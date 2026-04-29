@@ -5,31 +5,14 @@ config({ path: ".env.local" });
 config({ path: ".env" });
 
 import { db } from "./index";
-import {
-  timelineEvents,
-  intakeAnswers,
-  consents,
-  invoices,
-  observations,
-  themes,
-  goals,
-  documents,
-  readings,
-  souls,
-} from "./schema";
+import { attachments, goals, sessions, clients } from "./schema";
 
 async function reset() {
   console.log("Wiping every row…");
-  await db.delete(timelineEvents);
-  await db.delete(intakeAnswers);
-  await db.delete(consents);
-  await db.delete(invoices);
-  await db.delete(observations);
-  await db.delete(themes);
+  await db.delete(attachments);
   await db.delete(goals);
-  await db.delete(documents);
-  await db.delete(readings);
-  await db.delete(souls);
+  await db.delete(sessions);
+  await db.delete(clients);
   console.log("Database is now empty.");
 }
 

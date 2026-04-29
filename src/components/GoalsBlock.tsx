@@ -3,12 +3,14 @@
 import { useState, useTransition } from "react";
 import { addGoal, deleteGoal, updateGoalProgress } from "@/lib/actions";
 import type { Goal } from "@/db/schema";
+import { ConfirmButton } from "./ConfirmButton";
+import { Field, inputCls } from "./Form";
 
 export function GoalsBlock({
-  soulId,
+  clientId,
   goals,
 }: {
-  soulId: string;
+  clientId: string;
   goals: Goal[];
 }) {
   const [adding, setAdding] = useState(false);
@@ -17,59 +19,53 @@ export function GoalsBlock({
     <div className="space-y-3">
       {goals.length === 0 && !adding && (
         <div className="text-xs text-ink-400 italic">
-          No goals yet. Add the first one she&apos;s working on.
+          No goals yet. Track what they&apos;re working on.
         </div>
       )}
 
       {goals.map((g) => (
-        <GoalRow key={g.id} goal={g} />
+        <GoalRow key={g.id} goal={g} clientId={clientId} />
       ))}
 
       {adding ? (
-        <AddGoalForm
-          soulId={soulId}
-          onDone={() => setAdding(false)}
-        />
+        <AddGoalForm clientId={clientId} onDone={() => setAdding(false)} />
       ) : (
         <button
           onClick={() => setAdding(true)}
-          className="text-xs text-flame-700 hover:underline"
+          className="text-xs text-flame-700 hover:underline font-medium"
         >
-          + add goal
+          + Add goal
         </button>
       )}
     </div>
   );
 }
 
-function GoalRow({ goal }: { goal: Goal }) {
+function GoalRow({ goal, clientId }: { goal: Goal; clientId: string }) {
   const [pending, start] = useTransition();
-  const [confirming, setConfirming] = useState(false);
+  const [progress, setProgress] = useState(goal.progress);
 
   return (
     <div className="group">
       <div className="flex items-center justify-between text-sm">
         <span className="text-ink-800">{goal.label}</span>
         <span className="font-mono text-[11px] text-ink-500">
-          {goal.progress}%
+          {progress}%
         </span>
       </div>
       <input
         type="range"
         min={0}
         max={100}
-        defaultValue={goal.progress}
-        onMouseUp={(e) => {
-          const v = parseInt((e.target as HTMLInputElement).value, 10);
-          if (v !== goal.progress) {
-            start(() => updateGoalProgress(goal.id, v));
-          }
+        value={progress}
+        onChange={(e) => setProgress(parseInt(e.target.value, 10))}
+        onMouseUp={() => {
+          if (progress !== goal.progress)
+            start(() => updateGoalProgress(goal.id, clientId, progress));
         }}
-        onTouchEnd={(e) => {
-          const v = parseInt((e.target as HTMLInputElement).value, 10);
-          if (v !== goal.progress) {
-            start(() => updateGoalProgress(goal.id, v));
-          }
+        onTouchEnd={() => {
+          if (progress !== goal.progress)
+            start(() => updateGoalProgress(goal.id, clientId, progress));
         }}
         disabled={pending}
         className="w-full mt-1 accent-flame-600"
@@ -79,31 +75,26 @@ function GoalRow({ goal }: { goal: Goal }) {
           <div className="text-[11px] text-ink-500 mt-0.5">{goal.note}</div>
         )}
         <div className="flex-1" />
-        <button
-          onClick={() => setConfirming(!confirming)}
-          className="text-[10px] text-ink-400 hover:text-red-700 opacity-0 group-hover:opacity-100"
-        >
-          {confirming ? "tap again" : "remove"}
-        </button>
-        {confirming && (
-          <button
-            onClick={() => start(() => deleteGoal(goal.id))}
-            disabled={pending}
-            className="text-[10px] text-red-700 font-medium hover:underline"
-          >
-            confirm
-          </button>
-        )}
+        <ConfirmButton
+          label={
+            <span className="text-[10px] text-ink-400 hover:text-red-700 opacity-0 group-hover:opacity-100">
+              remove
+            </span>
+          }
+          message={`Remove the goal "${goal.label}"?`}
+          confirmLabel="Yes, remove"
+          onConfirm={() => deleteGoal(goal.id, clientId)}
+        />
       </div>
     </div>
   );
 }
 
 function AddGoalForm({
-  soulId,
+  clientId,
   onDone,
 }: {
-  soulId: string;
+  clientId: string;
   onDone: () => void;
 }) {
   const [submitting, setSubmitting] = useState(false);
@@ -118,32 +109,36 @@ function AddGoalForm({
           setSubmitting(false);
         }
       }}
-      className="border border-ink-200 rounded p-3 space-y-2 bg-white"
+      className="border border-ink-200 rounded-md p-3 space-y-3 bg-white"
     >
-      <input type="hidden" name="soulId" value={soulId} />
-      <input
-        name="label"
-        required
-        autoFocus
-        placeholder="Goal in her own words"
-        className="w-full px-2 py-1 border border-ink-200 rounded text-sm outline-none focus:border-flame-600"
-      />
-      <input
-        name="note"
-        placeholder="Status note (optional)"
-        className="w-full px-2 py-1 border border-ink-200 rounded text-xs outline-none focus:border-flame-600"
-      />
+      <input type="hidden" name="clientId" value={clientId} />
+      <Field label="Goal" required>
+        <input
+          name="label"
+          required
+          autoFocus
+          placeholder="In their own words"
+          className={inputCls}
+        />
+      </Field>
+      <Field label="Status note (optional)">
+        <input
+          name="note"
+          placeholder="Where they are with this"
+          className={inputCls}
+        />
+      </Field>
       <div className="flex items-center gap-2">
-        <label className="text-[10px] text-ink-500">Start at</label>
+        <label className="text-[11px] text-ink-500">Start at</label>
         <input
           name="progress"
           type="number"
           defaultValue={0}
           min={0}
           max={100}
-          className="w-16 px-2 py-0.5 border border-ink-200 rounded text-xs outline-none"
+          className={`${inputCls} w-20`}
         />
-        <span className="text-[10px] text-ink-500">%</span>
+        <span className="text-[11px] text-ink-500">%</span>
         <div className="flex-1" />
         <button
           type="button"
@@ -155,7 +150,7 @@ function AddGoalForm({
         <button
           type="submit"
           disabled={submitting}
-          className="text-xs bg-ink-900 text-white px-2 py-1 rounded font-medium disabled:opacity-60"
+          className="text-xs bg-ink-900 text-white px-3 py-1.5 rounded font-medium disabled:opacity-60"
         >
           {submitting ? "…" : "add"}
         </button>

@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/AppShell";
-import { listReadingsInRange } from "@/db/queries";
+import { listSessionsInRange, listClientsForPicker } from "@/db/queries";
 import { WeekCalendar } from "@/components/WeekCalendar";
+import { QuickActions } from "@/components/QuickActions";
 
 export const dynamic = "force-dynamic";
 
@@ -15,29 +16,34 @@ export default async function CalendarPage({
   const anchor = startParam ? new Date(startParam) : new Date();
   const weekStart = new Date(anchor);
   weekStart.setHours(0, 0, 0, 0);
-  weekStart.setDate(weekStart.getDate() - weekStart.getDay()); // back to Sunday
+  weekStart.setDate(weekStart.getDate() - weekStart.getDay());
   const weekEnd = new Date(weekStart);
   weekEnd.setDate(weekEnd.getDate() + 7);
 
-  const readings = await listReadingsInRange(weekStart, weekEnd);
+  const [sessions, clients] = await Promise.all([
+    listSessionsInRange(weekStart, weekEnd),
+    listClientsForPicker(),
+  ]);
 
   return (
     <AppShell
       breadcrumb={[
-        { label: "Readings calendar", href: "/calendar" },
+        { label: "Calendar", href: "/calendar" },
         { label: "This week" },
       ]}
+      rightAction={<QuickActions clients={clients} />}
     >
       <WeekCalendar
         weekStart={weekStart.toISOString()}
-        readings={readings.map((r) => ({
-          id: r.id,
-          soulCode: r.soulCode,
-          soulName: r.soulName,
-          type: r.type,
-          status: r.status,
-          scheduledAt: r.scheduledAt.toISOString(),
-          durationMinutes: r.durationMinutes,
+        sessions={sessions.map((s) => ({
+          id: s.id,
+          clientId: s.clientId,
+          clientName: s.clientName,
+          type: s.type,
+          status: s.status,
+          scheduledAt: s.scheduledAt.toISOString(),
+          durationMinutes: s.durationMinutes,
+          paid: s.paid,
         }))}
       />
     </AppShell>

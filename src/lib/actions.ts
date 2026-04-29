@@ -4,16 +4,12 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import {
-  souls,
-  readings,
+  clients,
+  sessions,
+  attachments,
   goals,
-  themes,
-  observations,
-  intakeAnswers,
-  invoices,
-  consents,
 } from "@/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -33,32 +29,39 @@ function num(form: FormData, key: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function required(value: string | null, fieldName: string): string {
-  if (!value) throw new Error(`${fieldName} is required`);
-  return value;
+function bool(form: FormData, key: string): boolean {
+  const v = form.get(key);
+  return v === "on" || v === "true" || v === "1";
 }
 
-async function nextSoulCode(): Promise<string> {
-  // Soul codes look like "#S-01", "#S-02"… Use the count + 1, padded to 2 digits.
-  const [{ count }] = await db
-    .select({ count: sql<number>`COUNT(*)::int` })
-    .from(souls);
-  const next = (count + 1).toString().padStart(2, "0");
-  return `#S-${next}`;
+function tagsFromString(input: string | null): string[] {
+  if (!input) return [];
+  return Array.from(
+    new Set(
+      input
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean)
+    )
+  );
+}
+
+function required<T>(value: T | null, fieldName: string): T {
+  if (value === null || value === undefined || value === "")
+    throw new Error(`${fieldName} is required`);
+  return value as T;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SOULS
+// CLIENTS
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function createSoul(formData: FormData) {
+export async function createClient(formData: FormData) {
   const fullName = required(str(formData, "fullName"), "Full name");
-  const code = await nextSoulCode();
 
   const [created] = await db
-    .insert(souls)
+    .insert(clients)
     .values({
-      code,
       fullName,
       pronouns: str(formData, "pronouns"),
       email: str(formData, "email"),
@@ -66,162 +69,230 @@ export async function createSoul(formData: FormData) {
       city: str(formData, "city"),
       timezone: str(formData, "timezone"),
       workingOn: str(formData, "workingOn"),
-      pinnedNote: str(formData, "pinnedNote"),
-      source: str(formData, "source"),
-      avatarTone: str(formData, "avatarTone") ?? "ink",
-      primaryReadingType:
-        (str(formData, "primaryReadingType") as
-          | "soul_reading"
-          | "heart_clearing"
-          | "ancestral_reading"
-          | "love_alignment"
-          | "inner_child"
-          | "forgiveness_ritual"
-          | "first_reading_intake"
-          | "reconnection_call"
-          | "cord_cutting"
-          | null) ?? null,
+      aboutClient: str(formData, "aboutClient"),
+      intakeNotes: str(formData, "intakeNotes"),
+      howTheyFoundMe: str(formData, "howTheyFoundMe"),
+      primarySessionType:
+        str(formData, "primarySessionType") ?? "Soul reading",
+      tags: tagsFromString(str(formData, "tags")),
       emergencyName: str(formData, "emergencyName"),
       emergencyPhone: str(formData, "emergencyPhone"),
       status: "active",
     })
-    .returning({ code: souls.code });
+    .returning({ id: clients.id });
 
-  revalidatePath("/souls");
-  redirect(`/souls/${encodeURIComponent(created.code)}`);
+  revalidatePath("/clients");
+  redirect(`/clients/${created.id}`);
 }
 
-export async function updateSoulField(
-  soulId: string,
-  field: string,
-  value: string | null
-) {
-  const allowed = new Set([
-    "fullName",
-    "pronouns",
-    "email",
-    "phone",
-    "city",
-    "timezone",
-    "workingOn",
-    "pinnedNote",
-    "source",
-    "primaryReadingType",
-    "emergencyName",
-    "emergencyPhone",
-    "avatarTone",
-  ]);
-  if (!allowed.has(field)) throw new Error(`Field "${field}" is not editable`);
+export async function updateClient(formData: FormData) {
+  const id = required(str(formData, "id"), "Client id");
 
-  const cleaned = value && value.trim().length > 0 ? value.trim() : null;
   await db
-    .update(souls)
-    .set({ [field]: cleaned, updatedAt: new Date() })
-    .where(eq(souls.id, soulId));
+    .update(clients)
+    .set({
+      fullName: required(str(formData, "fullName"), "Full name"),
+      pronouns: str(formData, "pronouns"),
+      email: str(formData, "email"),
+      phone: str(formData, "phone"),
+      city: str(formData, "city"),
+      timezone: str(formData, "timezone"),
+      workingOn: str(formData, "workingOn"),
+      aboutClient: str(formData, "aboutClient"),
+      intakeNotes: str(formData, "intakeNotes"),
+      howTheyFoundMe: str(formData, "howTheyFoundMe"),
+      primarySessionType: str(formData, "primarySessionType"),
+      tags: tagsFromString(str(formData, "tags")),
+      emergencyName: str(formData, "emergencyName"),
+      emergencyPhone: str(formData, "emergencyPhone"),
+      status:
+        (str(formData, "status") as
+          | "active"
+          | "new"
+          | "dormant"
+          | "archived"
+          | null) ?? "active",
+      updatedAt: new Date(),
+    })
+    .where(eq(clients.id, id));
 
-  revalidatePath("/souls");
-  revalidatePath("/souls/[code]", "page");
+  revalidatePath(`/clients/${id}`);
+  revalidatePath("/clients");
 }
 
-export async function deleteSoul(soulId: string) {
-  await db.delete(souls).where(eq(souls.id, soulId));
-  revalidatePath("/souls");
-  redirect("/souls");
+export async function deleteClient(clientId: string) {
+  await db.delete(clients).where(eq(clients.id, clientId));
+  revalidatePath("/clients");
+  redirect("/clients");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// READINGS
+// SESSIONS
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function scheduleReading(formData: FormData) {
-  const soulId = required(str(formData, "soulId"), "Soul");
-  const type = required(str(formData, "type"), "Reading type") as
-    | "soul_reading"
-    | "heart_clearing"
-    | "ancestral_reading"
-    | "love_alignment"
-    | "inner_child"
-    | "forgiveness_ritual"
-    | "first_reading_intake"
-    | "reconnection_call"
-    | "cord_cutting";
+// Schedule a future session
+export async function scheduleSession(formData: FormData) {
+  const clientId = required(str(formData, "clientId"), "Client");
+  const type = str(formData, "type") ?? "Soul reading";
   const scheduledAtRaw = required(
     str(formData, "scheduledAt"),
     "Date / time"
   );
   const durationMinutes = num(formData, "durationMinutes") ?? 60;
-  const intention = str(formData, "intention");
-  const meetUrl = str(formData, "meetUrl");
 
-  await db.insert(readings).values({
-    soulId,
+  await db.insert(sessions).values({
+    clientId,
     type,
     status: "scheduled",
     scheduledAt: new Date(scheduledAtRaw),
     durationMinutes,
-    intention,
-    meetUrl,
+    intention: str(formData, "intention"),
+    meetUrl: str(formData, "meetUrl"),
   });
 
-  revalidatePath("/souls/[code]", "page");
+  revalidatePath(`/clients/${clientId}`);
   revalidatePath("/calendar");
   revalidatePath("/");
 }
 
-export async function completeReading(formData: FormData) {
-  const id = required(str(formData, "id"), "Reading id");
-  const log = str(formData, "log");
-  const intention = str(formData, "intention");
-  const preHeartOpen = num(formData, "preHeartOpen");
-  const preSelfLove = num(formData, "preSelfLove");
-  const preBody = str(formData, "preBody");
-  const postHeartOpen = num(formData, "postHeartOpen");
-  const postSelfLove = num(formData, "postSelfLove");
-  const postBody = str(formData, "postBody");
+// Log a session that already happened (can mark paid in the same step)
+export async function logPastSession(formData: FormData) {
+  const clientId = required(str(formData, "clientId"), "Client");
+  const type = str(formData, "type") ?? "Soul reading";
+  const scheduledAtRaw = required(
+    str(formData, "scheduledAt"),
+    "Date / time"
+  );
+  const durationMinutes = num(formData, "durationMinutes") ?? 60;
+  const paid = bool(formData, "paid");
+  const paymentAmount = num(formData, "paymentAmount");
+
+  await db.insert(sessions).values({
+    clientId,
+    type,
+    status: "completed",
+    scheduledAt: new Date(scheduledAtRaw),
+    durationMinutes,
+    intention: str(formData, "intention"),
+    arrivedAs: str(formData, "arrivedAs"),
+    leftAs: str(formData, "leftAs"),
+    notes: str(formData, "notes"),
+    paid,
+    paymentMethod: paid
+      ? ((str(formData, "paymentMethod") as
+          | "venmo"
+          | "zelle"
+          | "etransfer"
+          | "cash"
+          | "paypal"
+          | "stripe"
+          | "other"
+          | null) ?? null)
+      : null,
+    paymentAmountCents:
+      paid && paymentAmount !== null ? Math.round(paymentAmount * 100) : null,
+    paidAt: paid ? new Date().toISOString().slice(0, 10) : null,
+  });
+
+  revalidatePath(`/clients/${clientId}`);
+  revalidatePath("/calendar");
+  revalidatePath("/payments");
+  revalidatePath("/");
+}
+
+// Update an existing session (notes, intention, body states, etc.)
+export async function updateSession(formData: FormData) {
+  const id = required(str(formData, "id"), "Session id");
+  const clientId = required(str(formData, "clientId"), "Client id");
+
+  const updates: Record<string, unknown> = {
+    intention: str(formData, "intention"),
+    arrivedAs: str(formData, "arrivedAs"),
+    leftAs: str(formData, "leftAs"),
+    notes: str(formData, "notes"),
+    type: str(formData, "type") ?? undefined,
+    updatedAt: new Date(),
+  };
+
+  // If marking complete (from scheduled)
+  if (str(formData, "markComplete") === "true") {
+    updates.status = "completed";
+  }
+
+  await db.update(sessions).set(updates).where(eq(sessions.id, id));
+
+  revalidatePath(`/clients/${clientId}`);
+  revalidatePath("/calendar");
+  revalidatePath("/");
+}
+
+export async function cancelSession(sessionId: string, clientId: string) {
+  await db
+    .update(sessions)
+    .set({ status: "cancelled", updatedAt: new Date() })
+    .where(eq(sessions.id, sessionId));
+  revalidatePath(`/clients/${clientId}`);
+  revalidatePath("/calendar");
+  revalidatePath("/");
+}
+
+export async function deleteSession(sessionId: string, clientId: string) {
+  await db.delete(sessions).where(eq(sessions.id, sessionId));
+  revalidatePath(`/clients/${clientId}`);
+  revalidatePath("/calendar");
+  revalidatePath("/payments");
+  revalidatePath("/");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAYMENT MARKING
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function markSessionPaid(formData: FormData) {
+  const id = required(str(formData, "id"), "Session id");
+  const clientId = required(str(formData, "clientId"), "Client id");
+  const method = str(formData, "paymentMethod") ?? "other";
+  const amount = num(formData, "paymentAmount");
+  const note = str(formData, "paymentNote");
 
   await db
-    .update(readings)
+    .update(sessions)
     .set({
-      status: "completed",
-      log,
-      intention,
-      preHeartOpen,
-      preSelfLove,
-      preBody,
-      postHeartOpen,
-      postSelfLove,
-      postBody,
+      paid: true,
+      paymentMethod: method as
+        | "venmo"
+        | "zelle"
+        | "etransfer"
+        | "cash"
+        | "paypal"
+        | "stripe"
+        | "other",
+      paymentAmountCents: amount !== null ? Math.round(amount * 100) : null,
+      paymentNote: note,
+      paidAt: new Date().toISOString().slice(0, 10),
       updatedAt: new Date(),
     })
-    .where(eq(readings.id, id));
+    .where(eq(sessions.id, id));
 
-  revalidatePath("/souls/[code]", "page");
-  revalidatePath("/calendar");
+  revalidatePath(`/clients/${clientId}`);
+  revalidatePath("/payments");
   revalidatePath("/");
 }
 
-export async function updateReadingLog(readingId: string, log: string) {
+export async function markSessionUnpaid(sessionId: string, clientId: string) {
   await db
-    .update(readings)
-    .set({ log, updatedAt: new Date() })
-    .where(eq(readings.id, readingId));
-  revalidatePath("/souls/[code]", "page");
-}
-
-export async function cancelReading(readingId: string) {
-  await db
-    .update(readings)
-    .set({ status: "cancelled", updatedAt: new Date() })
-    .where(eq(readings.id, readingId));
-  revalidatePath("/souls/[code]", "page");
-  revalidatePath("/calendar");
-  revalidatePath("/");
-}
-
-export async function deleteReading(readingId: string) {
-  await db.delete(readings).where(eq(readings.id, readingId));
-  revalidatePath("/souls/[code]", "page");
-  revalidatePath("/calendar");
+    .update(sessions)
+    .set({
+      paid: false,
+      paymentMethod: null,
+      paymentAmountCents: null,
+      paymentNote: null,
+      paidAt: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(sessions.id, sessionId));
+  revalidatePath(`/clients/${clientId}`);
+  revalidatePath("/payments");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -229,167 +300,55 @@ export async function deleteReading(readingId: string) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function addGoal(formData: FormData) {
-  const soulId = required(str(formData, "soulId"), "Soul id");
+  const clientId = required(str(formData, "clientId"), "Client id");
   const label = required(str(formData, "label"), "Goal label");
   const progress = Math.max(0, Math.min(100, num(formData, "progress") ?? 0));
   const note = str(formData, "note");
 
-  // Position = end of list
-  const [{ count }] = await db
-    .select({ count: sql<number>`COUNT(*)::int` })
-    .from(goals)
-    .where(eq(goals.soulId, soulId));
-
-  await db.insert(goals).values({ soulId, label, progress, note, position: count });
-  revalidatePath("/souls/[code]", "page");
+  await db.insert(goals).values({ clientId, label, progress, note });
+  revalidatePath(`/clients/${clientId}`);
 }
 
-export async function updateGoalProgress(goalId: string, progress: number) {
+export async function updateGoalProgress(
+  goalId: string,
+  clientId: string,
+  progress: number
+) {
   const clamped = Math.max(0, Math.min(100, progress));
   await db
     .update(goals)
     .set({ progress: clamped, updatedAt: new Date() })
     .where(eq(goals.id, goalId));
-  revalidatePath("/souls/[code]", "page");
+  revalidatePath(`/clients/${clientId}`);
 }
 
-export async function deleteGoal(goalId: string) {
+export async function deleteGoal(goalId: string, clientId: string) {
   await db.delete(goals).where(eq(goals.id, goalId));
-  revalidatePath("/souls/[code]", "page");
+  revalidatePath(`/clients/${clientId}`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// THEMES
+// FILES (Vercel Blob — wired in Step 7)
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function addTheme(formData: FormData) {
-  const soulId = required(str(formData, "soulId"), "Soul id");
-  const label = required(str(formData, "label"), "Theme label");
-  await db.insert(themes).values({ soulId, label });
-  revalidatePath("/souls/[code]", "page");
-}
-
-export async function deleteTheme(themeId: string) {
-  await db.delete(themes).where(eq(themes.id, themeId));
-  revalidatePath("/souls/[code]", "page");
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// OBSERVATIONS
-// ─────────────────────────────────────────────────────────────────────────────
-
-export async function addObservation(formData: FormData) {
-  const soulId = required(str(formData, "soulId"), "Soul id");
-  const body = required(str(formData, "body"), "Observation");
-  await db.insert(observations).values({ soulId, body });
-  revalidatePath("/souls/[code]", "page");
-}
-
-export async function deleteObservation(observationId: string) {
-  await db.delete(observations).where(eq(observations.id, observationId));
-  revalidatePath("/souls/[code]", "page");
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// INTAKE ANSWERS
-// ─────────────────────────────────────────────────────────────────────────────
-
-export async function upsertIntakeAnswer(formData: FormData) {
-  const soulId = required(str(formData, "soulId"), "Soul id");
-  const question = required(str(formData, "question"), "Question");
-  const answer = str(formData, "answer");
-  const id = str(formData, "id");
-
-  if (id) {
-    await db
-      .update(intakeAnswers)
-      .set({ answer })
-      .where(eq(intakeAnswers.id, id));
-  } else {
-    const [{ count }] = await db
-      .select({ count: sql<number>`COUNT(*)::int` })
-      .from(intakeAnswers)
-      .where(eq(intakeAnswers.soulId, soulId));
-    await db
-      .insert(intakeAnswers)
-      .values({ soulId, question, answer, position: count });
+export async function deleteAttachment(
+  attachmentId: string,
+  clientId: string
+) {
+  // Best-effort: if Blob token is configured, also delete the blob
+  try {
+    if (process.env.BLOB_READ_WRITE_TOKEN) {
+      const { del } = await import("@vercel/blob");
+      const [row] = await db
+        .select({ url: attachments.url })
+        .from(attachments)
+        .where(eq(attachments.id, attachmentId))
+        .limit(1);
+      if (row?.url) await del(row.url);
+    }
+  } catch (e) {
+    console.warn("Blob delete failed (continuing with DB delete):", e);
   }
-  revalidatePath("/souls/[code]", "page");
-}
-
-export async function deleteIntakeAnswer(answerId: string) {
-  await db.delete(intakeAnswers).where(eq(intakeAnswers.id, answerId));
-  revalidatePath("/souls/[code]", "page");
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// CONSENTS (lightweight — full audit trail comes later)
-// ─────────────────────────────────────────────────────────────────────────────
-
-export async function addConsent(formData: FormData) {
-  const soulId = required(str(formData, "soulId"), "Soul id");
-  const label = required(str(formData, "label"), "Consent label");
-  const status = str(formData, "status") ?? "Acknowledged";
-  await db.insert(consents).values({ soulId, label, status });
-  revalidatePath("/souls/[code]", "page");
-}
-
-export async function deleteConsent(consentId: string) {
-  await db.delete(consents).where(eq(consents.id, consentId));
-  revalidatePath("/souls/[code]", "page");
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// INVOICES (manual — Stripe wiring is a later milestone)
-// ─────────────────────────────────────────────────────────────────────────────
-
-export async function addInvoice(formData: FormData) {
-  const soulId = required(str(formData, "soulId"), "Soul id");
-  const number = required(str(formData, "number"), "Invoice number");
-  const amountDollars = num(formData, "amount");
-  if (amountDollars === null || amountDollars < 0)
-    throw new Error("Amount must be a positive number");
-  const issuedAt = required(str(formData, "issuedAt"), "Issued date");
-  const dueAt = str(formData, "dueAt");
-  const description = str(formData, "description");
-  const status =
-    (str(formData, "status") as
-      | "paid"
-      | "outstanding"
-      | "overdue"
-      | "draft"
-      | "sent"
-      | "void"
-      | null) ?? "outstanding";
-
-  await db.insert(invoices).values({
-    soulId,
-    number,
-    amountCents: Math.round(amountDollars * 100),
-    issuedAt,
-    dueAt,
-    description,
-    status,
-  });
-  revalidatePath("/souls/[code]", "page");
-  revalidatePath("/exchange");
-}
-
-export async function markInvoicePaid(invoiceId: string) {
-  await db
-    .update(invoices)
-    .set({
-      status: "paid",
-      paidAt: new Date().toISOString().slice(0, 10),
-      updatedAt: new Date(),
-    })
-    .where(eq(invoices.id, invoiceId));
-  revalidatePath("/souls/[code]", "page");
-  revalidatePath("/exchange");
-}
-
-export async function deleteInvoice(invoiceId: string) {
-  await db.delete(invoices).where(eq(invoices.id, invoiceId));
-  revalidatePath("/souls/[code]", "page");
-  revalidatePath("/exchange");
+  await db.delete(attachments).where(eq(attachments.id, attachmentId));
+  revalidatePath(`/clients/${clientId}`);
 }

@@ -2,31 +2,30 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { readingTypeLabel, readingTypeTone } from "@/lib/format";
+import { fullDate, shortTime, toneFor } from "@/lib/format";
 
-type CalendarReading = {
+type CalSession = {
   id: string;
-  soulCode: string;
-  soulName: string;
+  clientId: string;
+  clientName: string;
   type: string;
   status: string;
   scheduledAt: string;
   durationMinutes: number;
+  paid: boolean;
 };
 
 const HOUR_START = 8;
 const HOUR_END = 21;
 const PX_PER_HOUR = 48;
-const SABBATH_DAY_OF_WEEK = 4; // Thursday
-
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export function WeekCalendar({
   weekStart,
-  readings,
+  sessions,
 }: {
   weekStart: string;
-  readings: CalendarReading[];
+  sessions: CalSession[];
 }) {
   const router = useRouter();
   const start = new Date(weekStart);
@@ -44,20 +43,17 @@ export function WeekCalendar({
     return d;
   });
 
-  // Group readings by day-of-week index
-  const readingsByDay: CalendarReading[][] = Array.from({ length: 7 }, () => []);
-  readings.forEach((r) => {
+  const sessionsByDay: CalSession[][] = Array.from({ length: 7 }, () => []);
+  sessions.forEach((r) => {
     const d = new Date(r.scheduledAt);
     const idx = Math.floor(
       (d.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)
     );
-    if (idx >= 0 && idx < 7) readingsByDay[idx].push(r);
+    if (idx >= 0 && idx < 7) sessionsByDay[idx].push(r);
   });
 
-  const totalMin = readings.reduce((s, r) => s + r.durationMinutes, 0);
-  const souls = new Set(readings.map((r) => r.soulCode)).size;
-
-  // "Now" line position
+  const totalMin = sessions.reduce((s, r) => s + r.durationMinutes, 0);
+  const clients = new Set(sessions.map((r) => r.clientId)).size;
   const nowHour = new Date().getHours() + new Date().getMinutes() / 60;
 
   function shiftWeek(deltaDays: number) {
@@ -68,12 +64,12 @@ export function WeekCalendar({
 
   return (
     <>
-      <div className="flex items-end justify-between mb-5">
+      <div className="flex items-end justify-between mb-5 gap-3 flex-wrap">
         <div>
-          <h1 className="text-xl font-semibold text-ink-900 tracking-tight">
-            This week&apos;s readings
+          <h1 className="text-2xl font-semibold text-ink-900 tracking-tight">
+            This week
           </h1>
-          <p className="text-xs text-ink-500 mt-0.5">
+          <p className="text-sm text-ink-500 mt-1">
             {start.toLocaleDateString("en-US", {
               month: "short",
               day: "numeric",
@@ -86,63 +82,106 @@ export function WeekCalendar({
             })}
           </p>
         </div>
-        <div className="flex items-center gap-2 text-xs">
-          <div className="flex items-center border border-ink-200 rounded">
+        <div className="flex items-center gap-2 text-sm">
+          <div className="flex items-center border border-ink-200 rounded-md bg-white">
             <button
               onClick={() => shiftWeek(-7)}
-              className="px-2 py-1 hover:bg-ink-50 border-r border-ink-200"
+              className="px-3 py-1.5 hover:bg-ink-50 border-r border-ink-200"
+              aria-label="Previous week"
             >
               ←
             </button>
             <button
               onClick={() => router.push("/calendar")}
-              className="px-3 py-1 hover:bg-ink-50 border-r border-ink-200 font-medium"
+              className="px-3 py-1.5 hover:bg-ink-50 border-r border-ink-200 font-medium text-xs"
             >
               Today
             </button>
             <button
               onClick={() => shiftWeek(7)}
-              className="px-2 py-1 hover:bg-ink-50"
+              className="px-3 py-1.5 hover:bg-ink-50"
+              aria-label="Next week"
             >
               →
             </button>
           </div>
-          <button className="bg-ink-900 hover:bg-ink-800 text-white text-xs font-medium px-3 py-1.5 rounded">
-            Schedule reading
-          </button>
         </div>
       </div>
 
       {/* Stat strip */}
-      <div className="grid grid-cols-4 border border-ink-200 rounded-md overflow-hidden mb-4 bg-white">
-        <Stat label="Readings booked" value={readings.length.toString()} />
+      <div className="grid grid-cols-3 border border-ink-200 rounded-md overflow-hidden mb-5 bg-white">
+        <Stat label="Sessions booked" value={sessions.length.toString()} />
         <Stat
-          label="Hours holding"
+          label="Hours"
           value={`${(totalMin / 60).toFixed(1)}h`}
           mono
         />
-        <Stat label="Souls in care" value={souls.toString()} />
-        <Stat
-          label="First-time souls"
-          value={readings
-            .filter((r) => r.type === "first_reading_intake")
-            .length.toString()}
-          last
-        />
+        <Stat label="Clients" value={clients.toString()} last />
       </div>
 
-      {/* Modality legend */}
-      <div className="flex items-center gap-4 mb-3 text-[11px] text-ink-500 flex-wrap">
-        <Legend tone="flame" label="Soul reading" />
-        <Legend tone="green" label="Heart clearing" />
-        <Legend tone="purple" label="Ancestral reading" />
-        <Legend tone="rose" label="Love alignment" />
-        <Legend tone="blue" label="Inner child" />
-        <Legend tone="amber" label="Intake" />
+      {/* Mobile: list view */}
+      <div className="md:hidden space-y-4">
+        {days.map((d, i) => {
+          const daySessions = sessionsByDay[i];
+          if (daySessions.length === 0 && i !== todayDayIndex) return null;
+          const isToday = i === todayDayIndex;
+          return (
+            <div key={i}>
+              <div
+                className={`text-xs uppercase tracking-wider mb-2 ${
+                  isToday ? "text-flame-700 font-semibold" : "text-ink-500"
+                }`}
+              >
+                {DAY_NAMES[i]} · {fullDate(d)}
+                {isToday && " · today"}
+              </div>
+              {daySessions.length === 0 ? (
+                <div className="text-xs text-ink-400 italic">
+                  Nothing scheduled.
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  {daySessions.map((s) => (
+                    <Link
+                      key={s.id}
+                      href={`/clients/${s.clientId}`}
+                      className="block border border-ink-200 rounded-md p-3 bg-white hover:bg-ink-50"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="font-mono text-sm text-flame-700 font-medium">
+                          {shortTime(s.scheduledAt)}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-ink-900 truncate">
+                            {s.clientName}
+                          </div>
+                          <div className="text-xs text-ink-500">
+                            {s.type} · {s.durationMinutes}m
+                          </div>
+                        </div>
+                        {s.status === "completed" && (
+                          <span
+                            className={`chip shrink-0 ${
+                              s.paid
+                                ? "bg-green-50 text-green-700"
+                                : "bg-amber-50 text-amber-700"
+                            }`}
+                          >
+                            {s.paid ? "PAID" : "UNPAID"}
+                          </span>
+                        )}
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
-      {/* Week grid */}
-      <div className="border border-ink-200 rounded-md overflow-hidden bg-white">
+      {/* Desktop: week grid */}
+      <div className="hidden md:block border border-ink-200 rounded-md overflow-hidden bg-white">
         <div
           className="grid border-b border-ink-100 bg-ink-50/40"
           style={{ gridTemplateColumns: "56px repeat(7, 1fr)" }}
@@ -150,7 +189,6 @@ export function WeekCalendar({
           <div />
           {days.map((d, i) => {
             const isToday = i === todayDayIndex;
-            const isSabbath = i === SABBATH_DAY_OF_WEEK;
             return (
               <div
                 key={i}
@@ -169,20 +207,9 @@ export function WeekCalendar({
                       {d.getDate()}
                     </span>
                   ) : (
-                    <span
-                      className={`text-sm ${
-                        isSabbath ? "text-ink-400" : "text-ink-800"
-                      }`}
-                    >
-                      {d.getDate()}
-                    </span>
+                    <span className="text-sm text-ink-800">{d.getDate()}</span>
                   )}
                 </div>
-                {isSabbath && (
-                  <div className="text-[9px] text-ink-400 mt-0.5 font-mono">
-                    sabbath
-                  </div>
-                )}
               </div>
             );
           })}
@@ -222,48 +249,37 @@ export function WeekCalendar({
           {/* Day columns */}
           {days.map((_, dayIdx) => {
             const isToday = dayIdx === todayDayIndex;
-            const isSabbath = dayIdx === SABBATH_DAY_OF_WEEK;
             return (
               <div
                 key={dayIdx}
                 className={`day-col relative ${
                   dayIdx < 6 ? "border-r border-ink-100" : ""
-                } ${isToday ? "today" : ""} ${isSabbath ? "sabbath" : ""}`}
+                } ${isToday ? "today" : ""}`}
               >
-                {isSabbath && (
-                  <div className="sabbath-label">rest day</div>
-                )}
-                {readingsByDay[dayIdx].map((r) => {
-                  const d = new Date(r.scheduledAt);
+                {sessionsByDay[dayIdx].map((s) => {
+                  const d = new Date(s.scheduledAt);
                   const startH = d.getHours() + d.getMinutes() / 60;
                   const top = (startH - HOUR_START) * PX_PER_HOUR;
                   const height =
-                    (r.durationMinutes / 60) * PX_PER_HOUR - 4;
+                    (s.durationMinutes / 60) * PX_PER_HOUR - 4;
                   if (top < 0 || top > (HOUR_END - HOUR_START) * PX_PER_HOUR)
                     return null;
-                  const tone = readingTypeTone(r.type);
-                  const endMin = d.getMinutes() + r.durationMinutes;
+                  const tone = toneFor(s.type);
+                  const endMin = d.getMinutes() + s.durationMinutes;
                   const endD = new Date(d);
                   endD.setMinutes(endMin);
-                  const fmt = (x: Date) =>
-                    x.toLocaleTimeString("en-US", {
-                      hour: "numeric",
-                      minute: "2-digit",
-                    });
                   return (
                     <Link
-                      key={r.id}
-                      href={`/souls/${encodeURIComponent(r.soulCode)}`}
+                      key={s.id}
+                      href={`/clients/${s.clientId}`}
                       className={`cal-block tone-${tone}`}
                       style={{ top, height }}
                     >
                       <div className="t">
-                        {fmt(d)}–{fmt(endD)}
+                        {shortTime(d)}–{shortTime(endD)}
                       </div>
-                      <div className="n">{r.soulName}</div>
-                      {height > 44 && (
-                        <div className="m">{readingTypeLabel(r.type)}</div>
-                      )}
+                      <div className="n">{s.clientName}</div>
+                      {height > 44 && <div className="m">{s.type}</div>}
                     </Link>
                   );
                 })}
@@ -298,11 +314,6 @@ export function WeekCalendar({
           })}
         </div>
       </div>
-      <p className="text-[11px] text-ink-400 mt-2">
-        Hours shown 8am–9pm. Click a reading to open that soul&apos;s file.
-        {readings.length === 0 &&
-          " · Nothing booked this week — schedule one from any soul's file."}
-      </p>
     </>
   );
 }
@@ -330,25 +341,6 @@ function Stat({
       >
         {value}
       </div>
-    </div>
-  );
-}
-
-function Legend({ tone, label }: { tone: string; label: string }) {
-  const colorMap: Record<string, string> = {
-    flame: "bg-flame-100 border-flame-500",
-    green: "bg-green-50 border-green-500",
-    purple: "bg-purple-50 border-purple-500",
-    rose: "bg-rose-50 border-rose-400",
-    blue: "bg-blue-50 border-blue-500",
-    amber: "bg-amber-50 border-amber-500",
-  };
-  return (
-    <div className="flex items-center gap-1.5">
-      <span
-        className={`w-3 h-3 rounded-sm border-l-2 ${colorMap[tone]}`}
-      />{" "}
-      {label}
     </div>
   );
 }
