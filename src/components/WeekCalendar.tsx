@@ -300,6 +300,8 @@ export function WeekCalendar({
       </div>
       <p className="text-[11px] text-ink-400 mt-2">
         Hours shown 8am–9pm. Click a reading to open that soul&apos;s file.
+        {readings.length === 0 &&
+          " · Nothing booked this week — schedule one from any soul's file."}
       </p>
     </>
   );

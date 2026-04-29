@@ -11,7 +11,18 @@ import {
   relativeTime,
 } from "@/lib/format";
 import { TimelineFeed } from "@/components/TimelineFeed";
-import { ReadingsList } from "@/components/ReadingsList";
+import { EditableField } from "@/components/EditableField";
+import { ScheduleReadingDialog } from "@/components/ScheduleReadingDialog";
+import { ReadingCard } from "@/components/ReadingCard";
+import { GoalsBlock } from "@/components/GoalsBlock";
+import { TagListBlock } from "@/components/TagListBlock";
+import { ObservationsBlock } from "@/components/ObservationsBlock";
+import { IntakeBlock } from "@/components/IntakeBlock";
+import {
+  updateSoulField,
+  addTheme,
+  deleteTheme,
+} from "@/lib/actions";
 
 const SUBTABS = [
   { key: "timeline", label: "Timeline" },
@@ -54,6 +65,10 @@ export default async function SoulFilePage({
     ? Math.round(lifetimePaidCents / completedReadings.length)
     : 0;
 
+  // Bind soul id + field for inline edits — server actions can be partially applied.
+  const saveField = (field: string) =>
+    updateSoulField.bind(null, soul.id, field);
+
   return (
     <AppShell
       breadcrumb={[
@@ -61,7 +76,7 @@ export default async function SoulFilePage({
         { label: soul.fullName },
       ]}
     >
-      {/* — File header (folder-tab strip + identity + stat strip) — */}
+      {/* — File header — */}
       <div className="border border-ink-200 rounded-md bg-ink-50/40 overflow-hidden mb-5">
         <div className="flex items-center gap-1 bg-white border-b border-ink-200 px-2 pt-2">
           <div className="folder-tab bg-ink-50 border border-ink-200 border-b-0 rounded-t px-3 py-1 text-[11px] font-mono text-ink-700">
@@ -82,59 +97,82 @@ export default async function SoulFilePage({
               soul.avatarTone
             )} flex items-center justify-center text-2xl font-semibold shrink-0`}
           >
-            ·
+            {soul.fullName
+              .split(" ")
+              .map((p) => p[0])
+              .slice(0, 2)
+              .join("")
+              .toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="flex items-baseline gap-3 flex-wrap">
-              <h1 className="text-2xl font-semibold text-ink-900 tracking-tight">
-                {soul.fullName}
-              </h1>
-              <span className="text-xs text-ink-500">{soul.pronouns}</span>
-              <span className="text-xs text-ink-400">·</span>
-              <span className="font-mono text-xs text-ink-500">
+            <div className="flex items-baseline gap-3 flex-wrap text-2xl font-semibold text-ink-900 tracking-tight">
+              <EditableField
+                value={soul.fullName}
+                onSave={saveField("fullName")}
+                placeholder="Full name"
+                className="text-2xl font-semibold text-ink-900"
+              />
+              <span className="text-xs text-ink-500 font-normal">
+                <EditableField
+                  value={soul.pronouns}
+                  onSave={saveField("pronouns")}
+                  placeholder="pronouns"
+                />
+              </span>
+              <span className="font-mono text-xs text-ink-500 font-normal">
                 {soul.code} · opened {shortDate(soul.createdAt)}
               </span>
             </div>
             <div className="mt-1.5 text-xs text-ink-600 font-mono flex items-center gap-3 flex-wrap">
-              {soul.email && <span>{soul.email}</span>}
-              {soul.phone && (
-                <>
-                  <span className="text-ink-300">·</span>
-                  <span>{soul.phone}</span>
-                </>
-              )}
-              {soul.city && (
-                <>
-                  <span className="text-ink-300">·</span>
-                  <span>
-                    {soul.city}
-                    {soul.timezone ? ` · ${soul.timezone}` : ""}
-                  </span>
-                </>
-              )}
+              <EditableField
+                value={soul.email}
+                onSave={saveField("email")}
+                placeholder="email"
+              />
+              <span className="text-ink-300">·</span>
+              <EditableField
+                value={soul.phone}
+                onSave={saveField("phone")}
+                placeholder="phone"
+              />
+              <span className="text-ink-300">·</span>
+              <EditableField
+                value={soul.city}
+                onSave={saveField("city")}
+                placeholder="city"
+              />
+              <span className="text-ink-300">·</span>
+              <EditableField
+                value={soul.timezone}
+                onSave={saveField("timezone")}
+                placeholder="timezone"
+              />
             </div>
-            <div className="mt-3 flex items-center gap-1.5 flex-wrap">
-              {soul.primaryReadingType && (
-                <span className="chip bg-flame-100 text-flame-700">
-                  {readingTypeLabel(soul.primaryReadingType).toUpperCase()}
-                </span>
-              )}
+            <div className="mt-3 flex items-center gap-2 flex-wrap text-xs">
+              <span className="chip bg-flame-100 text-flame-700">
+                {soul.primaryReadingType
+                  ? readingTypeLabel(soul.primaryReadingType).toUpperCase()
+                  : "READING TYPE TBD"}
+              </span>
               <span className="chip bg-green-50 text-green-700">
                 <span className="dot bg-green-500" />
                 {soul.status.toUpperCase()}
               </span>
+              <span className="text-ink-500">Working on:</span>
+              <span className="flex-1 max-w-md text-ink-700">
+                <EditableField
+                  value={soul.workingOn}
+                  onSave={saveField("workingOn")}
+                  placeholder="short phrase naming the love work"
+                />
+              </span>
             </div>
           </div>
           <div className="flex flex-col gap-2 shrink-0">
-            <button className="bg-ink-900 hover:bg-ink-800 text-white text-xs font-medium px-3 py-1.5 rounded">
-              Schedule reading
-            </button>
-            <button className="border border-ink-200 hover:bg-white text-xs font-medium text-ink-700 px-3 py-1.5 rounded">
-              Write reading log
-            </button>
-            <button className="border border-ink-200 hover:bg-white text-xs font-medium text-ink-700 px-3 py-1.5 rounded">
-              Altar photo / doc
-            </button>
+            <ScheduleReadingDialog
+              soulId={soul.id}
+              defaultType={soul.primaryReadingType}
+            />
           </div>
         </div>
 
@@ -143,7 +181,11 @@ export default async function SoulFilePage({
             label="Readings held"
             value={completedReadings.length.toString()}
           />
-          <Stat label="Love exchanged" value={money(lifetimePaidCents)} mono />
+          <Stat
+            label="Love exchanged"
+            value={money(lifetimePaidCents)}
+            mono
+          />
           <Stat
             label="Next meeting"
             value={
@@ -158,9 +200,7 @@ export default async function SoulFilePage({
           <Stat label="Open exchange" value={money(outstandingCents)} mono />
           <Stat
             label="Avg per reading"
-            value={
-              avgPerReadingCents > 0 ? money(avgPerReadingCents) : "—"
-            }
+            value={avgPerReadingCents > 0 ? money(avgPerReadingCents) : "—"}
             mono
           />
           <Stat
@@ -197,107 +237,81 @@ export default async function SoulFilePage({
                 What I&apos;m holding for her
               </div>
               <div className="text-sm text-ink-700 leading-relaxed italic">
-                {soul.pinnedNote ?? (
-                  <span className="text-ink-400">
-                    [No pinned note yet — write what you&apos;re holding for
-                    this soul]
-                  </span>
-                )}
+                <EditableField
+                  value={soul.pinnedNote}
+                  onSave={saveField("pinnedNote")}
+                  placeholder="What you're holding for this soul. Click to write."
+                  multiline
+                  italic
+                />
               </div>
             </div>
             <div className="border border-ink-200 rounded-md p-4">
               <div className="text-[10px] uppercase tracking-wider text-ink-500 mb-3">
                 Where her love work is now
               </div>
-              <div className="space-y-3">
-                {file.goals.length === 0 ? (
-                  <div className="text-xs text-ink-400 italic">
-                    [No goals recorded yet]
-                  </div>
-                ) : (
-                  file.goals.map((g) => (
-                    <div key={g.id}>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-ink-800">{g.label}</span>
-                        <span className="font-mono text-[11px] text-ink-500">
-                          {g.progress}%
-                        </span>
-                      </div>
-                      <div className="bar mt-1">
-                        <span style={{ width: `${g.progress}%` }} />
-                      </div>
-                      {g.note && (
-                        <div className="text-[11px] text-ink-500 mt-1">
-                          {g.note}
-                        </div>
-                      )}
-                    </div>
-                  ))
-                )}
+              <GoalsBlock soulId={soul.id} goals={file.goals} />
+            </div>
+            <div className="border border-ink-200 rounded-md p-4">
+              <div className="text-[10px] uppercase tracking-wider text-ink-500 mb-2">
+                If anything ever happens
+              </div>
+              <div className="text-sm text-ink-800">
+                <EditableField
+                  value={soul.emergencyName}
+                  onSave={saveField("emergencyName")}
+                  placeholder="Emergency contact name"
+                />
+              </div>
+              <div className="text-xs text-ink-500 font-mono mt-0.5">
+                <EditableField
+                  value={soul.emergencyPhone}
+                  onSave={saveField("emergencyPhone")}
+                  placeholder="Emergency phone"
+                />
               </div>
             </div>
-            {soul.emergencyName && (
-              <div className="border border-ink-200 rounded-md p-4">
-                <div className="text-[10px] uppercase tracking-wider text-ink-500 mb-2">
-                  If anything ever happens
-                </div>
-                <div className="text-sm text-ink-800">
-                  {soul.emergencyName}
-                </div>
-                <div className="text-xs text-ink-500 font-mono mt-0.5">
-                  {soul.emergencyPhone}
-                </div>
-              </div>
-            )}
           </aside>
         </div>
       )}
 
-      {tab === "readings" && <ReadingsList readings={file.readings} />}
+      {tab === "readings" && (
+        <div className="space-y-3">
+          {file.readings.length === 0 ? (
+            <div className="border border-dashed border-ink-300 rounded-md p-8 text-center">
+              <div className="text-sm text-ink-500 mb-3">
+                No readings yet. Schedule the first one when you&apos;re ready.
+              </div>
+              <ScheduleReadingDialog
+                soulId={soul.id}
+                defaultType={soul.primaryReadingType}
+              />
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-end mb-3">
+                <ScheduleReadingDialog
+                  soulId={soul.id}
+                  defaultType={soul.primaryReadingType}
+                />
+              </div>
+              {file.readings.map((r) => (
+                <ReadingCard key={r.id} reading={r} />
+              ))}
+            </>
+          )}
+        </div>
+      )}
 
       {tab === "documents" && (
-        <div className="border border-ink-200 rounded-md overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="text-[10px] uppercase tracking-wider text-ink-500 bg-ink-50/60 border-b border-ink-100">
-              <tr>
-                <th className="text-left font-medium px-4 py-2">File</th>
-                <th className="text-left font-medium px-4 py-2">Type</th>
-                <th className="text-left font-medium px-4 py-2">Size</th>
-                <th className="text-left font-medium px-4 py-2">Updated</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-ink-100">
-              {file.documents.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={4}
-                    className="px-4 py-6 text-center text-ink-400 text-sm italic"
-                  >
-                    [No documents yet]
-                  </td>
-                </tr>
-              ) : (
-                file.documents.map((d) => (
-                  <tr key={d.id} className="row-hover">
-                    <td className="px-4 py-2 font-mono text-xs text-ink-900">
-                      {d.name}
-                    </td>
-                    <td className="px-4 py-2">
-                      <span className="chip bg-ink-100 text-ink-700">
-                        {d.type.toUpperCase()}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2 font-mono text-xs text-ink-500">
-                      {bytes(d.sizeBytes)}
-                    </td>
-                    <td className="px-4 py-2 font-mono text-xs text-ink-500">
-                      {relativeTime(d.createdAt)}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+        <div className="border border-dashed border-ink-300 rounded-md p-8 text-center">
+          <div className="text-sm text-ink-500">
+            File uploads coming soon — currently a stub.
+          </div>
+          <div className="text-[11px] text-ink-400 mt-1">
+            Will support: session recordings, intake PDFs, altar photos,
+            consent forms, voice memos.
+          </div>
         </div>
       )}
 
@@ -322,7 +336,8 @@ export default async function SoulFilePage({
                       colSpan={3}
                       className="text-xs text-ink-400 italic py-3"
                     >
-                      No completed readings yet.
+                      No completed readings yet — pre/post numbers will show up
+                      after you complete one.
                     </td>
                   </tr>
                 ) : (
@@ -359,34 +374,20 @@ export default async function SoulFilePage({
             <div className="text-[10px] uppercase tracking-wider text-ink-500 mb-3">
               Love patterns showing up
             </div>
-            <div className="flex flex-wrap gap-2">
-              {file.themes.length === 0 ? (
-                <span className="text-xs text-ink-400 italic">
-                  [No themes recorded yet]
-                </span>
-              ) : (
-                file.themes.map((t) => (
-                  <span
-                    key={t.id}
-                    className="chip bg-ink-100 text-ink-700"
-                  >
-                    {t.label}
-                  </span>
-                ))
-              )}
-            </div>
+            <TagListBlock
+              soulId={soul.id}
+              tags={file.themes.map((t) => ({ id: t.id, label: t.label }))}
+              onAdd={addTheme}
+              onDelete={deleteTheme}
+              emptyText="No themes yet — add tags as patterns reveal themselves."
+            />
             <div className="mt-5 text-[10px] uppercase tracking-wider text-ink-500 mb-2">
               What I keep receiving for her
             </div>
-            <ul className="text-sm text-ink-700 space-y-2 list-disc pl-4">
-              {file.observations.length === 0 ? (
-                <li className="list-none text-ink-400 italic">
-                  [No observations yet]
-                </li>
-              ) : (
-                file.observations.map((o) => <li key={o.id}>{o.body}</li>)
-              )}
-            </ul>
+            <ObservationsBlock
+              soulId={soul.id}
+              observations={file.observations}
+            />
           </div>
           <div className="col-span-2 border border-ink-200 rounded-md p-5">
             <div className="text-[10px] uppercase tracking-wider text-ink-500 mb-3">
@@ -395,7 +396,8 @@ export default async function SoulFilePage({
             <ol className="text-sm space-y-3">
               {completedReadings.filter((r) => r.intention).length === 0 ? (
                 <li className="text-xs text-ink-400 italic list-none">
-                  [No intentions recorded yet]
+                  Intentions show up here automatically as readings are
+                  completed with one recorded.
                 </li>
               ) : (
                 completedReadings
@@ -429,54 +431,16 @@ export default async function SoulFilePage({
               value={avgPerReadingCents > 0 ? money(avgPerReadingCents) : "—"}
               mono
             />
-            <Stat label="Payment method" value="Stripe" last />
+            <Stat label="Payment method" value="—" last />
           </div>
-          <div className="border border-ink-200 rounded-md overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="text-[10px] uppercase tracking-wider text-ink-500 bg-ink-50/60 border-b border-ink-100">
-                <tr>
-                  <th className="text-left font-medium px-4 py-2">Invoice</th>
-                  <th className="text-left font-medium px-4 py-2">Issued</th>
-                  <th className="text-left font-medium px-4 py-2">Due</th>
-                  <th className="text-left font-medium px-4 py-2">Amount</th>
-                  <th className="text-left font-medium px-4 py-2">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-ink-100">
-                {file.invoices.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={5}
-                      className="px-4 py-6 text-center text-ink-400 text-sm italic"
-                    >
-                      [No invoices yet]
-                    </td>
-                  </tr>
-                ) : (
-                  file.invoices.map((i) => (
-                    <tr key={i.id} className="row-hover">
-                      <td className="px-4 py-2 font-mono text-xs font-medium text-ink-900">
-                        {i.number}
-                      </td>
-                      <td className="px-4 py-2 font-mono text-xs text-ink-600">
-                        {shortDate(i.issuedAt)}
-                      </td>
-                      <td className="px-4 py-2 font-mono text-xs text-ink-600">
-                        {shortDate(i.dueAt)}
-                      </td>
-                      <td className="px-4 py-2 font-mono text-xs text-ink-900 font-medium">
-                        {money(i.amountCents, i.currency)}
-                      </td>
-                      <td className="px-4 py-2">
-                        <span className="chip bg-green-50 text-green-700">
-                          {i.status.toUpperCase()}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+          <div className="border border-dashed border-ink-300 rounded-md p-8 text-center">
+            <div className="text-sm text-ink-500">
+              Manual invoices + Stripe coming soon.
+            </div>
+            <div className="text-[11px] text-ink-400 mt-1">
+              Until then, you can record an exchange manually from the upcoming
+              Exchange page actions.
+            </div>
           </div>
         </>
       )}
@@ -485,65 +449,30 @@ export default async function SoulFilePage({
         <div className="grid grid-cols-2 gap-5">
           <div className="border border-ink-200 rounded-md p-5">
             <div className="text-[10px] uppercase tracking-wider text-ink-500 mb-3">
-              Contact
+              Source / referral
             </div>
-            <dl className="text-sm grid grid-cols-[120px_1fr] gap-y-2 gap-x-4">
-              <dt className="text-ink-500 text-xs">Email</dt>
-              <dd className="text-ink-800">{soul.email ?? "—"}</dd>
-              <dt className="text-ink-500 text-xs">Phone</dt>
-              <dd className="text-ink-800">{soul.phone ?? "—"}</dd>
-              <dt className="text-ink-500 text-xs">City</dt>
-              <dd className="text-ink-800">{soul.city ?? "—"}</dd>
-              <dt className="text-ink-500 text-xs">Timezone</dt>
-              <dd className="text-ink-800">{soul.timezone ?? "—"}</dd>
-              <dt className="text-ink-500 text-xs">Pronouns</dt>
-              <dd className="text-ink-800">{soul.pronouns ?? "—"}</dd>
-              <dt className="text-ink-500 text-xs">Source</dt>
-              <dd className="text-ink-800">{soul.source ?? "—"}</dd>
-            </dl>
+            <div className="text-sm text-ink-700">
+              <EditableField
+                value={soul.source}
+                onSave={saveField("source")}
+                placeholder="How she found you (Instagram, quiz, friend, referral)"
+              />
+            </div>
           </div>
           <div className="border border-ink-200 rounded-md p-5">
             <div className="text-[10px] uppercase tracking-wider text-ink-500 mb-3">
-              Consents &amp; agreements
+              Consents (coming soon)
             </div>
-            <ul className="text-sm space-y-2">
-              {file.consents.length === 0 ? (
-                <li className="text-ink-400 italic text-xs">
-                  [No consents recorded]
-                </li>
-              ) : (
-                file.consents.map((c) => (
-                  <li
-                    key={c.id}
-                    className="flex items-center justify-between border-b border-ink-100 pb-2 last:border-0"
-                  >
-                    <span className="text-ink-800">{c.label}</span>
-                    <span className="text-xs text-green-700">{c.status}</span>
-                  </li>
-                ))
-              )}
-            </ul>
+            <div className="text-xs text-ink-400 italic">
+              Care &amp; recording consent · permission to channel guides ·
+              permission to share voice memos · cancellation rhythm.
+            </div>
           </div>
           <div className="col-span-2 border border-ink-200 rounded-md p-5">
-            <div className="flex items-center justify-between mb-3">
-              <div className="text-[10px] uppercase tracking-wider text-ink-500">
-                Intake answers
-              </div>
+            <div className="text-[10px] uppercase tracking-wider text-ink-500 mb-3">
+              Intake answers
             </div>
-            <dl className="text-sm grid grid-cols-[280px_1fr] gap-y-3 gap-x-4">
-              {file.intakeAnswers.length === 0 ? (
-                <div className="col-span-2 text-ink-400 italic">
-                  [No intake answers recorded]
-                </div>
-              ) : (
-                file.intakeAnswers.map((a) => (
-                  <div key={a.id} className="contents">
-                    <dt className="text-ink-500 text-xs">{a.question}</dt>
-                    <dd className="text-ink-800">{a.answer ?? "—"}</dd>
-                  </div>
-                ))
-              )}
-            </dl>
+            <IntakeBlock soulId={soul.id} answers={file.intakeAnswers} />
           </div>
         </div>
       )}

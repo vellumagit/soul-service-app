@@ -56,7 +56,11 @@ export function TopBar({
         <span>Search</span>
         <span className="kbd">⌘K</span>
       </button>
-      <button className="bg-ink-900 hover:bg-ink-800 text-white text-xs font-medium px-3 py-1.5 rounded flex items-center gap-1.5">
+      <Link
+        href="/souls"
+        className="bg-ink-900 hover:bg-ink-800 text-white text-xs font-medium px-3 py-1.5 rounded flex items-center gap-1.5"
+        title="Open the souls directory to create a new file"
+      >
         <svg
           className="w-3 h-3"
           fill="none"
@@ -70,9 +74,8 @@ export function TopBar({
             d="M12 4v16m8-8H4"
           />
         </svg>
-        New
-        <span className="kbd bg-ink-800 text-ink-300 border-ink-700">C</span>
-      </button>
+        New soul
+      </Link>
     </header>
   );
 }
