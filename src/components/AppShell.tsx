@@ -154,7 +154,7 @@ function SidebarBrand({ onClose }: { onClose?: () => void }) {
           <div className="text-sm font-semibold text-ink-900 tracking-tight leading-none">
             Soul Service
           </div>
-          <div className="text-[10px] text-ink-400 mt-0.5">for Maya</div>
+          <div className="text-[10px] text-ink-400 mt-0.5">for Svitlana</div>
         </div>
       </Link>
       {onClose && (
@@ -225,10 +225,10 @@ function SidebarFooter() {
       <div className="flex items-center justify-between px-1">
         <div className="flex items-center gap-2">
           <div className="w-6 h-6 rounded-md bg-flame-100 flex items-center justify-center text-[11px] font-semibold text-flame-700">
-            M
+            S
           </div>
           <div className="min-w-0">
-            <div className="truncate text-ink-700 leading-none">Maya</div>
+            <div className="truncate text-ink-700 leading-none">Svitlana</div>
             <div className="text-[10px] text-ink-400 mt-0.5 leading-none">
               your space
             </div>

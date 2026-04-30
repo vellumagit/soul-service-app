@@ -151,34 +151,18 @@ export function SettingsForm({ settings }: { settings: PractitionerSettings }) {
             description="Saves a PDF on the session, ready to email or download. Off = generate manually."
           />
 
-          <div>
-            <Field
-              label="Auto-create a follow-up task after each completed session"
-              hint="Set to empty to disable"
-            >
-              <div className="flex items-center gap-2">
-                <input
-                  name="autoFollowupTaskDays"
-                  type="number"
-                  min={0}
-                  max={30}
-                  defaultValue={
-                    settings.autoFollowupTaskDays === null
-                      ? ""
-                      : settings.autoFollowupTaskDays
-                  }
-                  className={`${inputCls} w-24`}
-                  placeholder="2"
-                />
-                <span className="text-sm text-ink-500">days after, called</span>
-                <input
-                  name="autoFollowupTaskTitle"
-                  defaultValue={settings.autoFollowupTaskTitle ?? ""}
-                  className={`${inputCls} flex-1`}
-                  placeholder="Send aftercare email"
-                />
-              </div>
-            </Field>
+          <div className="rounded-md bg-flame-50 border border-flame-100 p-3">
+            <div className="text-sm font-medium text-flame-700 mb-1">
+              Follow-up cadence (locked in)
+            </div>
+            <p className="text-xs text-ink-700 leading-relaxed">
+              When you add a client and set their first session date, three
+              follow-up tasks are created automatically:
+              <strong> 1 week</strong>, <strong>1 month</strong>, and{" "}
+              <strong>3 months</strong> after that date. Past-dated follow-ups
+              are skipped, so old clients you onboard won&apos;t flood your
+              task list.
+            </p>
           </div>
 
           <div>

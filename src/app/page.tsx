@@ -38,7 +38,7 @@ export default async function HomePage() {
       {isFirstRun ? (
         <div className="border-2 border-dashed border-ink-200 rounded-lg p-12 text-center bg-white">
           <div className="text-base text-ink-900 font-medium mb-2">
-            Welcome to your space, Maya.
+            Welcome to your space, Svitlana.
           </div>
           <div className="text-sm text-ink-500 mb-6 max-w-md mx-auto leading-relaxed">
             This is where everyone you read for lives — their notes, their

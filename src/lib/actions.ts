@@ -64,6 +64,11 @@ function required<T>(value: T | null, fieldName: string): T {
 
 export async function createClient(formData: FormData) {
   const fullName = required(str(formData, "fullName"), "Full name");
+  const firstSessionDateRaw = str(formData, "firstSessionDate");
+  const firstSessionType =
+    str(formData, "firstSessionType") ??
+    str(formData, "primarySessionType") ??
+    "Soul reading";
 
   const [created] = await db
     .insert(clients)
@@ -78,8 +83,7 @@ export async function createClient(formData: FormData) {
       aboutClient: str(formData, "aboutClient"),
       intakeNotes: str(formData, "intakeNotes"),
       howTheyFoundMe: str(formData, "howTheyFoundMe"),
-      primarySessionType:
-        str(formData, "primarySessionType") ?? "Soul reading",
+      primarySessionType: firstSessionType,
       tags: tagsFromString(str(formData, "tags")),
       emergencyName: str(formData, "emergencyName"),
       emergencyPhone: str(formData, "emergencyPhone"),
@@ -87,8 +91,53 @@ export async function createClient(formData: FormData) {
     })
     .returning({ id: clients.id });
 
+  // If a first session date was given, create the session + follow-up tasks.
+  if (firstSessionDateRaw) {
+    const firstSessionDate = new Date(firstSessionDateRaw + "T12:00:00");
+    const isPast = firstSessionDate < new Date();
+    await db.insert(sessions).values({
+      clientId: created.id,
+      type: firstSessionType,
+      status: isPast ? "completed" : "scheduled",
+      scheduledAt: firstSessionDate,
+      durationMinutes: 60,
+    });
+    await scheduleFirstSessionFollowups(created.id, firstSessionDate, fullName);
+  }
+
   revalidatePath("/clients");
   redirect(`/clients/${created.id}`);
+}
+
+// Hardcoded touchpoint cadence: 1 week, 1 month, 3 months after the FIRST session.
+// Tasks dated in the past are skipped (kept clean for long-time clients being onboarded).
+async function scheduleFirstSessionFollowups(
+  clientId: string,
+  firstSessionDate: Date,
+  clientName: string
+) {
+  const FOLLOWUPS = [
+    { days: 7, title: "1-week follow-up" },
+    { days: 30, title: "1-month follow-up" },
+    { days: 90, title: "3-month follow-up" },
+  ];
+
+  const now = new Date();
+  const rows: typeof tasks.$inferInsert[] = [];
+
+  for (const f of FOLLOWUPS) {
+    const dueAt = new Date(firstSessionDate);
+    dueAt.setDate(dueAt.getDate() + f.days);
+    if (dueAt <= now) continue; // skip past follow-ups
+    rows.push({
+      title: `${f.title} with ${clientName}`,
+      clientId,
+      dueAt,
+      source: "rule",
+    });
+  }
+
+  if (rows.length > 0) await db.insert(tasks).values(rows);
 }
 
 export async function updateClient(formData: FormData) {
@@ -459,8 +508,6 @@ export async function updateSettings(formData: FormData) {
       invoiceFooter: str(formData, "invoiceFooter"),
       invoicePrefix: str(formData, "invoicePrefix") ?? "INV",
       autoInvoiceOnComplete: bool(formData, "autoInvoiceOnComplete"),
-      autoFollowupTaskDays: num(formData, "autoFollowupTaskDays"),
-      autoFollowupTaskTitle: str(formData, "autoFollowupTaskTitle"),
       birthdayReminderDays: num(formData, "birthdayReminderDays"),
       updatedAt: new Date(),
     })
@@ -536,23 +583,13 @@ export async function deleteNoteTemplate(id: string) {
 // AUTO-RULES — runs when a session is marked complete
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function runOnSessionCompleted(sessionId: string, clientId: string) {
+async function runOnSessionCompleted(sessionId: string, _clientId: string) {
   const settings = await getSettings();
 
-  // Rule 1: create a follow-up task N days after completion
-  if (settings.autoFollowupTaskDays !== null) {
-    const dueAt = new Date();
-    dueAt.setDate(dueAt.getDate() + settings.autoFollowupTaskDays);
-    await db.insert(tasks).values({
-      title: settings.autoFollowupTaskTitle ?? "Send aftercare email",
-      clientId,
-      sessionId,
-      dueAt,
-      source: "rule",
-    });
-  }
-
-  // Rule 2: auto-generate invoice PDF if enabled
+  // Auto-invoice when a session is marked complete (toggleable in Settings).
+  // The 1wk/1mo/3mo follow-up cadence is hardcoded and triggers when a client
+  // is added (based on their first-session date) — not per-session — so it lives
+  // in createClient, not here.
   if (settings.autoInvoiceOnComplete) {
     try {
       const { generateInvoiceForSession } = await import("./invoices");

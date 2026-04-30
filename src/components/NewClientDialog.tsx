@@ -154,6 +154,29 @@ export function NewClientDialog({
               placeholder="Instagram / referral / website"
             />
           </Field>
+
+          <div className="border-t border-ink-100 pt-4 mt-2">
+            <Field
+              label="First session date"
+              required
+              hint="Locks in the follow-up rhythm: 1 week, 1 month, and 3 months after this date. Past or future is fine."
+            >
+              <input
+                name="firstSessionDate"
+                type="date"
+                required
+                defaultValue={new Date().toISOString().slice(0, 10)}
+                className={inputCls}
+              />
+            </Field>
+            <Field label="First session type">
+              <input
+                name="firstSessionType"
+                defaultValue="Soul reading"
+                className={inputCls}
+              />
+            </Field>
+          </div>
         </form>
       </Modal>
     </>
