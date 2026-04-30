@@ -1,15 +1,35 @@
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { listClients, listClientsForPicker } from "@/db/queries";
+import type { ClientFilter } from "@/db/queries";
 import { initials, money, relativeTime } from "@/lib/format";
 import { NewClientDialog } from "@/components/NewClientDialog";
 import { QuickActions } from "@/components/QuickActions";
 
 export const dynamic = "force-dynamic";
 
-export default async function ClientsPage() {
+const FILTERS: { value: ClientFilter; label: string; description: string }[] = [
+  { value: "all", label: "All clients", description: "Everyone" },
+  { value: "active", label: "Active", description: "Currently in care" },
+  { value: "new", label: "New", description: "Recent arrivals" },
+  { value: "unpaid", label: "Has unpaid", description: "Money still open" },
+  { value: "quiet", label: "Quiet 30d+", description: "Hasn't been in 30 days" },
+  { value: "recent", label: "Added this month", description: "Joined recently" },
+  { value: "dormant", label: "Dormant", description: "Marked dormant" },
+];
+
+export default async function ClientsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ filter?: string }>;
+}) {
+  const { filter: filterRaw = "all" } = await searchParams;
+  const filter = (
+    FILTERS.some((f) => f.value === filterRaw) ? filterRaw : "all"
+  ) as ClientFilter;
+
   const [clients, picker] = await Promise.all([
-    listClients(),
+    listClients(filter),
     listClientsForPicker(),
   ]);
 
@@ -17,7 +37,10 @@ export default async function ClientsPage() {
     <AppShell
       breadcrumb={[
         { label: "Clients", href: "/clients" },
-        { label: "Everyone" },
+        {
+          label:
+            FILTERS.find((f) => f.value === filter)?.label ?? "Everyone",
+        },
       ]}
       rightAction={<QuickActions clients={picker} />}
     >
@@ -33,15 +56,37 @@ export default async function ClientsPage() {
         <NewClientDialog />
       </div>
 
+      {/* Smart filters */}
+      <div className="flex items-center gap-2 mb-4 overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+        {FILTERS.map((f) => (
+          <Link
+            key={f.value}
+            href={
+              f.value === "all" ? "/clients" : `/clients?filter=${f.value}`
+            }
+            className={`px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap shrink-0 ${
+              filter === f.value
+                ? "bg-ink-900 text-white"
+                : "bg-white border border-ink-200 text-ink-700 hover:bg-ink-50"
+            }`}
+            title={f.description}
+          >
+            {f.label}
+          </Link>
+        ))}
+      </div>
+
       {clients.length === 0 ? (
         <div className="border-2 border-dashed border-ink-200 rounded-lg p-12 text-center bg-white">
           <div className="text-base text-ink-900 font-medium mb-2">
-            No clients yet.
+            {filter === "all" ? "No clients yet." : "No matches."}
           </div>
           <div className="text-sm text-ink-500 mb-6 max-w-md mx-auto">
-            Add your first one and start building their profile.
+            {filter === "all"
+              ? "Add your first one and start building their profile."
+              : "Try a different filter."}
           </div>
-          <NewClientDialog />
+          {filter === "all" && <NewClientDialog />}
         </div>
       ) : (
         <>

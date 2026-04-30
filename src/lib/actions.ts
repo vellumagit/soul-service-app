@@ -8,11 +8,17 @@ import {
   sessions,
   attachments,
   goals,
+  tasks,
+  communications,
+  emailTemplates,
+  noteTemplates,
+  practitionerSettings,
 } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+import { getSettings } from "@/db/queries";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Helpers
+// Form helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
 function str(form: FormData, key: string): string | null {
@@ -130,14 +136,10 @@ export async function deleteClient(clientId: string) {
 // SESSIONS
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Schedule a future session
 export async function scheduleSession(formData: FormData) {
   const clientId = required(str(formData, "clientId"), "Client");
   const type = str(formData, "type") ?? "Soul reading";
-  const scheduledAtRaw = required(
-    str(formData, "scheduledAt"),
-    "Date / time"
-  );
+  const scheduledAtRaw = required(str(formData, "scheduledAt"), "Date / time");
   const durationMinutes = num(formData, "durationMinutes") ?? 60;
 
   await db.insert(sessions).values({
@@ -155,44 +157,46 @@ export async function scheduleSession(formData: FormData) {
   revalidatePath("/");
 }
 
-// Log a session that already happened (can mark paid in the same step)
 export async function logPastSession(formData: FormData) {
   const clientId = required(str(formData, "clientId"), "Client");
   const type = str(formData, "type") ?? "Soul reading";
-  const scheduledAtRaw = required(
-    str(formData, "scheduledAt"),
-    "Date / time"
-  );
+  const scheduledAtRaw = required(str(formData, "scheduledAt"), "Date / time");
   const durationMinutes = num(formData, "durationMinutes") ?? 60;
   const paid = bool(formData, "paid");
   const paymentAmount = num(formData, "paymentAmount");
 
-  await db.insert(sessions).values({
-    clientId,
-    type,
-    status: "completed",
-    scheduledAt: new Date(scheduledAtRaw),
-    durationMinutes,
-    intention: str(formData, "intention"),
-    arrivedAs: str(formData, "arrivedAs"),
-    leftAs: str(formData, "leftAs"),
-    notes: str(formData, "notes"),
-    paid,
-    paymentMethod: paid
-      ? ((str(formData, "paymentMethod") as
-          | "venmo"
-          | "zelle"
-          | "etransfer"
-          | "cash"
-          | "paypal"
-          | "stripe"
-          | "other"
-          | null) ?? null)
-      : null,
-    paymentAmountCents:
-      paid && paymentAmount !== null ? Math.round(paymentAmount * 100) : null,
-    paidAt: paid ? new Date().toISOString().slice(0, 10) : null,
-  });
+  const [created] = await db
+    .insert(sessions)
+    .values({
+      clientId,
+      type,
+      status: "completed",
+      scheduledAt: new Date(scheduledAtRaw),
+      durationMinutes,
+      intention: str(formData, "intention"),
+      arrivedAs: str(formData, "arrivedAs"),
+      leftAs: str(formData, "leftAs"),
+      notes: str(formData, "notes"),
+      paid,
+      paymentMethod: paid
+        ? ((str(formData, "paymentMethod") as
+            | "venmo"
+            | "zelle"
+            | "etransfer"
+            | "cash"
+            | "paypal"
+            | "stripe"
+            | "other"
+            | null) ?? null)
+        : null,
+      paymentAmountCents:
+        paid && paymentAmount !== null ? Math.round(paymentAmount * 100) : null,
+      paidAt: paid ? new Date().toISOString().slice(0, 10) : null,
+    })
+    .returning();
+
+  // Run auto-rules (creates follow-up task; auto-invoice if turned on)
+  await runOnSessionCompleted(created.id, created.clientId);
 
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/calendar");
@@ -200,7 +204,6 @@ export async function logPastSession(formData: FormData) {
   revalidatePath("/");
 }
 
-// Update an existing session (notes, intention, body states, etc.)
 export async function updateSession(formData: FormData) {
   const id = required(str(formData, "id"), "Session id");
   const clientId = required(str(formData, "clientId"), "Client id");
@@ -214,12 +217,14 @@ export async function updateSession(formData: FormData) {
     updatedAt: new Date(),
   };
 
-  // If marking complete (from scheduled)
-  if (str(formData, "markComplete") === "true") {
-    updates.status = "completed";
-  }
+  const isMarkComplete = str(formData, "markComplete") === "true";
+  if (isMarkComplete) updates.status = "completed";
 
   await db.update(sessions).set(updates).where(eq(sessions.id, id));
+
+  if (isMarkComplete) {
+    await runOnSessionCompleted(id, clientId);
+  }
 
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/calendar");
@@ -243,10 +248,6 @@ export async function deleteSession(sessionId: string, clientId: string) {
   revalidatePath("/payments");
   revalidatePath("/");
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PAYMENT MARKING
-// ─────────────────────────────────────────────────────────────────────────────
 
 export async function markSessionPaid(formData: FormData) {
   const id = required(str(formData, "id"), "Session id");
@@ -328,14 +329,94 @@ export async function deleteGoal(goalId: string, clientId: string) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FILES (Vercel Blob — wired in Step 7)
+// TASKS
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function addTask(formData: FormData) {
+  const title = required(str(formData, "title"), "Task title");
+  const clientId = str(formData, "clientId"); // optional
+  const dueAtRaw = str(formData, "dueAt");
+  const body = str(formData, "body");
+
+  await db.insert(tasks).values({
+    title,
+    body,
+    clientId,
+    dueAt: dueAtRaw ? new Date(dueAtRaw) : null,
+  });
+
+  revalidatePath("/");
+  if (clientId) revalidatePath(`/clients/${clientId}`);
+}
+
+export async function toggleTaskComplete(
+  taskId: string,
+  clientId: string | null
+) {
+  // Read the current state, flip it
+  const [t] = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1);
+  if (!t) return;
+  await db
+    .update(tasks)
+    .set({
+      completedAt: t.completedAt ? null : new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(tasks.id, taskId));
+  revalidatePath("/");
+  if (clientId) revalidatePath(`/clients/${clientId}`);
+}
+
+export async function deleteTask(taskId: string, clientId: string | null) {
+  await db.delete(tasks).where(eq(tasks.id, taskId));
+  revalidatePath("/");
+  if (clientId) revalidatePath(`/clients/${clientId}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COMMUNICATIONS — log emails / calls / messages
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function logCommunication(formData: FormData) {
+  const clientId = required(str(formData, "clientId"), "Client id");
+  const kind =
+    (str(formData, "kind") as
+      | "email_sent"
+      | "email_received"
+      | "call_logged"
+      | "sms_sent"
+      | "note"
+      | null) ?? "note";
+  const subject = str(formData, "subject");
+  const body = str(formData, "body");
+  const templateId = str(formData, "templateId");
+
+  await db.insert(communications).values({
+    clientId,
+    kind,
+    subject,
+    body,
+    templateId: templateId ?? null,
+  });
+  revalidatePath(`/clients/${clientId}`);
+}
+
+export async function deleteCommunication(
+  commId: string,
+  clientId: string
+) {
+  await db.delete(communications).where(eq(communications.id, commId));
+  revalidatePath(`/clients/${clientId}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FILES (deletion)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function deleteAttachment(
   attachmentId: string,
   clientId: string
 ) {
-  // Best-effort: if Blob token is configured, also delete the blob
   try {
     if (process.env.BLOB_READ_WRITE_TOKEN) {
       const { del } = await import("@vercel/blob");
@@ -351,4 +432,144 @@ export async function deleteAttachment(
   }
   await db.delete(attachments).where(eq(attachments.id, attachmentId));
   revalidatePath(`/clients/${clientId}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SETTINGS
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function updateSettings(formData: FormData) {
+  const settings = await getSettings();
+
+  const defaultRate = num(formData, "defaultRate");
+
+  await db
+    .update(practitionerSettings)
+    .set({
+      practitionerName: str(formData, "practitionerName"),
+      businessName: str(formData, "businessName"),
+      businessEmail: str(formData, "businessEmail"),
+      businessPhone: str(formData, "businessPhone"),
+      businessAddress: str(formData, "businessAddress"),
+      websiteUrl: str(formData, "websiteUrl"),
+      defaultRateCents:
+        defaultRate !== null ? Math.round(defaultRate * 100) : 13500,
+      defaultCurrency: str(formData, "defaultCurrency") ?? "USD",
+      paymentInstructions: str(formData, "paymentInstructions"),
+      invoiceFooter: str(formData, "invoiceFooter"),
+      invoicePrefix: str(formData, "invoicePrefix") ?? "INV",
+      autoInvoiceOnComplete: bool(formData, "autoInvoiceOnComplete"),
+      autoFollowupTaskDays: num(formData, "autoFollowupTaskDays"),
+      autoFollowupTaskTitle: str(formData, "autoFollowupTaskTitle"),
+      birthdayReminderDays: num(formData, "birthdayReminderDays"),
+      updatedAt: new Date(),
+    })
+    .where(eq(practitionerSettings.id, settings.id));
+
+  revalidatePath("/settings");
+  revalidatePath("/");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EMAIL TEMPLATES (CRUD)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function createEmailTemplate(formData: FormData) {
+  await db.insert(emailTemplates).values({
+    name: required(str(formData, "name"), "Name"),
+    subject: required(str(formData, "subject"), "Subject"),
+    body: required(str(formData, "body"), "Body"),
+  });
+  revalidatePath("/settings");
+}
+
+export async function updateEmailTemplate(formData: FormData) {
+  const id = required(str(formData, "id"), "id");
+  await db
+    .update(emailTemplates)
+    .set({
+      name: required(str(formData, "name"), "Name"),
+      subject: required(str(formData, "subject"), "Subject"),
+      body: required(str(formData, "body"), "Body"),
+      updatedAt: new Date(),
+    })
+    .where(eq(emailTemplates.id, id));
+  revalidatePath("/settings");
+}
+
+export async function deleteEmailTemplate(id: string) {
+  await db.delete(emailTemplates).where(eq(emailTemplates.id, id));
+  revalidatePath("/settings");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NOTE TEMPLATES (CRUD)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function createNoteTemplate(formData: FormData) {
+  await db.insert(noteTemplates).values({
+    name: required(str(formData, "name"), "Name"),
+    body: required(str(formData, "body"), "Body"),
+  });
+  revalidatePath("/settings");
+}
+
+export async function updateNoteTemplate(formData: FormData) {
+  const id = required(str(formData, "id"), "id");
+  await db
+    .update(noteTemplates)
+    .set({
+      name: required(str(formData, "name"), "Name"),
+      body: required(str(formData, "body"), "Body"),
+      updatedAt: new Date(),
+    })
+    .where(eq(noteTemplates.id, id));
+  revalidatePath("/settings");
+}
+
+export async function deleteNoteTemplate(id: string) {
+  await db.delete(noteTemplates).where(eq(noteTemplates.id, id));
+  revalidatePath("/settings");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AUTO-RULES — runs when a session is marked complete
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function runOnSessionCompleted(sessionId: string, clientId: string) {
+  const settings = await getSettings();
+
+  // Rule 1: create a follow-up task N days after completion
+  if (settings.autoFollowupTaskDays !== null) {
+    const dueAt = new Date();
+    dueAt.setDate(dueAt.getDate() + settings.autoFollowupTaskDays);
+    await db.insert(tasks).values({
+      title: settings.autoFollowupTaskTitle ?? "Send aftercare email",
+      clientId,
+      sessionId,
+      dueAt,
+      source: "rule",
+    });
+  }
+
+  // Rule 2: auto-generate invoice PDF if enabled
+  if (settings.autoInvoiceOnComplete) {
+    try {
+      const { generateInvoiceForSession } = await import("./invoices");
+      await generateInvoiceForSession(sessionId);
+    } catch (e) {
+      console.warn("Auto-invoice generation failed:", e);
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MANUAL INVOICE GENERATION
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function generateInvoice(sessionId: string, clientId: string) {
+  const { generateInvoiceForSession } = await import("./invoices");
+  await generateInvoiceForSession(sessionId);
+  revalidatePath(`/clients/${clientId}`);
+  revalidatePath("/payments");
 }

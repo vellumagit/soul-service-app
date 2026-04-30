@@ -210,3 +210,75 @@ body {
   color: var(--color-ink-900);
   border-color: var(--color-ink-900);
 }
+
+/* Markdown rendering — keep simple but readable */
+.md-render h1 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-top: 0.75rem;
+  margin-bottom: 0.5rem;
+  color: var(--color-ink-900);
+}
+.md-render h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-top: 0.75rem;
+  margin-bottom: 0.4rem;
+  color: var(--color-ink-900);
+}
+.md-render h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-top: 0.6rem;
+  margin-bottom: 0.3rem;
+  color: var(--color-ink-800);
+}
+.md-render p {
+  margin: 0.4rem 0;
+  line-height: 1.6;
+}
+.md-render ul,
+.md-render ol {
+  margin: 0.4rem 0;
+  padding-left: 1.25rem;
+}
+.md-render ul {
+  list-style: disc;
+}
+.md-render ol {
+  list-style: decimal;
+}
+.md-render li {
+  margin: 0.2rem 0;
+  line-height: 1.5;
+}
+.md-render strong {
+  font-weight: 600;
+  color: var(--color-ink-900);
+}
+.md-render em {
+  font-style: italic;
+}
+.md-render blockquote {
+  border-left: 2px solid var(--color-flame-500);
+  padding-left: 0.75rem;
+  margin: 0.5rem 0;
+  color: var(--color-ink-600);
+  font-style: italic;
+}
+.md-render code {
+  font-family: var(--font-mono);
+  background: var(--color-ink-100);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+.md-render a {
+  color: var(--color-flame-700);
+  text-decoration: underline;
+}
+.md-render hr {
+  border: 0;
+  border-top: 1px solid var(--color-ink-200);
+  margin: 0.75rem 0;
+}

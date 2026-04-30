@@ -49,6 +49,19 @@ export const attachmentKindEnum = pgEnum("attachment_kind", [
   "other",
 ]);
 
+export const communicationKindEnum = pgEnum("communication_kind", [
+  "email_sent",
+  "email_received",
+  "call_logged",
+  "sms_sent",
+  "note",
+]);
+
+export const taskSourceEnum = pgEnum("task_source", [
+  "manual",
+  "rule",
+]);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // clients — the central entity
 // ─────────────────────────────────────────────────────────────────────────────
@@ -128,6 +141,11 @@ export const sessions = pgTable(
     paidAt: date("paid_at"),
     paymentNote: text("payment_note"), // optional — confirmation # / "venmo: @maya"
 
+    // Generated invoice PDF (Vercel Blob URL). Auto-generated on completion if enabled.
+    invoiceUrl: text("invoice_url"),
+    invoiceNumber: text("invoice_number"),
+    invoiceGeneratedAt: timestamp("invoice_generated_at"),
+
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
@@ -190,10 +208,138 @@ export const goals = pgTable("goals", {
 // Relations
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────────────
+// tasks — to-dos. Optionally tied to a client.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const tasks = pgTable(
+  "tasks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clientId: uuid("client_id").references(() => clients.id, {
+      onDelete: "cascade",
+    }),
+    sessionId: uuid("session_id").references(() => sessions.id, {
+      onDelete: "set null",
+    }),
+
+    title: text("title").notNull(),
+    body: text("body"),
+    dueAt: timestamp("due_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+
+    source: taskSourceEnum("source").default("manual").notNull(), // 'rule' = auto-created by automation
+
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    clientIdx: index("tasks_client_idx").on(t.clientId),
+    dueIdx: index("tasks_due_idx").on(t.dueAt),
+    completedIdx: index("tasks_completed_idx").on(t.completedAt),
+  })
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// communications — every email sent / call logged / SMS recorded
+// (mailto-based composing means we log "I clicked send" rather than confirming delivery)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const communications = pgTable(
+  "communications",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    kind: communicationKindEnum("kind").notNull(),
+    subject: text("subject"),
+    body: text("body"),
+    occurredAt: timestamp("occurred_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    templateId: uuid("template_id"), // soft ref — if it was sent from a template
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    clientIdx: index("communications_client_idx").on(t.clientId),
+    occurredIdx: index("communications_occurred_idx").on(t.occurredAt),
+  })
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// email_templates — reusable email/message templates
+// Body supports {{client.firstName}}, {{client.fullName}}, {{session.date}}, etc.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const emailTemplates = pgTable("email_templates", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  subject: text("subject").notNull(),
+  body: text("body").notNull(),
+  archived: boolean("archived").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// note_templates — reusable note structures (insert into session/client notes)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const noteTemplates = pgTable("note_templates", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  body: text("body").notNull(),
+  archived: boolean("archived").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// practitioner_settings — single row holding biz info + automation toggles
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const practitionerSettings = pgTable("practitioner_settings", {
+  id: uuid("id").primaryKey().defaultRandom(),
+
+  businessName: text("business_name"),
+  practitionerName: text("practitioner_name"), // "Maya"
+  businessEmail: text("business_email"),
+  businessPhone: text("business_phone"),
+  businessAddress: text("business_address"),
+  websiteUrl: text("website_url"),
+
+  // Default rate (used when generating invoices if no amount is set)
+  defaultRateCents: integer("default_rate_cents").default(13500).notNull(),
+  defaultCurrency: varchar("default_currency", { length: 8 })
+    .default("USD")
+    .notNull(),
+
+  // Payment instructions printed on invoices (e.g. "Venmo @maya / Zelle 555-1234")
+  paymentInstructions: text("payment_instructions"),
+  invoiceFooter: text("invoice_footer"), // "Thank you. With love, Maya."
+  invoicePrefix: text("invoice_prefix").default("INV").notNull(),
+  nextInvoiceNumber: integer("next_invoice_number").default(1001).notNull(),
+
+  // Automation toggles
+  autoInvoiceOnComplete: boolean("auto_invoice_on_complete")
+    .default(true)
+    .notNull(),
+  autoFollowupTaskDays: integer("auto_followup_task_days").default(2), // null = disabled
+  autoFollowupTaskTitle: text("auto_followup_task_title").default(
+    "Send aftercare email"
+  ),
+  birthdayReminderDays: integer("birthday_reminder_days").default(3), // create task N days before
+
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export const clientsRelations = relations(clients, ({ many }) => ({
   sessions: many(sessions),
   attachments: many(attachments),
   goals: many(goals),
+  tasks: many(tasks),
+  communications: many(communications),
 }));
 
 export const sessionsRelations = relations(sessions, ({ one, many }) => ({
@@ -225,3 +371,8 @@ export type Session = typeof sessions.$inferSelect;
 export type NewSession = typeof sessions.$inferInsert;
 export type Attachment = typeof attachments.$inferSelect;
 export type Goal = typeof goals.$inferSelect;
+export type Task = typeof tasks.$inferSelect;
+export type Communication = typeof communications.$inferSelect;
+export type EmailTemplate = typeof emailTemplates.$inferSelect;
+export type NoteTemplate = typeof noteTemplates.$inferSelect;
+export type PractitionerSettings = typeof practitionerSettings.$inferSelect;

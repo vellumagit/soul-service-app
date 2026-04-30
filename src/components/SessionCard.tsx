@@ -7,7 +7,7 @@ import {
   deleteSession,
   markSessionUnpaid,
 } from "@/lib/actions";
-import type { Session } from "@/db/schema";
+import type { NoteTemplate, Session } from "@/db/schema";
 import {
   fullDate,
   shortTime,
@@ -17,6 +17,8 @@ import {
 import { Field, inputCls } from "./Form";
 import { ConfirmButton } from "./ConfirmButton";
 import { MarkPaidDialog } from "./MarkPaidDialog";
+import { NotesEditor } from "./NotesEditor";
+import { GenerateInvoiceButton } from "./GenerateInvoiceButton";
 
 const STATUS_CHIP: Record<string, string> = {
   scheduled: "bg-flame-100 text-flame-700",
@@ -25,7 +27,13 @@ const STATUS_CHIP: Record<string, string> = {
   no_show: "bg-amber-50 text-amber-700",
 };
 
-export function SessionCard({ session }: { session: Session }) {
+export function SessionCard({
+  session,
+  noteTemplates = [],
+}: {
+  session: Session;
+  noteTemplates?: NoteTemplate[];
+}) {
   const [open, setOpen] = useState(session.status === "scheduled");
   const [submitting, setSubmitting] = useState(false);
 
@@ -33,7 +41,10 @@ export function SessionCard({ session }: { session: Session }) {
   const isCompleted = session.status === "completed";
 
   return (
-    <div className="border border-ink-200 rounded-md overflow-hidden bg-white">
+    <div
+      id={session.id}
+      className="border border-ink-200 rounded-md overflow-hidden bg-white"
+    >
       <button
         type="button"
         onClick={() => setOpen(!open)}
@@ -135,12 +146,20 @@ export function SessionCard({ session }: { session: Session }) {
               </Field>
             </div>
 
-            <Field label="Session notes" hint="What came through, guides, body shifts, recommendations">
-              <textarea
+            <Field
+              label="Session notes"
+              hint="Markdown supported. Use a template to start fast."
+            >
+              <NotesEditor
                 name="notes"
-                rows={6}
                 defaultValue={session.notes ?? ""}
-                className={inputCls}
+                templates={noteTemplates.map((t) => ({
+                  id: t.id,
+                  name: t.name,
+                  body: t.body,
+                }))}
+                rows={8}
+                placeholder="What came through. What guides showed up. Body shifts. Recommendations."
               />
             </Field>
 
@@ -167,7 +186,7 @@ export function SessionCard({ session }: { session: Session }) {
           </form>
 
           {/* Payment row */}
-          <div className="border-t border-ink-100 pt-3 flex items-center gap-3 text-sm">
+          <div className="border-t border-ink-100 pt-3 flex items-center gap-3 text-sm flex-wrap">
             <div className="text-ink-500 text-xs">Payment</div>
             {session.paid ? (
               <>
@@ -206,8 +225,26 @@ export function SessionCard({ session }: { session: Session }) {
             )}
           </div>
 
+          {/* Invoice row — only for completed sessions */}
+          {isCompleted && (
+            <div className="border-t border-ink-100 pt-3 flex items-center gap-3 text-sm flex-wrap">
+              <div className="text-ink-500 text-xs">Invoice</div>
+              <GenerateInvoiceButton
+                sessionId={session.id}
+                clientId={session.clientId}
+                hasInvoice={!!session.invoiceUrl}
+                invoiceUrl={session.invoiceUrl}
+              />
+              {session.invoiceNumber && (
+                <span className="font-mono text-[11px] text-ink-500">
+                  {session.invoiceNumber}
+                </span>
+              )}
+            </div>
+          )}
+
           {/* Cancel / delete row */}
-          <div className="border-t border-ink-100 pt-3 flex items-center gap-2">
+          <div className="border-t border-ink-100 pt-3 flex items-center gap-2 flex-wrap">
             {isScheduled && (
               <ConfirmButton
                 destructive={false}

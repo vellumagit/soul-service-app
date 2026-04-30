@@ -11,16 +11,20 @@
     "db:push": "drizzle-kit push",
     "db:migrate": "tsx src/db/migrate.ts",
     "db:rebuild": "tsx src/db/rebuild.ts",
+    "db:seed-defaults": "tsx src/db/seed-defaults.ts",
     "db:studio": "drizzle-kit studio",
     "db:reset": "tsx src/db/reset.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
+    "@react-pdf/renderer": "^4.5.1",
     "@vercel/blob": "^2.3.3",
     "drizzle-orm": "^0.45.2",
     "next": "16.2.4",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

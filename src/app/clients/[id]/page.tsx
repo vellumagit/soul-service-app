@@ -1,13 +1,19 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
-import { getClientFile, listClientsForPicker } from "@/db/queries";
+import {
+  getClientFile,
+  listClientsForPicker,
+  getClientActivity,
+  listEmailTemplates,
+  listNoteTemplates,
+  getSettings,
+} from "@/db/queries";
 import {
   fullDate,
   money,
   relativeTime,
   shortDate,
-  shortTime,
 } from "@/lib/format";
 import { Avatar } from "@/components/Avatar";
 import { EditClientDialog } from "@/components/EditClientDialog";
@@ -17,10 +23,16 @@ import { SessionCard } from "@/components/SessionCard";
 import { GoalsBlock } from "@/components/GoalsBlock";
 import { AttachmentsBlock } from "@/components/AttachmentsBlock";
 import { QuickActions } from "@/components/QuickActions";
+import { TasksBlock } from "@/components/TasksBlock";
+import { ActivityTimeline } from "@/components/ActivityTimeline";
+import { EmailComposer } from "@/components/EmailComposer";
+import { MarkdownRender } from "@/components/NotesEditor";
 
 const TABS = [
   { key: "overview", label: "Overview" },
+  { key: "activity", label: "Activity" },
   { key: "sessions", label: "Sessions" },
+  { key: "tasks", label: "Tasks" },
   { key: "files", label: "Files" },
   { key: "intake", label: "Intake notes" },
 ] as const;
@@ -37,10 +49,15 @@ export default async function ClientProfilePage({
   const { id } = await params;
   const { tab = "overview" } = await searchParams;
 
-  const [file, allClients] = await Promise.all([
-    getClientFile(id),
-    listClientsForPicker(),
-  ]);
+  const [file, allClients, activity, emailTpls, noteTpls, settings] =
+    await Promise.all([
+      getClientFile(id),
+      listClientsForPicker(),
+      getClientActivity(id),
+      listEmailTemplates(),
+      listNoteTemplates(),
+      getSettings(),
+    ]);
 
   if (!file) notFound();
 
@@ -59,6 +76,11 @@ export default async function ClientProfilePage({
     (s) => s.status === "completed" && !s.paid
   ).length;
 
+  const nextSession = upcomingSessions[upcomingSessions.length - 1] ?? null;
+  const lastSession = completedSessions[0] ?? null;
+
+  const openTasks = file.tasks.filter((t) => !t.completedAt);
+
   return (
     <AppShell
       breadcrumb={[
@@ -67,7 +89,7 @@ export default async function ClientProfilePage({
       ]}
       rightAction={<QuickActions clients={allClients} />}
     >
-      {/* — Profile header — */}
+      {/* Profile header */}
       <div className="bg-white border border-ink-200 rounded-lg overflow-hidden mb-5">
         <div className="p-5 md:p-6 flex flex-col md:flex-row gap-5 items-start">
           <Avatar
@@ -164,11 +186,31 @@ export default async function ClientProfilePage({
                 clients={allClients}
                 defaultClientId={client.id}
               />
+              <EmailComposer
+                client={client}
+                templates={emailTpls}
+                nextSession={nextSession}
+                lastSession={lastSession}
+                paymentInstructions={settings.paymentInstructions}
+                trigger={(open) => (
+                  <button
+                    onClick={open}
+                    disabled={!client.email}
+                    title={
+                      !client.email
+                        ? "Add an email to compose"
+                        : "Compose email"
+                    }
+                    className="border border-ink-200 hover:bg-ink-50 text-ink-700 text-sm font-medium px-3 py-2 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Email
+                  </button>
+                )}
+              />
             </div>
           </div>
         </div>
 
-        {/* Stat row */}
         <div className="grid grid-cols-2 md:grid-cols-4 border-t border-ink-100">
           <Stat
             label="Sessions"
@@ -176,14 +218,8 @@ export default async function ClientProfilePage({
           />
           <Stat
             label="Next"
-            value={
-              upcomingSessions[upcomingSessions.length - 1]
-                ? relativeTime(
-                    upcomingSessions[upcomingSessions.length - 1].scheduledAt
-                  )
-                : "—"
-            }
-            highlight={upcomingSessions.length > 0}
+            value={nextSession ? relativeTime(nextSession.scheduledAt) : "—"}
+            highlight={!!nextSession}
           />
           <Stat label="Paid" value={money(lifetimeCents)} />
           <Stat
@@ -199,29 +235,44 @@ export default async function ClientProfilePage({
         </div>
       </div>
 
-      {/* — Tabs — */}
+      {/* Tabs */}
       <div className="border-b border-ink-200 flex items-center mb-5 text-sm overflow-x-auto">
-        {TABS.map((t) => (
-          <Link
-            key={t.key}
-            href={`/clients/${client.id}?tab=${t.key}`}
-            data-active={tab === t.key}
-            className="subtab border-b-2 border-transparent px-3 py-2 text-ink-500 hover:text-ink-800 font-medium whitespace-nowrap"
-          >
-            {t.label}
-          </Link>
-        ))}
+        {TABS.map((t) => {
+          const count =
+            t.key === "tasks"
+              ? openTasks.length
+              : t.key === "sessions"
+              ? file.sessions.length
+              : t.key === "files"
+              ? file.attachments.length
+              : null;
+          return (
+            <Link
+              key={t.key}
+              href={`/clients/${client.id}?tab=${t.key}`}
+              data-active={tab === t.key}
+              className="subtab border-b-2 border-transparent px-3 py-2 text-ink-500 hover:text-ink-800 font-medium whitespace-nowrap"
+            >
+              {t.label}
+              {count !== null && count > 0 && (
+                <span className="ml-1.5 text-[10px] font-mono text-ink-400">
+                  {count}
+                </span>
+              )}
+            </Link>
+          );
+        })}
       </div>
 
-      {/* — Tab content — */}
+      {/* Tab content */}
       {tab === "overview" && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           <div className="md:col-span-2 space-y-5">
             <Card title="About this client">
               {client.aboutClient ? (
-                <p className="text-sm text-ink-700 leading-relaxed whitespace-pre-wrap">
-                  {client.aboutClient}
-                </p>
+                <div className="md-render text-sm text-ink-700 leading-relaxed">
+                  <MarkdownRender body={client.aboutClient} />
+                </div>
               ) : (
                 <div className="text-sm text-ink-400 italic">
                   Nothing written yet.{" "}
@@ -280,6 +331,14 @@ export default async function ClientProfilePage({
                 </Link>
               </div>
             </Card>
+
+            <Card title="Open tasks">
+              <TasksBlock
+                clientId={client.id}
+                tasks={file.tasks}
+                emptyText="Nothing on the list. Add a follow-up if needed."
+              />
+            </Card>
           </div>
 
           <aside className="space-y-5">
@@ -302,6 +361,8 @@ export default async function ClientProfilePage({
         </div>
       )}
 
+      {tab === "activity" && <ActivityTimeline events={activity} />}
+
       {tab === "sessions" && (
         <div className="space-y-3">
           <div className="flex items-center gap-2 mb-3">
@@ -320,9 +381,21 @@ export default async function ClientProfilePage({
               No sessions yet.
             </div>
           ) : (
-            file.sessions.map((s) => <SessionCard key={s.id} session={s} />)
+            file.sessions.map((s) => (
+              <SessionCard
+                key={s.id}
+                session={s}
+                noteTemplates={noteTpls}
+              />
+            ))
           )}
         </div>
+      )}
+
+      {tab === "tasks" && (
+        <Card title="Tasks">
+          <TasksBlock clientId={client.id} tasks={file.tasks} />
+        </Card>
       )}
 
       {tab === "files" && (
@@ -333,29 +406,30 @@ export default async function ClientProfilePage({
       )}
 
       {tab === "intake" && (
-        <Card title="Intake notes">
-          {client.intakeNotes ? (
-            <p className="text-sm text-ink-700 leading-relaxed whitespace-pre-wrap">
-              {client.intakeNotes}
-            </p>
-          ) : (
-            <div className="text-sm text-ink-400 italic">
-              No intake notes yet.{" "}
-              <span className="text-flame-700">Click Edit profile</span> to add
-              what they shared on the way in.
-            </div>
-          )}
-          {client.howTheyFoundMe && (
-            <div className="mt-4 pt-4 border-t border-ink-100">
-              <div className="text-[10px] uppercase tracking-wider text-ink-500">
-                How they found me
+        <div className="space-y-5">
+          <Card title="Intake notes">
+            {client.intakeNotes ? (
+              <div className="md-render text-sm text-ink-700 leading-relaxed">
+                <MarkdownRender body={client.intakeNotes} />
               </div>
-              <div className="text-sm text-ink-700 mt-1">
-                {client.howTheyFoundMe}
+            ) : (
+              <div className="text-sm text-ink-400 italic">
+                No intake notes yet. Click <strong>Edit profile</strong> to add
+                what they shared on the way in.
               </div>
-            </div>
-          )}
-        </Card>
+            )}
+            {client.howTheyFoundMe && (
+              <div className="mt-4 pt-4 border-t border-ink-100">
+                <div className="text-[10px] uppercase tracking-wider text-ink-500">
+                  How they found me
+                </div>
+                <div className="text-sm text-ink-700 mt-1">
+                  {client.howTheyFoundMe}
+                </div>
+              </div>
+            )}
+          </Card>
+        </div>
       )}
     </AppShell>
   );
