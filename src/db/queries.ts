@@ -9,6 +9,9 @@ import {
   emailTemplates,
   noteTemplates,
   practitionerSettings,
+  importantPeople,
+  themes,
+  observations,
   type Client,
   type PractitionerSettings,
 } from "./schema";
@@ -136,6 +139,9 @@ export async function getClientFile(id: string) {
     goalsList,
     tasksList,
     communicationsList,
+    peopleList,
+    themesList,
+    observationsList,
   ] = await Promise.all([
     db
       .select()
@@ -165,6 +171,21 @@ export async function getClientFile(id: string) {
       .from(communications)
       .where(eq(communications.clientId, id))
       .orderBy(desc(communications.occurredAt)),
+    db
+      .select()
+      .from(importantPeople)
+      .where(eq(importantPeople.clientId, id))
+      .orderBy(asc(importantPeople.position), asc(importantPeople.createdAt)),
+    db
+      .select()
+      .from(themes)
+      .where(eq(themes.clientId, id))
+      .orderBy(asc(themes.label)),
+    db
+      .select()
+      .from(observations)
+      .where(eq(observations.clientId, id))
+      .orderBy(desc(observations.createdAt)),
   ]);
 
   return {
@@ -174,6 +195,222 @@ export async function getClientFile(id: string) {
     goals: goalsList,
     tasks: tasksList,
     communications: communicationsList,
+    importantPeople: peopleList,
+    themes: themesList,
+    observations: observationsList,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// "Where we left off" — pre-session digest. The 30-second snapshot a
+// practitioner needs before joining a Meet. Auto-derived from existing data.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type ClientDigest = {
+  // The most recent session held with this client
+  lastSession: {
+    when: Date;
+    type: string;
+    intention: string | null;
+    arrivedAs: string | null;
+    leftAs: string | null;
+    notesExcerpt: string | null;
+  } | null;
+  // The next scheduled session
+  nextSession: {
+    when: Date;
+    type: string;
+    durationMinutes: number;
+    meetUrl: string | null;
+  } | null;
+  // Open tasks (unfinished business)
+  openTasks: { id: string; title: string; dueAt: Date | null }[];
+  // Currently working on (the "load-bearing" intention)
+  workingOn: string | null;
+  // Active goals (top 3 by position)
+  topGoals: { id: string; label: string; progress: number }[];
+  // Last stated intention across all sessions (latest with one)
+  latestIntention: { when: Date; text: string } | null;
+};
+
+export async function getClientDigest(clientId: string): Promise<ClientDigest> {
+  const client = await getClientById(clientId);
+  if (!client) {
+    return {
+      lastSession: null,
+      nextSession: null,
+      openTasks: [],
+      workingOn: null,
+      topGoals: [],
+      latestIntention: null,
+    };
+  }
+
+  const [lastSessions, nextSessions, openTasksRows, goalsRows, intentionRow] =
+    await Promise.all([
+      db
+        .select()
+        .from(sessions)
+        .where(
+          and(
+            eq(sessions.clientId, clientId),
+            eq(sessions.status, "completed")
+          )
+        )
+        .orderBy(desc(sessions.scheduledAt))
+        .limit(1),
+      db
+        .select()
+        .from(sessions)
+        .where(
+          and(
+            eq(sessions.clientId, clientId),
+            eq(sessions.status, "scheduled"),
+            gte(sessions.scheduledAt, new Date())
+          )
+        )
+        .orderBy(asc(sessions.scheduledAt))
+        .limit(1),
+      db
+        .select({
+          id: tasks.id,
+          title: tasks.title,
+          dueAt: tasks.dueAt,
+        })
+        .from(tasks)
+        .where(and(eq(tasks.clientId, clientId), isNull(tasks.completedAt)))
+        .orderBy(
+          sql`CASE WHEN ${tasks.dueAt} IS NULL THEN 1 ELSE 0 END`,
+          asc(tasks.dueAt)
+        )
+        .limit(5),
+      db
+        .select({
+          id: goals.id,
+          label: goals.label,
+          progress: goals.progress,
+        })
+        .from(goals)
+        .where(and(eq(goals.clientId, clientId), eq(goals.archived, false)))
+        .orderBy(asc(goals.position))
+        .limit(3),
+      db
+        .select({
+          intention: sessions.intention,
+          when: sessions.scheduledAt,
+        })
+        .from(sessions)
+        .where(
+          and(
+            eq(sessions.clientId, clientId),
+            isNotNull(sessions.intention)
+          )
+        )
+        .orderBy(desc(sessions.scheduledAt))
+        .limit(1),
+    ]);
+
+  const last = lastSessions[0] ?? null;
+  const next = nextSessions[0] ?? null;
+  const intention = intentionRow[0] ?? null;
+
+  return {
+    lastSession: last
+      ? {
+          when: last.scheduledAt,
+          type: last.type,
+          intention: last.intention,
+          arrivedAs: last.arrivedAs,
+          leftAs: last.leftAs,
+          notesExcerpt: last.notes
+            ? last.notes.slice(0, 280) +
+              (last.notes.length > 280 ? "…" : "")
+            : null,
+        }
+      : null,
+    nextSession: next
+      ? {
+          when: next.scheduledAt,
+          type: next.type,
+          durationMinutes: next.durationMinutes,
+          meetUrl: next.meetUrl,
+        }
+      : null,
+    openTasks: openTasksRows,
+    workingOn: client.workingOn ?? null,
+    topGoals: goalsRows,
+    latestIntention:
+      intention && intention.intention
+        ? { when: intention.when, text: intention.intention }
+        : null,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Practitioner capacity — the "weight" she's holding. Surfaced on Today.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function getCapacity() {
+  const now = new Date();
+  const startOfWeek = new Date(now);
+  startOfWeek.setHours(0, 0, 0, 0);
+  startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(endOfWeek.getDate() + 7);
+
+  const [
+    activeCount,
+    weekSessionCount,
+    openTaskCount,
+    overdueTaskCount,
+    heavyClients,
+  ] = await Promise.all([
+    db
+      .select({ count: sql<number>`COUNT(*)::int` })
+      .from(clients)
+      .where(eq(clients.status, "active")),
+    db
+      .select({ count: sql<number>`COUNT(*)::int` })
+      .from(sessions)
+      .where(
+        and(
+          gte(sessions.scheduledAt, startOfWeek),
+          lte(sessions.scheduledAt, endOfWeek),
+          eq(sessions.status, "scheduled")
+        )
+      ),
+    db
+      .select({ count: sql<number>`COUNT(*)::int` })
+      .from(tasks)
+      .where(isNull(tasks.completedAt)),
+    db
+      .select({ count: sql<number>`COUNT(*)::int` })
+      .from(tasks)
+      .where(
+        and(
+          isNull(tasks.completedAt),
+          isNotNull(tasks.dueAt),
+          sql`${tasks.dueAt} < NOW()`
+        )
+      ),
+    // "Heavy threads" — active clients with ≥1 sensitivity recorded
+    db
+      .select({ count: sql<number>`COUNT(*)::int` })
+      .from(clients)
+      .where(
+        and(
+          eq(clients.status, "active"),
+          sql`array_length(${clients.sensitivities}, 1) > 0`
+        )
+      ),
+  ]);
+
+  return {
+    activeClients: activeCount[0]?.count ?? 0,
+    sessionsThisWeek: weekSessionCount[0]?.count ?? 0,
+    openTasks: openTaskCount[0]?.count ?? 0,
+    overdueTasks: overdueTaskCount[0]?.count ?? 0,
+    heavyClients: heavyClients[0]?.count ?? 0,
   };
 }
 

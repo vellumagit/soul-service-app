@@ -201,6 +201,31 @@ export function EditClientDialog({ client }: { client: Client }) {
             />
           </Field>
 
+          <Field
+            label="Sensitivity flags"
+            hint="Topics to handle gently. Comma-separated. Shown at the top of the file as a soft warning."
+          >
+            <input
+              name="sensitivities"
+              defaultValue={(client.sensitivities ?? []).join(", ")}
+              className={inputCls}
+              placeholder="recent miscarriage, abusive father, no eye-gazing"
+            />
+          </Field>
+
+          <Field
+            label="Just for you (private notes)"
+            hint="Counter-transference, hunches, things you're holding privately. Never exported, never shared with the client."
+          >
+            <textarea
+              name="privateNotes"
+              rows={4}
+              defaultValue={client.privateNotes ?? ""}
+              className={inputCls}
+              placeholder="What's mine vs theirs · what I'm sensing but not ready to say"
+            />
+          </Field>
+
           <div className="grid grid-cols-2 gap-3">
             <Field label="Emergency contact">
               <input

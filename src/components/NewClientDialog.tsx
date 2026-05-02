@@ -147,6 +147,17 @@ export function NewClientDialog({
             />
           </Field>
 
+          <Field
+            label="Sensitivity flags (optional)"
+            hint="Topics to handle gently. Shown as a warm warning at the top of their file."
+          >
+            <input
+              name="sensitivities"
+              className={inputCls}
+              placeholder="recent loss, abusive past, no eye-gazing"
+            />
+          </Field>
+
           <Field label="How they found me">
             <input
               name="howTheyFoundMe"

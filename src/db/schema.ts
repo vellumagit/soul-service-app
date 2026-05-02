@@ -90,6 +90,14 @@ export const clients = pgTable(
     // Comma/tag list — themes/patterns the practitioner notices
     tags: text("tags").array().default([]).notNull(),
 
+    // Sensitivity / trigger warnings shown at top of file. Things to handle gently.
+    // (e.g. ["recent miscarriage", "no eye-gazing", "abusive father history"])
+    sensitivities: text("sensitivities").array().default([]).notNull(),
+
+    // Practitioner-only private notes — counter-transference, hunches,
+    // things never meant for export or client view. Sacred space for HER.
+    privateNotes: text("private_notes"),
+
     primarySessionType: text("primary_session_type"), // free-form (e.g. "Soul reading")
 
     emergencyName: text("emergency_name"),
@@ -183,6 +191,72 @@ export const attachments = pgTable(
   },
   (t) => ({
     clientIdx: index("attachments_client_idx").on(t.clientId),
+  })
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// important_people — secondary characters in a client's life
+// (mom, partner, ex, kid, dog, boss). Helps the practitioner walk in
+// holding the whole relational field, not just the client.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const importantPeople = pgTable(
+  "important_people",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    relationship: text("relationship").notNull(), // free-form: mom, partner, ex, etc
+    notes: text("notes"), // dynamic, current temperature, what they mean
+    isAlive: boolean("is_alive").default(true).notNull(),
+    position: integer("position").default(0).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    clientIdx: index("important_people_client_idx").on(t.clientId),
+  })
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// themes — recurring patterns the practitioner notices across this client's
+// readings. Tag-cloud-style.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const themes = pgTable(
+  "themes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    label: text("label").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    clientIdx: index("themes_client_idx").on(t.clientId),
+  })
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// observations — running practitioner observations / hunches / hypotheses.
+// Bulleted "what I keep receiving for her" notes that build over time.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const observations = pgTable(
+  "observations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    body: text("body").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    clientIdx: index("observations_client_idx").on(t.clientId),
   })
 );
 
@@ -340,6 +414,9 @@ export const clientsRelations = relations(clients, ({ many }) => ({
   goals: many(goals),
   tasks: many(tasks),
   communications: many(communications),
+  importantPeople: many(importantPeople),
+  themes: many(themes),
+  observations: many(observations),
 }));
 
 export const sessionsRelations = relations(sessions, ({ one, many }) => ({
@@ -371,6 +448,9 @@ export type Session = typeof sessions.$inferSelect;
 export type NewSession = typeof sessions.$inferInsert;
 export type Attachment = typeof attachments.$inferSelect;
 export type Goal = typeof goals.$inferSelect;
+export type ImportantPerson = typeof importantPeople.$inferSelect;
+export type Theme = typeof themes.$inferSelect;
+export type Observation = typeof observations.$inferSelect;
 export type Task = typeof tasks.$inferSelect;
 export type Communication = typeof communications.$inferSelect;
 export type EmailTemplate = typeof emailTemplates.$inferSelect;

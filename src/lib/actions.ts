@@ -13,6 +13,9 @@ import {
   emailTemplates,
   noteTemplates,
   practitionerSettings,
+  importantPeople,
+  themes,
+  observations,
 } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { getSettings } from "@/db/queries";
@@ -82,9 +85,11 @@ export async function createClient(formData: FormData) {
       workingOn: str(formData, "workingOn"),
       aboutClient: str(formData, "aboutClient"),
       intakeNotes: str(formData, "intakeNotes"),
+      privateNotes: str(formData, "privateNotes"),
       howTheyFoundMe: str(formData, "howTheyFoundMe"),
       primarySessionType: firstSessionType,
       tags: tagsFromString(str(formData, "tags")),
+      sensitivities: tagsFromString(str(formData, "sensitivities")),
       emergencyName: str(formData, "emergencyName"),
       emergencyPhone: str(formData, "emergencyPhone"),
       status: "active",
@@ -155,9 +160,11 @@ export async function updateClient(formData: FormData) {
       workingOn: str(formData, "workingOn"),
       aboutClient: str(formData, "aboutClient"),
       intakeNotes: str(formData, "intakeNotes"),
+      privateNotes: str(formData, "privateNotes"),
       howTheyFoundMe: str(formData, "howTheyFoundMe"),
       primarySessionType: str(formData, "primarySessionType"),
       tags: tagsFromString(str(formData, "tags")),
+      sensitivities: tagsFromString(str(formData, "sensitivities")),
       emergencyName: str(formData, "emergencyName"),
       emergencyPhone: str(formData, "emergencyPhone"),
       status:
@@ -598,6 +605,86 @@ async function runOnSessionCompleted(sessionId: string, _clientId: string) {
       console.warn("Auto-invoice generation failed:", e);
     }
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// IMPORTANT PEOPLE — secondary characters in a client's life
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function addImportantPerson(formData: FormData) {
+  const clientId = required(str(formData, "clientId"), "Client id");
+  const name = required(str(formData, "name"), "Name");
+  const relationship = required(str(formData, "relationship"), "Relationship");
+  const notes = str(formData, "notes");
+  const isAlive = !bool(formData, "deceased");
+
+  // Position: end of list
+  const [{ count }] = await db
+    .select({ count: sql<number>`COUNT(*)::int` })
+    .from(importantPeople)
+    .where(eq(importantPeople.clientId, clientId));
+
+  await db
+    .insert(importantPeople)
+    .values({ clientId, name, relationship, notes, isAlive, position: count });
+  revalidatePath(`/clients/${clientId}`);
+}
+
+export async function updateImportantPerson(formData: FormData) {
+  const id = required(str(formData, "id"), "id");
+  const clientId = required(str(formData, "clientId"), "Client id");
+
+  await db
+    .update(importantPeople)
+    .set({
+      name: required(str(formData, "name"), "Name"),
+      relationship: required(str(formData, "relationship"), "Relationship"),
+      notes: str(formData, "notes"),
+      isAlive: !bool(formData, "deceased"),
+      updatedAt: new Date(),
+    })
+    .where(eq(importantPeople.id, id));
+  revalidatePath(`/clients/${clientId}`);
+}
+
+export async function deleteImportantPerson(
+  personId: string,
+  clientId: string
+) {
+  await db.delete(importantPeople).where(eq(importantPeople.id, personId));
+  revalidatePath(`/clients/${clientId}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THEMES — recurring patterns the practitioner is noticing
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function addTheme(formData: FormData) {
+  const clientId = required(str(formData, "clientId"), "Client id");
+  const label = required(str(formData, "label"), "Theme");
+  await db.insert(themes).values({ clientId, label });
+  revalidatePath(`/clients/${clientId}`);
+}
+
+export async function deleteTheme(themeId: string, clientId: string) {
+  await db.delete(themes).where(eq(themes.id, themeId));
+  revalidatePath(`/clients/${clientId}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OBSERVATIONS — bulleted "what I keep noticing for them"
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function addObservation(formData: FormData) {
+  const clientId = required(str(formData, "clientId"), "Client id");
+  const body = required(str(formData, "body"), "Observation");
+  await db.insert(observations).values({ clientId, body });
+  revalidatePath(`/clients/${clientId}`);
+}
+
+export async function deleteObservation(observationId: string, clientId: string) {
+  await db.delete(observations).where(eq(observations.id, observationId));
+  revalidatePath(`/clients/${clientId}`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

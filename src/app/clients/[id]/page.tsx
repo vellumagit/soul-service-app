@@ -5,6 +5,7 @@ import {
   getClientFile,
   listClientsForPicker,
   getClientActivity,
+  getClientDigest,
   listEmailTemplates,
   listNoteTemplates,
   getSettings,
@@ -27,11 +28,17 @@ import { TasksBlock } from "@/components/TasksBlock";
 import { ActivityTimeline } from "@/components/ActivityTimeline";
 import { EmailComposer } from "@/components/EmailComposer";
 import { MarkdownRender } from "@/components/NotesEditor";
+import { WhereWeLeftOffCard } from "@/components/WhereWeLeftOffCard";
+import { SensitivityFlags } from "@/components/SensitivityFlags";
+import { PrivateNotesBlock } from "@/components/PrivateNotesBlock";
+import { PeopleInLifeBlock } from "@/components/PeopleInLifeBlock";
+import { PatternsTab } from "@/components/PatternsTab";
 
 const TABS = [
   { key: "overview", label: "Overview" },
   { key: "activity", label: "Activity" },
   { key: "sessions", label: "Sessions" },
+  { key: "patterns", label: "Patterns" },
   { key: "tasks", label: "Tasks" },
   { key: "files", label: "Files" },
   { key: "intake", label: "Intake notes" },
@@ -49,11 +56,12 @@ export default async function ClientProfilePage({
   const { id } = await params;
   const { tab = "overview" } = await searchParams;
 
-  const [file, allClients, activity, emailTpls, noteTpls, settings] =
+  const [file, allClients, activity, digest, emailTpls, noteTpls, settings] =
     await Promise.all([
       getClientFile(id),
       listClientsForPicker(),
       getClientActivity(id),
+      getClientDigest(id),
       listEmailTemplates(),
       listNoteTemplates(),
       getSettings(),
@@ -89,6 +97,9 @@ export default async function ClientProfilePage({
       ]}
       rightAction={<QuickActions clients={allClients} />}
     >
+      {/* Sensitivity flags — first thing visible if any */}
+      <SensitivityFlags sensitivities={(client.sensitivities ?? []) as string[]} />
+
       {/* Profile header */}
       <div className="bg-white border border-ink-200 rounded-lg overflow-hidden mb-5">
         <div className="p-5 md:p-6 flex flex-col md:flex-row gap-5 items-start">
@@ -266,99 +277,124 @@ export default async function ClientProfilePage({
 
       {/* Tab content */}
       {tab === "overview" && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          <div className="md:col-span-2 space-y-5">
-            <Card title="About this client">
-              {client.aboutClient ? (
-                <div className="md-render text-sm text-ink-700 leading-relaxed">
-                  <MarkdownRender body={client.aboutClient} />
-                </div>
-              ) : (
-                <div className="text-sm text-ink-400 italic">
-                  Nothing written yet.{" "}
-                  <span className="text-flame-700">Click Edit profile</span> to
-                  add what you&apos;re holding for them.
-                </div>
-              )}
-            </Card>
+        <div className="space-y-5">
+          {/* Pre-session digest — auto-derived snapshot at the top */}
+          <WhereWeLeftOffCard
+            digest={digest}
+            clientName={client.fullName}
+          />
 
-            <Card title="Recent sessions">
-              {file.sessions.slice(0, 3).length === 0 ? (
-                <div className="text-sm text-ink-400 italic">
-                  No sessions yet.{" "}
-                  <Link
-                    href={`/clients/${client.id}?tab=sessions`}
-                    className="text-flame-700"
-                  >
-                    Schedule the first one
-                  </Link>
-                  .
-                </div>
-              ) : (
-                <ul className="divide-y divide-ink-100">
-                  {file.sessions.slice(0, 3).map((s) => (
-                    <li
-                      key={s.id}
-                      className="py-2 flex items-center gap-3 text-sm"
-                    >
-                      <span className="font-mono text-xs text-ink-500 w-24 shrink-0">
-                        {shortDate(s.scheduledAt)}
-                      </span>
-                      <span className="text-ink-700 flex-1 min-w-0 truncate">
-                        {s.type}
-                      </span>
-                      <span
-                        className={`chip ${
-                          s.status === "scheduled"
-                            ? "bg-flame-100 text-flame-700"
-                            : s.status === "completed"
-                            ? "bg-green-50 text-green-700"
-                            : "bg-ink-100 text-ink-500"
-                        }`}
-                      >
-                        {s.status.toUpperCase()}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <div className="mt-3 text-right">
-                <Link
-                  href={`/clients/${client.id}?tab=sessions`}
-                  className="text-xs text-flame-700 hover:underline"
-                >
-                  All sessions →
-                </Link>
-              </div>
-            </Card>
-
-            <Card title="Open tasks">
-              <TasksBlock
-                clientId={client.id}
-                tasks={file.tasks}
-                emptyText="Nothing on the list. Add a follow-up if needed."
-              />
-            </Card>
-          </div>
-
-          <aside className="space-y-5">
-            <Card title="What they're working on">
-              <GoalsBlock clientId={client.id} goals={file.goals} />
-            </Card>
-            {client.emergencyName && (
-              <Card title="Emergency contact">
-                <div className="text-sm text-ink-800">
-                  {client.emergencyName}
-                </div>
-                {client.emergencyPhone && (
-                  <div className="text-xs text-ink-500 font-mono mt-0.5">
-                    {client.emergencyPhone}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <div className="md:col-span-2 space-y-5">
+              <Card title="About this client">
+                {client.aboutClient ? (
+                  <div className="md-render text-sm text-ink-700 leading-relaxed">
+                    <MarkdownRender body={client.aboutClient} />
+                  </div>
+                ) : (
+                  <div className="text-sm text-ink-400 italic">
+                    Nothing written yet.{" "}
+                    <span className="text-flame-700">Click Edit profile</span> to
+                    add what you&apos;re holding for them.
                   </div>
                 )}
               </Card>
-            )}
-          </aside>
+
+              <Card title="People in their life">
+                <PeopleInLifeBlock
+                  clientId={client.id}
+                  people={file.importantPeople}
+                />
+              </Card>
+
+              <Card title="Recent sessions">
+                {file.sessions.slice(0, 3).length === 0 ? (
+                  <div className="text-sm text-ink-400 italic">
+                    No sessions yet.{" "}
+                    <Link
+                      href={`/clients/${client.id}?tab=sessions`}
+                      className="text-flame-700"
+                    >
+                      Schedule the first one
+                    </Link>
+                    .
+                  </div>
+                ) : (
+                  <ul className="divide-y divide-ink-100">
+                    {file.sessions.slice(0, 3).map((s) => (
+                      <li
+                        key={s.id}
+                        className="py-2 flex items-center gap-3 text-sm"
+                      >
+                        <span className="font-mono text-xs text-ink-500 w-24 shrink-0">
+                          {shortDate(s.scheduledAt)}
+                        </span>
+                        <span className="text-ink-700 flex-1 min-w-0 truncate">
+                          {s.type}
+                        </span>
+                        <span
+                          className={`chip ${
+                            s.status === "scheduled"
+                              ? "bg-flame-100 text-flame-700"
+                              : s.status === "completed"
+                              ? "bg-green-50 text-green-700"
+                              : "bg-ink-100 text-ink-500"
+                          }`}
+                        >
+                          {s.status.toUpperCase()}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <div className="mt-3 text-right">
+                  <Link
+                    href={`/clients/${client.id}?tab=sessions`}
+                    className="text-xs text-flame-700 hover:underline"
+                  >
+                    All sessions →
+                  </Link>
+                </div>
+              </Card>
+
+              <PrivateNotesBlock body={client.privateNotes} />
+            </div>
+
+            <aside className="space-y-5">
+              <Card title="What they're working on">
+                <GoalsBlock clientId={client.id} goals={file.goals} />
+              </Card>
+              <Card title="Open tasks">
+                <TasksBlock
+                  clientId={client.id}
+                  tasks={file.tasks}
+                  emptyText="Nothing on the list."
+                />
+              </Card>
+              {client.emergencyName && (
+                <Card title="Emergency contact">
+                  <div className="text-sm text-ink-800">
+                    {client.emergencyName}
+                  </div>
+                  {client.emergencyPhone && (
+                    <div className="text-xs text-ink-500 font-mono mt-0.5">
+                      {client.emergencyPhone}
+                    </div>
+                  )}
+                </Card>
+              )}
+            </aside>
+          </div>
         </div>
+      )}
+
+      {tab === "patterns" && (
+        <PatternsTab
+          clientId={client.id}
+          themes={file.themes}
+          observations={file.observations}
+          sessions={file.sessions}
+        />
       )}
 
       {tab === "activity" && <ActivityTimeline events={activity} />}

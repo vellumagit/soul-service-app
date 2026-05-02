@@ -4,8 +4,10 @@ import { QuickActions } from "@/components/QuickActions";
 import { NewClientDialog } from "@/components/NewClientDialog";
 import { MarkPaidDialog } from "@/components/MarkPaidDialog";
 import { TasksBlock } from "@/components/TasksBlock";
+import { CapacityStrip } from "@/components/CapacityStrip";
 import {
   getDashboardData,
+  getCapacity,
   listClientsForPicker,
 } from "@/db/queries";
 import { shortTime, fullDate, relativeTime } from "@/lib/format";
@@ -13,9 +15,10 @@ import { shortTime, fullDate, relativeTime } from "@/lib/format";
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const [data, clientsList] = await Promise.all([
+  const [data, clientsList, capacity] = await Promise.all([
     getDashboardData(),
     listClientsForPicker(),
+    getCapacity(),
   ]);
 
   const isFirstRun = data.totalClients === 0;
@@ -48,7 +51,11 @@ export default async function HomePage() {
           <NewClientDialog />
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <>
+          <div className="mb-6">
+            <CapacityStrip capacity={capacity} />
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           <div className="lg:col-span-2 space-y-6">
             {/* Today's sessions */}
             <Section
@@ -222,7 +229,8 @@ export default async function HomePage() {
               />
             </Section>
           </aside>
-        </div>
+          </div>
+        </>
       )}
     </AppShell>
   );
