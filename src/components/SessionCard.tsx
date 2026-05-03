@@ -19,6 +19,7 @@ import { ConfirmButton } from "./ConfirmButton";
 import { MarkPaidDialog } from "./MarkPaidDialog";
 import { NotesEditor } from "./NotesEditor";
 import { GenerateInvoiceButton } from "./GenerateInvoiceButton";
+import { GenerateNotesDialog } from "./GenerateNotesDialog";
 
 const STATUS_CHIP: Record<string, string> = {
   scheduled: "bg-flame-100 text-flame-700",
@@ -146,10 +147,17 @@ export function SessionCard({
               </Field>
             </div>
 
-            <Field
-              label="Session notes"
-              hint="Markdown supported. Use a template to start fast."
-            >
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-medium text-ink-700">
+                  Session notes
+                </label>
+                <GenerateNotesDialog
+                  sessionId={session.id}
+                  noteTemplates={noteTemplates}
+                  hasExistingNotes={!!session.notes && session.notes.trim().length > 0}
+                />
+              </div>
               <NotesEditor
                 name="notes"
                 defaultValue={session.notes ?? ""}
@@ -159,9 +167,12 @@ export function SessionCard({
                   body: t.body,
                 }))}
                 rows={8}
-                placeholder="What came through. What guides showed up. Body shifts. Recommendations."
+                placeholder="What came through. What guides showed up. Body shifts. Recommendations. — Or paste a transcript and click 'AI: structure from transcript' above."
               />
-            </Field>
+              <div className="text-[11px] text-ink-400 mt-1">
+                Markdown supported. Use a note template, or generate from a meeting transcript.
+              </div>
+            </div>
 
             <div className="flex items-center justify-end gap-2">
               {isScheduled && (

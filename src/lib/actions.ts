@@ -688,6 +688,97 @@ export async function deleteObservation(observationId: string, clientId: string)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// AI SESSION NOTES — transcript → structured markdown
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type GenerateNotesActionResult = {
+  ok: true;
+  notes: string;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
+} | { ok: false; error: string };
+
+export async function generateNotesForSession(
+  formData: FormData
+): Promise<GenerateNotesActionResult> {
+  const sessionId = required(str(formData, "sessionId"), "Session id");
+  const transcript = required(str(formData, "transcript"), "Transcript");
+  const templateId = str(formData, "templateId");
+  const replaceExisting = bool(formData, "replaceExisting");
+
+  // Look up the session + client for context
+  const sessionRows = await db
+    .select()
+    .from(sessions)
+    .where(eq(sessions.id, sessionId))
+    .limit(1);
+  const session = sessionRows[0];
+  if (!session) return { ok: false, error: "Session not found" };
+
+  const clientRows = await db
+    .select()
+    .from(clients)
+    .where(eq(clients.id, session.clientId))
+    .limit(1);
+  const client = clientRows[0];
+  if (!client) return { ok: false, error: "Client not found" };
+
+  // Optional template lookup
+  let templateName: string | null = null;
+  let templateBody: string | null = null;
+  if (templateId) {
+    const tplRows = await db
+      .select()
+      .from(noteTemplates)
+      .where(eq(noteTemplates.id, templateId))
+      .limit(1);
+    if (tplRows[0]) {
+      templateName = tplRows[0].name;
+      templateBody = tplRows[0].body;
+    }
+  }
+
+  // Call the AI
+  let result;
+  try {
+    const { generateNotesFromTranscript } = await import("./ai-notes");
+    result = await generateNotesFromTranscript({
+      transcript,
+      templateName,
+      templateBody,
+      clientFirstName: client.fullName.split(" ")[0] ?? client.fullName,
+      clientWorkingOn: client.workingOn,
+      sessionType: session.type,
+    });
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "AI call failed",
+    };
+  }
+
+  // Decide how to merge with existing notes
+  const existingNotes = session.notes?.trim() ?? "";
+  const finalNotes = replaceExisting || existingNotes.length === 0
+    ? result.notes
+    : existingNotes + "\n\n---\n\n" + result.notes;
+
+  await db
+    .update(sessions)
+    .set({ notes: finalNotes, updatedAt: new Date() })
+    .where(eq(sessions.id, sessionId));
+
+  revalidatePath(`/clients/${session.clientId}`);
+
+  return {
+    ok: true,
+    notes: finalNotes,
+    cacheReadTokens: result.cacheReadTokens,
+    cacheCreationTokens: result.cacheCreationTokens,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // MANUAL INVOICE GENERATION
 // ─────────────────────────────────────────────────────────────────────────────
 
