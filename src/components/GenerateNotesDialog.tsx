@@ -14,10 +14,15 @@ export function GenerateNotesDialog({
   sessionId,
   noteTemplates,
   hasExistingNotes,
+  autoClose = false,
 }: {
   sessionId: string;
   noteTemplates: NoteTemplate[];
   hasExistingNotes: boolean;
+  /** When true, dialog closes ~1.2s after a successful generation instead of
+   *  showing the "Done — review in the session card" confirmation step.
+   *  Driven by the practitioner_settings.autoUploadAiNotes toggle. */
+  autoClose?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -125,6 +130,15 @@ export function GenerateNotesDialog({
                       ? `Cached system prompt was reused (${result.cacheReadTokens.toLocaleString()} tokens at ~10% cost).`
                       : `First call — system prompt was cached for the next call.`;
                   setSuccess(note);
+                  // Auto-close mode: dismiss the dialog after a beat so the
+                  // practitioner sees the success flash but doesn't have to
+                  // click anything to get back to the session card.
+                  if (autoClose) {
+                    setTimeout(() => {
+                      setOpen(false);
+                      setTimeout(reset, 200);
+                    }, 1200);
+                  }
                 }
               } finally {
                 setSubmitting(false);

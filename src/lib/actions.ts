@@ -668,7 +668,7 @@ export async function updateSettings(formData: FormData) {
       invoiceFooter: str(formData, "invoiceFooter"),
       invoicePrefix: str(formData, "invoicePrefix") ?? "INV",
       autoInvoiceOnComplete: bool(formData, "autoInvoiceOnComplete"),
-      birthdayReminderDays: num(formData, "birthdayReminderDays"),
+      autoUploadAiNotes: bool(formData, "autoUploadAiNotes"),
       updatedAt: new Date(),
     })
     .where(eq(practitionerSettings.id, settings.id));

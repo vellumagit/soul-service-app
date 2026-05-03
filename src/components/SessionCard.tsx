@@ -32,9 +32,13 @@ const STATUS_CHIP: Record<string, string> = {
 export function SessionCard({
   session,
   noteTemplates = [],
+  autoUploadAiNotes = false,
 }: {
   session: Session;
   noteTemplates?: NoteTemplate[];
+  /** When true, the AI-notes dialog auto-closes after a successful generation
+   *  instead of showing the "Done — close to review" confirmation step. */
+  autoUploadAiNotes?: boolean;
 }) {
   const [open, setOpen] = useState(session.status === "scheduled");
   const [submitting, setSubmitting] = useState(false);
@@ -158,6 +162,7 @@ export function SessionCard({
                   sessionId={session.id}
                   noteTemplates={noteTemplates}
                   hasExistingNotes={!!session.notes && session.notes.trim().length > 0}
+                  autoClose={autoUploadAiNotes}
                 />
               </div>
               <NotesEditor

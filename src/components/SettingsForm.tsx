@@ -151,6 +151,13 @@ export function SettingsForm({ settings }: { settings: PractitionerSettings }) {
             description="Saves a PDF on the session, ready to email or download. Off = generate manually."
           />
 
+          <Toggle
+            name="autoUploadAiNotes"
+            defaultChecked={settings.autoUploadAiNotes}
+            label="Automatically upload AI notes from sessions"
+            description="When you generate notes from a transcript, save them straight to the session instead of waiting for you to click Insert. You can still edit afterwards."
+          />
+
           <div className="rounded-md bg-flame-50 border border-flame-100 p-3">
             <div className="text-sm font-medium text-flame-700 mb-1">
               Follow-up cadence (locked in)
@@ -163,29 +170,6 @@ export function SettingsForm({ settings }: { settings: PractitionerSettings }) {
               are skipped, so old clients you onboard won&apos;t flood your
               task list.
             </p>
-          </div>
-
-          <div>
-            <Field
-              label="Birthday reminder"
-              hint="Create a task this many days before a client's birthday. Empty = off."
-            >
-              <div className="flex items-center gap-2">
-                <input
-                  name="birthdayReminderDays"
-                  type="number"
-                  min={0}
-                  max={30}
-                  defaultValue={
-                    settings.birthdayReminderDays === null
-                      ? ""
-                      : settings.birthdayReminderDays
-                  }
-                  className={`${inputCls} w-24`}
-                />
-                <span className="text-sm text-ink-500">days ahead</span>
-              </div>
-            </Field>
           </div>
         </div>
       </Section>

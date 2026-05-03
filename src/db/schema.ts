@@ -402,7 +402,10 @@ export const practitionerSettings = pgTable("practitioner_settings", {
   autoFollowupTaskTitle: text("auto_followup_task_title").default(
     "Send aftercare email"
   ),
-  birthdayReminderDays: integer("birthday_reminder_days").default(3), // create task N days before
+  // When true, AI-generated notes are saved straight to the session instead
+  // of waiting for the practitioner to click "Insert into notes". Lets her
+  // run a transcript and walk away.
+  autoUploadAiNotes: boolean("auto_upload_ai_notes").default(false).notNull(),
 
   // Google Calendar OAuth (one practitioner per app — single connected account).
   // Refresh tokens are long-lived; access tokens auto-refresh in google-calendar.ts.

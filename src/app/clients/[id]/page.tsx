@@ -316,6 +316,7 @@ export default async function ClientProfilePage({
                 key={s.id}
                 session={s}
                 noteTemplates={noteTpls}
+                autoUploadAiNotes={settings.autoUploadAiNotes}
               />
             ))
           )}

@@ -204,7 +204,7 @@ async function seed() {
     invoiceFooter: `Thank you. — ${PRACTITIONER_NAME}`,
     invoicePrefix: "INV",
     autoInvoiceOnComplete: true,
-    birthdayReminderDays: 3,
+    autoUploadAiNotes: false,
   };
   if (settingsRows.length === 0) {
     await db.insert(practitionerSettings).values(baseSettings);
