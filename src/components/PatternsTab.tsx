@@ -158,10 +158,9 @@ function ThemesBlock({
 
   return (
     <div className="flex flex-wrap gap-2 items-center">
-      {themes.length === 0 && !adding && (
+        {themes.length === 0 && !adding && (
         <span className="text-xs text-ink-400 italic">
-          Add tags as patterns reveal themselves — &ldquo;mother&rdquo;,
-          &ldquo;self-worth&rdquo;, &ldquo;ancestral grief&rdquo;.
+          Add tags as patterns surface — anything that keeps coming up.
         </span>
       )}
 
@@ -292,7 +291,7 @@ function ObservationsBlock({
             autoFocus
             required
             rows={2}
-            placeholder="Pattern across multiple readings"
+            placeholder="Something you keep noticing across sessions"
             className="w-full px-2 py-1 border border-ink-200 rounded text-sm outline-none focus:border-flame-600"
           />
           <div className="flex items-center justify-end gap-2">

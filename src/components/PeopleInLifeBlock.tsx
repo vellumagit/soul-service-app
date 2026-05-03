@@ -41,8 +41,9 @@ export function PeopleInLifeBlock({
     <div>
       {people.length === 0 && !adding && (
         <div className="text-xs text-ink-400 italic">
-          Nobody added yet. The cast in their life — partner, mom, ex, kid,
-          even the dog — helps you walk in holding the whole field.
+          Nobody added yet. The people who matter in their life —
+          partner, parents, kids, friends — give you the bigger picture
+          when they walk in.
         </div>
       )}
 

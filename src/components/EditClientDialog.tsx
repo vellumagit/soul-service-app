@@ -180,7 +180,7 @@ export function EditClientDialog({ client }: { client: Client }) {
                 name="primarySessionType"
                 defaultValue={client.primarySessionType ?? ""}
                 className={inputCls}
-                placeholder="Soul reading"
+                placeholder="What you usually do with this person"
               />
             </Field>
             <Field label="How they found me">
@@ -192,37 +192,37 @@ export function EditClientDialog({ client }: { client: Client }) {
             </Field>
           </div>
 
-          <Field label="Tags" hint="Comma-separated">
+          <Field label="Tags" hint="Comma-separated. Use whatever vocabulary helps you find them later.">
             <input
               name="tags"
               defaultValue={(client.tags ?? []).join(", ")}
               className={inputCls}
-              placeholder="grief, self-love, ancestral"
+              placeholder="e.g. weekly, longterm, friend-of-friend"
             />
           </Field>
 
           <Field
             label="Sensitivity flags"
-            hint="Topics to handle gently. Comma-separated. Shown at the top of the file as a soft warning."
+            hint="Topics to handle gently. Comma-separated. Shown softly at the top of the file as a reminder to you."
           >
             <input
               name="sensitivities"
               defaultValue={(client.sensitivities ?? []).join(", ")}
               className={inputCls}
-              placeholder="recent miscarriage, abusive father, no eye-gazing"
+              placeholder="e.g. recent loss, sensitive about money"
             />
           </Field>
 
           <Field
             label="Just for you (private notes)"
-            hint="Counter-transference, hunches, things you're holding privately. Never exported, never shared with the client."
+            hint="Anything you'd want to remember but never share with the client. Never exported."
           >
             <textarea
               name="privateNotes"
               rows={4}
               defaultValue={client.privateNotes ?? ""}
               className={inputCls}
-              placeholder="What's mine vs theirs · what I'm sensing but not ready to say"
+              placeholder="Hunches, observations, anything you're sitting with quietly"
             />
           </Field>
 

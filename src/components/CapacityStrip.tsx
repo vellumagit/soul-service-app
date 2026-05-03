@@ -14,7 +14,7 @@ export function CapacityStrip({ capacity }: { capacity: Capacity }) {
   return (
     <div className="border border-ink-200 rounded-md bg-white grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 divide-x divide-ink-100 overflow-hidden">
       <Cell
-        label="Active souls"
+        label="Active clients"
         value={capacity.activeClients.toString()}
         href="/clients?filter=active"
       />
@@ -34,7 +34,7 @@ export function CapacityStrip({ capacity }: { capacity: Capacity }) {
         }
       />
       <Cell
-        label="Holding gently"
+        label="Handle with care"
         value={capacity.heavyClients.toString()}
         sublabel="with sensitivities flagged"
         href="/clients"

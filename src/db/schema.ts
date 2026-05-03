@@ -82,23 +82,22 @@ export const clients = pgTable(
     timezone: varchar("timezone", { length: 64 }),
 
     // Free-text fields the practitioner edits in the profile form
-    aboutClient: text("about_client"), // was "pinnedNote" — what she's holding for them
+    aboutClient: text("about_client"), // anything she wants to remember about who they are
     workingOn: text("working_on"), // short phrase shown in directory
-    intakeNotes: text("intake_notes"), // replaces the old intake-answers table — single freeform field
+    intakeNotes: text("intake_notes"), // single freeform intake field
     howTheyFoundMe: text("how_they_found_me"),
 
-    // Comma/tag list — themes/patterns the practitioner notices
+    // Free-form tags — practitioner picks her own vocabulary
     tags: text("tags").array().default([]).notNull(),
 
-    // Sensitivity / trigger warnings shown at top of file. Things to handle gently.
-    // (e.g. ["recent miscarriage", "no eye-gazing", "abusive father history"])
+    // Sensitivity flags shown at the top of the file. Things to handle gently
+    // — practitioner's free-form descriptions, never shared with the client.
     sensitivities: text("sensitivities").array().default([]).notNull(),
 
-    // Practitioner-only private notes — counter-transference, hunches,
-    // things never meant for export or client view. Sacred space for HER.
+    // Practitioner-only private notes — never exported, never shown to the client.
     privateNotes: text("private_notes"),
 
-    primarySessionType: text("primary_session_type"), // free-form (e.g. "Soul reading")
+    primarySessionType: text("primary_session_type"), // free-form (the practitioner's own label)
 
     emergencyName: text("emergency_name"),
     emergencyPhone: varchar("emergency_phone", { length: 32 }),
@@ -115,8 +114,8 @@ export const clients = pgTable(
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
-// sessions — every scheduled or past session for a client
-// (replaces "readings". Payment lives on the session row itself.)
+// sessions — every scheduled or past session for a client.
+// Payment lives on the session row itself (no separate invoice entity).
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const sessions = pgTable(
@@ -127,7 +126,7 @@ export const sessions = pgTable(
       .notNull()
       .references(() => clients.id, { onDelete: "cascade" }),
 
-    type: text("type").notNull().default("Soul reading"), // free-form
+    type: text("type").notNull().default("Session"), // free-form — practitioner renames to fit her own modality
     status: sessionStatusEnum("status").default("scheduled").notNull(),
 
     scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
@@ -147,7 +146,7 @@ export const sessions = pgTable(
     paymentMethod: paymentMethodEnum("payment_method"),
     paymentAmountCents: integer("payment_amount_cents"),
     paidAt: date("paid_at"),
-    paymentNote: text("payment_note"), // optional — confirmation # / "venmo: @maya"
+    paymentNote: text("payment_note"), // optional — confirmation # or short note
 
     // Generated invoice PDF (Vercel Blob URL). Auto-generated on completion if enabled.
     invoiceUrl: text("invoice_url"),
@@ -195,9 +194,9 @@ export const attachments = pgTable(
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
-// important_people — secondary characters in a client's life
-// (mom, partner, ex, kid, dog, boss). Helps the practitioner walk in
-// holding the whole relational field, not just the client.
+// important_people — the people who matter in a client's life
+// (mom, partner, ex, kid, dog, boss). Helps the practitioner walk into a
+// session with the bigger picture in mind, not just the client in isolation.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const importantPeople = pgTable(
@@ -222,7 +221,7 @@ export const importantPeople = pgTable(
 
 // ─────────────────────────────────────────────────────────────────────────────
 // themes — recurring patterns the practitioner notices across this client's
-// readings. Tag-cloud-style.
+// sessions. Tag-cloud-style.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const themes = pgTable(
@@ -241,8 +240,8 @@ export const themes = pgTable(
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
-// observations — running practitioner observations / hunches / hypotheses.
-// Bulleted "what I keep receiving for her" notes that build over time.
+// observations — running practitioner observations / hunches / hypotheses
+// that build up over time as bullet notes.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const observations = pgTable(
@@ -377,7 +376,7 @@ export const practitionerSettings = pgTable("practitioner_settings", {
   id: uuid("id").primaryKey().defaultRandom(),
 
   businessName: text("business_name"),
-  practitionerName: text("practitioner_name"), // "Maya"
+  practitionerName: text("practitioner_name"), // how the practitioner signs emails / appears on invoices
   businessEmail: text("business_email"),
   businessPhone: text("business_phone"),
   businessAddress: text("business_address"),
@@ -389,9 +388,9 @@ export const practitionerSettings = pgTable("practitioner_settings", {
     .default("USD")
     .notNull(),
 
-  // Payment instructions printed on invoices (e.g. "Venmo @maya / Zelle 555-1234")
+  // Payment instructions printed on invoices (e.g. "Venmo @yourhandle / Zelle you@example.com")
   paymentInstructions: text("payment_instructions"),
-  invoiceFooter: text("invoice_footer"), // "Thank you. With love, Maya."
+  invoiceFooter: text("invoice_footer"), // single closing line — e.g. "Thank you. — Your name"
   invoicePrefix: text("invoice_prefix").default("INV").notNull(),
   nextInvoiceNumber: integer("next_invoice_number").default(1001).notNull(),
 

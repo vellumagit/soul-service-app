@@ -122,8 +122,9 @@ export function LogPastSessionDialog({
             <Field label="Session type">
               <input
                 name="type"
-                defaultValue="Soul reading"
+                defaultValue="Session"
                 className={inputCls}
+                placeholder="Whatever you call this kind of session"
               />
             </Field>
 
@@ -150,8 +151,12 @@ export function LogPastSessionDialog({
               </Field>
             </div>
 
-            <Field label="Their intention">
-              <input name="intention" className={inputCls} />
+            <Field label="What they wanted from it">
+              <input
+                name="intention"
+                className={inputCls}
+                placeholder="Their words if you have them"
+              />
             </Field>
 
             <div className="grid grid-cols-2 gap-3">
@@ -171,7 +176,7 @@ export function LogPastSessionDialog({
               </Field>
             </div>
 
-            <Field label="Session notes" hint="What came through, guides, body shifts, what to suggest next">
+            <Field label="Session notes" hint="Whatever you'd want to remember about this session">
               <textarea name="notes" rows={5} className={inputCls} />
             </Field>
 

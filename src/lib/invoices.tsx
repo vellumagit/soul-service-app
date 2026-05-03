@@ -309,7 +309,7 @@ export async function generateInvoiceForSession(sessionId: string) {
     issuedAt,
     dueAt,
 
-    practitionerName: settings.practitionerName ?? "Maya",
+    practitionerName: settings.practitionerName ?? "Practitioner",
     businessName: settings.businessName,
     businessEmail: settings.businessEmail,
     businessPhone: settings.businessPhone,

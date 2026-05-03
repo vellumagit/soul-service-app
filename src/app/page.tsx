@@ -44,12 +44,12 @@ export default async function HomePage() {
       {isFirstRun ? (
         <div className="border-2 border-dashed border-ink-200 rounded-lg p-12 text-center bg-white">
           <div className="text-base text-ink-900 font-medium mb-2">
-            Welcome to your space, Svitlana.
+            This is your space.
           </div>
           <div className="text-sm text-ink-500 mb-6 max-w-md mx-auto leading-relaxed">
-            This is where everyone you read for lives — their notes, their
-            history, what you&apos;re holding for them. Add your first client to
-            begin.
+            Everyone you work with lives here — their details, their sessions,
+            anything you&apos;d want to remember. Make it yours over time.
+            Add your first client to start.
           </div>
           <NewClientDialog />
         </div>

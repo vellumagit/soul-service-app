@@ -34,7 +34,7 @@ export default async function SignInPage({
             Sign in
           </h1>
           <p className="text-sm text-ink-500 mb-5">
-            Your space for client work.
+            Quiet space for your client work.
           </p>
 
           {error === "invalid" && (
@@ -54,7 +54,7 @@ export default async function SignInPage({
         </div>
 
         <p className="text-[11px] text-ink-400 text-center mt-6">
-          Built quietly · for Svitlana
+          Made for Svitlana, with care.
         </p>
       </div>
     </div>

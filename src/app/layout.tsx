@@ -16,7 +16,7 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: "Soul Service",
-  description: "Readings for returning to love · client file system for soul reading practice",
+  description: "A quiet, personal client workspace for one-on-one practitioners.",
 };
 
 export default function RootLayout({

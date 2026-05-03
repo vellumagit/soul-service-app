@@ -1,6 +1,6 @@
 # Soul Service
 
-Client file system for Maya's soul reading practice. Each row in the directory is a soul; opening it reveals everything she's holding for that person — readings, notes, intentions, where their love work is now.
+A quiet, personal client workspace for one-on-one practitioners. Each row in the directory is a person; opening it reveals everything you'd want to remember about them — sessions, notes, the people in their life, what's worth handling gently. Designed to be a fresh slate the practitioner shapes into her own way of working over time.
 
 Built with Next.js 16 (App Router, Turbopack), Drizzle ORM, and Neon Postgres. Designed so swapping Neon → Supabase later is a one-line change.
 
@@ -59,7 +59,7 @@ src/
 │   ├── page.tsx            # / · Today's thread (Inbox)
 │   ├── signin/             # /signin · magic-link request page
 │   ├── auth/verify/        # GET handler that consumes a magic-link token
-│   ├── clients/            # /clients · directory + /clients/[id] · soul file
+│   ├── clients/            # /clients · directory + /clients/[id] · client file
 │   ├── calendar/           # /calendar · week view
 │   ├── payments/           # /payments · invoices + ledger
 │   ├── settings/           # /settings · biz info, integrations, templates
@@ -157,7 +157,7 @@ After that, scheduling a session in the app auto-creates a Calendar event with a
 
 ## Status
 
-- ✅ Souls directory + soul file (timeline · readings · documents · soul log · exchange · intake)
+- ✅ Clients directory + client file (timeline · sessions · documents · log · payments · intake)
 - ✅ Week calendar with click-to-open + sabbath day + now-line
 - ✅ Global exchange ledger
 - ✅ Auth — magic-link sign-in via Resend, allowlist gate

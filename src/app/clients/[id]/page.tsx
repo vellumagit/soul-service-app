@@ -247,7 +247,7 @@ export default async function ClientProfilePage({
             ) : (
               <div className="text-sm text-ink-400 italic">
                 Nothing written yet. Click <strong>Edit profile</strong> in the
-                header to capture what you&apos;re holding for them.
+                header to add anything you&apos;d want to remember about them.
               </div>
             )}
           </ScanCard>

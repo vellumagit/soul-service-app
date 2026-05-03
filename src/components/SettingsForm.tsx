@@ -35,7 +35,7 @@ export function SettingsForm({ settings }: { settings: PractitionerSettings }) {
               name="practitionerName"
               defaultValue={settings.practitionerName ?? ""}
               className={inputCls}
-              placeholder="Maya"
+              placeholder="How you sign your emails"
             />
           </Field>
           <Field label="Business name (optional)">
@@ -120,7 +120,7 @@ export function SettingsForm({ settings }: { settings: PractitionerSettings }) {
               rows={2}
               defaultValue={settings.paymentInstructions ?? ""}
               className={inputCls}
-              placeholder="Venmo @maya · Zelle to 555-1234"
+              placeholder="e.g. Venmo @yourhandle · Zelle to you@example.com"
             />
           </Field>
           <Field
@@ -132,7 +132,7 @@ export function SettingsForm({ settings }: { settings: PractitionerSettings }) {
               name="invoiceFooter"
               defaultValue={settings.invoiceFooter ?? ""}
               className={inputCls}
-              placeholder="Thank you, with love. — Maya"
+              placeholder="e.g. Thank you. — Your name"
             />
           </Field>
         </div>

@@ -130,9 +130,9 @@ export function ScheduleSessionDialog({
             <Field label="Session type">
               <input
                 name="type"
-                defaultValue={defaultType ?? "Soul reading"}
+                defaultValue={defaultType ?? "Session"}
                 className={inputCls}
-                placeholder="e.g. Soul reading, Ancestral reading"
+                placeholder="Whatever you call this kind of session"
               />
             </Field>
 
@@ -168,11 +168,11 @@ export function ScheduleSessionDialog({
               />
             </Field>
 
-            <Field label="Their intention (optional)">
+            <Field label="What they're hoping for (optional)">
               <input
                 name="intention"
                 className={inputCls}
-                placeholder="What they said they wanted from this session"
+                placeholder="In their own words, if they shared something"
               />
             </Field>
           </form>

@@ -120,11 +120,12 @@ export function SessionCard({
                   className={inputCls}
                 />
               </Field>
-              <Field label="Their intention">
+              <Field label="What they wanted from it">
                 <input
                   name="intention"
                   defaultValue={session.intention ?? ""}
                   className={inputCls}
+                  placeholder="Their words if you have them"
                 />
               </Field>
             </div>
@@ -168,10 +169,10 @@ export function SessionCard({
                   body: t.body,
                 }))}
                 rows={8}
-                placeholder="What came through. What guides showed up. Body shifts. Recommendations. — Or paste a transcript and click 'AI: structure from transcript' above."
+                placeholder="Anything you'd want to remember about this session — in your own words. You can also pick a template above, or paste a transcript and click 'AI: structure from transcript' to get a clean draft to edit."
               />
               <div className="text-[11px] text-ink-400 mt-1">
-                Markdown supported. Use a note template, or generate from a meeting transcript.
+                Markdown supported. Pick a template, or generate a draft from a meeting transcript.
               </div>
             </div>
 

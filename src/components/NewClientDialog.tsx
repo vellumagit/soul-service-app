@@ -127,7 +127,7 @@ export function NewClientDialog({
             <input
               name="workingOn"
               className={inputCls}
-              placeholder="e.g. healing after a breakup"
+              placeholder="In a few words, what they came in around"
             />
           </Field>
 
@@ -139,22 +139,22 @@ export function NewClientDialog({
             />
           </Field>
 
-          <Field label="Tags" hint="Comma-separated. Helps you filter later (e.g. self-love, grief, ancestral)">
+          <Field label="Tags" hint="Comma-separated. Use whatever vocabulary helps you find them later.">
             <input
               name="tags"
               className={inputCls}
-              placeholder="grief, self-love"
+              placeholder="e.g. weekly, longterm"
             />
           </Field>
 
           <Field
             label="Sensitivity flags (optional)"
-            hint="Topics to handle gently. Shown as a warm warning at the top of their file."
+            hint="Topics to handle gently. A soft reminder at the top of their file — only you see this."
           >
             <input
               name="sensitivities"
               className={inputCls}
-              placeholder="recent loss, abusive past, no eye-gazing"
+              placeholder="e.g. recent loss, sensitive about money"
             />
           </Field>
 
@@ -183,8 +183,9 @@ export function NewClientDialog({
             <Field label="First session type">
               <input
                 name="firstSessionType"
-                defaultValue="Soul reading"
+                defaultValue="Session"
                 className={inputCls}
+                placeholder="Whatever you call this kind of session"
               />
             </Field>
           </div>

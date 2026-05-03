@@ -1,6 +1,6 @@
-// Practitioner-only space — counter-transference, hunches, things she's
-// not ready to say. Visually distinct (locked-feeling) so it's clear nothing
-// here ever leaves the file.
+// Practitioner-only space — hunches, observations, anything she'd want to
+// remember but never share. Visually distinct (locked-feeling) so it's
+// clear nothing here ever leaves the file.
 import { MarkdownRender } from "./NotesEditor";
 
 export function PrivateNotesBlock({ body }: { body: string | null }) {
@@ -24,7 +24,7 @@ export function PrivateNotesBlock({ body }: { body: string | null }) {
           Just for you
         </div>
         <div className="text-[10px] text-ink-400">
-          · counter-transference, hunches, things you&apos;re holding privately
+          · hunches, observations, things you&apos;re sitting with quietly
         </div>
       </div>
       {body && body.trim().length > 0 ? (
@@ -33,8 +33,8 @@ export function PrivateNotesBlock({ body }: { body: string | null }) {
         </div>
       ) : (
         <div className="text-sm text-ink-400 italic">
-          Nothing yet. Write what you&apos;re holding privately about this
-          client — never exported, never shared.
+          Nothing yet. Anything you write here stays here — never exported,
+          never shared with the client.
         </div>
       )}
     </div>

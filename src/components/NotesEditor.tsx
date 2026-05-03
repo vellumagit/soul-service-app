@@ -177,7 +177,7 @@ export function NotesEditor({
           style={{ minHeight: `${rows * 1.6}em`, fontFamily: "var(--font-sans)" }}
         />
       ) : (
-        <div className="px-4 py-3 text-sm prose-sm prose-soul" style={{ minHeight: `${rows * 1.6}em` }}>
+        <div className="px-4 py-3 text-sm md-render" style={{ minHeight: `${rows * 1.6}em` }}>
           {value.trim().length > 0 ? (
             <MarkdownRender body={value} />
           ) : (

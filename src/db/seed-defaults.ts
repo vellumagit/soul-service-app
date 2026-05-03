@@ -14,170 +14,147 @@ import { eq, sql } from "drizzle-orm";
 
 const PRACTITIONER_NAME = "Svitlana";
 
+// These are STARTER templates — deliberately neutral and brief so the practitioner
+// can edit them into her own voice. Every body ends with a "— [Your name]" stub
+// rather than a hardcoded sign-off so she doesn't inherit a tone she didn't choose.
 const DEFAULT_EMAIL_TEMPLATES = [
   {
-    name: "Welcome — first session confirmation",
-    subject: "Looking forward to our first session, {{firstName}}",
+    name: "Starter · First session confirmation",
+    subject: "Confirming our first session, {{firstName}}",
     body: `Hi {{firstName}},
 
-So glad we're connecting. Quick logistics for our session:
+Looking forward to working together. Here are the details:
 
 · When: {{nextSessionWhen}}
-· Where: Google Meet ({{meetUrl}})
+· Where: Google Meet — {{meetUrl}}
 · Length: {{nextSessionDuration}}
 
-A few notes before we begin:
-· Find a quiet, private space where you won't be interrupted.
-· Have water nearby.
-· You don't need to prepare anything specific — just come as you are.
+A quiet, private spot works best. If anything comes up before we meet that you'd like me to know, feel free to share.
 
-If anything comes up beforehand you'd like me to know, feel free to share. Otherwise, see you {{nextSessionWhen}}.
-
-Holding space for you.
-
-— ${PRACTITIONER_NAME}`,
+See you soon,
+— [Your name]`,
   },
   {
-    name: "1-week follow-up",
+    name: "Starter · 1-week check-in",
     subject: "Checking in after our session",
     body: `Hi {{firstName}},
 
-It's been a week since our session — wanted to gently check in. How has the week landed for you?
+Just checking in after our session last week. How has it landed?
 
-If anything came up that you'd like to bring into our next time, jot it down whenever it surfaces.
+If anything has come up you'd like to bring to our next time together, jot it down whenever it surfaces — no need to reply.
 
-With love,
-${PRACTITIONER_NAME}`,
+— [Your name]`,
   },
   {
-    name: "1-month follow-up",
+    name: "Starter · 1-month check-in",
     subject: "Thinking of you, {{firstName}}",
     body: `Hi {{firstName}},
 
-A month has passed since we sat together. I wanted to check in — how are things? What's shifted, what's still here?
+It's been about a month since we last sat together. I wanted to check in — how are things going?
 
-If you'd like to come back in for another session, the door is open. If something specific has come up, I'd love to hear about it.
+If you'd like to schedule another session, just reply and we'll find a time.
 
-With love,
-${PRACTITIONER_NAME}`,
+— [Your name]`,
   },
   {
-    name: "3-month deeper follow-up",
-    subject: "Three months on — how is your heart?",
+    name: "Starter · 3-month check-in",
+    subject: "How are things, {{firstName}}?",
     body: `Hi {{firstName}},
 
-Three months ago we worked together. I find myself thinking of you and wanted to send love.
+It's been a few months since we worked together — I wanted to reach out and see how you've been.
 
-Sometimes the deeper changes take time to surface. If you've noticed something — small or big — I'd love to hear. And if you're ready for another session, just say the word.
+If you'd like to come back in, the door is open. And if there's something you'd like to share about what's been going on, I'd love to hear.
 
-With love,
-${PRACTITIONER_NAME}`,
+— [Your name]`,
   },
   {
-    name: "Aftercare — same-day post-session",
+    name: "Starter · Aftercare (same-day)",
     subject: "After our session today",
     body: `Hi {{firstName}},
 
-Thank you for showing up today. Some gentle reminders for the rest of the day:
+Thank you for showing up today. A few small things for the rest of the day:
 
-· Drink water.
-· Be slow with yourself — let what surfaced settle.
-· Journal if anything wants to come through.
-· Reach out if you need anything before our next time.
+· Drink some water.
+· Take it slow if you can.
+· Reach out if you need anything before our next session.
 
-What we touched on today is yours to keep working with at your own pace.
+What we worked on today is yours — at your pace.
 
-With love,
-${PRACTITIONER_NAME}`,
+— [Your name]`,
   },
   {
-    name: "Payment reminder — gentle",
-    subject: "A friendly note re: our last session",
+    name: "Starter · Payment reminder",
+    subject: "Quick note about our last session",
     body: `Hi {{firstName}},
 
-Hope you're well. Just a gentle nudge — the exchange for our session on {{lastSessionDate}} ({{amount}}) is still open.
+Hope you're well. A gentle reminder — payment for our session on {{lastSessionDate}} ({{amount}}) is still open.
 
-Easiest options:
+How to pay:
 {{paymentInstructions}}
 
-No rush — just letting you know it's there. Reply if anything's unclear.
+No rush, just letting you know. Let me know if anything's unclear.
 
-Warmly,
-${PRACTITIONER_NAME}`,
+— [Your name]`,
   },
   {
-    name: "Birthday — happy day",
+    name: "Starter · Birthday",
     subject: "Thinking of you today",
     body: `Hi {{firstName}},
 
-Just wanted to send a little light your way today. Hope it's a beautiful one — that the people who love you find their way to you and that you take a moment to feel chosen.
+Just wanted to wish you a happy birthday. Hope today is a good one for you.
 
-If anything wants to come up, the door is open.
-
-Sending love,
-${PRACTITIONER_NAME}`,
+— [Your name]`,
   },
 ];
 
+// Starter note templates — generic structures the practitioner can rename and
+// rewrite into her own way of working. Two short ones, plus a quick log.
 const DEFAULT_NOTE_TEMPLATES = [
   {
-    name: "Standard session — soul reading",
-    body: `## Their intention
-(in their own words)
+    name: "Starter · Standard session",
+    body: `## What they came in with
+(in their own words if possible)
 
-## What came through
+## What we covered
 -
 
-## Guides / energy that showed up
+## Observations
 -
 
-## What I noticed in their body / energy field
-- Pre:
-- Post:
-
-## What I said / what they said
+## What they're taking away
 -
 
-## What to suggest between now and next session
--
-
-## Themes recurring
+## Follow up next time
 - `,
   },
   {
-    name: "First session / intake",
+    name: "Starter · First session / intake",
     body: `## What brings them
-(reason for booking, in their words)
+(reason for booking — in their words)
 
-## Where love is currently feeling blocked
+## Background worth noting
 -
 
-## Who they need to forgive (themselves / others)
+## What they're hoping for
 -
 
-## What I noticed energetically on first read
--
+## Anything to be mindful of
+(things to handle gently — note privately, never exported)
 
-## Trauma / nervous system notes (anything to be careful about)
--
-
-## Goals we co-set today
+## What we agreed on for next steps
 1.
 2.
-3.
-
-## What I told them to expect / next steps
-- `,
+3. `,
   },
   {
-    name: "Quick log — short session",
-    body: `## Top theme
+    name: "Starter · Quick log",
+    body: `## Main thing today
 -
 
 ## What landed
 -
 
-## Action item for them
+## For next time
 - `,
   },
 ];
@@ -186,6 +163,19 @@ const DEFAULT_NOTE_TEMPLATES = [
 const DEPRECATED_EMAIL_TEMPLATES = [
   "Re-engagement — checking in",
   "Aftercare — post-session follow-up",
+  "Welcome — first session confirmation",
+  "1-week follow-up",
+  "1-month follow-up",
+  "3-month deeper follow-up",
+  "Aftercare — same-day post-session",
+  "Payment reminder — gentle",
+  "Birthday — happy day",
+];
+
+const DEPRECATED_NOTE_TEMPLATES = [
+  "Standard session — soul reading",
+  "First session / intake",
+  "Quick log — short session",
 ];
 
 async function seed() {
@@ -197,6 +187,11 @@ async function seed() {
       .delete(emailTemplates)
       .where(sql`${emailTemplates.name} = ${name}`);
   }
+  for (const name of DEPRECATED_NOTE_TEMPLATES) {
+    await db
+      .delete(noteTemplates)
+      .where(sql`${noteTemplates.name} = ${name}`);
+  }
 
   // Settings: upsert single row
   const settingsRows = await db.select().from(practitionerSettings);
@@ -205,8 +200,8 @@ async function seed() {
     defaultRateCents: 13500,
     defaultCurrency: "USD",
     paymentInstructions:
-      "Venmo @svitlana · Zelle to your-email@example.com · cash welcomed in person",
-    invoiceFooter: `Thank you, with love. — ${PRACTITIONER_NAME}`,
+      "Edit me in Settings — e.g. Venmo @yourhandle · Zelle to you@example.com",
+    invoiceFooter: `Thank you. — ${PRACTITIONER_NAME}`,
     invoicePrefix: "INV",
     autoInvoiceOnComplete: true,
     birthdayReminderDays: 3,

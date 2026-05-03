@@ -71,7 +71,7 @@ export async function createClient(formData: FormData) {
   const firstSessionType =
     str(formData, "firstSessionType") ??
     str(formData, "primarySessionType") ??
-    "Soul reading";
+    "Session";
 
   const [created] = await db
     .insert(clients)
@@ -194,7 +194,7 @@ export async function deleteClient(clientId: string) {
 
 export async function scheduleSession(formData: FormData) {
   const clientId = required(str(formData, "clientId"), "Client");
-  const type = str(formData, "type") ?? "Soul reading";
+  const type = str(formData, "type") ?? "Session";
   const scheduledAtRaw = required(str(formData, "scheduledAt"), "Date / time");
   const durationMinutes = num(formData, "durationMinutes") ?? 60;
   const manualMeetUrl = str(formData, "meetUrl");
@@ -222,7 +222,7 @@ export async function scheduleSession(formData: FormData) {
 
 export async function logPastSession(formData: FormData) {
   const clientId = required(str(formData, "clientId"), "Client");
-  const type = str(formData, "type") ?? "Soul reading";
+  const type = str(formData, "type") ?? "Session";
   const scheduledAtRaw = required(str(formData, "scheduledAt"), "Date / time");
   const durationMinutes = num(formData, "durationMinutes") ?? 60;
   const paid = bool(formData, "paid");
