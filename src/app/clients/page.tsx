@@ -5,6 +5,7 @@ import type { ClientFilter } from "@/db/queries";
 import { initials, money, relativeTime } from "@/lib/format";
 import { NewClientDialog } from "@/components/NewClientDialog";
 import { QuickActions } from "@/components/QuickActions";
+import { requireSession } from "@/lib/session-cookies";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,7 @@ export default async function ClientsPage({
 }: {
   searchParams: Promise<{ filter?: string }>;
 }) {
+  const { email } = await requireSession();
   const { filter: filterRaw = "all" } = await searchParams;
   const filter = (
     FILTERS.some((f) => f.value === filterRaw) ? filterRaw : "all"
@@ -43,6 +45,7 @@ export default async function ClientsPage({
         },
       ]}
       rightAction={<QuickActions clients={picker} />}
+      userEmail={email}
     >
       <div className="flex items-end justify-between mb-5 gap-4 flex-wrap">
         <div>

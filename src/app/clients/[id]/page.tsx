@@ -28,6 +28,7 @@ import { PatternsTab } from "@/components/PatternsTab";
 import { ClientHeader } from "@/components/ClientHeader";
 import { ClientStatStrip } from "@/components/ClientStatStrip";
 import { RecentActivityMini } from "@/components/RecentActivityMini";
+import { requireSession } from "@/lib/session-cookies";
 
 const TABS = [
   { key: "overview", label: "Overview" },
@@ -48,6 +49,7 @@ export default async function ClientProfilePage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ tab?: string }>;
 }) {
+  const { email } = await requireSession();
   const { id } = await params;
   const { tab = "overview" } = await searchParams;
 
@@ -94,6 +96,7 @@ export default async function ClientProfilePage({
         { label: client.fullName },
       ]}
       rightAction={<QuickActions clients={allClients} />}
+      userEmail={email}
     >
       {/* Sensitivity flags — first thing visible if any */}
       <SensitivityFlags
@@ -108,6 +111,7 @@ export default async function ClientProfilePage({
         lastSession={lastSession}
         paymentInstructions={settings.paymentInstructions}
         allClients={allClients}
+        resendConfigured={!!process.env.RESEND_API_KEY}
       />
 
       {/* Stat strip — sessions / together since / next / paid / unpaid */}

@@ -23,6 +23,7 @@ export function ClientHeader({
   lastSession,
   paymentInstructions,
   allClients,
+  resendConfigured = false,
 }: {
   client: Client;
   emailTemplates: EmailTemplate[];
@@ -30,6 +31,7 @@ export function ClientHeader({
   lastSession: Session | null;
   paymentInstructions: string | null;
   allClients: { id: string; fullName: string }[];
+  resendConfigured?: boolean;
 }) {
   return (
     <div className="bg-white border border-ink-200 rounded-lg overflow-hidden mb-5">
@@ -139,6 +141,7 @@ export function ClientHeader({
                 nextSession={nextSession}
                 lastSession={lastSession}
                 paymentInstructions={paymentInstructions}
+                resendConfigured={resendConfigured}
                 trigger={(open) => (
                   <button
                     onClick={open}

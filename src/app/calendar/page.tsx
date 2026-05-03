@@ -2,6 +2,7 @@ import { AppShell } from "@/components/AppShell";
 import { listSessionsInRange, listClientsForPicker } from "@/db/queries";
 import { WeekCalendar } from "@/components/WeekCalendar";
 import { QuickActions } from "@/components/QuickActions";
+import { requireSession } from "@/lib/session-cookies";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +11,7 @@ export default async function CalendarPage({
 }: {
   searchParams: Promise<{ start?: string }>;
 }) {
+  const { email } = await requireSession();
   const { start: startParam } = await searchParams;
 
   // Anchor to the Sunday of the week we're viewing
@@ -32,6 +34,7 @@ export default async function CalendarPage({
         { label: "This week" },
       ]}
       rightAction={<QuickActions clients={clients} />}
+      userEmail={email}
     >
       <WeekCalendar
         weekStart={weekStart.toISOString()}

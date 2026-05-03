@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
+import { requireSession } from "@/lib/session-cookies";
 import { QuickActions } from "@/components/QuickActions";
 import { NewClientDialog } from "@/components/NewClientDialog";
 import { MarkPaidDialog } from "@/components/MarkPaidDialog";
@@ -15,6 +16,7 @@ import { shortTime, fullDate, relativeTime } from "@/lib/format";
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
+  const { email } = await requireSession();
   const [data, clientsList, capacity] = await Promise.all([
     getDashboardData(),
     listClientsForPicker(),
@@ -30,6 +32,7 @@ export default async function HomePage() {
     <AppShell
       breadcrumb={[{ label: "Today" }]}
       rightAction={<QuickActions clients={clientsList} />}
+      userEmail={email}
     >
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-ink-900 tracking-tight">

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Modal } from "./Modal";
 import { Field, inputCls } from "./Form";
-import { logCommunication } from "@/lib/actions";
+import { logCommunication, sendClientEmail } from "@/lib/actions";
 import type { Client, EmailTemplate, Session } from "@/db/schema";
 
 // Simple variable substitution. Supports:
@@ -66,6 +66,7 @@ export function EmailComposer({
   nextSession,
   lastSession,
   paymentInstructions,
+  resendConfigured = false,
   trigger,
 }: {
   client: Client;
@@ -73,6 +74,8 @@ export function EmailComposer({
   nextSession?: Session | null;
   lastSession?: Session | null;
   paymentInstructions?: string | null;
+  /** When true, the "Send" button calls Resend. When false, falls back to mailto. */
+  resendConfigured?: boolean;
   trigger?: (open: () => void) => React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -80,6 +83,7 @@ export function EmailComposer({
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!templateId) return;
@@ -99,26 +103,51 @@ export function EmailComposer({
     return `mailto:${client.email ?? ""}?${params.toString()}`;
   }
 
-  async function logAndOpen() {
+  async function handleSend() {
     if (!client.email) return;
     setSubmitting(true);
+    setError(null);
     try {
-      const fd = new FormData();
-      fd.append("clientId", client.id);
-      fd.append("kind", "email_sent");
-      fd.append("subject", subject);
-      fd.append("body", body);
-      if (templateId) fd.append("templateId", templateId);
-      await logCommunication(fd);
-
-      // Open mailto in a new tab. Some browsers block popups for non-user-gesture
-      // openings, but this happens inside a click handler so it should work.
-      window.location.href = buildMailto();
-      setOpen(false);
+      if (resendConfigured) {
+        // Real send via Resend (also logs the comm internally).
+        const fd = new FormData();
+        fd.append("clientId", client.id);
+        fd.append("to", client.email);
+        fd.append("subject", subject);
+        fd.append("body", body);
+        if (templateId) fd.append("templateId", templateId);
+        const result = await sendClientEmail(fd);
+        if (!result.ok) {
+          setError(result.message);
+          return;
+        }
+        setOpen(false);
+      } else {
+        // Mailto fallback — log first, then open the user's mail app.
+        const fd = new FormData();
+        fd.append("clientId", client.id);
+        fd.append("kind", "email_sent");
+        fd.append("subject", subject);
+        fd.append("body", body);
+        if (templateId) fd.append("templateId", templateId);
+        await logCommunication(fd);
+        window.location.href = buildMailto();
+        setOpen(false);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to send.");
     } finally {
       setSubmitting(false);
     }
   }
+
+  const sendLabel = submitting
+    ? resendConfigured
+      ? "Sending…"
+      : "Opening…"
+    : resendConfigured
+    ? "Send email"
+    : "Open in mail app";
 
   return (
     <>
@@ -163,11 +192,11 @@ export function EmailComposer({
             </button>
             <button
               type="button"
-              onClick={logAndOpen}
+              onClick={handleSend}
               disabled={submitting || !client.email}
               className="px-4 py-2 text-sm bg-ink-900 hover:bg-ink-800 text-white rounded-md font-medium disabled:opacity-60"
             >
-              {submitting ? "Opening…" : "Open in mail app"}
+              {sendLabel}
             </button>
           </>
         }
@@ -179,6 +208,12 @@ export function EmailComposer({
           </div>
         ) : (
           <div className="space-y-4">
+            {error && (
+              <div className="text-xs text-red-700 bg-red-50 border border-red-100 rounded p-2">
+                {error}
+              </div>
+            )}
+
             <Field label="To">
               <input
                 disabled
@@ -229,9 +264,19 @@ export function EmailComposer({
               <code className="font-mono text-ink-700">{`{{paymentInstructions}}`}</code>{" "}
               <code className="font-mono text-ink-700">{`{{meetUrl}}`}</code>
               <br />
-              Clicking <strong>Open in mail app</strong> will log this on the
-              client&apos;s profile and open your default mail program with the
-              draft pre-filled.
+              {resendConfigured ? (
+                <>
+                  Clicking <strong>Send email</strong> sends this directly via
+                  Resend and logs it on the client&apos;s profile.
+                </>
+              ) : (
+                <>
+                  Clicking <strong>Open in mail app</strong> logs this on the
+                  client&apos;s profile and opens your default mail program with
+                  the draft pre-filled. To send directly from this app, set{" "}
+                  <code className="font-mono">RESEND_API_KEY</code>.
+                </>
+              )}
             </div>
           </div>
         )}

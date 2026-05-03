@@ -416,6 +416,28 @@ export const practitionerSettings = pgTable("practitioner_settings", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// magic_links — one-time tokens emailed to allowlisted users for sign-in.
+// Single-tenant app (just Svitlana), so we don't need a `users` table —
+// the email itself is the identity. Token is a hashed random string.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const magicLinks = pgTable(
+  "magic_links",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    email: text("email").notNull(),
+    tokenHash: text("token_hash").notNull(), // sha256 of the token; raw token only in email
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    tokenIdx: index("magic_links_token_idx").on(t.tokenHash),
+    emailIdx: index("magic_links_email_idx").on(t.email),
+  })
+);
+
 export const clientsRelations = relations(clients, ({ many }) => ({
   sessions: many(sessions),
   attachments: many(attachments),
@@ -464,3 +486,5 @@ export type Communication = typeof communications.$inferSelect;
 export type EmailTemplate = typeof emailTemplates.$inferSelect;
 export type NoteTemplate = typeof noteTemplates.$inferSelect;
 export type PractitionerSettings = typeof practitionerSettings.$inferSelect;
+export type MagicLink = typeof magicLinks.$inferSelect;
+export type NewMagicLink = typeof magicLinks.$inferInsert;

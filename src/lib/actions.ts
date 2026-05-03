@@ -547,6 +547,78 @@ export async function deleteCommunication(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// SEND EMAIL — actually send via Resend + log it on the client.
+// Returns { ok: true } on success or { ok: false, message } on failure.
+// EmailComposer falls back to mailto: if Resend isn't configured.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type SendEmailResult = { ok: true } | { ok: false; message: string };
+
+export async function sendClientEmail(formData: FormData): Promise<SendEmailResult> {
+  const clientId = required(str(formData, "clientId"), "Client id");
+  const to = required(str(formData, "to"), "Recipient");
+  const subject = required(str(formData, "subject"), "Subject");
+  const body = required(str(formData, "body"), "Body");
+  const templateId = str(formData, "templateId");
+
+  if (!process.env.RESEND_API_KEY) {
+    return {
+      ok: false,
+      message: "Email sending isn't configured. Set RESEND_API_KEY to enable real send.",
+    };
+  }
+
+  // Lazy-import so this action stays cheap when Resend isn't used.
+  const { sendEmail } = await import("./resend");
+  const settings = await getSettings();
+
+  // Wrap plain-text body in a minimal HTML email so it renders cleanly.
+  const html = bodyToHtml(body, settings?.businessName ?? null);
+
+  try {
+    await sendEmail({
+      to,
+      subject,
+      html,
+      text: body,
+      replyTo: settings?.businessEmail ?? undefined,
+    });
+  } catch (err) {
+    const message =
+      err instanceof Error
+        ? err.message
+        : "Resend rejected the message.";
+    return { ok: false, message };
+  }
+
+  // Log it on the client's profile.
+  await db.insert(communications).values({
+    clientId,
+    kind: "email_sent",
+    subject,
+    body,
+    templateId: templateId ?? null,
+  });
+  revalidatePath(`/clients/${clientId}`);
+  return { ok: true };
+}
+
+function bodyToHtml(body: string, businessName: string | null): string {
+  const escaped = body
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  const paragraphs = escaped
+    .split(/\n{2,}/)
+    .map((p) => `<p style="margin:0 0 12px 0;">${p.replace(/\n/g, "<br>")}</p>`)
+    .join("");
+  const signature = businessName
+    ? `<p style="margin:24px 0 0 0;color:#9a9a9a;font-size:11px;">Sent via ${businessName}</p>`
+    : "";
+  return `<!doctype html><html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1a1a1a;font-size:14px;line-height:1.55;max-width:560px;margin:24px auto;padding:0 16px;">${paragraphs}${signature}</body></html>`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // FILES (deletion)
 // ─────────────────────────────────────────────────────────────────────────────
 

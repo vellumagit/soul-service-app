@@ -12,6 +12,7 @@ import {
 } from "@/lib/format";
 import { MarkPaidDialog } from "@/components/MarkPaidDialog";
 import { QuickActions } from "@/components/QuickActions";
+import { requireSession } from "@/lib/session-cookies";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,7 @@ export default async function PaymentsPage({
 }: {
   searchParams: Promise<{ filter?: string }>;
 }) {
+  const { email: userEmail } = await requireSession();
   const { filter = "all" } = await searchParams;
 
   const [sessions, clients, totals] = await Promise.all([
@@ -43,6 +45,7 @@ export default async function PaymentsPage({
         { label: filterLabel(filter) },
       ]}
       rightAction={<QuickActions clients={clients} />}
+      userEmail={userEmail}
     >
       <div className="mb-5">
         <h1 className="text-2xl font-semibold text-ink-900 tracking-tight">

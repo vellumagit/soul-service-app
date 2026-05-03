@@ -57,17 +57,30 @@ The schema and all queries are pure Drizzle — they work identically on both pr
 src/
 ├── app/                    # Next.js routes
 │   ├── page.tsx            # / · Today's thread (Inbox)
-│   ├── souls/page.tsx      # /souls · directory
-│   ├── souls/[code]/       # /souls/{code} · single soul file
+│   ├── signin/             # /signin · magic-link request page
+│   ├── auth/verify/        # GET handler that consumes a magic-link token
+│   ├── clients/            # /clients · directory + /clients/[id] · soul file
 │   ├── calendar/           # /calendar · week view
-│   └── exchange/           # /exchange · global invoices
-├── components/             # AppShell, Sidebar, TopBar, TimelineFeed, ReadingsList, WeekCalendar
+│   ├── payments/           # /payments · invoices + ledger
+│   ├── settings/           # /settings · biz info, integrations, templates
+│   └── api/auth/google/    # Google Calendar OAuth callback
+├── components/             # AppShell, Sidebar, ClientHeader, SessionCard, etc.
 ├── db/
 │   ├── schema.ts           # Drizzle schema · single source of truth
 │   ├── queries.ts          # Read helpers used by pages
-│   ├── index.ts            # Lazy-init Postgres client (proxy)
-│   └── seed.ts             # Idempotent seeder
-└── lib/format.ts           # Tiny formatting helpers (money, dates, tones)
+│   ├── index.ts            # Lazy-init Postgres client (Proxy-wrapped)
+│   └── migrate.ts          # Apply SQL migrations non-interactively
+├── lib/
+│   ├── actions.ts          # All server actions (mutations, sends, OAuth starts)
+│   ├── auth-actions.ts     # `requestMagicLink`, `signOutAction`
+│   ├── auth-tokens.ts      # Token issue/consume helpers (server-only)
+│   ├── session.ts          # JWT primitives — usable from proxy.ts
+│   ├── session-cookies.ts  # `requireSession`, `setSessionCookie` — uses next/headers
+│   ├── resend.ts           # Resend client + magic-link email + sendEmail()
+│   ├── google-calendar.ts  # OAuth + Calendar/Meet event CRUD
+│   ├── ai-notes.ts         # Claude Sonnet 4.6 transcript→notes
+│   └── format.ts           # Tiny formatting helpers (money, dates, tones)
+└── proxy.ts                # Next.js 16 renamed middleware — gates protected routes
 ```
 
 ## Scripts
@@ -78,6 +91,39 @@ src/
 - `npm run db:push` — push schema directly to DB (good for prototyping)
 - `npm run db:studio` — open Drizzle Studio (DB explorer)
 - `npm run db:seed` — wipe + reseed with descriptive placeholder data
+
+## Auth setup (magic-link sign-in)
+
+The app is locked to an allowlist of emails. Anyone whose email isn't on the list
+silently gets the same "check your inbox" message they would on success — we
+never leak who has access.
+
+1. **Generate a session secret** (≥32 chars):
+   ```bash
+   openssl rand -base64 32
+   ```
+   Set it as `AUTH_SECRET` in `.env.local` and Vercel.
+
+2. **Sign up for Resend** at <https://resend.com> (free tier covers thousands of
+   emails/month). Create an API key and set it as `RESEND_API_KEY`.
+
+3. **Pick a From address**:
+   - For testing: use `Soul Service <onboarding@resend.dev>` (default if unset).
+   - For production: verify a domain in Resend → use `Soul Service <hello@yourdomain.com>`.
+   Set it as `AUTH_EMAIL_FROM`.
+
+4. **Set the allowlist** as a comma-separated list:
+   ```bash
+   ALLOWED_EMAILS=svitlana@example.com,backup@example.com
+   ```
+
+5. **Visit `/signin`**, enter your email, click the link in your inbox, you're in.
+   Sessions last 30 days and live in an HTTP-only cookie. Sign out from the
+   sidebar footer.
+
+> **Why no `users` table?** Single-tenant app — Svitlana is the only user.
+> Removing an email from `ALLOWED_EMAILS` immediately revokes access on the
+> next request, no DB change needed.
 
 ## Google Calendar setup (one-time, ~5 min)
 
@@ -114,7 +160,7 @@ After that, scheduling a session in the app auto-creates a Calendar event with a
 - ✅ Souls directory + soul file (timeline · readings · documents · soul log · exchange · intake)
 - ✅ Week calendar with click-to-open + sabbath day + now-line
 - ✅ Global exchange ledger
-- ⏳ Auth (skipped for v1 — add Auth.js magic link before going live)
+- ✅ Auth — magic-link sign-in via Resend, allowlist gate
 - ⏳ Mutations (Schedule / Write log / Upload all wired as buttons but don't submit yet)
 - ⏳ Google Calendar + Meet integration
 - ⏳ Stripe integration for the exchange ledger

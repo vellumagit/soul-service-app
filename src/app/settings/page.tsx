@@ -10,6 +10,7 @@ import { QuickActions } from "@/components/QuickActions";
 import { SettingsForm } from "@/components/SettingsForm";
 import { TemplatesManager } from "@/components/TemplatesManager";
 import { GoogleCalendarSection } from "@/components/GoogleCalendarSection";
+import { requireSession } from "@/lib/session-cookies";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,7 @@ export default async function SettingsPage({
     reason?: string;
   }>;
 }) {
+  const { email: userEmail } = await requireSession();
   const { google, email, reason } = await searchParams;
 
   const [settings, clientsList, emailTpls, noteTpls, googleStatus] =
@@ -40,6 +42,7 @@ export default async function SettingsPage({
     <AppShell
       breadcrumb={[{ label: "Settings", href: "/settings" }]}
       rightAction={<QuickActions clients={clientsList} />}
+      userEmail={userEmail}
     >
       <div className="mb-5">
         <h1 className="text-2xl font-semibold text-ink-900 tracking-tight">

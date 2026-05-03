@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { SearchPalette } from "./SearchPalette";
+import { SignOutButton } from "./SignOutButton";
 
 const NAV = [
   { href: "/", label: "Today", icon: "today" },
@@ -29,10 +30,13 @@ const ICON: Record<string, string> = {
 export function AppShell({
   breadcrumb,
   rightAction,
+  userEmail,
   children,
 }: {
   breadcrumb: { label: string; href?: string }[];
   rightAction?: React.ReactNode;
+  /** Logged-in user's email — shown in the sidebar footer with a sign-out link. */
+  userEmail?: string;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -47,7 +51,7 @@ export function AppShell({
       <aside className="hidden md:flex w-56 border-r border-ink-100 flex-col bg-white shrink-0">
         <SidebarBrand />
         <SidebarNav isActive={isActive} />
-        <SidebarFooter />
+        <SidebarFooter userEmail={userEmail} />
       </aside>
 
       {/* Mobile drawer */}
@@ -67,7 +71,7 @@ export function AppShell({
           isActive={isActive}
           onNavigate={() => setDrawerOpen(false)}
         />
-        <SidebarFooter />
+        <SidebarFooter userEmail={userEmail} />
       </aside>
 
       <main className="flex-1 flex flex-col min-w-0 bg-white">
@@ -219,21 +223,29 @@ function SidebarNav({
   );
 }
 
-function SidebarFooter() {
+function SidebarFooter({ userEmail }: { userEmail?: string }) {
+  const initial = (userEmail?.[0] ?? "S").toUpperCase();
+  const display = userEmail ?? "Svitlana";
   return (
     <div className="px-3 py-3 border-t border-ink-100 text-xs text-ink-500">
-      <div className="flex items-center justify-between px-1">
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-md bg-flame-100 flex items-center justify-center text-[11px] font-semibold text-flame-700">
-            S
+      <div className="flex items-center justify-between gap-2 px-1">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <div className="w-6 h-6 rounded-md bg-flame-100 flex items-center justify-center text-[11px] font-semibold text-flame-700 shrink-0">
+            {initial}
           </div>
           <div className="min-w-0">
-            <div className="truncate text-ink-700 leading-none">Svitlana</div>
+            <div
+              className="truncate text-ink-700 leading-none"
+              title={display}
+            >
+              {display}
+            </div>
             <div className="text-[10px] text-ink-400 mt-0.5 leading-none">
               your space
             </div>
           </div>
         </div>
+        {userEmail && <SignOutButton />}
       </div>
     </div>
   );
