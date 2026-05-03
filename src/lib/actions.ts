@@ -197,16 +197,23 @@ export async function scheduleSession(formData: FormData) {
   const type = str(formData, "type") ?? "Soul reading";
   const scheduledAtRaw = required(str(formData, "scheduledAt"), "Date / time");
   const durationMinutes = num(formData, "durationMinutes") ?? 60;
+  const manualMeetUrl = str(formData, "meetUrl");
 
-  await db.insert(sessions).values({
-    clientId,
-    type,
-    status: "scheduled",
-    scheduledAt: new Date(scheduledAtRaw),
-    durationMinutes,
-    intention: str(formData, "intention"),
-    meetUrl: str(formData, "meetUrl"),
-  });
+  const [created] = await db
+    .insert(sessions)
+    .values({
+      clientId,
+      type,
+      status: "scheduled",
+      scheduledAt: new Date(scheduledAtRaw),
+      durationMinutes,
+      intention: str(formData, "intention"),
+      meetUrl: manualMeetUrl, // fallback if Google isn't connected
+    })
+    .returning({ id: sessions.id });
+
+  // Best-effort: push to Google Calendar (auto-generates Meet link + invites client)
+  await syncSessionToGoogle(created.id);
 
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/calendar");
@@ -264,12 +271,23 @@ export async function updateSession(formData: FormData) {
   const id = required(str(formData, "id"), "Session id");
   const clientId = required(str(formData, "clientId"), "Client id");
 
+  // Read existing session to detect title/intention changes worth syncing
+  const existingRows = await db
+    .select()
+    .from(sessions)
+    .where(eq(sessions.id, id))
+    .limit(1);
+  const existing = existingRows[0];
+
+  const newType = str(formData, "type");
+  const newIntention = str(formData, "intention");
+
   const updates: Record<string, unknown> = {
-    intention: str(formData, "intention"),
+    intention: newIntention,
     arrivedAs: str(formData, "arrivedAs"),
     leftAs: str(formData, "leftAs"),
     notes: str(formData, "notes"),
-    type: str(formData, "type") ?? undefined,
+    type: newType ?? undefined,
     updatedAt: new Date(),
   };
 
@@ -277,6 +295,16 @@ export async function updateSession(formData: FormData) {
   if (isMarkComplete) updates.status = "completed";
 
   await db.update(sessions).set(updates).where(eq(sessions.id, id));
+
+  // Push edited title/intention to Google (only if event exists and something
+  // user-visible changed). Skip on completion — past events don't need sync.
+  if (
+    !isMarkComplete &&
+    existing?.googleEventId &&
+    (newType !== existing.type || newIntention !== existing.intention)
+  ) {
+    await syncSessionToGoogle(id);
+  }
 
   if (isMarkComplete) {
     await runOnSessionCompleted(id, clientId);
@@ -287,18 +315,71 @@ export async function updateSession(formData: FormData) {
   revalidatePath("/");
 }
 
+// Reschedule = change scheduledAt (and optionally durationMinutes). Pushes to Google.
+export async function rescheduleSession(formData: FormData) {
+  const id = required(str(formData, "id"), "Session id");
+  const clientId = required(str(formData, "clientId"), "Client id");
+  const scheduledAtRaw = required(
+    str(formData, "scheduledAt"),
+    "Date / time"
+  );
+  const durationMinutes = num(formData, "durationMinutes");
+
+  const updates: Record<string, unknown> = {
+    scheduledAt: new Date(scheduledAtRaw),
+    updatedAt: new Date(),
+  };
+  if (durationMinutes !== null) updates.durationMinutes = durationMinutes;
+
+  await db.update(sessions).set(updates).where(eq(sessions.id, id));
+
+  // Push to Google. If event exists, this updates it (sends "rescheduled"
+  // notification to the client). If it doesn't exist yet, this creates one.
+  await syncSessionToGoogle(id);
+
+  revalidatePath(`/clients/${clientId}`);
+  revalidatePath("/calendar");
+  revalidatePath("/");
+}
+
 export async function cancelSession(sessionId: string, clientId: string) {
+  // Look up before update to grab the Google event id
+  const existingRows = await db
+    .select({ googleEventId: sessions.googleEventId })
+    .from(sessions)
+    .where(eq(sessions.id, sessionId))
+    .limit(1);
+
   await db
     .update(sessions)
     .set({ status: "cancelled", updatedAt: new Date() })
     .where(eq(sessions.id, sessionId));
+
+  // Pull from Google Calendar so the client gets a "cancelled" notification
+  await deleteSessionFromGoogle(existingRows[0]?.googleEventId ?? null);
+  // Clear our reference so a re-schedule doesn't try to update a deleted event
+  if (existingRows[0]?.googleEventId) {
+    await db
+      .update(sessions)
+      .set({ googleEventId: null })
+      .where(eq(sessions.id, sessionId));
+  }
+
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/calendar");
   revalidatePath("/");
 }
 
 export async function deleteSession(sessionId: string, clientId: string) {
+  const existingRows = await db
+    .select({ googleEventId: sessions.googleEventId })
+    .from(sessions)
+    .where(eq(sessions.id, sessionId))
+    .limit(1);
+
   await db.delete(sessions).where(eq(sessions.id, sessionId));
+  await deleteSessionFromGoogle(existingRows[0]?.googleEventId ?? null);
+
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/calendar");
   revalidatePath("/payments");
@@ -685,6 +766,108 @@ export async function addObservation(formData: FormData) {
 export async function deleteObservation(observationId: string, clientId: string) {
   await db.delete(observations).where(eq(observations.id, observationId));
   revalidatePath(`/clients/${clientId}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GOOGLE CALENDAR — connect / disconnect
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function startGoogleConnect() {
+  const { getGoogleAuthUrl } = await import("./google-calendar");
+  const url = getGoogleAuthUrl();
+  redirect(url);
+}
+
+export async function disconnectGoogleAction() {
+  const { disconnectGoogle } = await import("./google-calendar");
+  await disconnectGoogle();
+  revalidatePath("/settings");
+}
+
+// Internal helper — best-effort Google Calendar push for a session.
+// Never throws; any Google failure is logged + returned as an error string.
+async function syncSessionToGoogle(
+  sessionId: string
+): Promise<{ ok: true; meetUrl?: string | null } | { ok: false; error: string }> {
+  try {
+    const sessionRows = await db
+      .select()
+      .from(sessions)
+      .where(eq(sessions.id, sessionId))
+      .limit(1);
+    const session = sessionRows[0];
+    if (!session) return { ok: false, error: "Session not found" };
+
+    const clientRows = await db
+      .select()
+      .from(clients)
+      .where(eq(clients.id, session.clientId))
+      .limit(1);
+    const client = clientRows[0];
+    if (!client) return { ok: false, error: "Client not found" };
+
+    const settingsRows = await db.select().from(practitionerSettings).limit(1);
+    const settings = settingsRows[0];
+
+    const eventInput = {
+      summary: `${session.type} · ${client.fullName}`,
+      description: [
+        session.intention ? `Intention: "${session.intention}"` : null,
+        client.workingOn ? `Working on: ${client.workingOn}` : null,
+        "—",
+        "Created by Soul Service",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      startAt: session.scheduledAt,
+      durationMinutes: session.durationMinutes,
+      attendeeEmail: client.email,
+      practitionerEmail: settings?.googleCalendarEmail ?? null,
+    };
+
+    const {
+      createCalendarEvent,
+      updateCalendarEvent,
+    } = await import("./google-calendar");
+
+    let result;
+    if (session.googleEventId) {
+      result = await updateCalendarEvent(session.googleEventId, eventInput);
+      // If event was deleted on Google's side (returns null), recreate it
+      if (!result) result = await createCalendarEvent(eventInput);
+    } else {
+      result = await createCalendarEvent(eventInput);
+    }
+
+    if (!result) return { ok: true }; // Not connected — silent no-op
+
+    await db
+      .update(sessions)
+      .set({
+        googleEventId: result.eventId,
+        meetUrl: result.meetUrl ?? session.meetUrl,
+        updatedAt: new Date(),
+      })
+      .where(eq(sessions.id, sessionId));
+
+    return { ok: true, meetUrl: result.meetUrl };
+  } catch (err) {
+    console.warn("Google Calendar sync failed:", err);
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Sync failed",
+    };
+  }
+}
+
+async function deleteSessionFromGoogle(googleEventId: string | null) {
+  if (!googleEventId) return;
+  try {
+    const { deleteCalendarEvent } = await import("./google-calendar");
+    await deleteCalendarEvent(googleEventId);
+  } catch (err) {
+    console.warn("Google Calendar delete failed:", err);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

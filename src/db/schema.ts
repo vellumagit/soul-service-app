@@ -405,6 +405,14 @@ export const practitionerSettings = pgTable("practitioner_settings", {
   ),
   birthdayReminderDays: integer("birthday_reminder_days").default(3), // create task N days before
 
+  // Google Calendar OAuth (one practitioner per app — single connected account).
+  // Refresh tokens are long-lived; access tokens auto-refresh in google-calendar.ts.
+  googleAccessToken: text("google_access_token"),
+  googleRefreshToken: text("google_refresh_token"),
+  googleTokenExpiresAt: timestamp("google_token_expires_at"),
+  googleCalendarEmail: text("google_calendar_email"), // the connected Google account
+  googleConnectedAt: timestamp("google_connected_at"),
+
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 

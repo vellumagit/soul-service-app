@@ -79,6 +79,36 @@ src/
 - `npm run db:studio` — open Drizzle Studio (DB explorer)
 - `npm run db:seed` — wipe + reseed with descriptive placeholder data
 
+## Google Calendar setup (one-time, ~5 min)
+
+For the auto-Meet-link + calendar-invite feature.
+
+1. **Create a Google Cloud project** at <https://console.cloud.google.com/projectcreate>. Name it anything ("Soul Service").
+2. **Enable the Google Calendar API:** Cloud Console → APIs & Services → Library → search "Google Calendar API" → Enable.
+3. **Configure the OAuth consent screen:** APIs & Services → OAuth consent screen.
+   - User type: **External**
+   - App name: "Soul Service" (or whatever)
+   - User support email + developer contact: your email
+   - Scopes: leave blank for now — we request them at runtime
+   - Test users: add your own Google account
+   - You can leave the app in "Testing" mode forever for personal use
+4. **Create OAuth credentials:** APIs & Services → Credentials → Create Credentials → OAuth client ID.
+   - Application type: **Web application**
+   - Name: "Soul Service Web"
+   - Authorized redirect URIs (add ALL three you'll need):
+     - `http://localhost:3000/api/auth/google/callback` (local dev)
+     - `https://your-app.vercel.app/api/auth/google/callback` (your Vercel deploy URL — find in Vercel dashboard)
+     - `https://your-domain.com/api/auth/google/callback` (custom domain, if any)
+   - Click Create. You'll get a **Client ID** and **Client Secret**.
+5. **Add to Vercel env vars** (Project Settings → Environment Variables, all environments):
+   - `GOOGLE_CLIENT_ID` = the Client ID
+   - `GOOGLE_CLIENT_SECRET` = the Client Secret
+   - `APP_URL` = your production URL (e.g. `https://your-app.vercel.app`) — only needed if Vercel's auto-detect picks the wrong one
+6. **Add to `.env.local`** for local dev with the same values.
+7. **Redeploy.** Then go to /settings → click "Connect Google Calendar" → grant access.
+
+After that, scheduling a session in the app auto-creates a Calendar event with a Meet link and invites the client.
+
 ## Status
 
 - ✅ Souls directory + soul file (timeline · readings · documents · soul log · exchange · intake)

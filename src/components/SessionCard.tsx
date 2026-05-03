@@ -20,6 +20,7 @@ import { MarkPaidDialog } from "./MarkPaidDialog";
 import { NotesEditor } from "./NotesEditor";
 import { GenerateInvoiceButton } from "./GenerateInvoiceButton";
 import { GenerateNotesDialog } from "./GenerateNotesDialog";
+import { RescheduleDialog } from "./RescheduleDialog";
 
 const STATUS_CHIP: Record<string, string> = {
   scheduled: "bg-flame-100 text-flame-700",
@@ -257,19 +258,27 @@ export function SessionCard({
           {/* Cancel / delete row */}
           <div className="border-t border-ink-100 pt-3 flex items-center gap-2 flex-wrap">
             {isScheduled && (
-              <ConfirmButton
-                destructive={false}
-                label={
-                  <span className="text-xs text-ink-500 hover:text-amber-700">
-                    Cancel session
-                  </span>
-                }
-                message="Cancel this scheduled session? You can keep it in their history or delete it later."
-                confirmLabel="Yes, cancel it"
-                onConfirm={() =>
-                  cancelSession(session.id, session.clientId)
-                }
-              />
+              <>
+                <RescheduleDialog
+                  sessionId={session.id}
+                  clientId={session.clientId}
+                  currentScheduledAt={session.scheduledAt}
+                  currentDurationMinutes={session.durationMinutes}
+                />
+                <ConfirmButton
+                  destructive={false}
+                  label={
+                    <span className="text-xs text-ink-500 hover:text-amber-700">
+                      Cancel session
+                    </span>
+                  }
+                  message="Cancel this scheduled session? If Google Calendar is connected, the event will be deleted and your client will be notified."
+                  confirmLabel="Yes, cancel it"
+                  onConfirm={() =>
+                    cancelSession(session.id, session.clientId)
+                  }
+                />
+              </>
             )}
             {session.meetUrl && (
               <a
@@ -288,7 +297,7 @@ export function SessionCard({
                   Delete
                 </span>
               }
-              message="Delete this session permanently? This can't be undone."
+              message="Delete this session permanently? This can't be undone. If a Google Calendar event exists, it will be deleted too."
               confirmLabel="Yes, delete"
               onConfirm={() => deleteSession(session.id, session.clientId)}
             />
