@@ -44,7 +44,7 @@ export function Modal({
       ref={ref}
       onClose={onClose}
       onClick={handleBackdropClick}
-      className={`rounded-lg border border-ink-200 shadow-2xl p-0 backdrop:bg-ink-900/40 w-full ${sizeCls}`}
+      className={`rounded-lg border border-ink-200 shadow-2xl p-0 backdrop:bg-ink-900/40 w-full m-auto fixed inset-0 ${sizeCls}`}
     >
       <div className="px-5 py-3 border-b border-ink-100 flex items-center justify-between">
         <h2 className="text-sm font-semibold text-ink-900">{title}</h2>
