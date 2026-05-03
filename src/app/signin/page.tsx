@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSessionEmail } from "@/lib/session-cookies";
+import { isAuthDisabled } from "@/lib/session";
 import { SignInForm } from "./SignInForm";
 
 export const dynamic = "force-dynamic";
@@ -10,6 +11,11 @@ export default async function SignInPage({
   searchParams: Promise<{ from?: string; error?: string }>;
 }) {
   const { from, error } = await searchParams;
+
+  // Auth disabled (demo mode) → no point being on this page.
+  if (isAuthDisabled()) {
+    redirect(from && from.startsWith("/") ? from : "/");
+  }
 
   // If already signed in, bounce to wherever they were headed (or home).
   const existing = await getSessionEmail();

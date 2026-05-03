@@ -11,6 +11,7 @@ import {
   SESSION_COOKIE_NAME,
   SESSION_DAYS,
   getEmailFromToken,
+  isAuthDisabled,
   signSessionToken,
 } from "./session";
 
@@ -28,8 +29,11 @@ export async function setSessionCookie(email: string): Promise<void> {
   });
 }
 
-/** Read & verify current session from cookies. Returns the email or null. */
+/** Read & verify current session from cookies. Returns the email or null.
+ *  When auth is disabled (AUTH_DISABLED=true or AUTH_SECRET unset) returns
+ *  null so the sidebar shows its neutral fallback instead of an email. */
 export async function getSessionEmail(): Promise<string | null> {
+  if (isAuthDisabled()) return null;
   const store = await cookies();
   const token = store.get(SESSION_COOKIE_NAME)?.value;
   return getEmailFromToken(token);
@@ -41,8 +45,11 @@ export async function clearSessionCookie(): Promise<void> {
   store.delete(SESSION_COOKIE_NAME);
 }
 
-/** Redirects to /signin if no valid session. Use at the top of protected pages/actions. */
+/** Redirects to /signin if no valid session. Use at the top of protected pages/actions.
+ *  When auth is disabled, returns an empty email so the page renders without
+ *  a redirect and the sidebar falls back to its default chip. */
 export async function requireSession(): Promise<{ email: string }> {
+  if (isAuthDisabled()) return { email: "" };
   const email = await getSessionEmail();
   if (!email) redirect("/signin");
   return { email };

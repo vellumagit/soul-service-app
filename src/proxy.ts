@@ -13,7 +13,11 @@
 // crashing. The page-level requireSession() will still gate access.
 
 import { NextResponse, type NextRequest } from "next/server";
-import { SESSION_COOKIE_NAME, getEmailFromToken } from "@/lib/session";
+import {
+  SESSION_COOKIE_NAME,
+  getEmailFromToken,
+  isAuthDisabled,
+} from "@/lib/session";
 
 // Public routes — anything starting with these prefixes is unprotected.
 const PUBLIC_PREFIXES = [
@@ -33,10 +37,10 @@ function isPublic(pathname: string): boolean {
 export async function proxy(request: NextRequest): Promise<NextResponse> {
   const { pathname, search } = request.nextUrl;
 
-  // Build-safety: if AUTH_SECRET isn't set, don't crash the proxy — let pages
-  // handle their own auth. Otherwise the entire app would 500 before env vars
-  // are configured.
-  if (!process.env.AUTH_SECRET) {
+  // Kill-switch: when AUTH_DISABLED=true (or AUTH_SECRET is unset), skip every
+  // check and let the request through. Lets you ship the app for a demo before
+  // sign-in is fully configured.
+  if (isAuthDisabled()) {
     return NextResponse.next();
   }
 

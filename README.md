@@ -98,6 +98,19 @@ The app is locked to an allowlist of emails. Anyone whose email isn't on the lis
 silently gets the same "check your inbox" message they would on success — we
 never leak who has access.
 
+### Demo mode (skip auth entirely)
+
+While you're previewing or sharing the app before sign-in is fully wired up,
+set `AUTH_DISABLED=true` in your env. Every page is open, `/signin` redirects
+to `/`, and the sidebar shows a neutral chip instead of an email. The auth
+code stays in place — flip it back to `false` (or unset it) when you're
+ready to lock things down.
+
+```bash
+# .env.local — or Vercel env vars
+AUTH_DISABLED=true
+```
+
 1. **Generate a session secret** (≥32 chars):
    ```bash
    openssl rand -base64 32

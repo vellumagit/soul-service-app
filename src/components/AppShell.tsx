@@ -224,8 +224,10 @@ function SidebarNav({
 }
 
 function SidebarFooter({ userEmail }: { userEmail?: string }) {
-  const initial = (userEmail?.[0] ?? "S").toUpperCase();
-  const display = userEmail ?? "Svitlana";
+  // `||` (not `??`) so empty-string from auth-disabled mode falls back to
+  // the neutral chip instead of rendering as a blank label.
+  const initial = (userEmail?.[0] || "S").toUpperCase();
+  const display = userEmail || "Svitlana";
   return (
     <div className="px-3 py-3 border-t border-ink-100 text-xs text-ink-500">
       <div className="flex items-center justify-between gap-2 px-1">

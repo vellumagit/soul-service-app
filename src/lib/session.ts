@@ -14,6 +14,19 @@ export type SessionPayload = {
   email: string;
 };
 
+/**
+ * Kill-switch for auth. When true, the proxy + requireSession bypass every
+ * check and act as if no auth system exists — useful for demos/previews
+ * before sign-in is fully configured. Triggered by EITHER:
+ *   - AUTH_DISABLED=true (explicit)
+ *   - AUTH_SECRET missing (build-safety — can't sign tokens without it)
+ */
+export function isAuthDisabled(): boolean {
+  if (process.env.AUTH_DISABLED === "true") return true;
+  if (!process.env.AUTH_SECRET) return true;
+  return false;
+}
+
 function encodedSecret(): Uint8Array {
   const secret = process.env.AUTH_SECRET;
   if (!secret || secret.length < 32) {
