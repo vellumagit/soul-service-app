@@ -10,29 +10,24 @@ import {
   listNoteTemplates,
   getSettings,
 } from "@/db/queries";
-import {
-  fullDate,
-  money,
-  relativeTime,
-  shortDate,
-} from "@/lib/format";
-import { Avatar } from "@/components/Avatar";
-import { EditClientDialog } from "@/components/EditClientDialog";
-import { ScheduleSessionDialog } from "@/components/ScheduleSessionDialog";
-import { LogPastSessionDialog } from "@/components/LogPastSessionDialog";
+import { shortDate } from "@/lib/format";
 import { SessionCard } from "@/components/SessionCard";
 import { GoalsBlock } from "@/components/GoalsBlock";
 import { AttachmentsBlock } from "@/components/AttachmentsBlock";
 import { QuickActions } from "@/components/QuickActions";
 import { TasksBlock } from "@/components/TasksBlock";
 import { ActivityTimeline } from "@/components/ActivityTimeline";
-import { EmailComposer } from "@/components/EmailComposer";
+import { ScheduleSessionDialog } from "@/components/ScheduleSessionDialog";
+import { LogPastSessionDialog } from "@/components/LogPastSessionDialog";
 import { MarkdownRender } from "@/components/NotesEditor";
 import { WhereWeLeftOffCard } from "@/components/WhereWeLeftOffCard";
 import { SensitivityFlags } from "@/components/SensitivityFlags";
 import { PrivateNotesBlock } from "@/components/PrivateNotesBlock";
 import { PeopleInLifeBlock } from "@/components/PeopleInLifeBlock";
 import { PatternsTab } from "@/components/PatternsTab";
+import { ClientHeader } from "@/components/ClientHeader";
+import { ClientStatStrip } from "@/components/ClientStatStrip";
+import { RecentActivityMini } from "@/components/RecentActivityMini";
 
 const TABS = [
   { key: "overview", label: "Overview" },
@@ -83,6 +78,9 @@ export default async function ClientProfilePage({
   const unpaidCount = file.sessions.filter(
     (s) => s.status === "completed" && !s.paid
   ).length;
+  const unpaidCents = file.sessions
+    .filter((s) => s.status === "completed" && !s.paid)
+    .reduce((sum, s) => sum + (s.paymentAmountCents ?? 0), 0);
 
   const nextSession = upcomingSessions[upcomingSessions.length - 1] ?? null;
   const lastSession = completedSessions[0] ?? null;
@@ -98,153 +96,32 @@ export default async function ClientProfilePage({
       rightAction={<QuickActions clients={allClients} />}
     >
       {/* Sensitivity flags — first thing visible if any */}
-      <SensitivityFlags sensitivities={(client.sensitivities ?? []) as string[]} />
+      <SensitivityFlags
+        sensitivities={(client.sensitivities ?? []) as string[]}
+      />
 
-      {/* Profile header */}
-      <div className="bg-white border border-ink-200 rounded-lg overflow-hidden mb-5">
-        <div className="p-5 md:p-6 flex flex-col md:flex-row gap-5 items-start">
-          <Avatar
-            clientId={client.id}
-            fullName={client.fullName}
-            url={client.avatarUrl}
-            size="lg"
-            editable
-          />
-          <div className="flex-1 min-w-0 w-full">
-            <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-2xl font-semibold text-ink-900 tracking-tight">
-                {client.fullName}
-              </h1>
-              {client.pronouns && (
-                <span className="text-xs text-ink-500">{client.pronouns}</span>
-              )}
-              <span
-                className={`chip ${
-                  client.status === "active"
-                    ? "bg-green-50 text-green-700"
-                    : client.status === "new"
-                    ? "bg-amber-50 text-amber-700"
-                    : "bg-ink-100 text-ink-500"
-                }`}
-              >
-                {client.status.toUpperCase()}
-              </span>
-              <div className="flex-1" />
-              <EditClientDialog client={client} />
-            </div>
+      {/* Header — identity, status, working-on, tags, action buttons */}
+      <ClientHeader
+        client={client}
+        emailTemplates={emailTpls}
+        nextSession={nextSession}
+        lastSession={lastSession}
+        paymentInstructions={settings.paymentInstructions}
+        allClients={allClients}
+      />
 
-            <div className="mt-2 text-sm text-ink-600 flex items-center gap-2 flex-wrap">
-              {client.email && (
-                <a
-                  href={`mailto:${client.email}`}
-                  className="hover:text-flame-700"
-                >
-                  {client.email}
-                </a>
-              )}
-              {client.email && client.phone && (
-                <span className="text-ink-300">·</span>
-              )}
-              {client.phone && (
-                <a
-                  href={`tel:${client.phone}`}
-                  className="hover:text-flame-700"
-                >
-                  {client.phone}
-                </a>
-              )}
-              {(client.email || client.phone) &&
-                (client.city || client.timezone) && (
-                  <span className="text-ink-300">·</span>
-                )}
-              {client.city && <span>{client.city}</span>}
-              {client.timezone && (
-                <span className="text-ink-400 text-xs">
-                  ({client.timezone})
-                </span>
-              )}
-            </div>
-
-            {client.workingOn && (
-              <div className="mt-3 text-sm text-ink-700">
-                <span className="text-ink-500 text-xs">
-                  Working on:&nbsp;
-                </span>
-                {client.workingOn}
-              </div>
-            )}
-
-            {(client.tags ?? []).length > 0 && (
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                {(client.tags as string[]).map((t) => (
-                  <span
-                    key={t}
-                    className="chip bg-ink-100 text-ink-700"
-                  >
-                    {t}
-                  </span>
-                ))}
-              </div>
-            )}
-
-            <div className="mt-4 flex items-center gap-2 flex-wrap">
-              <ScheduleSessionDialog
-                clients={allClients}
-                defaultClientId={client.id}
-                defaultType={client.primarySessionType}
-              />
-              <LogPastSessionDialog
-                clients={allClients}
-                defaultClientId={client.id}
-              />
-              <EmailComposer
-                client={client}
-                templates={emailTpls}
-                nextSession={nextSession}
-                lastSession={lastSession}
-                paymentInstructions={settings.paymentInstructions}
-                trigger={(open) => (
-                  <button
-                    onClick={open}
-                    disabled={!client.email}
-                    title={
-                      !client.email
-                        ? "Add an email to compose"
-                        : "Compose email"
-                    }
-                    className="border border-ink-200 hover:bg-ink-50 text-ink-700 text-sm font-medium px-3 py-2 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Email
-                  </button>
-                )}
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-4 border-t border-ink-100">
-          <Stat
-            label="Sessions"
-            value={completedSessions.length.toString()}
-          />
-          <Stat
-            label="Next"
-            value={nextSession ? relativeTime(nextSession.scheduledAt) : "—"}
-            highlight={!!nextSession}
-          />
-          <Stat label="Paid" value={money(lifetimeCents)} />
-          <Stat
-            label="Unpaid"
-            value={
-              unpaidCount === 0
-                ? "0"
-                : `${unpaidCount} session${unpaidCount === 1 ? "" : "s"}`
-            }
-            tone={unpaidCount > 0 ? "amber" : "default"}
-            last
-          />
-        </div>
-      </div>
+      {/* Stat strip — sessions / together since / next / paid / unpaid */}
+      <ClientStatStrip
+        clientId={client.id}
+        stats={{
+          sessionsHeld: completedSessions.length,
+          togetherSince: client.createdAt,
+          nextSessionAt: nextSession?.scheduledAt ?? null,
+          lifetimePaidCents: lifetimeCents,
+          unpaidCents,
+          unpaidCount,
+        }}
+      />
 
       {/* Tabs */}
       <div className="border-b border-ink-200 flex items-center mb-5 text-sm overflow-x-auto">
@@ -256,6 +133,8 @@ export default async function ClientProfilePage({
               ? file.sessions.length
               : t.key === "files"
               ? file.attachments.length
+              : t.key === "activity"
+              ? activity.length
               : null;
           return (
             <Link
@@ -275,126 +154,137 @@ export default async function ClientProfilePage({
         })}
       </div>
 
-      {/* Tab content */}
+      {/* OVERVIEW — the dashboard */}
       {tab === "overview" && (
         <div className="space-y-5">
-          {/* Pre-session digest — auto-derived snapshot at the top */}
+          {/* Hero: pre-session digest */}
           <WhereWeLeftOffCard
             digest={digest}
             clientName={client.fullName}
           />
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            <div className="md:col-span-2 space-y-5">
-              <Card title="About this client">
-                {client.aboutClient ? (
-                  <div className="md-render text-sm text-ink-700 leading-relaxed">
-                    <MarkdownRender body={client.aboutClient} />
-                  </div>
-                ) : (
-                  <div className="text-sm text-ink-400 italic">
-                    Nothing written yet.{" "}
-                    <span className="text-flame-700">Click Edit profile</span> to
-                    add what you&apos;re holding for them.
-                  </div>
-                )}
-              </Card>
+          {/* Three-column scan grid */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <ScanCard title="Where her work is now">
+              <GoalsBlock clientId={client.id} goals={file.goals} />
+            </ScanCard>
 
-              <Card title="People in their life">
-                <PeopleInLifeBlock
-                  clientId={client.id}
-                  people={file.importantPeople}
-                />
-              </Card>
+            <ScanCard title="People in her life">
+              <PeopleInLifeBlock
+                clientId={client.id}
+                people={file.importantPeople}
+              />
+            </ScanCard>
 
-              <Card title="Recent sessions">
-                {file.sessions.slice(0, 3).length === 0 ? (
-                  <div className="text-sm text-ink-400 italic">
-                    No sessions yet.{" "}
-                    <Link
-                      href={`/clients/${client.id}?tab=sessions`}
-                      className="text-flame-700"
-                    >
-                      Schedule the first one
-                    </Link>
-                    .
-                  </div>
-                ) : (
-                  <ul className="divide-y divide-ink-100">
-                    {file.sessions.slice(0, 3).map((s) => (
-                      <li
-                        key={s.id}
-                        className="py-2 flex items-center gap-3 text-sm"
-                      >
-                        <span className="font-mono text-xs text-ink-500 w-24 shrink-0">
-                          {shortDate(s.scheduledAt)}
-                        </span>
-                        <span className="text-ink-700 flex-1 min-w-0 truncate">
-                          {s.type}
-                        </span>
-                        <span
-                          className={`chip ${
-                            s.status === "scheduled"
-                              ? "bg-flame-100 text-flame-700"
-                              : s.status === "completed"
-                              ? "bg-green-50 text-green-700"
-                              : "bg-ink-100 text-ink-500"
-                          }`}
-                        >
-                          {s.status.toUpperCase()}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <div className="mt-3 text-right">
+            <ScanCard title="Patterns">
+              {file.themes.length === 0 && file.observations.length === 0 ? (
+                <div className="text-xs text-ink-400 italic">
+                  Tag themes and capture observations as they surface in your
+                  work together.{" "}
                   <Link
-                    href={`/clients/${client.id}?tab=sessions`}
-                    className="text-xs text-flame-700 hover:underline"
+                    href={`/clients/${client.id}?tab=patterns`}
+                    className="text-flame-700 hover:underline"
                   >
-                    All sessions →
+                    Open Patterns →
                   </Link>
                 </div>
-              </Card>
-
-              <PrivateNotesBlock body={client.privateNotes} />
-            </div>
-
-            <aside className="space-y-5">
-              <Card title="What they're working on">
-                <GoalsBlock clientId={client.id} goals={file.goals} />
-              </Card>
-              <Card title="Open tasks">
-                <TasksBlock
-                  clientId={client.id}
-                  tasks={file.tasks}
-                  emptyText="Nothing on the list."
-                />
-              </Card>
-              {client.emergencyName && (
-                <Card title="Emergency contact">
-                  <div className="text-sm text-ink-800">
-                    {client.emergencyName}
-                  </div>
-                  {client.emergencyPhone && (
-                    <div className="text-xs text-ink-500 font-mono mt-0.5">
-                      {client.emergencyPhone}
+              ) : (
+                <div className="space-y-3">
+                  {file.themes.length > 0 && (
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wider text-ink-500 mb-1.5">
+                        Recurring themes
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {file.themes.slice(0, 12).map((t) => (
+                          <span
+                            key={t.id}
+                            className="chip bg-ink-100 text-ink-700"
+                          >
+                            {t.label}
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   )}
-                </Card>
+                  {file.observations.length > 0 && (
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wider text-ink-500 mb-1.5">
+                        Latest observations
+                      </div>
+                      <ul className="text-xs text-ink-700 space-y-1.5 list-disc pl-4">
+                        {file.observations.slice(0, 3).map((o) => (
+                          <li key={o.id} className="leading-relaxed">
+                            {o.body}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  <div className="text-right">
+                    <Link
+                      href={`/clients/${client.id}?tab=patterns`}
+                      className="text-xs text-flame-700 hover:underline"
+                    >
+                      Open Patterns →
+                    </Link>
+                  </div>
+                </div>
               )}
-            </aside>
+            </ScanCard>
           </div>
-        </div>
-      )}
 
-      {tab === "patterns" && (
-        <PatternsTab
-          clientId={client.id}
-          themes={file.themes}
-          observations={file.observations}
-          sessions={file.sessions}
-        />
+          {/* About — full width, prominent */}
+          <ScanCard title="About this client">
+            {client.aboutClient && client.aboutClient.trim().length > 0 ? (
+              <div className="md-render text-sm text-ink-700 leading-relaxed">
+                <MarkdownRender body={client.aboutClient} />
+              </div>
+            ) : (
+              <div className="text-sm text-ink-400 italic">
+                Nothing written yet. Click <strong>Edit profile</strong> in the
+                header to capture what you&apos;re holding for them.
+              </div>
+            )}
+          </ScanCard>
+
+          {/* Two-column bottom: Recent activity + Open tasks */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <ScanCard title="Recent activity">
+              <RecentActivityMini
+                events={activity}
+                clientId={client.id}
+                limit={6}
+              />
+            </ScanCard>
+
+            <ScanCard title="Open tasks for her">
+              <TasksBlock
+                clientId={client.id}
+                tasks={file.tasks}
+                emptyText="Nothing on the list."
+              />
+            </ScanCard>
+          </div>
+
+          {/* Practitioner-only private notes */}
+          <PrivateNotesBlock body={client.privateNotes} />
+
+          {/* Emergency contact — small footer-ish block */}
+          {client.emergencyName && (
+            <div className="border border-ink-200 rounded-md bg-white p-4 flex items-center gap-4 text-sm">
+              <span className="text-[10px] uppercase tracking-wider text-ink-500 font-semibold shrink-0">
+                If anything ever happens
+              </span>
+              <span className="text-ink-800">{client.emergencyName}</span>
+              {client.emergencyPhone && (
+                <span className="text-ink-500 font-mono">
+                  {client.emergencyPhone}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
       )}
 
       {tab === "activity" && <ActivityTimeline events={activity} />}
@@ -428,10 +318,19 @@ export default async function ClientProfilePage({
         </div>
       )}
 
+      {tab === "patterns" && (
+        <PatternsTab
+          clientId={client.id}
+          themes={file.themes}
+          observations={file.observations}
+          sessions={file.sessions}
+        />
+      )}
+
       {tab === "tasks" && (
-        <Card title="Tasks">
+        <ScanCard title="Tasks">
           <TasksBlock clientId={client.id} tasks={file.tasks} />
-        </Card>
+        </ScanCard>
       )}
 
       {tab === "files" && (
@@ -442,36 +341,34 @@ export default async function ClientProfilePage({
       )}
 
       {tab === "intake" && (
-        <div className="space-y-5">
-          <Card title="Intake notes">
-            {client.intakeNotes ? (
-              <div className="md-render text-sm text-ink-700 leading-relaxed">
-                <MarkdownRender body={client.intakeNotes} />
+        <ScanCard title="Intake notes">
+          {client.intakeNotes && client.intakeNotes.trim().length > 0 ? (
+            <div className="md-render text-sm text-ink-700 leading-relaxed">
+              <MarkdownRender body={client.intakeNotes} />
+            </div>
+          ) : (
+            <div className="text-sm text-ink-400 italic">
+              No intake notes yet. Click <strong>Edit profile</strong> to add
+              what they shared on the way in.
+            </div>
+          )}
+          {client.howTheyFoundMe && (
+            <div className="mt-4 pt-4 border-t border-ink-100">
+              <div className="text-[10px] uppercase tracking-wider text-ink-500">
+                How they found you
               </div>
-            ) : (
-              <div className="text-sm text-ink-400 italic">
-                No intake notes yet. Click <strong>Edit profile</strong> to add
-                what they shared on the way in.
+              <div className="text-sm text-ink-700 mt-1">
+                {client.howTheyFoundMe}
               </div>
-            )}
-            {client.howTheyFoundMe && (
-              <div className="mt-4 pt-4 border-t border-ink-100">
-                <div className="text-[10px] uppercase tracking-wider text-ink-500">
-                  How they found me
-                </div>
-                <div className="text-sm text-ink-700 mt-1">
-                  {client.howTheyFoundMe}
-                </div>
-              </div>
-            )}
-          </Card>
-        </div>
+            </div>
+          )}
+        </ScanCard>
       )}
     </AppShell>
   );
 }
 
-function Card({
+function ScanCard({
   title,
   children,
 }: {
@@ -480,42 +377,10 @@ function Card({
 }) {
   return (
     <div className="border border-ink-200 rounded-md bg-white p-5">
-      <div className="text-[10px] uppercase tracking-wider text-ink-500 mb-3">
+      <div className="text-[10px] uppercase tracking-wider text-ink-500 mb-3 font-semibold">
         {title}
       </div>
       {children}
-    </div>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  tone = "default",
-  highlight,
-  last,
-}: {
-  label: string;
-  value: string;
-  tone?: "default" | "amber" | "red";
-  highlight?: boolean;
-  last?: boolean;
-}) {
-  const valueCls = {
-    default: highlight ? "text-flame-700" : "text-ink-900",
-    amber: "text-amber-700",
-    red: "text-red-700",
-  }[tone];
-  return (
-    <div
-      className={`px-4 py-3 ${
-        last ? "" : "border-r border-ink-100 last:border-r-0"
-      }`}
-    >
-      <div className="text-[10px] uppercase tracking-wider text-ink-500">
-        {label}
-      </div>
-      <div className={`mt-1 text-base font-semibold ${valueCls}`}>{value}</div>
     </div>
   );
 }
