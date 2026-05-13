@@ -29,6 +29,7 @@ import { ClientHeader } from "@/components/ClientHeader";
 import { ClientStatStrip } from "@/components/ClientStatStrip";
 import { RecentActivityMini } from "@/components/RecentActivityMini";
 import { requireSession } from "@/lib/session-cookies";
+import { asLocale, t } from "@/lib/i18n";
 
 const TABS = [
   { key: "overview", label: "Overview" },
@@ -88,15 +89,17 @@ export default async function ClientProfilePage({
   const lastSession = completedSessions[0] ?? null;
 
   const openTasks = file.tasks.filter((t) => !t.completedAt);
+  const locale = asLocale(settings.uiLanguage);
 
   return (
     <AppShell
       breadcrumb={[
-        { label: "Clients", href: "/clients" },
+        { label: t(locale, "nav.clients"), href: "/clients" },
         { label: client.fullName },
       ]}
       rightAction={<QuickActions clients={allClients} />}
       userEmail={email}
+      locale={locale}
     >
       {/* Sensitivity flags — first thing visible if any */}
       <SensitivityFlags

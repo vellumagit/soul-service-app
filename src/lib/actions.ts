@@ -43,6 +43,14 @@ function bool(form: FormData, key: string): boolean {
   return v === "on" || v === "true" || v === "1";
 }
 
+// Locale validator — only accepts our three supported codes.
+// Returns null for empty/blank (meaning "follow app language" for clients).
+function locale(form: FormData, key: string): "en" | "ru" | "uk" | null {
+  const v = str(form, key);
+  if (v === "en" || v === "ru" || v === "uk") return v;
+  return null;
+}
+
 function tagsFromString(input: string | null): string[] {
   if (!input) return [];
   return Array.from(
@@ -87,6 +95,7 @@ export async function createClient(formData: FormData) {
       intakeNotes: str(formData, "intakeNotes"),
       privateNotes: str(formData, "privateNotes"),
       howTheyFoundMe: str(formData, "howTheyFoundMe"),
+      preferredLanguage: locale(formData, "preferredLanguage"),
       primarySessionType: firstSessionType,
       tags: tagsFromString(str(formData, "tags")),
       sensitivities: tagsFromString(str(formData, "sensitivities")),
@@ -162,6 +171,7 @@ export async function updateClient(formData: FormData) {
       intakeNotes: str(formData, "intakeNotes"),
       privateNotes: str(formData, "privateNotes"),
       howTheyFoundMe: str(formData, "howTheyFoundMe"),
+      preferredLanguage: locale(formData, "preferredLanguage"),
       primarySessionType: str(formData, "primarySessionType"),
       tags: tagsFromString(str(formData, "tags")),
       sensitivities: tagsFromString(str(formData, "sensitivities")),
@@ -652,6 +662,16 @@ export async function updateSettings(formData: FormData) {
 
   const defaultRate = num(formData, "defaultRate");
 
+  // Validate uiLanguage against our known locale list — accept "en"/"ru"/"uk",
+  // fall back to existing value (or "en") on anything else.
+  const submittedLang = str(formData, "uiLanguage");
+  const uiLanguage =
+    submittedLang === "en" ||
+    submittedLang === "ru" ||
+    submittedLang === "uk"
+      ? submittedLang
+      : settings.uiLanguage ?? "en";
+
   await db
     .update(practitionerSettings)
     .set({
@@ -661,6 +681,7 @@ export async function updateSettings(formData: FormData) {
       businessPhone: str(formData, "businessPhone"),
       businessAddress: str(formData, "businessAddress"),
       websiteUrl: str(formData, "websiteUrl"),
+      uiLanguage,
       defaultRateCents:
         defaultRate !== null ? Math.round(defaultRate * 100) : 13500,
       defaultCurrency: str(formData, "defaultCurrency") ?? "USD",
@@ -686,6 +707,7 @@ export async function createEmailTemplate(formData: FormData) {
     name: required(str(formData, "name"), "Name"),
     subject: required(str(formData, "subject"), "Subject"),
     body: required(str(formData, "body"), "Body"),
+    language: locale(formData, "language") ?? "en",
   });
   revalidatePath("/settings");
 }
@@ -698,6 +720,7 @@ export async function updateEmailTemplate(formData: FormData) {
       name: required(str(formData, "name"), "Name"),
       subject: required(str(formData, "subject"), "Subject"),
       body: required(str(formData, "body"), "Body"),
+      language: locale(formData, "language") ?? "en",
       updatedAt: new Date(),
     })
     .where(eq(emailTemplates.id, id));

@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import { signOutAction } from "@/lib/auth-actions";
+import { useT } from "./LocaleProvider";
 
 // Tiny "sign out" link for the sidebar footer. Calls the signOutAction server
 // action which clears the session cookie and redirects to /signin.
 export function SignOutButton() {
   const [pending, setPending] = useState(false);
+  const t = useT();
 
   return (
     <form
@@ -26,7 +28,7 @@ export function SignOutButton() {
         disabled={pending}
         className="text-[10px] uppercase tracking-wide text-ink-400 hover:text-ink-700 disabled:opacity-60"
       >
-        {pending ? "Signing out…" : "Sign out"}
+        {pending ? t("sidebar.signingOut") : t("sidebar.signOut")}
       </button>
     </form>
   );

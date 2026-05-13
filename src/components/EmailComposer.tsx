@@ -84,14 +84,29 @@ export function EmailComposer({
   const [body, setBody] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showAllLanguages, setShowAllLanguages] = useState(false);
+
+  // Filter templates by the client's preferred language. If they don't have one,
+  // we show every template; if they do but no templates match, we auto-fall back
+  // to showing all (with a small note explaining why).
+  const targetLang = client.preferredLanguage;
+  const matchingTemplates = targetLang
+    ? templates.filter((t) => t.language === targetLang)
+    : templates;
+  const noLanguageMatch =
+    !!targetLang && matchingTemplates.length === 0 && templates.length > 0;
+  const visibleTemplates =
+    showAllLanguages || noLanguageMatch || !targetLang
+      ? templates
+      : matchingTemplates;
 
   useEffect(() => {
     if (!templateId) return;
-    const t = templates.find((x) => x.id === templateId);
-    if (!t) return;
+    const tpl = templates.find((x) => x.id === templateId);
+    if (!tpl) return;
     const ctx = { client, nextSession, lastSession, paymentInstructions };
-    setSubject(render(t.subject, ctx));
-    setBody(render(t.body, ctx));
+    setSubject(render(tpl.subject, ctx));
+    setBody(render(tpl.body, ctx));
   }, [templateId, templates, client, nextSession, lastSession, paymentInstructions]);
 
   const noEmail = !client.email;
@@ -222,19 +237,45 @@ export function EmailComposer({
               />
             </Field>
 
-            <Field label="Template">
+            <Field
+              label="Template"
+              hint={
+                targetLang && !showAllLanguages && !noLanguageMatch
+                  ? `Showing templates in ${targetLang.toUpperCase()} (this client's preferred language).`
+                  : undefined
+              }
+            >
               <select
                 value={templateId}
                 onChange={(e) => setTemplateId(e.target.value)}
                 className={inputCls}
               >
                 <option value="">— start blank —</option>
-                {templates.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
+                {visibleTemplates.map((tpl) => (
+                  <option key={tpl.id} value={tpl.id}>
+                    {tpl.name}
+                    {tpl.language ? ` [${tpl.language.toUpperCase()}]` : ""}
                   </option>
                 ))}
               </select>
+              {noLanguageMatch && (
+                <div className="mt-1 text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded px-2 py-1">
+                  No templates in {targetLang?.toUpperCase()}. Showing all.
+                </div>
+              )}
+              {targetLang &&
+                !noLanguageMatch &&
+                matchingTemplates.length < templates.length && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllLanguages((v) => !v)}
+                    className="mt-1 text-[11px] text-ink-500 hover:text-ink-900 underline"
+                  >
+                    {showAllLanguages
+                      ? "Filter to client's language"
+                      : "Show all languages"}
+                  </button>
+                )}
             </Field>
 
             <Field label="Subject">

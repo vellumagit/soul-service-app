@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Modal } from "./Modal";
 import { Field, inputCls } from "./Form";
 import { createClient } from "@/lib/actions";
+import { LOCALE_LABELS, LOCALES } from "@/lib/i18n";
 
 export function NewClientDialog({
   trigger,
@@ -164,6 +165,24 @@ export function NewClientDialog({
               className={inputCls}
               placeholder="Instagram / referral / website"
             />
+          </Field>
+
+          <Field
+            label="Preferred language"
+            hint="Used when emailing — templates filter to this language. Blank = follow app language."
+          >
+            <select
+              name="preferredLanguage"
+              defaultValue=""
+              className={`${inputCls} md:w-64`}
+            >
+              <option value="">Follow app language</option>
+              {LOCALES.map((code) => (
+                <option key={code} value={code}>
+                  {LOCALE_LABELS[code]}
+                </option>
+              ))}
+            </select>
           </Field>
 
           <div className="border-t border-ink-100 pt-4 mt-2">

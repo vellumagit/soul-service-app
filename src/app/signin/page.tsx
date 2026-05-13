@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { getSessionEmail } from "@/lib/session-cookies";
 import { isAuthDisabled } from "@/lib/session";
+import { getSettings } from "@/db/queries";
+import { asLocale, t } from "@/lib/i18n";
 import { SignInForm } from "./SignInForm";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +25,11 @@ export default async function SignInPage({
     redirect(from && from.startsWith("/") ? from : "/");
   }
 
+  // Single-tenant: read the practitioner's stored UI language so the sign-in
+  // screen is shown in her preferred language too.
+  const settings = await getSettings();
+  const locale = asLocale(settings.uiLanguage);
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-ink-50 px-4">
       <div className="w-full max-w-sm">
@@ -37,10 +44,10 @@ export default async function SignInPage({
 
         <div className="bg-white border border-ink-200 rounded-lg p-6 shadow-sm">
           <h1 className="text-lg font-semibold text-ink-900 mb-1">
-            Sign in
+            {t(locale, "signin.title")}
           </h1>
           <p className="text-sm text-ink-500 mb-5">
-            Quiet space for your client work.
+            {t(locale, "signin.subtitle")}
           </p>
 
           {error === "invalid" && (
@@ -56,11 +63,11 @@ export default async function SignInPage({
             </div>
           )}
 
-          <SignInForm />
+          <SignInForm locale={locale} />
         </div>
 
         <p className="text-[11px] text-ink-400 text-center mt-6">
-          Made for Svitlana, with care.
+          {t(locale, "signin.tagline")}
         </p>
       </div>
     </div>

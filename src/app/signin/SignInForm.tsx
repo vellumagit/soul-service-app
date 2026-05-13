@@ -3,15 +3,16 @@
 import { useActionState } from "react";
 import { requestMagicLink, type RequestMagicLinkResult } from "@/lib/auth-actions";
 import { Field, inputCls } from "@/components/Form";
+import { DEFAULT_LOCALE, t, type Locale } from "@/lib/i18n";
 
 const initialState: RequestMagicLinkResult | undefined = undefined;
 
-export function SignInForm() {
+export function SignInForm({ locale = DEFAULT_LOCALE }: { locale?: Locale }) {
   const [state, action, pending] = useActionState(requestMagicLink, initialState);
 
   return (
     <form action={action} className="space-y-4">
-      <Field label="Email" required>
+      <Field label={t(locale, "signin.emailLabel")} required>
         <input
           name="email"
           type="email"
@@ -40,11 +41,11 @@ export function SignInForm() {
         disabled={pending}
         className="w-full bg-ink-900 hover:bg-ink-800 text-white text-sm font-medium px-4 py-2.5 rounded-md disabled:opacity-60 transition"
       >
-        {pending ? "Sending link…" : "Email me a sign-in link"}
+        {pending ? t(locale, "signin.submitting") : t(locale, "signin.submit")}
       </button>
 
       <p className="text-[11px] text-ink-400 text-center pt-1">
-        We'll email a one-time link that signs you in. It expires in 15 minutes.
+        {t(locale, "signin.helpText")}
       </p>
     </form>
   );

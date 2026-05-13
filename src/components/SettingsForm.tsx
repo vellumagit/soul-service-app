@@ -4,11 +4,19 @@ import { useState } from "react";
 import { Field, inputCls } from "./Form";
 import { updateSettings } from "@/lib/actions";
 import type { PractitionerSettings } from "@/db/schema";
+import {
+  LOCALE_LABELS,
+  LOCALES,
+  asLocale,
+  t,
+  type Locale,
+} from "@/lib/i18n";
 
 export function SettingsForm({ settings }: { settings: PractitionerSettings }) {
   const [submitting, setSubmitting] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const locale: Locale = asLocale(settings.uiLanguage);
 
   return (
     <form
@@ -27,6 +35,30 @@ export function SettingsForm({ settings }: { settings: PractitionerSettings }) {
       }}
       className="space-y-6"
     >
+      {/* Language — first so it's easy to find */}
+      <Section
+        title={t(locale, "settings.language.section")}
+        subtitle={t(locale, "settings.language.uiLanguageHint")}
+      >
+        <Field label={t(locale, "settings.language.uiLanguageLabel")}>
+          <select
+            name="uiLanguage"
+            defaultValue={locale}
+            className={`${inputCls} md:w-64`}
+          >
+            {LOCALES.map((code) => (
+              <option key={code} value={code}>
+                {LOCALE_LABELS[code]}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <p className="text-[11px] text-ink-400 mt-2">
+          Changing this updates the menus, buttons, and headings throughout
+          the app. Page reloads after Save.
+        </p>
+      </Section>
+
       {/* Business info */}
       <Section title="Your business" subtitle="What appears on invoices and emails.">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

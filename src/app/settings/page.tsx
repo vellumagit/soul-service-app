@@ -11,6 +11,7 @@ import { SettingsForm } from "@/components/SettingsForm";
 import { TemplatesManager } from "@/components/TemplatesManager";
 import { GoogleCalendarSection } from "@/components/GoogleCalendarSection";
 import { requireSession } from "@/lib/session-cookies";
+import { asLocale, t } from "@/lib/i18n";
 
 export const dynamic = "force-dynamic";
 
@@ -37,19 +38,21 @@ export default async function SettingsPage({
 
   const flashStatus =
     google === "connected" ? "connected" : google === "error" ? "error" : null;
+  const locale = asLocale(settings.uiLanguage);
 
   return (
     <AppShell
-      breadcrumb={[{ label: "Settings", href: "/settings" }]}
+      breadcrumb={[{ label: t(locale, "nav.settings"), href: "/settings" }]}
       rightAction={<QuickActions clients={clientsList} />}
       userEmail={userEmail}
+      locale={locale}
     >
       <div className="mb-5">
         <h1 className="text-2xl font-semibold text-ink-900 tracking-tight">
-          Settings
+          {t(locale, "settings.title")}
         </h1>
         <p className="text-sm text-ink-500 mt-1">
-          Business info, automations, integrations, and reusable templates.
+          {t(locale, "settings.subtitle")}
         </p>
       </div>
 
@@ -69,19 +72,20 @@ export default async function SettingsPage({
       <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-5">
         <TemplatesManager
           kind="email"
-          templates={emailTpls.map((t) => ({
-            id: t.id,
-            name: t.name,
-            subject: t.subject,
-            body: t.body,
+          templates={emailTpls.map((tpl) => ({
+            id: tpl.id,
+            name: tpl.name,
+            subject: tpl.subject,
+            body: tpl.body,
+            language: tpl.language,
           }))}
         />
         <TemplatesManager
           kind="note"
-          templates={noteTpls.map((t) => ({
-            id: t.id,
-            name: t.name,
-            body: t.body,
+          templates={noteTpls.map((tpl) => ({
+            id: tpl.id,
+            name: tpl.name,
+            body: tpl.body,
           }))}
         />
       </div>

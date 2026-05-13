@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
-import { listClients, listClientsForPicker } from "@/db/queries";
+import { listClients, listClientsForPicker, getSettings } from "@/db/queries";
 import type { ClientFilter } from "@/db/queries";
 import { initials, money, relativeTime } from "@/lib/format";
 import { NewClientDialog } from "@/components/NewClientDialog";
 import { QuickActions } from "@/components/QuickActions";
 import { requireSession } from "@/lib/session-cookies";
+import { asLocale, t } from "@/lib/i18n";
 
 export const dynamic = "force-dynamic";
 
@@ -30,15 +31,17 @@ export default async function ClientsPage({
     FILTERS.some((f) => f.value === filterRaw) ? filterRaw : "all"
   ) as ClientFilter;
 
-  const [clients, picker] = await Promise.all([
+  const [clients, picker, settings] = await Promise.all([
     listClients(filter),
     listClientsForPicker(),
+    getSettings(),
   ]);
+  const locale = asLocale(settings.uiLanguage);
 
   return (
     <AppShell
       breadcrumb={[
-        { label: "Clients", href: "/clients" },
+        { label: t(locale, "nav.clients"), href: "/clients" },
         {
           label:
             FILTERS.find((f) => f.value === filter)?.label ?? "Everyone",
@@ -46,11 +49,12 @@ export default async function ClientsPage({
       ]}
       rightAction={<QuickActions clients={picker} />}
       userEmail={email}
+      locale={locale}
     >
       <div className="flex items-end justify-between mb-5 gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-semibold text-ink-900 tracking-tight">
-            Clients
+            {t(locale, "clients.title")}
           </h1>
           <p className="text-sm text-ink-500 mt-1">
             Open a client to see their full profile, sessions, and notes.

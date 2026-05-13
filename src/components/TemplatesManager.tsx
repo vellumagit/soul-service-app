@@ -12,8 +12,16 @@ import {
   updateNoteTemplate,
   deleteNoteTemplate,
 } from "@/lib/actions";
+import { LOCALE_LABELS, LOCALE_SHORT, LOCALES, asLocale } from "@/lib/i18n";
 
-type Tpl = { id: string; name: string; subject?: string; body: string };
+type Tpl = {
+  id: string;
+  name: string;
+  subject?: string;
+  body: string;
+  /** Only set on email templates — note templates ignore this. */
+  language?: string;
+};
 
 export function TemplatesManager({
   kind,
@@ -56,8 +64,13 @@ export function TemplatesManager({
               className="flex items-center gap-2 py-2 group"
             >
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-ink-900 truncate">
-                  {t.name}
+                <div className="text-sm font-medium text-ink-900 truncate flex items-center gap-2">
+                  <span className="truncate">{t.name}</span>
+                  {kind === "email" && t.language && (
+                    <span className="chip bg-ink-100 text-ink-600 shrink-0">
+                      {LOCALE_SHORT[asLocale(t.language)]}
+                    </span>
+                  )}
                 </div>
                 {kind === "email" && t.subject && (
                   <div className="text-xs text-ink-500 truncate">
@@ -189,14 +202,29 @@ function TemplateForm({
           />
         </Field>
         {kind === "email" && (
-          <Field label="Subject" required>
-            <input
-              name="subject"
-              required
-              defaultValue={template?.subject ?? ""}
-              className={inputCls}
-            />
-          </Field>
+          <>
+            <Field label="Language" hint="Which language this template is written in. EmailComposer uses this to pick the right template per client.">
+              <select
+                name="language"
+                defaultValue={template?.language ?? "en"}
+                className={`${inputCls} md:w-64`}
+              >
+                {LOCALES.map((code) => (
+                  <option key={code} value={code}>
+                    {LOCALE_LABELS[code]}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Subject" required>
+              <input
+                name="subject"
+                required
+                defaultValue={template?.subject ?? ""}
+                className={inputCls}
+              />
+            </Field>
+          </>
         )}
         <Field label="Body" required>
           <textarea

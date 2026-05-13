@@ -5,13 +5,21 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { SearchPalette } from "./SearchPalette";
 import { SignOutButton } from "./SignOutButton";
+import { LocaleProvider, useT } from "./LocaleProvider";
+import { DEFAULT_LOCALE, type Locale, type TranslationKey } from "@/lib/i18n";
 
-const NAV = [
-  { href: "/", label: "Today", icon: "today" },
-  { href: "/clients", label: "Clients", icon: "clients" },
-  { href: "/calendar", label: "Calendar", icon: "calendar" },
-  { href: "/payments", label: "Payments", icon: "payments" },
-  { href: "/settings", label: "Settings", icon: "settings" },
+type NavItem = {
+  href: string;
+  labelKey: TranslationKey;
+  icon: string;
+};
+
+const NAV: NavItem[] = [
+  { href: "/", labelKey: "nav.today", icon: "today" },
+  { href: "/clients", labelKey: "nav.clients", icon: "clients" },
+  { href: "/calendar", labelKey: "nav.calendar", icon: "calendar" },
+  { href: "/payments", labelKey: "nav.payments", icon: "payments" },
+  { href: "/settings", labelKey: "nav.settings", icon: "settings" },
 ];
 
 const ICON: Record<string, string> = {
@@ -31,11 +39,38 @@ export function AppShell({
   breadcrumb,
   rightAction,
   userEmail,
+  locale = DEFAULT_LOCALE,
   children,
 }: {
   breadcrumb: { label: string; href?: string }[];
   rightAction?: React.ReactNode;
   /** Logged-in user's email — shown in the sidebar footer with a sign-out link. */
+  userEmail?: string;
+  /** UI locale — drives nav labels + footer chip via LocaleProvider context. */
+  locale?: Locale;
+  children: React.ReactNode;
+}) {
+  return (
+    <LocaleProvider locale={locale}>
+      <AppShellInner
+        breadcrumb={breadcrumb}
+        rightAction={rightAction}
+        userEmail={userEmail}
+      >
+        {children}
+      </AppShellInner>
+    </LocaleProvider>
+  );
+}
+
+function AppShellInner({
+  breadcrumb,
+  rightAction,
+  userEmail,
+  children,
+}: {
+  breadcrumb: { label: string; href?: string }[];
+  rightAction?: React.ReactNode;
   userEmail?: string;
   children: React.ReactNode;
 }) {
@@ -193,6 +228,7 @@ function SidebarNav({
   isActive: (href: string) => boolean;
   onNavigate?: () => void;
 }) {
+  const t = useT();
   return (
     <nav className="flex-1 py-2 text-sm">
       {NAV.map((item) => (
@@ -216,7 +252,7 @@ function SidebarNav({
               d={ICON[item.icon]}
             />
           </svg>
-          <span className="flex-1 text-left">{item.label}</span>
+          <span className="flex-1 text-left">{t(item.labelKey)}</span>
         </Link>
       ))}
     </nav>
@@ -224,6 +260,7 @@ function SidebarNav({
 }
 
 function SidebarFooter({ userEmail }: { userEmail?: string }) {
+  const t = useT();
   // `||` (not `??`) so empty-string from auth-disabled mode falls back to
   // the neutral chip instead of rendering as a blank label.
   const initial = (userEmail?.[0] || "S").toUpperCase();
@@ -243,7 +280,7 @@ function SidebarFooter({ userEmail }: { userEmail?: string }) {
               {display}
             </div>
             <div className="text-[10px] text-ink-400 mt-0.5 leading-none">
-              your space
+              {t("sidebar.yourSpace")}
             </div>
           </div>
         </div>

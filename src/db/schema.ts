@@ -87,6 +87,10 @@ export const clients = pgTable(
     intakeNotes: text("intake_notes"), // single freeform intake field
     howTheyFoundMe: text("how_they_found_me"),
 
+    // ISO 639-1 code: "en" | "ru" | "uk". Null = fall back to UI language.
+    // Used to filter email templates and (later) localize generated invoices.
+    preferredLanguage: text("preferred_language"),
+
     // Free-form tags — practitioner picks her own vocabulary
     tags: text("tags").array().default([]).notNull(),
 
@@ -350,6 +354,9 @@ export const emailTemplates = pgTable("email_templates", {
   name: text("name").notNull(),
   subject: text("subject").notNull(),
   body: text("body").notNull(),
+  // ISO 639-1 code identifying which language this template is written in.
+  // EmailComposer filters templates by the recipient client's preferredLanguage.
+  language: text("language").default("en").notNull(),
   archived: boolean("archived").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -377,6 +384,8 @@ export const practitionerSettings = pgTable("practitioner_settings", {
 
   businessName: text("business_name"),
   practitionerName: text("practitioner_name"), // how the practitioner signs emails / appears on invoices
+  // ISO 639-1: "en" | "ru" | "uk". Default UI language for the practitioner.
+  uiLanguage: text("ui_language").default("en").notNull(),
   businessEmail: text("business_email"),
   businessPhone: text("business_phone"),
   businessAddress: text("business_address"),

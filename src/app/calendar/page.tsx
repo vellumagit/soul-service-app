@@ -1,8 +1,13 @@
 import { AppShell } from "@/components/AppShell";
-import { listSessionsInRange, listClientsForPicker } from "@/db/queries";
+import {
+  listSessionsInRange,
+  listClientsForPicker,
+  getSettings,
+} from "@/db/queries";
 import { WeekCalendar } from "@/components/WeekCalendar";
 import { QuickActions } from "@/components/QuickActions";
 import { requireSession } from "@/lib/session-cookies";
+import { asLocale, t } from "@/lib/i18n";
 
 export const dynamic = "force-dynamic";
 
@@ -22,19 +27,22 @@ export default async function CalendarPage({
   const weekEnd = new Date(weekStart);
   weekEnd.setDate(weekEnd.getDate() + 7);
 
-  const [sessions, clients] = await Promise.all([
+  const [sessions, clients, settings] = await Promise.all([
     listSessionsInRange(weekStart, weekEnd),
     listClientsForPicker(),
+    getSettings(),
   ]);
+  const locale = asLocale(settings.uiLanguage);
 
   return (
     <AppShell
       breadcrumb={[
-        { label: "Calendar", href: "/calendar" },
-        { label: "This week" },
+        { label: t(locale, "nav.calendar"), href: "/calendar" },
+        { label: t(locale, "calendar.thisWeek") },
       ]}
       rightAction={<QuickActions clients={clients} />}
       userEmail={email}
+      locale={locale}
     >
       <WeekCalendar
         weekStart={weekStart.toISOString()}

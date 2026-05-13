@@ -4,6 +4,7 @@ import {
   listAllSessionsForPayments,
   listClientsForPicker,
   getPaymentTotals,
+  getSettings,
 } from "@/db/queries";
 import {
   fullDate,
@@ -13,6 +14,7 @@ import {
 import { MarkPaidDialog } from "@/components/MarkPaidDialog";
 import { QuickActions } from "@/components/QuickActions";
 import { requireSession } from "@/lib/session-cookies";
+import { asLocale, t } from "@/lib/i18n";
 
 export const dynamic = "force-dynamic";
 
@@ -24,11 +26,13 @@ export default async function PaymentsPage({
   const { email: userEmail } = await requireSession();
   const { filter = "all" } = await searchParams;
 
-  const [sessions, clients, totals] = await Promise.all([
+  const [sessions, clients, totals, settings] = await Promise.all([
     listAllSessionsForPayments(),
     listClientsForPicker(),
     getPaymentTotals(),
+    getSettings(),
   ]);
+  const locale = asLocale(settings.uiLanguage);
 
   const filtered = sessions.filter((s) => {
     if (filter === "unpaid")
@@ -41,15 +45,16 @@ export default async function PaymentsPage({
   return (
     <AppShell
       breadcrumb={[
-        { label: "Payments", href: "/payments" },
+        { label: t(locale, "nav.payments"), href: "/payments" },
         { label: filterLabel(filter) },
       ]}
       rightAction={<QuickActions clients={clients} />}
       userEmail={userEmail}
+      locale={locale}
     >
       <div className="mb-5">
         <h1 className="text-2xl font-semibold text-ink-900 tracking-tight">
-          Payments
+          {t(locale, "payments.title")}
         </h1>
         <p className="text-sm text-ink-500 mt-1">
           Every session you&apos;ve held — paid and unpaid.

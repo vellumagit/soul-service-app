@@ -6,6 +6,7 @@ import { Field, inputCls } from "./Form";
 import { ConfirmButton } from "./ConfirmButton";
 import { updateClient, deleteClient } from "@/lib/actions";
 import type { Client } from "@/db/schema";
+import { LOCALE_LABELS, LOCALES } from "@/lib/i18n";
 
 export function EditClientDialog({ client }: { client: Client }) {
   const [open, setOpen] = useState(false);
@@ -191,6 +192,24 @@ export function EditClientDialog({ client }: { client: Client }) {
               />
             </Field>
           </div>
+
+          <Field
+            label="Preferred language"
+            hint="Used when emailing — templates filter to this language. Blank = follow app language."
+          >
+            <select
+              name="preferredLanguage"
+              defaultValue={client.preferredLanguage ?? ""}
+              className={`${inputCls} md:w-64`}
+            >
+              <option value="">Follow app language</option>
+              {LOCALES.map((code) => (
+                <option key={code} value={code}>
+                  {LOCALE_LABELS[code]}
+                </option>
+              ))}
+            </select>
+          </Field>
 
           <Field label="Tags" hint="Comma-separated. Use whatever vocabulary helps you find them later.">
             <input

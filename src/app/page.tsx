@@ -9,20 +9,24 @@ import { CapacityStrip } from "@/components/CapacityStrip";
 import {
   getDashboardData,
   getCapacity,
+  getSettings,
   listClientsForPicker,
 } from "@/db/queries";
 import { shortTime, fullDate, relativeTime } from "@/lib/format";
+import { asLocale, t } from "@/lib/i18n";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   const { email } = await requireSession();
-  const [data, clientsList, capacity] = await Promise.all([
+  const [data, clientsList, capacity, settings] = await Promise.all([
     getDashboardData(),
     listClientsForPicker(),
     getCapacity(),
+    getSettings(),
   ]);
 
+  const locale = asLocale(settings.uiLanguage);
   const isFirstRun = data.totalClients === 0;
   const upcomingToday = data.todaySessions.filter(
     (s) => s.status === "scheduled"
@@ -30,13 +34,14 @@ export default async function HomePage() {
 
   return (
     <AppShell
-      breadcrumb={[{ label: "Today" }]}
+      breadcrumb={[{ label: t(locale, "nav.today") }]}
       rightAction={<QuickActions clients={clientsList} />}
       userEmail={email}
+      locale={locale}
     >
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-ink-900 tracking-tight">
-          Today
+          {t(locale, "home.title")}
         </h1>
         <p className="text-sm text-ink-500 mt-1">{fullDate(new Date())}</p>
       </div>
@@ -44,12 +49,10 @@ export default async function HomePage() {
       {isFirstRun ? (
         <div className="border-2 border-dashed border-ink-200 rounded-lg p-12 text-center bg-white">
           <div className="text-base text-ink-900 font-medium mb-2">
-            This is your space.
+            {t(locale, "home.firstRun.title")}
           </div>
           <div className="text-sm text-ink-500 mb-6 max-w-md mx-auto leading-relaxed">
-            Everyone you work with lives here — their details, their sessions,
-            anything you&apos;d want to remember. Make it yours over time.
-            Add your first client to start.
+            {t(locale, "home.firstRun.body")}
           </div>
           <NewClientDialog />
         </div>
@@ -62,9 +65,9 @@ export default async function HomePage() {
           <div className="lg:col-span-2 space-y-6">
             {/* Today's sessions */}
             <Section
-              title="Today's sessions"
+              title={t(locale, "home.sectionTodaySessions")}
               count={upcomingToday.length}
-              empty="Nothing on the schedule today."
+              empty={t(locale, "home.emptyToday")}
             >
               {upcomingToday.length > 0 && (
                 <div className="border border-ink-200 rounded-md overflow-hidden bg-white divide-y divide-ink-100">
@@ -106,7 +109,7 @@ export default async function HomePage() {
             {(data.unpaidSessions.length > 0 ||
               data.missingNotes.length > 0 ||
               data.dormantClients.length > 0) && (
-              <Section title="Needs your attention">
+              <Section title={t(locale, "home.sectionNeedsAttention")}>
                 <div className="space-y-2">
                   {data.unpaidSessions.map((s) => (
                     <NeedsRow
