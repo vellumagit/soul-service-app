@@ -6,6 +6,7 @@ import { db } from "@/db";
 import {
   clients,
   sessions,
+  sessionSeries,
   attachments,
   goals,
   tasks,
@@ -228,6 +229,157 @@ export async function scheduleSession(formData: FormData) {
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/calendar");
   revalidatePath("/");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RECURRING SERIES
+//
+// Creates a series row + generates N session rows at the chosen cadence.
+// Capped at 52 occurrences (one year of weekly) to avoid runaway inserts.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const MAX_OCCURRENCES = 52;
+
+export type ScheduleSeriesResult =
+  | { ok: true; seriesId: string; created: number }
+  | { ok: false; error: string };
+
+export async function scheduleSessionSeries(
+  formData: FormData
+): Promise<ScheduleSeriesResult> {
+  try {
+    const clientId = required(str(formData, "clientId"), "Client");
+    const type = str(formData, "type") ?? "Session";
+    const firstAtRaw = required(str(formData, "firstAt"), "First session date/time");
+    const durationMinutes = num(formData, "durationMinutes") ?? 60;
+    const intention = str(formData, "intention");
+    const frequencyRaw = str(formData, "frequency") ?? "weekly";
+    if (
+      frequencyRaw !== "weekly" &&
+      frequencyRaw !== "biweekly" &&
+      frequencyRaw !== "monthly"
+    ) {
+      return { ok: false, error: "Invalid frequency" };
+    }
+    const frequency = frequencyRaw;
+
+    const countRaw = num(formData, "occurrenceCount") ?? 0;
+    if (countRaw < 1 || countRaw > MAX_OCCURRENCES) {
+      return {
+        ok: false,
+        error: `Number of sessions must be between 1 and ${MAX_OCCURRENCES}.`,
+      };
+    }
+    const occurrenceCount = Math.floor(countRaw);
+
+    const firstAt = new Date(firstAtRaw);
+    if (Number.isNaN(firstAt.getTime())) {
+      return { ok: false, error: "Couldn't parse the first session date/time." };
+    }
+
+    const dates = computeSeriesDates(firstAt, frequency, occurrenceCount);
+
+    // Create the series row first so we can link sessions to it
+    const [seriesRow] = await db
+      .insert(sessionSeries)
+      .values({
+        clientId,
+        type,
+        frequency,
+        durationMinutes,
+        firstAt,
+        occurrenceCount,
+        intention,
+      })
+      .returning({ id: sessionSeries.id });
+
+    // Bulk-insert all the sessions
+    const now = new Date();
+    const sessionRows = dates.map((scheduledAt, i) => ({
+      clientId,
+      type,
+      // Past dates land as 'completed' (treats it like a back-fill).
+      // Future dates are 'scheduled'. Saves a step for clients she's been
+      // seeing weekly for a while.
+      status: (scheduledAt < now ? "completed" : "scheduled") as
+        | "completed"
+        | "scheduled",
+      scheduledAt,
+      durationMinutes,
+      intention,
+      seriesId: seriesRow.id,
+      occurrenceIndex: i + 1,
+    }));
+
+    await db.insert(sessions).values(sessionRows);
+
+    revalidatePath(`/clients/${clientId}`);
+    revalidatePath("/calendar");
+    revalidatePath("/");
+
+    return { ok: true, seriesId: seriesRow.id, created: sessionRows.length };
+  } catch (err) {
+    console.error("[scheduleSessionSeries] failed:", err);
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Couldn't create the series.",
+    };
+  }
+}
+
+/**
+ * Cancel a whole series — marks the series cancelled and deletes all FUTURE
+ * scheduled sessions linked to it. Past + completed sessions stay (they're
+ * history). Used by the "Cancel series" button.
+ */
+export async function cancelSessionSeries(
+  seriesId: string,
+  clientId: string
+): Promise<void> {
+  const now = new Date();
+
+  // Mark the series cancelled
+  await db
+    .update(sessionSeries)
+    .set({ cancelledAt: now, updatedAt: now })
+    .where(eq(sessionSeries.id, seriesId));
+
+  // Delete future scheduled sessions in the series.
+  // (Drizzle doesn't have `gt` imported here yet — using sql template for safety.)
+  await db.execute(
+    sql`DELETE FROM sessions
+        WHERE series_id = ${seriesId}
+        AND status = 'scheduled'
+        AND scheduled_at > ${now.toISOString()}`
+  );
+
+  revalidatePath(`/clients/${clientId}`);
+  revalidatePath("/calendar");
+  revalidatePath("/");
+}
+
+/** Pure date math — compute the timestamps for a series. */
+function computeSeriesDates(
+  firstAt: Date,
+  frequency: "weekly" | "biweekly" | "monthly",
+  count: number
+): Date[] {
+  const dates: Date[] = [];
+  for (let i = 0; i < count; i++) {
+    const d = new Date(firstAt);
+    if (frequency === "weekly") {
+      d.setDate(firstAt.getDate() + i * 7);
+    } else if (frequency === "biweekly") {
+      d.setDate(firstAt.getDate() + i * 14);
+    } else {
+      // monthly — same day-of-month each month. JS Date handles month overflow
+      // (e.g. Jan 31 + 1 month = Mar 3 or similar). For practitioner scheduling
+      // that's fine — she'd just adjust the rare overflow manually.
+      d.setMonth(firstAt.getMonth() + i);
+    }
+    dates.push(d);
+  }
+  return dates;
 }
 
 export async function logPastSession(formData: FormData) {

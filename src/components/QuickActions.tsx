@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { NewClientDialog } from "./NewClientDialog";
 import { ScheduleSessionDialog } from "./ScheduleSessionDialog";
+import { ScheduleSeriesDialog } from "./ScheduleSeriesDialog";
 import { LogPastSessionDialog } from "./LogPastSessionDialog";
 
 type ClientOption = { id: string; fullName: string };
@@ -71,6 +72,21 @@ export function QuickActions({ clients }: { clients: ClientOption[] }) {
                 >
                   <span className="text-ink-400">📅</span>
                   <span className="flex-1">Schedule session</span>
+                </button>
+              )}
+            />
+            <ScheduleSeriesDialog
+              clients={clients}
+              trigger={(open) => (
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
+                    open();
+                  }}
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-ink-50 flex items-center gap-2"
+                >
+                  <span className="text-ink-400">🔁</span>
+                  <span className="flex-1">New recurring series</span>
                 </button>
               )}
             />

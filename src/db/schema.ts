@@ -62,6 +62,12 @@ export const taskSourceEnum = pgEnum("task_source", [
   "rule",
 ]);
 
+export const seriesFrequencyEnum = pgEnum("series_frequency", [
+  "weekly",      // every 7 days
+  "biweekly",    // every 14 days
+  "monthly",     // every month on the same day-of-month
+]);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // clients — the central entity
 // ─────────────────────────────────────────────────────────────────────────────
@@ -145,6 +151,12 @@ export const sessions = pgTable(
     meetUrl: text("meet_url"),
     googleEventId: text("google_event_id"),
 
+    // Recurring-series linkage. Null = standalone session. When set, this
+    // session was generated as part of a series — useful for "session 3 of 12"
+    // labels and for bulk operations (e.g. cancel all future).
+    seriesId: uuid("series_id"),
+    occurrenceIndex: integer("occurrence_index"), // 1-based
+
     // Payment lives here (Venmo/Zelle/cash style — no separate invoice entity)
     paid: boolean("paid").default(false).notNull(),
     paymentMethod: paymentMethodEnum("payment_method"),
@@ -165,6 +177,45 @@ export const sessions = pgTable(
     scheduledIdx: index("sessions_scheduled_idx").on(t.scheduledAt),
     statusIdx: index("sessions_status_idx").on(t.status),
     paidIdx: index("sessions_paid_idx").on(t.paid),
+  })
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// session_series — a recurring booking. Spawns N sessions when created.
+// Editing or cancelling the series lets the practitioner act on all future
+// occurrences in one shot.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const sessionSeries = pgTable(
+  "session_series",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+
+    type: text("type").notNull().default("Session"),
+    frequency: seriesFrequencyEnum("frequency").notNull(),
+    durationMinutes: integer("duration_minutes").notNull().default(60),
+
+    // The first occurrence's full timestamp — defines time-of-day + day-of-week
+    // pattern for the rest of the series.
+    firstAt: timestamp("first_at", { withTimezone: true }).notNull(),
+
+    // How many sessions were generated. Stored so we can render "session 3/12"
+    // without re-counting, and so we know when a series is "complete".
+    occurrenceCount: integer("occurrence_count").notNull(),
+
+    intention: text("intention"),
+
+    // Cancelled (vs deleted) — we keep the row + past sessions but stop future ones.
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    clientIdx: index("session_series_client_idx").on(t.clientId),
   })
 );
 
@@ -499,3 +550,5 @@ export type NoteTemplate = typeof noteTemplates.$inferSelect;
 export type PractitionerSettings = typeof practitionerSettings.$inferSelect;
 export type MagicLink = typeof magicLinks.$inferSelect;
 export type NewMagicLink = typeof magicLinks.$inferInsert;
+export type SessionSeries = typeof sessionSeries.$inferSelect;
+export type NewSessionSeries = typeof sessionSeries.$inferInsert;

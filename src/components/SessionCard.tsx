@@ -278,7 +278,7 @@ export function SessionCard({
                       Cancel session
                     </span>
                   }
-                  message="Cancel this scheduled session? If Google Calendar is connected, the event will be deleted and your client will be notified."
+                  message="Cancel this scheduled session? It will be marked cancelled here. (Google Calendar sync is coming soon — for now, remember to cancel the event yourself if you've already invited the client.)"
                   confirmLabel="Yes, cancel it"
                   onConfirm={() =>
                     cancelSession(session.id, session.clientId)
@@ -303,7 +303,7 @@ export function SessionCard({
                   Delete
                 </span>
               }
-              message="Delete this session permanently? This can't be undone. If a Google Calendar event exists, it will be deleted too."
+              message="Delete this session permanently? This can't be undone."
               confirmLabel="Yes, delete"
               onConfirm={() => deleteSession(session.id, session.clientId)}
             />

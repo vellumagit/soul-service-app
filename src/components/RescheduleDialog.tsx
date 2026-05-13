@@ -93,8 +93,9 @@ export function RescheduleDialog({
           )}
 
           <p className="text-xs text-ink-500">
-            If Google Calendar is connected, the event will be updated and your
-            client will get a &ldquo;rescheduled&rdquo; notification automatically.
+            Updates the session in this app. Google Calendar sync is coming
+            soon — for now, if you&apos;ve already invited the client to a
+            Meet, remember to update that event yourself.
           </p>
 
           <div className="grid grid-cols-[1fr_auto] gap-3">
