@@ -23,14 +23,14 @@ export default async function PaymentsPage({
 }: {
   searchParams: Promise<{ filter?: string }>;
 }) {
-  const { email: userEmail } = await requireSession();
+  const { email: userEmail, accountId } = await requireSession();
   const { filter = "all" } = await searchParams;
 
   const [sessions, clients, totals, settings] = await Promise.all([
-    listAllSessionsForPayments(),
-    listClientsForPicker(),
-    getPaymentTotals(),
-    getSettings(),
+    listAllSessionsForPayments(accountId),
+    listClientsForPicker(accountId),
+    getPaymentTotals(accountId),
+    getSettings(accountId),
   ]);
   const locale = asLocale(settings.uiLanguage);
 

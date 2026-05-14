@@ -60,28 +60,27 @@ export function getGoogleAuthUrl(): string {
 }
 
 // Public — exchange the OAuth code for tokens and persist on the settings row
-export async function exchangeGoogleCode(code: string) {
+// for the calling user's account.
+export async function exchangeGoogleCode(code: string, accountId: string) {
   const client = getOAuthClient();
   const { tokens } = await client.getToken(code);
 
   if (!tokens.refresh_token) {
-    // This usually means the user has already granted consent before. Tell them
-    // to revoke at https://myaccount.google.com/permissions and try again.
     throw new Error(
       "Google didn't return a refresh token. Revoke this app's access at https://myaccount.google.com/permissions and connect again."
     );
   }
 
-  // Get the connected user's email (for display in Settings)
   client.setCredentials(tokens);
   const oauth2 = google.oauth2({ version: "v2", auth: client });
   const userInfo = await oauth2.userinfo.get();
   const email = userInfo.data.email ?? null;
 
-  // Save on settings row
-  const settingsRows = await db.select().from(practitionerSettings);
-  if (settingsRows.length === 0) {
-    await db.insert(practitionerSettings).values({
+  // Update the existing settings row for this account (settings is 1:1 with account
+  // and gets created at sign-in time, so it always exists).
+  await db
+    .update(practitionerSettings)
+    .set({
       googleAccessToken: tokens.access_token ?? null,
       googleRefreshToken: tokens.refresh_token,
       googleTokenExpiresAt: tokens.expiry_date
@@ -89,29 +88,20 @@ export async function exchangeGoogleCode(code: string) {
         : null,
       googleCalendarEmail: email,
       googleConnectedAt: new Date(),
-    });
-  } else {
-    await db
-      .update(practitionerSettings)
-      .set({
-        googleAccessToken: tokens.access_token ?? null,
-        googleRefreshToken: tokens.refresh_token,
-        googleTokenExpiresAt: tokens.expiry_date
-          ? new Date(tokens.expiry_date)
-          : null,
-        googleCalendarEmail: email,
-        googleConnectedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(practitionerSettings.id, settingsRows[0].id));
-  }
+      updatedAt: new Date(),
+    })
+    .where(eq(practitionerSettings.accountId, accountId));
 
   return { email };
 }
 
 // Public — disconnect: revoke the token at Google, then null out our copy
-export async function disconnectGoogle() {
-  const settingsRows = await db.select().from(practitionerSettings).limit(1);
+export async function disconnectGoogle(accountId: string) {
+  const settingsRows = await db
+    .select()
+    .from(practitionerSettings)
+    .where(eq(practitionerSettings.accountId, accountId))
+    .limit(1);
   const settings = settingsRows[0];
   if (!settings?.googleRefreshToken) return;
 
@@ -133,13 +123,17 @@ export async function disconnectGoogle() {
       googleConnectedAt: null,
       updatedAt: new Date(),
     })
-    .where(eq(practitionerSettings.id, settings.id));
+    .where(eq(practitionerSettings.accountId, accountId));
 }
 
 // Returns an authed OAuth2 client with a fresh access token, or null if not
 // connected. Auto-refreshes expired tokens and persists the new access token.
-async function getAuthedClient() {
-  const settingsRows = await db.select().from(practitionerSettings).limit(1);
+async function getAuthedClient(accountId: string) {
+  const settingsRows = await db
+    .select()
+    .from(practitionerSettings)
+    .where(eq(practitionerSettings.accountId, accountId))
+    .limit(1);
   const settings = settingsRows[0];
   if (!settings?.googleRefreshToken) return null;
 
@@ -150,7 +144,6 @@ async function getAuthedClient() {
     expiry_date: settings.googleTokenExpiresAt?.getTime() ?? null,
   });
 
-  // googleapis auto-refreshes when expired — listen for new tokens and persist.
   client.on("tokens", async (tokens) => {
     if (tokens.access_token) {
       await db
@@ -162,15 +155,16 @@ async function getAuthedClient() {
             : null,
           updatedAt: new Date(),
         })
-        .where(eq(practitionerSettings.id, settings.id));
+        .where(eq(practitionerSettings.accountId, accountId));
     }
   });
 
   return client;
 }
 
-// Public — check connected status (used by Settings UI)
-export async function getGoogleConnectionStatus(): Promise<{
+// Public — check connected status (used by Settings UI). Scoped per account.
+// Returns a "not connected" placeholder if no settings row exists yet.
+export async function getGoogleConnectionStatus(accountId: string): Promise<{
   connected: boolean;
   email: string | null;
   connectedAt: Date | null;
@@ -182,6 +176,7 @@ export async function getGoogleConnectionStatus(): Promise<{
       googleConnectedAt: practitionerSettings.googleConnectedAt,
     })
     .from(practitionerSettings)
+    .where(eq(practitionerSettings.accountId, accountId))
     .limit(1);
   const s = settingsRows[0];
   return {
@@ -213,9 +208,10 @@ export type CalendarEventResult = {
 // Create a new event with an auto-generated Meet link.
 // Returns null if Google isn't connected (caller should treat this as a no-op).
 export async function createCalendarEvent(
+  accountId: string,
   input: CalendarEventInput
 ): Promise<CalendarEventResult | null> {
-  const auth = await getAuthedClient();
+  const auth = await getAuthedClient(accountId);
   if (!auth) return null;
 
   const calendar = google.calendar({ version: "v3", auth });
@@ -267,10 +263,11 @@ export async function createCalendarEvent(
 
 // Update an existing event (typically when the session is rescheduled).
 export async function updateCalendarEvent(
+  accountId: string,
   eventId: string,
   input: CalendarEventInput
 ): Promise<CalendarEventResult | null> {
-  const auth = await getAuthedClient();
+  const auth = await getAuthedClient(accountId);
   if (!auth) return null;
 
   const calendar = google.calendar({ version: "v3", auth });
@@ -310,8 +307,11 @@ export async function updateCalendarEvent(
 }
 
 // Delete an event. Best-effort — swallows "already gone" errors.
-export async function deleteCalendarEvent(eventId: string): Promise<void> {
-  const auth = await getAuthedClient();
+export async function deleteCalendarEvent(
+  accountId: string,
+  eventId: string
+): Promise<void> {
+  const auth = await getAuthedClient(accountId);
   if (!auth) return;
 
   const calendar = google.calendar({ version: "v3", auth });

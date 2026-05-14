@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { put } from "@vercel/blob";
 import { db } from "@/db";
 import { attachments, clients } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
+import { requireSession } from "./session-cookies";
 
 function ensureBlobConfigured() {
   if (!process.env.BLOB_READ_WRITE_TOKEN) {
@@ -17,6 +18,7 @@ function ensureBlobConfigured() {
 // Upload an avatar for a client. Replaces previous avatarUrl on the client row.
 export async function uploadClientAvatar(formData: FormData) {
   ensureBlobConfigured();
+  const { accountId } = await requireSession();
   const clientId = formData.get("clientId");
   const file = formData.get("file");
   if (typeof clientId !== "string" || !clientId)
@@ -29,7 +31,7 @@ export async function uploadClientAvatar(formData: FormData) {
     throw new Error("Avatar must be under 5 MB");
 
   const ext = file.name.includes(".") ? file.name.split(".").pop() : "jpg";
-  const blob = await put(`avatars/${clientId}.${ext}`, file, {
+  const blob = await put(`accounts/${accountId}/avatars/${clientId}.${ext}`, file, {
     access: "public",
     addRandomSuffix: true, // avoid CDN cache issues on update
     allowOverwrite: true,
@@ -38,7 +40,7 @@ export async function uploadClientAvatar(formData: FormData) {
   await db
     .update(clients)
     .set({ avatarUrl: blob.url, updatedAt: new Date() })
-    .where(eq(clients.id, clientId));
+    .where(and(eq(clients.accountId, accountId), eq(clients.id, clientId)));
 
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/clients");
@@ -47,6 +49,7 @@ export async function uploadClientAvatar(formData: FormData) {
 // Upload a generic file attached to a client (and optionally a session).
 export async function uploadAttachment(formData: FormData) {
   ensureBlobConfigured();
+  const { accountId } = await requireSession();
   const clientId = formData.get("clientId");
   const sessionId = formData.get("sessionId");
   const kind = formData.get("kind");
@@ -59,12 +62,18 @@ export async function uploadAttachment(formData: FormData) {
     throw new Error("File must be under 100 MB");
 
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-  const blob = await put(`clients/${clientId}/${Date.now()}_${safeName}`, file, {
-    access: "public",
-    addRandomSuffix: false,
-  });
+  // Bucket files by account so each tenant's Blob storage is isolated.
+  const blob = await put(
+    `accounts/${accountId}/clients/${clientId}/${Date.now()}_${safeName}`,
+    file,
+    {
+      access: "public",
+      addRandomSuffix: false,
+    }
+  );
 
   await db.insert(attachments).values({
+    accountId,
     clientId,
     sessionId:
       typeof sessionId === "string" && sessionId.length > 0 ? sessionId : null,

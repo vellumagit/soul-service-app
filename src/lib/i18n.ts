@@ -128,10 +128,10 @@ const en: Record<TranslationKey, string> = {
   "signin.title": "Sign in",
   "signin.subtitle": "Quiet space for your client work.",
   "signin.emailLabel": "Email",
-  "signin.submit": "Email me a sign-in link",
-  "signin.submitting": "Sending link…",
+  "signin.submit": "Enter",
+  "signin.submitting": "Signing in…",
   "signin.helpText":
-    "We'll email a one-time link that signs you in. It expires in 15 minutes.",
+    "Type the email on your access list. You'll stay signed in for 30 days.",
   "signin.tagline": "Made for Svitlana, with care.",
   // Home / Today
   "home.title": "Today",
@@ -205,10 +205,10 @@ const ru: Record<TranslationKey, string> = {
   "signin.title": "Войти",
   "signin.subtitle": "Тихое пространство для вашей работы с клиентами.",
   "signin.emailLabel": "Электронная почта",
-  "signin.submit": "Отправить ссылку для входа",
-  "signin.submitting": "Отправка ссылки…",
+  "signin.submit": "Войти",
+  "signin.submitting": "Входим…",
   "signin.helpText":
-    "Мы отправим одноразовую ссылку для входа. Она действует 15 минут.",
+    "Введите email из списка доступа. Вы останетесь в системе на 30 дней.",
   "signin.tagline": "Сделано для Светланы, с заботой.",
   // Home / Today
   "home.title": "Сегодня",
@@ -282,10 +282,10 @@ const uk: Record<TranslationKey, string> = {
   "signin.title": "Увійти",
   "signin.subtitle": "Тихий простір для вашої роботи з клієнтами.",
   "signin.emailLabel": "Електронна пошта",
-  "signin.submit": "Надіслати посилання для входу",
-  "signin.submitting": "Надсилаємо посилання…",
+  "signin.submit": "Увійти",
+  "signin.submitting": "Входимо…",
   "signin.helpText":
-    "Ми надішлемо одноразове посилання для входу. Воно дійсне 15 хвилин.",
+    "Введіть email зі списку доступу. Ви залишитесь у системі на 30 днів.",
   "signin.tagline": "Зроблено для Світлани, з турботою.",
   // Home / Today
   "home.title": "Сьогодні",

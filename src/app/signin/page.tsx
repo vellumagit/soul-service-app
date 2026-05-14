@@ -1,8 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSessionEmail } from "@/lib/session-cookies";
-import { isAuthDisabled } from "@/lib/session";
-import { getSettings } from "@/db/queries";
-import { asLocale, t } from "@/lib/i18n";
+import { DEFAULT_LOCALE, t } from "@/lib/i18n";
 import { SignInForm } from "./SignInForm";
 
 export const dynamic = "force-dynamic";
@@ -14,21 +12,16 @@ export default async function SignInPage({
 }) {
   const { from, error } = await searchParams;
 
-  // Auth disabled (demo mode) → no point being on this page.
-  if (isAuthDisabled()) {
-    redirect(from && from.startsWith("/") ? from : "/");
-  }
-
   // If already signed in, bounce to wherever they were headed (or home).
   const existing = await getSessionEmail();
   if (existing) {
     redirect(from && from.startsWith("/") ? from : "/");
   }
 
-  // Single-tenant: read the practitioner's stored UI language so the sign-in
-  // screen is shown in her preferred language too.
-  const settings = await getSettings();
-  const locale = asLocale(settings.uiLanguage);
+  // No account context yet, so the sign-in page is always in the default
+  // locale. Once they sign in, every other page uses their account's
+  // uiLanguage setting.
+  const locale = DEFAULT_LOCALE;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-ink-50 px-4">
@@ -50,15 +43,16 @@ export default async function SignInPage({
             {t(locale, "signin.subtitle")}
           </p>
 
-          {error === "invalid" && (
-            <div className="mb-4 text-xs rounded-md border border-red-100 bg-red-50 text-red-700 p-3">
-              That sign-in link is invalid, expired, or already used. Request a new one below.
+          {error === "missing-account" && (
+            <div className="mb-4 text-xs rounded-md border border-amber-100 bg-amber-50 text-amber-800 p-3">
+              Your session was valid but your account couldn&apos;t be found.
+              Sign in again to recreate it.
             </div>
           )}
           {error === "config" && (
             <div className="mb-4 text-xs rounded-md border border-amber-100 bg-amber-50 text-amber-800 p-3">
-              Sign-in isn't configured yet. Set <code className="font-mono">AUTH_SECRET</code>,{" "}
-              <code className="font-mono">RESEND_API_KEY</code>, and{" "}
+              Sign-in isn&apos;t configured yet. Set{" "}
+              <code className="font-mono">AUTH_SECRET</code> and{" "}
               <code className="font-mono">ALLOWED_EMAILS</code> in your environment.
             </div>
           )}

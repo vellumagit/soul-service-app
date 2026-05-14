@@ -1,14 +1,14 @@
 "use client";
 
 import { useActionState } from "react";
-import { requestMagicLink, type RequestMagicLinkResult } from "@/lib/auth-actions";
+import { signInWithEmail, type SignInResult } from "@/lib/auth-actions";
 import { Field, inputCls } from "@/components/Form";
 import { DEFAULT_LOCALE, t, type Locale } from "@/lib/i18n";
 
-const initialState: RequestMagicLinkResult | undefined = undefined;
+const initialState: SignInResult | undefined = undefined;
 
 export function SignInForm({ locale = DEFAULT_LOCALE }: { locale?: Locale }) {
-  const [state, action, pending] = useActionState(requestMagicLink, initialState);
+  const [state, action, pending] = useActionState(signInWithEmail, initialState);
 
   return (
     <form action={action} className="space-y-4">
@@ -24,14 +24,9 @@ export function SignInForm({ locale = DEFAULT_LOCALE }: { locale?: Locale }) {
         />
       </Field>
 
-      {state && (
-        <div
-          className={`text-xs rounded-md border p-3 ${
-            state.ok
-              ? "bg-green-50 border-green-100 text-green-800"
-              : "bg-red-50 border-red-100 text-red-700"
-          }`}
-        >
+      {/* Only show on error — success redirects, never renders here. */}
+      {state && !state.ok && (
+        <div className="text-xs rounded-md border p-3 bg-red-50 border-red-100 text-red-700">
           {state.message}
         </div>
       )}

@@ -69,6 +69,19 @@ export const seriesFrequencyEnum = pgEnum("series_frequency", [
 ]);
 
 // ─────────────────────────────────────────────────────────────────────────────
+// accounts — one row per signed-in user. Every user-data row carries an
+// accountId so the test account and the production account never see each
+// other's data. Auth is just "type your email" — see lib/session.ts.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const accounts = pgTable("accounts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  email: text("email").notNull().unique(),
+  name: text("name"), // display name — defaults to "Practitioner"
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // clients — the central entity
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -76,6 +89,9 @@ export const clients = pgTable(
   "clients",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
     fullName: text("full_name").notNull(),
     avatarUrl: text("avatar_url"),
 
@@ -118,6 +134,7 @@ export const clients = pgTable(
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (t) => ({
+    accountIdx: index("clients_account_idx").on(t.accountId),
     nameIdx: index("clients_name_idx").on(t.fullName),
     statusIdx: index("clients_status_idx").on(t.status),
   })
@@ -132,6 +149,9 @@ export const sessions = pgTable(
   "sessions",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
     clientId: uuid("client_id")
       .notNull()
       .references(() => clients.id, { onDelete: "cascade" }),
@@ -173,6 +193,7 @@ export const sessions = pgTable(
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (t) => ({
+    accountIdx: index("sessions_account_idx").on(t.accountId),
     clientIdx: index("sessions_client_idx").on(t.clientId),
     scheduledIdx: index("sessions_scheduled_idx").on(t.scheduledAt),
     statusIdx: index("sessions_status_idx").on(t.status),
@@ -190,6 +211,9 @@ export const sessionSeries = pgTable(
   "session_series",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
     clientId: uuid("client_id")
       .notNull()
       .references(() => clients.id, { onDelete: "cascade" }),
@@ -215,6 +239,7 @@ export const sessionSeries = pgTable(
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (t) => ({
+    accountIdx: index("session_series_account_idx").on(t.accountId),
     clientIdx: index("session_series_client_idx").on(t.clientId),
   })
 );
@@ -227,6 +252,9 @@ export const attachments = pgTable(
   "attachments",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
     clientId: uuid("client_id")
       .notNull()
       .references(() => clients.id, { onDelete: "cascade" }),
@@ -258,6 +286,9 @@ export const importantPeople = pgTable(
   "important_people",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
     clientId: uuid("client_id")
       .notNull()
       .references(() => clients.id, { onDelete: "cascade" }),
@@ -283,6 +314,9 @@ export const themes = pgTable(
   "themes",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
     clientId: uuid("client_id")
       .notNull()
       .references(() => clients.id, { onDelete: "cascade" }),
@@ -303,6 +337,9 @@ export const observations = pgTable(
   "observations",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
     clientId: uuid("client_id")
       .notNull()
       .references(() => clients.id, { onDelete: "cascade" }),
@@ -320,6 +357,9 @@ export const observations = pgTable(
 
 export const goals = pgTable("goals", {
   id: uuid("id").primaryKey().defaultRandom(),
+  accountId: uuid("account_id")
+    .notNull()
+    .references(() => accounts.id, { onDelete: "cascade" }),
   clientId: uuid("client_id")
     .notNull()
     .references(() => clients.id, { onDelete: "cascade" }),
@@ -344,6 +384,9 @@ export const tasks = pgTable(
   "tasks",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
     clientId: uuid("client_id").references(() => clients.id, {
       onDelete: "cascade",
     }),
@@ -362,6 +405,7 @@ export const tasks = pgTable(
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (t) => ({
+    accountIdx: index("tasks_account_idx").on(t.accountId),
     clientIdx: index("tasks_client_idx").on(t.clientId),
     dueIdx: index("tasks_due_idx").on(t.dueAt),
     completedIdx: index("tasks_completed_idx").on(t.completedAt),
@@ -377,6 +421,9 @@ export const communications = pgTable(
   "communications",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
     clientId: uuid("client_id")
       .notNull()
       .references(() => clients.id, { onDelete: "cascade" }),
@@ -390,6 +437,7 @@ export const communications = pgTable(
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (t) => ({
+    accountIdx: index("communications_account_idx").on(t.accountId),
     clientIdx: index("communications_client_idx").on(t.clientId),
     occurredIdx: index("communications_occurred_idx").on(t.occurredAt),
   })
@@ -402,6 +450,9 @@ export const communications = pgTable(
 
 export const emailTemplates = pgTable("email_templates", {
   id: uuid("id").primaryKey().defaultRandom(),
+  accountId: uuid("account_id")
+    .notNull()
+    .references(() => accounts.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   subject: text("subject").notNull(),
   body: text("body").notNull(),
@@ -419,6 +470,9 @@ export const emailTemplates = pgTable("email_templates", {
 
 export const noteTemplates = pgTable("note_templates", {
   id: uuid("id").primaryKey().defaultRandom(),
+  accountId: uuid("account_id")
+    .notNull()
+    .references(() => accounts.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   body: text("body").notNull(),
   archived: boolean("archived").default(false).notNull(),
@@ -432,6 +486,10 @@ export const noteTemplates = pgTable("note_templates", {
 
 export const practitionerSettings = pgTable("practitioner_settings", {
   id: uuid("id").primaryKey().defaultRandom(),
+  accountId: uuid("account_id")
+    .notNull()
+    .unique()
+    .references(() => accounts.id, { onDelete: "cascade" }),
 
   businessName: text("business_name"),
   practitionerName: text("practitioner_name"), // how the practitioner signs emails / appears on invoices
@@ -477,28 +535,6 @@ export const practitionerSettings = pgTable("practitioner_settings", {
 
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
-
-// ─────────────────────────────────────────────────────────────────────────────
-// magic_links — one-time tokens emailed to allowlisted users for sign-in.
-// Single-tenant app (just Svitlana), so we don't need a `users` table —
-// the email itself is the identity. Token is a hashed random string.
-// ─────────────────────────────────────────────────────────────────────────────
-
-export const magicLinks = pgTable(
-  "magic_links",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    email: text("email").notNull(),
-    tokenHash: text("token_hash").notNull(), // sha256 of the token; raw token only in email
-    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-    consumedAt: timestamp("consumed_at", { withTimezone: true }),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-  },
-  (t) => ({
-    tokenIdx: index("magic_links_token_idx").on(t.tokenHash),
-    emailIdx: index("magic_links_email_idx").on(t.email),
-  })
-);
 
 export const clientsRelations = relations(clients, ({ many }) => ({
   sessions: many(sessions),
@@ -548,7 +584,7 @@ export type Communication = typeof communications.$inferSelect;
 export type EmailTemplate = typeof emailTemplates.$inferSelect;
 export type NoteTemplate = typeof noteTemplates.$inferSelect;
 export type PractitionerSettings = typeof practitionerSettings.$inferSelect;
-export type MagicLink = typeof magicLinks.$inferSelect;
-export type NewMagicLink = typeof magicLinks.$inferInsert;
 export type SessionSeries = typeof sessionSeries.$inferSelect;
 export type NewSessionSeries = typeof sessionSeries.$inferInsert;
+export type Account = typeof accounts.$inferSelect;
+export type NewAccount = typeof accounts.$inferInsert;

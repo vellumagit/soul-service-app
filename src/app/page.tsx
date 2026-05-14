@@ -18,12 +18,12 @@ import { asLocale, t } from "@/lib/i18n";
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const { email } = await requireSession();
+  const { email, accountId } = await requireSession();
   const [data, clientsList, capacity, settings] = await Promise.all([
-    getDashboardData(),
-    listClientsForPicker(),
-    getCapacity(),
-    getSettings(),
+    getDashboardData(accountId),
+    listClientsForPicker(accountId),
+    getCapacity(accountId),
+    getSettings(accountId),
   ]);
 
   const locale = asLocale(settings.uiLanguage);

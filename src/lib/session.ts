@@ -1,10 +1,13 @@
 // Session primitives — JWT sign/verify + allowlist check.
 //
-// This module deliberately AVOIDS importing `next/headers` so it can be
-// called from `proxy.ts` (Next 16's renamed middleware), which only has
-// access to NextRequest cookies, not the global cookies() API.
+// Auth is intentionally simple: sign in by typing an allowlisted email.
+// No password, no magic link, no email roundtrip. The signed cookie binds
+// the email to the request; getOrCreateAccount maps email → accountId at
+// every request via session-cookies.ts.
 //
-// Cookie helpers that DO use next/headers live in `session-cookies.ts`.
+// This module avoids importing `next/headers` so it can be called from
+// `proxy.ts` (Next 16's renamed middleware), which only has access to
+// NextRequest cookies, not the global cookies() API.
 import { SignJWT, jwtVerify } from "jose";
 
 export const SESSION_COOKIE_NAME = "ss_session";
@@ -13,19 +16,6 @@ export const SESSION_DAYS = 30;
 export type SessionPayload = {
   email: string;
 };
-
-/**
- * Kill-switch for auth. When true, the proxy + requireSession bypass every
- * check and act as if no auth system exists — useful for demos/previews
- * before sign-in is fully configured. Triggered by EITHER:
- *   - AUTH_DISABLED=true (explicit)
- *   - AUTH_SECRET missing (build-safety — can't sign tokens without it)
- */
-export function isAuthDisabled(): boolean {
-  if (process.env.AUTH_DISABLED === "true") return true;
-  if (!process.env.AUTH_SECRET) return true;
-  return false;
-}
 
 function encodedSecret(): Uint8Array {
   const secret = process.env.AUTH_SECRET;
@@ -73,7 +63,7 @@ export async function verifySessionToken(
   }
 }
 
-/** Combined: verify token + re-check allowlist. */
+/** Combined: verify token + re-check allowlist. Returns the email or null. */
 export async function getEmailFromToken(
   token: string | undefined | null
 ): Promise<string | null> {

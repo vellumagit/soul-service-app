@@ -276,11 +276,18 @@ export async function generateInvoiceForSession(sessionId: string) {
   const client = clientRow[0];
   if (!client) throw new Error("Client not found");
 
-  const settingsRow = await db.select().from(practitionerSettings).limit(1);
-  let settings = settingsRow[0];
+  // Settings row is 1:1 with the account (created at sign-in). Look it up
+  // by session's accountId — should always exist by the time we get here.
+  const settingsRow = await db
+    .select()
+    .from(practitionerSettings)
+    .where(eq(practitionerSettings.accountId, session.accountId))
+    .limit(1);
+  const settings = settingsRow[0];
   if (!settings) {
-    const [created] = await db.insert(practitionerSettings).values({}).returning();
-    settings = created;
+    throw new Error(
+      "Practitioner settings missing for this account — sign in to recreate."
+    );
   }
 
   const amountCents =
@@ -297,7 +304,7 @@ export async function generateInvoiceForSession(sessionId: string) {
         nextInvoiceNumber: sql`${practitionerSettings.nextInvoiceNumber} + 1`,
         updatedAt: new Date(),
       })
-      .where(eq(practitionerSettings.id, settings.id));
+      .where(eq(practitionerSettings.accountId, session.accountId));
   }
 
   const issuedAt = new Date();

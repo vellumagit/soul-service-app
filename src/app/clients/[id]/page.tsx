@@ -50,19 +50,19 @@ export default async function ClientProfilePage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ tab?: string }>;
 }) {
-  const { email } = await requireSession();
+  const { email, accountId } = await requireSession();
   const { id } = await params;
   const { tab = "overview" } = await searchParams;
 
   const [file, allClients, activity, digest, emailTpls, noteTpls, settings] =
     await Promise.all([
-      getClientFile(id),
-      listClientsForPicker(),
-      getClientActivity(id),
-      getClientDigest(id),
-      listEmailTemplates(),
-      listNoteTemplates(),
-      getSettings(),
+      getClientFile(accountId, id),
+      listClientsForPicker(accountId),
+      getClientActivity(accountId, id),
+      getClientDigest(accountId, id),
+      listEmailTemplates(accountId),
+      listNoteTemplates(accountId),
+      getSettings(accountId),
     ]);
 
   if (!file) notFound();

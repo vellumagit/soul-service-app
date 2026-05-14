@@ -22,7 +22,7 @@ export default async function CalendarPage({
 }: {
   searchParams: Promise<{ start?: string; view?: string }>;
 }) {
-  const { email } = await requireSession();
+  const { email, accountId } = await requireSession();
   const { start: startParam, view: viewParam } = await searchParams;
 
   const view: CalendarView = viewParam === "month" ? "month" : "week";
@@ -64,9 +64,9 @@ export default async function CalendarPage({
   }
 
   const [sessions, clients, settings] = await Promise.all([
-    listSessionsInRange(rangeStart, rangeEnd),
-    listClientsForPicker(),
-    getSettings(),
+    listSessionsInRange(accountId, rangeStart, rangeEnd),
+    listClientsForPicker(accountId),
+    getSettings(accountId),
   ]);
   const locale = asLocale(settings.uiLanguage);
 

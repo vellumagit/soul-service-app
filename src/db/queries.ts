@@ -1,3 +1,7 @@
+// Every public query in here takes an `accountId` as its first argument.
+// That's the multi-tenancy gate: data from other accounts is filtered out at
+// the database level via `AND account_id = ?`. Pages call requireSession()
+// (which returns the current accountId) and pass it through.
 import { db } from "./index";
 import {
   clients,
@@ -31,15 +35,21 @@ import {
 } from "drizzle-orm";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Settings — single row, lazy-create on first read
+// Settings — one row per account, lazy-create on first read
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function getSettings(): Promise<PractitionerSettings> {
-  const rows = await db.select().from(practitionerSettings).limit(1);
+export async function getSettings(
+  accountId: string
+): Promise<PractitionerSettings> {
+  const rows = await db
+    .select()
+    .from(practitionerSettings)
+    .where(eq(practitionerSettings.accountId, accountId))
+    .limit(1);
   if (rows[0]) return rows[0];
   const [created] = await db
     .insert(practitionerSettings)
-    .values({})
+    .values({ accountId })
     .returning();
   return created;
 }
@@ -57,13 +67,14 @@ export type ClientFilter =
   | "quiet"
   | "recent";
 
-export async function listClients(filter: ClientFilter = "all") {
-  const fourteenDaysAgo = new Date();
-  fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 30);
+export async function listClients(
+  accountId: string,
+  filter: ClientFilter = "all"
+) {
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-  const baseSelect = db
+  const list = await db
     .select({
       id: clients.id,
       fullName: clients.fullName,
@@ -79,11 +90,10 @@ export async function listClients(filter: ClientFilter = "all") {
       lastSessionAt: sql<Date | null>`(SELECT MAX(${sessions.scheduledAt}) FROM ${sessions} WHERE ${sessions.clientId} = ${clients.id} AND ${sessions.status} = 'completed')`,
       nextSessionAt: sql<Date | null>`(SELECT MIN(${sessions.scheduledAt}) FROM ${sessions} WHERE ${sessions.clientId} = ${clients.id} AND ${sessions.status} = 'scheduled')`,
     })
-    .from(clients);
+    .from(clients)
+    .where(eq(clients.accountId, accountId))
+    .orderBy(asc(clients.fullName));
 
-  const list = await baseSelect.orderBy(asc(clients.fullName));
-
-  // Apply filter in JS — small dataset, easier than nested SQL filtering on derived columns
   return list.filter((c) => {
     switch (filter) {
       case "active":
@@ -112,7 +122,7 @@ export async function listClients(filter: ClientFilter = "all") {
   });
 }
 
-export async function listClientsForPicker() {
+export async function listClientsForPicker(accountId: string) {
   return db
     .select({
       id: clients.id,
@@ -120,19 +130,31 @@ export async function listClientsForPicker() {
       avatarUrl: clients.avatarUrl,
     })
     .from(clients)
-    .where(ne(clients.status, "archived"))
+    .where(
+      and(eq(clients.accountId, accountId), ne(clients.status, "archived"))
+    )
     .orderBy(asc(clients.fullName));
 }
 
-export async function getClientById(id: string): Promise<Client | null> {
-  const rows = await db.select().from(clients).where(eq(clients.id, id)).limit(1);
+export async function getClientById(
+  accountId: string,
+  id: string
+): Promise<Client | null> {
+  const rows = await db
+    .select()
+    .from(clients)
+    .where(and(eq(clients.accountId, accountId), eq(clients.id, id)))
+    .limit(1);
   return rows[0] ?? null;
 }
 
-export async function getClientFile(id: string) {
-  const client = await getClientById(id);
+export async function getClientFile(accountId: string, id: string) {
+  const client = await getClientById(accountId, id);
   if (!client) return null;
 
+  // Each leaf-table query is doubly-scoped: the join on clientId is the
+  // primary filter, and accountId is defense-in-depth (also catches the
+  // rare case where a row's accountId got out of sync with its client's).
   const [
     sessionsList,
     attachmentsList,
@@ -146,22 +168,35 @@ export async function getClientFile(id: string) {
     db
       .select()
       .from(sessions)
-      .where(eq(sessions.clientId, id))
+      .where(
+        and(eq(sessions.accountId, accountId), eq(sessions.clientId, id))
+      )
       .orderBy(desc(sessions.scheduledAt)),
     db
       .select()
       .from(attachments)
-      .where(eq(attachments.clientId, id))
+      .where(
+        and(
+          eq(attachments.accountId, accountId),
+          eq(attachments.clientId, id)
+        )
+      )
       .orderBy(desc(attachments.createdAt)),
     db
       .select()
       .from(goals)
-      .where(and(eq(goals.clientId, id), eq(goals.archived, false)))
+      .where(
+        and(
+          eq(goals.accountId, accountId),
+          eq(goals.clientId, id),
+          eq(goals.archived, false)
+        )
+      )
       .orderBy(asc(goals.position)),
     db
       .select()
       .from(tasks)
-      .where(eq(tasks.clientId, id))
+      .where(and(eq(tasks.accountId, accountId), eq(tasks.clientId, id)))
       .orderBy(
         sql`CASE WHEN ${tasks.completedAt} IS NULL THEN 0 ELSE 1 END`,
         asc(tasks.dueAt)
@@ -169,22 +204,39 @@ export async function getClientFile(id: string) {
     db
       .select()
       .from(communications)
-      .where(eq(communications.clientId, id))
+      .where(
+        and(
+          eq(communications.accountId, accountId),
+          eq(communications.clientId, id)
+        )
+      )
       .orderBy(desc(communications.occurredAt)),
     db
       .select()
       .from(importantPeople)
-      .where(eq(importantPeople.clientId, id))
+      .where(
+        and(
+          eq(importantPeople.accountId, accountId),
+          eq(importantPeople.clientId, id)
+        )
+      )
       .orderBy(asc(importantPeople.position), asc(importantPeople.createdAt)),
     db
       .select()
       .from(themes)
-      .where(eq(themes.clientId, id))
+      .where(
+        and(eq(themes.accountId, accountId), eq(themes.clientId, id))
+      )
       .orderBy(asc(themes.label)),
     db
       .select()
       .from(observations)
-      .where(eq(observations.clientId, id))
+      .where(
+        and(
+          eq(observations.accountId, accountId),
+          eq(observations.clientId, id)
+        )
+      )
       .orderBy(desc(observations.createdAt)),
   ]);
 
@@ -202,12 +254,10 @@ export async function getClientFile(id: string) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// "Where we left off" — pre-session digest. The 30-second snapshot a
-// practitioner needs before joining a Meet. Auto-derived from existing data.
+// "Where we left off" — pre-session digest
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type ClientDigest = {
-  // The most recent session held with this client
   lastSession: {
     when: Date;
     type: string;
@@ -216,25 +266,23 @@ export type ClientDigest = {
     leftAs: string | null;
     notesExcerpt: string | null;
   } | null;
-  // The next scheduled session
   nextSession: {
     when: Date;
     type: string;
     durationMinutes: number;
     meetUrl: string | null;
   } | null;
-  // Open tasks (unfinished business)
   openTasks: { id: string; title: string; dueAt: Date | null }[];
-  // Currently working on (the "load-bearing" intention)
   workingOn: string | null;
-  // Active goals (top 3 by position)
   topGoals: { id: string; label: string; progress: number }[];
-  // Last stated intention across all sessions (latest with one)
   latestIntention: { when: Date; text: string } | null;
 };
 
-export async function getClientDigest(clientId: string): Promise<ClientDigest> {
-  const client = await getClientById(clientId);
+export async function getClientDigest(
+  accountId: string,
+  clientId: string
+): Promise<ClientDigest> {
+  const client = await getClientById(accountId, clientId);
   if (!client) {
     return {
       lastSession: null,
@@ -253,6 +301,7 @@ export async function getClientDigest(clientId: string): Promise<ClientDigest> {
         .from(sessions)
         .where(
           and(
+            eq(sessions.accountId, accountId),
             eq(sessions.clientId, clientId),
             eq(sessions.status, "completed")
           )
@@ -264,6 +313,7 @@ export async function getClientDigest(clientId: string): Promise<ClientDigest> {
         .from(sessions)
         .where(
           and(
+            eq(sessions.accountId, accountId),
             eq(sessions.clientId, clientId),
             eq(sessions.status, "scheduled"),
             gte(sessions.scheduledAt, new Date())
@@ -278,7 +328,13 @@ export async function getClientDigest(clientId: string): Promise<ClientDigest> {
           dueAt: tasks.dueAt,
         })
         .from(tasks)
-        .where(and(eq(tasks.clientId, clientId), isNull(tasks.completedAt)))
+        .where(
+          and(
+            eq(tasks.accountId, accountId),
+            eq(tasks.clientId, clientId),
+            isNull(tasks.completedAt)
+          )
+        )
         .orderBy(
           sql`CASE WHEN ${tasks.dueAt} IS NULL THEN 1 ELSE 0 END`,
           asc(tasks.dueAt)
@@ -291,7 +347,13 @@ export async function getClientDigest(clientId: string): Promise<ClientDigest> {
           progress: goals.progress,
         })
         .from(goals)
-        .where(and(eq(goals.clientId, clientId), eq(goals.archived, false)))
+        .where(
+          and(
+            eq(goals.accountId, accountId),
+            eq(goals.clientId, clientId),
+            eq(goals.archived, false)
+          )
+        )
         .orderBy(asc(goals.position))
         .limit(3),
       db
@@ -302,6 +364,7 @@ export async function getClientDigest(clientId: string): Promise<ClientDigest> {
         .from(sessions)
         .where(
           and(
+            eq(sessions.accountId, accountId),
             eq(sessions.clientId, clientId),
             isNotNull(sessions.intention)
           )
@@ -347,10 +410,10 @@ export async function getClientDigest(clientId: string): Promise<ClientDigest> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Practitioner capacity — the "weight" she's holding. Surfaced on Today.
+// Capacity strip — workload at-a-glance
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function getCapacity() {
+export async function getCapacity(accountId: string) {
   const now = new Date();
   const startOfWeek = new Date(now);
   startOfWeek.setHours(0, 0, 0, 0);
@@ -368,12 +431,15 @@ export async function getCapacity() {
     db
       .select({ count: sql<number>`COUNT(*)::int` })
       .from(clients)
-      .where(eq(clients.status, "active")),
+      .where(
+        and(eq(clients.accountId, accountId), eq(clients.status, "active"))
+      ),
     db
       .select({ count: sql<number>`COUNT(*)::int` })
       .from(sessions)
       .where(
         and(
+          eq(sessions.accountId, accountId),
           gte(sessions.scheduledAt, startOfWeek),
           lte(sessions.scheduledAt, endOfWeek),
           eq(sessions.status, "scheduled")
@@ -382,23 +448,26 @@ export async function getCapacity() {
     db
       .select({ count: sql<number>`COUNT(*)::int` })
       .from(tasks)
-      .where(isNull(tasks.completedAt)),
+      .where(
+        and(eq(tasks.accountId, accountId), isNull(tasks.completedAt))
+      ),
     db
       .select({ count: sql<number>`COUNT(*)::int` })
       .from(tasks)
       .where(
         and(
+          eq(tasks.accountId, accountId),
           isNull(tasks.completedAt),
           isNotNull(tasks.dueAt),
           sql`${tasks.dueAt} < NOW()`
         )
       ),
-    // "Heavy threads" — active clients with ≥1 sensitivity recorded
     db
       .select({ count: sql<number>`COUNT(*)::int` })
       .from(clients)
       .where(
         and(
+          eq(clients.accountId, accountId),
           eq(clients.status, "active"),
           sql`array_length(${clients.sensitivities}, 1) > 0`
         )
@@ -415,7 +484,7 @@ export async function getCapacity() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Activity timeline — auto-derived feed of every event for a client
+// Activity timeline
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type ActivityEvent = {
@@ -438,31 +507,51 @@ export type ActivityEvent = {
 };
 
 export async function getClientActivity(
+  accountId: string,
   clientId: string
 ): Promise<ActivityEvent[]> {
   const [client, sessionsList, attachmentsList, tasksList, comms] =
     await Promise.all([
-      getClientById(clientId),
+      getClientById(accountId, clientId),
       db
         .select()
         .from(sessions)
-        .where(eq(sessions.clientId, clientId)),
+        .where(
+          and(
+            eq(sessions.accountId, accountId),
+            eq(sessions.clientId, clientId)
+          )
+        ),
       db
         .select()
         .from(attachments)
-        .where(eq(attachments.clientId, clientId)),
-      db.select().from(tasks).where(eq(tasks.clientId, clientId)),
+        .where(
+          and(
+            eq(attachments.accountId, accountId),
+            eq(attachments.clientId, clientId)
+          )
+        ),
+      db
+        .select()
+        .from(tasks)
+        .where(
+          and(eq(tasks.accountId, accountId), eq(tasks.clientId, clientId))
+        ),
       db
         .select()
         .from(communications)
-        .where(eq(communications.clientId, clientId)),
+        .where(
+          and(
+            eq(communications.accountId, accountId),
+            eq(communications.clientId, clientId)
+          )
+        ),
     ]);
 
   if (!client) return [];
 
   const events: ActivityEvent[] = [];
 
-  // Client created
   events.push({
     id: `c-${client.id}`,
     kind: "client_created",
@@ -473,7 +562,6 @@ export async function getClientActivity(
     occurredAt: client.createdAt,
   });
 
-  // Sessions
   for (const s of sessionsList) {
     events.push({
       id: `s-create-${s.id}`,
@@ -524,7 +612,6 @@ export async function getClientActivity(
     }
   }
 
-  // Attachments
   for (const a of attachmentsList) {
     events.push({
       id: `a-${a.id}`,
@@ -535,7 +622,6 @@ export async function getClientActivity(
     });
   }
 
-  // Tasks
   for (const t of tasksList) {
     events.push({
       id: `t-${t.id}`,
@@ -553,7 +639,6 @@ export async function getClientActivity(
     }
   }
 
-  // Communications
   for (const c of comms) {
     events.push({
       id: `comm-${c.id}`,
@@ -575,7 +660,11 @@ export async function getClientActivity(
 // Sessions
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function listSessionsInRange(start: Date, end: Date) {
+export async function listSessionsInRange(
+  accountId: string,
+  start: Date,
+  end: Date
+) {
   return db
     .select({
       id: sessions.id,
@@ -590,11 +679,17 @@ export async function listSessionsInRange(start: Date, end: Date) {
     })
     .from(sessions)
     .innerJoin(clients, eq(sessions.clientId, clients.id))
-    .where(and(gte(sessions.scheduledAt, start), lte(sessions.scheduledAt, end)))
+    .where(
+      and(
+        eq(sessions.accountId, accountId),
+        gte(sessions.scheduledAt, start),
+        lte(sessions.scheduledAt, end)
+      )
+    )
     .orderBy(asc(sessions.scheduledAt));
 }
 
-export async function listAllSessionsForPayments() {
+export async function listAllSessionsForPayments(accountId: string) {
   return db
     .select({
       id: sessions.id,
@@ -612,20 +707,25 @@ export async function listAllSessionsForPayments() {
     })
     .from(sessions)
     .innerJoin(clients, eq(sessions.clientId, clients.id))
+    .where(eq(sessions.accountId, accountId))
     .orderBy(desc(sessions.scheduledAt));
 }
 
-export async function getSessionById(id: string) {
-  const rows = await db.select().from(sessions).where(eq(sessions.id, id)).limit(1);
+export async function getSessionById(accountId: string, id: string) {
+  const rows = await db
+    .select()
+    .from(sessions)
+    .where(and(eq(sessions.accountId, accountId), eq(sessions.id, id)))
+    .limit(1);
   return rows[0] ?? null;
 }
 
-export async function getSessionWithClient(id: string) {
+export async function getSessionWithClient(accountId: string, id: string) {
   const rows = await db
     .select()
     .from(sessions)
     .innerJoin(clients, eq(sessions.clientId, clients.id))
-    .where(eq(sessions.id, id))
+    .where(and(eq(sessions.accountId, accountId), eq(sessions.id, id)))
     .limit(1);
   if (!rows[0]) return null;
   return { session: rows[0].sessions, client: rows[0].clients };
@@ -635,7 +735,7 @@ export async function getSessionWithClient(id: string) {
 // Tasks
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function listOpenTasks() {
+export async function listOpenTasks(accountId: string) {
   return db
     .select({
       id: tasks.id,
@@ -649,7 +749,7 @@ export async function listOpenTasks() {
     })
     .from(tasks)
     .leftJoin(clients, eq(tasks.clientId, clients.id))
-    .where(isNull(tasks.completedAt))
+    .where(and(eq(tasks.accountId, accountId), isNull(tasks.completedAt)))
     .orderBy(
       sql`CASE WHEN ${tasks.dueAt} IS NULL THEN 1 ELSE 0 END`,
       asc(tasks.dueAt)
@@ -660,19 +760,29 @@ export async function listOpenTasks() {
 // Templates
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function listEmailTemplates() {
+export async function listEmailTemplates(accountId: string) {
   return db
     .select()
     .from(emailTemplates)
-    .where(eq(emailTemplates.archived, false))
+    .where(
+      and(
+        eq(emailTemplates.accountId, accountId),
+        eq(emailTemplates.archived, false)
+      )
+    )
     .orderBy(asc(emailTemplates.name));
 }
 
-export async function listNoteTemplates() {
+export async function listNoteTemplates(accountId: string) {
   return db
     .select()
     .from(noteTemplates)
-    .where(eq(noteTemplates.archived, false))
+    .where(
+      and(
+        eq(noteTemplates.accountId, accountId),
+        eq(noteTemplates.archived, false)
+      )
+    )
     .orderBy(asc(noteTemplates.name));
 }
 
@@ -688,7 +798,10 @@ export type SearchResult = {
   href: string;
 };
 
-export async function search(query: string): Promise<SearchResult[]> {
+export async function search(
+  accountId: string,
+  query: string
+): Promise<SearchResult[]> {
   const q = query.trim();
   if (q.length < 2) return [];
   const wildcard = `%${q}%`;
@@ -704,13 +817,16 @@ export async function search(query: string): Promise<SearchResult[]> {
         })
         .from(clients)
         .where(
-          or(
-            ilike(clients.fullName, wildcard),
-            ilike(clients.email, wildcard),
-            ilike(clients.workingOn, wildcard),
-            sql`${clients.tags}::text ILIKE ${wildcard}`,
-            ilike(clients.aboutClient, wildcard),
-            ilike(clients.intakeNotes, wildcard)
+          and(
+            eq(clients.accountId, accountId),
+            or(
+              ilike(clients.fullName, wildcard),
+              ilike(clients.email, wildcard),
+              ilike(clients.workingOn, wildcard),
+              sql`${clients.tags}::text ILIKE ${wildcard}`,
+              ilike(clients.aboutClient, wildcard),
+              ilike(clients.intakeNotes, wildcard)
+            )
           )
         )
         .limit(8),
@@ -726,10 +842,13 @@ export async function search(query: string): Promise<SearchResult[]> {
         .from(sessions)
         .innerJoin(clients, eq(sessions.clientId, clients.id))
         .where(
-          or(
-            ilike(sessions.notes, wildcard),
-            ilike(sessions.intention, wildcard),
-            ilike(sessions.type, wildcard)
+          and(
+            eq(sessions.accountId, accountId),
+            or(
+              ilike(sessions.notes, wildcard),
+              ilike(sessions.intention, wildcard),
+              ilike(sessions.type, wildcard)
+            )
           )
         )
         .orderBy(desc(sessions.scheduledAt))
@@ -743,7 +862,12 @@ export async function search(query: string): Promise<SearchResult[]> {
         })
         .from(attachments)
         .innerJoin(clients, eq(attachments.clientId, clients.id))
-        .where(ilike(attachments.name, wildcard))
+        .where(
+          and(
+            eq(attachments.accountId, accountId),
+            ilike(attachments.name, wildcard)
+          )
+        )
         .limit(5),
       db
         .select({
@@ -757,6 +881,7 @@ export async function search(query: string): Promise<SearchResult[]> {
         .leftJoin(clients, eq(tasks.clientId, clients.id))
         .where(
           and(
+            eq(tasks.accountId, accountId),
             isNull(tasks.completedAt),
             or(ilike(tasks.title, wildcard), ilike(tasks.body, wildcard))
           )
@@ -812,7 +937,7 @@ export async function search(query: string): Promise<SearchResult[]> {
 // Dashboard
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function getDashboardData() {
+export async function getDashboardData(accountId: string) {
   const now = new Date();
   const startOfToday = new Date(now);
   startOfToday.setHours(0, 0, 0, 0);
@@ -851,6 +976,7 @@ export async function getDashboardData() {
       .innerJoin(clients, eq(sessions.clientId, clients.id))
       .where(
         and(
+          eq(sessions.accountId, accountId),
           gte(sessions.scheduledAt, startOfToday),
           lte(sessions.scheduledAt, endOfToday)
         )
@@ -861,6 +987,7 @@ export async function getDashboardData() {
       .from(sessions)
       .where(
         and(
+          eq(sessions.accountId, accountId),
           gte(sessions.scheduledAt, startOfWeek),
           lte(sessions.scheduledAt, endOfWeek)
         )
@@ -875,7 +1002,13 @@ export async function getDashboardData() {
       })
       .from(sessions)
       .innerJoin(clients, eq(sessions.clientId, clients.id))
-      .where(and(eq(sessions.status, "completed"), eq(sessions.paid, false)))
+      .where(
+        and(
+          eq(sessions.accountId, accountId),
+          eq(sessions.status, "completed"),
+          eq(sessions.paid, false)
+        )
+      )
       .orderBy(desc(sessions.scheduledAt))
       .limit(10),
     db
@@ -890,6 +1023,7 @@ export async function getDashboardData() {
       .innerJoin(clients, eq(sessions.clientId, clients.id))
       .where(
         and(
+          eq(sessions.accountId, accountId),
           eq(sessions.status, "completed"),
           sql`${sessions.notes} IS NULL OR length(trim(${sessions.notes})) = 0`
         )
@@ -903,11 +1037,14 @@ export async function getDashboardData() {
         lastSessionAt: sql<Date | null>`(SELECT MAX(${sessions.scheduledAt}) FROM ${sessions} WHERE ${sessions.clientId} = ${clients.id})`,
       })
       .from(clients)
-      .where(eq(clients.status, "active"))
+      .where(
+        and(eq(clients.accountId, accountId), eq(clients.status, "active"))
+      )
       .orderBy(asc(clients.fullName)),
     db
       .select({ count: sql<number>`COUNT(*)::int` })
-      .from(clients),
+      .from(clients)
+      .where(eq(clients.accountId, accountId)),
     db
       .select({
         id: tasks.id,
@@ -918,7 +1055,7 @@ export async function getDashboardData() {
       })
       .from(tasks)
       .leftJoin(clients, eq(tasks.clientId, clients.id))
-      .where(isNull(tasks.completedAt))
+      .where(and(eq(tasks.accountId, accountId), isNull(tasks.completedAt)))
       .orderBy(
         sql`CASE WHEN ${tasks.dueAt} IS NULL THEN 1 ELSE 0 END`,
         asc(tasks.dueAt)
@@ -946,7 +1083,7 @@ export async function getDashboardData() {
 // Payments
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function getPaymentTotals() {
+export async function getPaymentTotals(accountId: string) {
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const startOfYear = new Date(now.getFullYear(), 0, 1);
@@ -959,6 +1096,7 @@ export async function getPaymentTotals() {
       .from(sessions)
       .where(
         and(
+          eq(sessions.accountId, accountId),
           eq(sessions.paid, true),
           isNotNull(sessions.paidAt),
           sql`${sessions.paidAt} >= ${startOfMonth.toISOString().slice(0, 10)}`
@@ -971,6 +1109,7 @@ export async function getPaymentTotals() {
       .from(sessions)
       .where(
         and(
+          eq(sessions.accountId, accountId),
           eq(sessions.paid, true),
           isNotNull(sessions.paidAt),
           sql`${sessions.paidAt} >= ${startOfYear.toISOString().slice(0, 10)}`
@@ -982,7 +1121,13 @@ export async function getPaymentTotals() {
         count: sql<number>`COUNT(*)::int`,
       })
       .from(sessions)
-      .where(and(eq(sessions.paid, false), eq(sessions.status, "completed"))),
+      .where(
+        and(
+          eq(sessions.accountId, accountId),
+          eq(sessions.paid, false),
+          eq(sessions.status, "completed")
+        )
+      ),
   ]);
 
   return {

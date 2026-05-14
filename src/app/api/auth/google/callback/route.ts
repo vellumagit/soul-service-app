@@ -2,6 +2,7 @@
 // We exchange the code for tokens, persist them, and bounce back to /settings.
 import { NextResponse } from "next/server";
 import { exchangeGoogleCode } from "@/lib/google-calendar";
+import { requireSession } from "@/lib/session-cookies";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +28,8 @@ export async function GET(request: Request) {
   }
 
   try {
-    const { email } = await exchangeGoogleCode(code);
+    const { accountId } = await requireSession();
+    const { email } = await exchangeGoogleCode(code, accountId);
     return NextResponse.redirect(
       new URL(
         `/settings?google=connected&email=${encodeURIComponent(email ?? "")}`,

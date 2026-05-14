@@ -24,16 +24,16 @@ export default async function SettingsPage({
     reason?: string;
   }>;
 }) {
-  const { email: userEmail } = await requireSession();
+  const { email: userEmail, accountId } = await requireSession();
   const { google, email, reason } = await searchParams;
 
   const [settings, clientsList, emailTpls, noteTpls, googleStatus] =
     await Promise.all([
-      getSettings(),
-      listClientsForPicker(),
-      listEmailTemplates(),
-      listNoteTemplates(),
-      getGoogleConnectionStatus(),
+      getSettings(accountId),
+      listClientsForPicker(accountId),
+      listEmailTemplates(accountId),
+      listNoteTemplates(accountId),
+      getGoogleConnectionStatus(accountId),
     ]);
 
   const flashStatus =

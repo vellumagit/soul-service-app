@@ -18,8 +18,9 @@ import {
   themes,
   observations,
 } from "@/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { getSettings } from "@/db/queries";
+import { requireSession } from "./session-cookies";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Form helpers
@@ -75,6 +76,7 @@ function required<T>(value: T | null, fieldName: string): T {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function createClient(formData: FormData) {
+  const { accountId } = await requireSession();
   const fullName = required(str(formData, "fullName"), "Full name");
   const firstSessionDateRaw = str(formData, "firstSessionDate");
   const firstSessionType =
@@ -85,6 +87,7 @@ export async function createClient(formData: FormData) {
   const [created] = await db
     .insert(clients)
     .values({
+      accountId,
       fullName,
       pronouns: str(formData, "pronouns"),
       email: str(formData, "email"),
@@ -111,13 +114,19 @@ export async function createClient(formData: FormData) {
     const firstSessionDate = new Date(firstSessionDateRaw + "T12:00:00");
     const isPast = firstSessionDate < new Date();
     await db.insert(sessions).values({
+      accountId,
       clientId: created.id,
       type: firstSessionType,
       status: isPast ? "completed" : "scheduled",
       scheduledAt: firstSessionDate,
       durationMinutes: 60,
     });
-    await scheduleFirstSessionFollowups(created.id, firstSessionDate, fullName);
+    await scheduleFirstSessionFollowups(
+      accountId,
+      created.id,
+      firstSessionDate,
+      fullName
+    );
   }
 
   revalidatePath("/clients");
@@ -127,6 +136,7 @@ export async function createClient(formData: FormData) {
 // Hardcoded touchpoint cadence: 1 week, 1 month, 3 months after the FIRST session.
 // Tasks dated in the past are skipped (kept clean for long-time clients being onboarded).
 async function scheduleFirstSessionFollowups(
+  accountId: string,
   clientId: string,
   firstSessionDate: Date,
   clientName: string
@@ -145,6 +155,7 @@ async function scheduleFirstSessionFollowups(
     dueAt.setDate(dueAt.getDate() + f.days);
     if (dueAt <= now) continue; // skip past follow-ups
     rows.push({
+      accountId,
       title: `${f.title} with ${clientName}`,
       clientId,
       dueAt,
@@ -156,6 +167,7 @@ async function scheduleFirstSessionFollowups(
 }
 
 export async function updateClient(formData: FormData) {
+  const { accountId } = await requireSession();
   const id = required(str(formData, "id"), "Client id");
 
   await db
@@ -187,14 +199,17 @@ export async function updateClient(formData: FormData) {
           | null) ?? "active",
       updatedAt: new Date(),
     })
-    .where(eq(clients.id, id));
+    .where(and(eq(clients.accountId, accountId), eq(clients.id, id)));
 
   revalidatePath(`/clients/${id}`);
   revalidatePath("/clients");
 }
 
 export async function deleteClient(clientId: string) {
-  await db.delete(clients).where(eq(clients.id, clientId));
+  const { accountId } = await requireSession();
+  await db
+    .delete(clients)
+    .where(and(eq(clients.accountId, accountId), eq(clients.id, clientId)));
   revalidatePath("/clients");
   redirect("/clients");
 }
@@ -204,6 +219,7 @@ export async function deleteClient(clientId: string) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function scheduleSession(formData: FormData) {
+  const { accountId } = await requireSession();
   const clientId = required(str(formData, "clientId"), "Client");
   const type = str(formData, "type") ?? "Session";
   const scheduledAtRaw = required(str(formData, "scheduledAt"), "Date / time");
@@ -213,6 +229,7 @@ export async function scheduleSession(formData: FormData) {
   const [created] = await db
     .insert(sessions)
     .values({
+      accountId,
       clientId,
       type,
       status: "scheduled",
@@ -248,6 +265,7 @@ export async function scheduleSessionSeries(
   formData: FormData
 ): Promise<ScheduleSeriesResult> {
   try {
+    const { accountId } = await requireSession();
     const clientId = required(str(formData, "clientId"), "Client");
     const type = str(formData, "type") ?? "Session";
     const firstAtRaw = required(str(formData, "firstAt"), "First session date/time");
@@ -283,6 +301,7 @@ export async function scheduleSessionSeries(
     const [seriesRow] = await db
       .insert(sessionSeries)
       .values({
+        accountId,
         clientId,
         type,
         frequency,
@@ -296,6 +315,7 @@ export async function scheduleSessionSeries(
     // Bulk-insert all the sessions
     const now = new Date();
     const sessionRows = dates.map((scheduledAt, i) => ({
+      accountId,
       clientId,
       type,
       // Past dates land as 'completed' (treats it like a back-fill).
@@ -336,19 +356,25 @@ export async function cancelSessionSeries(
   seriesId: string,
   clientId: string
 ): Promise<void> {
+  const { accountId } = await requireSession();
   const now = new Date();
 
-  // Mark the series cancelled
+  // Mark the series cancelled — scoped by account to prevent cross-account hits.
   await db
     .update(sessionSeries)
     .set({ cancelledAt: now, updatedAt: now })
-    .where(eq(sessionSeries.id, seriesId));
+    .where(
+      and(
+        eq(sessionSeries.accountId, accountId),
+        eq(sessionSeries.id, seriesId)
+      )
+    );
 
   // Delete future scheduled sessions in the series.
-  // (Drizzle doesn't have `gt` imported here yet — using sql template for safety.)
   await db.execute(
     sql`DELETE FROM sessions
-        WHERE series_id = ${seriesId}
+        WHERE account_id = ${accountId}
+        AND series_id = ${seriesId}
         AND status = 'scheduled'
         AND scheduled_at > ${now.toISOString()}`
   );
@@ -383,6 +409,7 @@ function computeSeriesDates(
 }
 
 export async function logPastSession(formData: FormData) {
+  const { accountId } = await requireSession();
   const clientId = required(str(formData, "clientId"), "Client");
   const type = str(formData, "type") ?? "Session";
   const scheduledAtRaw = required(str(formData, "scheduledAt"), "Date / time");
@@ -393,6 +420,7 @@ export async function logPastSession(formData: FormData) {
   const [created] = await db
     .insert(sessions)
     .values({
+      accountId,
       clientId,
       type,
       status: "completed",
@@ -430,6 +458,7 @@ export async function logPastSession(formData: FormData) {
 }
 
 export async function updateSession(formData: FormData) {
+  const { accountId } = await requireSession();
   const id = required(str(formData, "id"), "Session id");
   const clientId = required(str(formData, "clientId"), "Client id");
 
@@ -437,7 +466,7 @@ export async function updateSession(formData: FormData) {
   const existingRows = await db
     .select()
     .from(sessions)
-    .where(eq(sessions.id, id))
+    .where(and(eq(sessions.accountId, accountId), eq(sessions.id, id)))
     .limit(1);
   const existing = existingRows[0];
 
@@ -456,7 +485,10 @@ export async function updateSession(formData: FormData) {
   const isMarkComplete = str(formData, "markComplete") === "true";
   if (isMarkComplete) updates.status = "completed";
 
-  await db.update(sessions).set(updates).where(eq(sessions.id, id));
+  await db
+    .update(sessions)
+    .set(updates)
+    .where(and(eq(sessions.accountId, accountId), eq(sessions.id, id)));
 
   // Push edited title/intention to Google (only if event exists and something
   // user-visible changed). Skip on completion — past events don't need sync.
@@ -479,6 +511,7 @@ export async function updateSession(formData: FormData) {
 
 // Reschedule = change scheduledAt (and optionally durationMinutes). Pushes to Google.
 export async function rescheduleSession(formData: FormData) {
+  const { accountId } = await requireSession();
   const id = required(str(formData, "id"), "Session id");
   const clientId = required(str(formData, "clientId"), "Client id");
   const scheduledAtRaw = required(
@@ -493,7 +526,10 @@ export async function rescheduleSession(formData: FormData) {
   };
   if (durationMinutes !== null) updates.durationMinutes = durationMinutes;
 
-  await db.update(sessions).set(updates).where(eq(sessions.id, id));
+  await db
+    .update(sessions)
+    .set(updates)
+    .where(and(eq(sessions.accountId, accountId), eq(sessions.id, id)));
 
   // Push to Google. If event exists, this updates it (sends "rescheduled"
   // notification to the client). If it doesn't exist yet, this creates one.
@@ -505,26 +541,28 @@ export async function rescheduleSession(formData: FormData) {
 }
 
 export async function cancelSession(sessionId: string, clientId: string) {
+  const { accountId } = await requireSession();
   // Look up before update to grab the Google event id
   const existingRows = await db
     .select({ googleEventId: sessions.googleEventId })
     .from(sessions)
-    .where(eq(sessions.id, sessionId))
+    .where(and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId)))
     .limit(1);
 
   await db
     .update(sessions)
     .set({ status: "cancelled", updatedAt: new Date() })
-    .where(eq(sessions.id, sessionId));
+    .where(and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId)));
 
   // Pull from Google Calendar so the client gets a "cancelled" notification
-  await deleteSessionFromGoogle(existingRows[0]?.googleEventId ?? null);
-  // Clear our reference so a re-schedule doesn't try to update a deleted event
+  await deleteSessionFromGoogle(accountId, existingRows[0]?.googleEventId ?? null);
   if (existingRows[0]?.googleEventId) {
     await db
       .update(sessions)
       .set({ googleEventId: null })
-      .where(eq(sessions.id, sessionId));
+      .where(
+        and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId))
+      );
   }
 
   revalidatePath(`/clients/${clientId}`);
@@ -533,14 +571,17 @@ export async function cancelSession(sessionId: string, clientId: string) {
 }
 
 export async function deleteSession(sessionId: string, clientId: string) {
+  const { accountId } = await requireSession();
   const existingRows = await db
     .select({ googleEventId: sessions.googleEventId })
     .from(sessions)
-    .where(eq(sessions.id, sessionId))
+    .where(and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId)))
     .limit(1);
 
-  await db.delete(sessions).where(eq(sessions.id, sessionId));
-  await deleteSessionFromGoogle(existingRows[0]?.googleEventId ?? null);
+  await db
+    .delete(sessions)
+    .where(and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId)));
+  await deleteSessionFromGoogle(accountId, existingRows[0]?.googleEventId ?? null);
 
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/calendar");
@@ -549,6 +590,7 @@ export async function deleteSession(sessionId: string, clientId: string) {
 }
 
 export async function markSessionPaid(formData: FormData) {
+  const { accountId } = await requireSession();
   const id = required(str(formData, "id"), "Session id");
   const clientId = required(str(formData, "clientId"), "Client id");
   const method = str(formData, "paymentMethod") ?? "other";
@@ -572,7 +614,7 @@ export async function markSessionPaid(formData: FormData) {
       paidAt: new Date().toISOString().slice(0, 10),
       updatedAt: new Date(),
     })
-    .where(eq(sessions.id, id));
+    .where(and(eq(sessions.accountId, accountId), eq(sessions.id, id)));
 
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/payments");
@@ -580,6 +622,7 @@ export async function markSessionPaid(formData: FormData) {
 }
 
 export async function markSessionUnpaid(sessionId: string, clientId: string) {
+  const { accountId } = await requireSession();
   await db
     .update(sessions)
     .set({
@@ -590,7 +633,9 @@ export async function markSessionUnpaid(sessionId: string, clientId: string) {
       paidAt: null,
       updatedAt: new Date(),
     })
-    .where(eq(sessions.id, sessionId));
+    .where(
+      and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId))
+    );
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/payments");
 }
@@ -600,12 +645,15 @@ export async function markSessionUnpaid(sessionId: string, clientId: string) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function addGoal(formData: FormData) {
+  const { accountId } = await requireSession();
   const clientId = required(str(formData, "clientId"), "Client id");
   const label = required(str(formData, "label"), "Goal label");
   const progress = Math.max(0, Math.min(100, num(formData, "progress") ?? 0));
   const note = str(formData, "note");
 
-  await db.insert(goals).values({ clientId, label, progress, note });
+  await db
+    .insert(goals)
+    .values({ accountId, clientId, label, progress, note });
   revalidatePath(`/clients/${clientId}`);
 }
 
@@ -614,16 +662,20 @@ export async function updateGoalProgress(
   clientId: string,
   progress: number
 ) {
+  const { accountId } = await requireSession();
   const clamped = Math.max(0, Math.min(100, progress));
   await db
     .update(goals)
     .set({ progress: clamped, updatedAt: new Date() })
-    .where(eq(goals.id, goalId));
+    .where(and(eq(goals.accountId, accountId), eq(goals.id, goalId)));
   revalidatePath(`/clients/${clientId}`);
 }
 
 export async function deleteGoal(goalId: string, clientId: string) {
-  await db.delete(goals).where(eq(goals.id, goalId));
+  const { accountId } = await requireSession();
+  await db
+    .delete(goals)
+    .where(and(eq(goals.accountId, accountId), eq(goals.id, goalId)));
   revalidatePath(`/clients/${clientId}`);
 }
 
@@ -632,12 +684,14 @@ export async function deleteGoal(goalId: string, clientId: string) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function addTask(formData: FormData) {
+  const { accountId } = await requireSession();
   const title = required(str(formData, "title"), "Task title");
   const clientId = str(formData, "clientId"); // optional
   const dueAtRaw = str(formData, "dueAt");
   const body = str(formData, "body");
 
   await db.insert(tasks).values({
+    accountId,
     title,
     body,
     clientId,
@@ -652,8 +706,12 @@ export async function toggleTaskComplete(
   taskId: string,
   clientId: string | null
 ) {
-  // Read the current state, flip it
-  const [t] = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1);
+  const { accountId } = await requireSession();
+  const [t] = await db
+    .select()
+    .from(tasks)
+    .where(and(eq(tasks.accountId, accountId), eq(tasks.id, taskId)))
+    .limit(1);
   if (!t) return;
   await db
     .update(tasks)
@@ -661,13 +719,16 @@ export async function toggleTaskComplete(
       completedAt: t.completedAt ? null : new Date(),
       updatedAt: new Date(),
     })
-    .where(eq(tasks.id, taskId));
+    .where(and(eq(tasks.accountId, accountId), eq(tasks.id, taskId)));
   revalidatePath("/");
   if (clientId) revalidatePath(`/clients/${clientId}`);
 }
 
 export async function deleteTask(taskId: string, clientId: string | null) {
-  await db.delete(tasks).where(eq(tasks.id, taskId));
+  const { accountId } = await requireSession();
+  await db
+    .delete(tasks)
+    .where(and(eq(tasks.accountId, accountId), eq(tasks.id, taskId)));
   revalidatePath("/");
   if (clientId) revalidatePath(`/clients/${clientId}`);
 }
@@ -677,6 +738,7 @@ export async function deleteTask(taskId: string, clientId: string | null) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function logCommunication(formData: FormData) {
+  const { accountId } = await requireSession();
   const clientId = required(str(formData, "clientId"), "Client id");
   const kind =
     (str(formData, "kind") as
@@ -691,6 +753,7 @@ export async function logCommunication(formData: FormData) {
   const templateId = str(formData, "templateId");
 
   await db.insert(communications).values({
+    accountId,
     clientId,
     kind,
     subject,
@@ -704,7 +767,15 @@ export async function deleteCommunication(
   commId: string,
   clientId: string
 ) {
-  await db.delete(communications).where(eq(communications.id, commId));
+  const { accountId } = await requireSession();
+  await db
+    .delete(communications)
+    .where(
+      and(
+        eq(communications.accountId, accountId),
+        eq(communications.id, commId)
+      )
+    );
   revalidatePath(`/clients/${clientId}`);
 }
 
@@ -717,6 +788,7 @@ export async function deleteCommunication(
 export type SendEmailResult = { ok: true } | { ok: false; message: string };
 
 export async function sendClientEmail(formData: FormData): Promise<SendEmailResult> {
+  const { accountId } = await requireSession();
   const clientId = required(str(formData, "clientId"), "Client id");
   const to = required(str(formData, "to"), "Recipient");
   const subject = required(str(formData, "subject"), "Subject");
@@ -732,7 +804,7 @@ export async function sendClientEmail(formData: FormData): Promise<SendEmailResu
 
   // Lazy-import so this action stays cheap when Resend isn't used.
   const { sendEmail } = await import("./resend");
-  const settings = await getSettings();
+  const settings = await getSettings(accountId);
 
   // Wrap plain-text body in a minimal HTML email so it renders cleanly.
   const html = bodyToHtml(body, settings?.businessName ?? null);
@@ -755,6 +827,7 @@ export async function sendClientEmail(formData: FormData): Promise<SendEmailResu
 
   // Log it on the client's profile.
   await db.insert(communications).values({
+    accountId,
     clientId,
     kind: "email_sent",
     subject,
@@ -788,20 +861,33 @@ export async function deleteAttachment(
   attachmentId: string,
   clientId: string
 ) {
+  const { accountId } = await requireSession();
   try {
     if (process.env.BLOB_READ_WRITE_TOKEN) {
       const { del } = await import("@vercel/blob");
       const [row] = await db
         .select({ url: attachments.url })
         .from(attachments)
-        .where(eq(attachments.id, attachmentId))
+        .where(
+          and(
+            eq(attachments.accountId, accountId),
+            eq(attachments.id, attachmentId)
+          )
+        )
         .limit(1);
       if (row?.url) await del(row.url);
     }
   } catch (e) {
     console.warn("Blob delete failed (continuing with DB delete):", e);
   }
-  await db.delete(attachments).where(eq(attachments.id, attachmentId));
+  await db
+    .delete(attachments)
+    .where(
+      and(
+        eq(attachments.accountId, accountId),
+        eq(attachments.id, attachmentId)
+      )
+    );
   revalidatePath(`/clients/${clientId}`);
 }
 
@@ -810,7 +896,8 @@ export async function deleteAttachment(
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function updateSettings(formData: FormData) {
-  const settings = await getSettings();
+  const { accountId } = await requireSession();
+  const settings = await getSettings(accountId);
 
   const defaultRate = num(formData, "defaultRate");
 
@@ -844,7 +931,7 @@ export async function updateSettings(formData: FormData) {
       autoUploadAiNotes: bool(formData, "autoUploadAiNotes"),
       updatedAt: new Date(),
     })
-    .where(eq(practitionerSettings.id, settings.id));
+    .where(eq(practitionerSettings.accountId, accountId));
 
   revalidatePath("/settings");
   revalidatePath("/");
@@ -855,7 +942,9 @@ export async function updateSettings(formData: FormData) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function createEmailTemplate(formData: FormData) {
+  const { accountId } = await requireSession();
   await db.insert(emailTemplates).values({
+    accountId,
     name: required(str(formData, "name"), "Name"),
     subject: required(str(formData, "subject"), "Subject"),
     body: required(str(formData, "body"), "Body"),
@@ -865,6 +954,7 @@ export async function createEmailTemplate(formData: FormData) {
 }
 
 export async function updateEmailTemplate(formData: FormData) {
+  const { accountId } = await requireSession();
   const id = required(str(formData, "id"), "id");
   await db
     .update(emailTemplates)
@@ -875,12 +965,25 @@ export async function updateEmailTemplate(formData: FormData) {
       language: locale(formData, "language") ?? "en",
       updatedAt: new Date(),
     })
-    .where(eq(emailTemplates.id, id));
+    .where(
+      and(
+        eq(emailTemplates.accountId, accountId),
+        eq(emailTemplates.id, id)
+      )
+    );
   revalidatePath("/settings");
 }
 
 export async function deleteEmailTemplate(id: string) {
-  await db.delete(emailTemplates).where(eq(emailTemplates.id, id));
+  const { accountId } = await requireSession();
+  await db
+    .delete(emailTemplates)
+    .where(
+      and(
+        eq(emailTemplates.accountId, accountId),
+        eq(emailTemplates.id, id)
+      )
+    );
   revalidatePath("/settings");
 }
 
@@ -889,7 +992,9 @@ export async function deleteEmailTemplate(id: string) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function createNoteTemplate(formData: FormData) {
+  const { accountId } = await requireSession();
   await db.insert(noteTemplates).values({
+    accountId,
     name: required(str(formData, "name"), "Name"),
     body: required(str(formData, "body"), "Body"),
   });
@@ -897,6 +1002,7 @@ export async function createNoteTemplate(formData: FormData) {
 }
 
 export async function updateNoteTemplate(formData: FormData) {
+  const { accountId } = await requireSession();
   const id = required(str(formData, "id"), "id");
   await db
     .update(noteTemplates)
@@ -905,12 +1011,19 @@ export async function updateNoteTemplate(formData: FormData) {
       body: required(str(formData, "body"), "Body"),
       updatedAt: new Date(),
     })
-    .where(eq(noteTemplates.id, id));
+    .where(
+      and(eq(noteTemplates.accountId, accountId), eq(noteTemplates.id, id))
+    );
   revalidatePath("/settings");
 }
 
 export async function deleteNoteTemplate(id: string) {
-  await db.delete(noteTemplates).where(eq(noteTemplates.id, id));
+  const { accountId } = await requireSession();
+  await db
+    .delete(noteTemplates)
+    .where(
+      and(eq(noteTemplates.accountId, accountId), eq(noteTemplates.id, id))
+    );
   revalidatePath("/settings");
 }
 
@@ -919,12 +1032,12 @@ export async function deleteNoteTemplate(id: string) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function runOnSessionCompleted(sessionId: string, _clientId: string) {
-  const settings = await getSettings();
+  // requireSession is already called by the parent action (logPastSession /
+  // updateSession), so calling it again here uses the React `cache()` and
+  // doesn't re-decrypt the JWT.
+  const { accountId } = await requireSession();
+  const settings = await getSettings(accountId);
 
-  // Auto-invoice when a session is marked complete (toggleable in Settings).
-  // The 1wk/1mo/3mo follow-up cadence is hardcoded and triggers when a client
-  // is added (based on their first-session date) — not per-session — so it lives
-  // in createClient, not here.
   if (settings.autoInvoiceOnComplete) {
     try {
       const { generateInvoiceForSession } = await import("./invoices");
@@ -936,29 +1049,41 @@ async function runOnSessionCompleted(sessionId: string, _clientId: string) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// IMPORTANT PEOPLE — secondary characters in a client's life
+// IMPORTANT PEOPLE
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function addImportantPerson(formData: FormData) {
+  const { accountId } = await requireSession();
   const clientId = required(str(formData, "clientId"), "Client id");
   const name = required(str(formData, "name"), "Name");
   const relationship = required(str(formData, "relationship"), "Relationship");
   const notes = str(formData, "notes");
   const isAlive = !bool(formData, "deceased");
 
-  // Position: end of list
   const [{ count }] = await db
     .select({ count: sql<number>`COUNT(*)::int` })
     .from(importantPeople)
-    .where(eq(importantPeople.clientId, clientId));
+    .where(
+      and(
+        eq(importantPeople.accountId, accountId),
+        eq(importantPeople.clientId, clientId)
+      )
+    );
 
-  await db
-    .insert(importantPeople)
-    .values({ clientId, name, relationship, notes, isAlive, position: count });
+  await db.insert(importantPeople).values({
+    accountId,
+    clientId,
+    name,
+    relationship,
+    notes,
+    isAlive,
+    position: count,
+  });
   revalidatePath(`/clients/${clientId}`);
 }
 
 export async function updateImportantPerson(formData: FormData) {
+  const { accountId } = await requireSession();
   const id = required(str(formData, "id"), "id");
   const clientId = required(str(formData, "clientId"), "Client id");
 
@@ -971,7 +1096,12 @@ export async function updateImportantPerson(formData: FormData) {
       isAlive: !bool(formData, "deceased"),
       updatedAt: new Date(),
     })
-    .where(eq(importantPeople.id, id));
+    .where(
+      and(
+        eq(importantPeople.accountId, accountId),
+        eq(importantPeople.id, id)
+      )
+    );
   revalidatePath(`/clients/${clientId}`);
 }
 
@@ -979,39 +1109,60 @@ export async function deleteImportantPerson(
   personId: string,
   clientId: string
 ) {
-  await db.delete(importantPeople).where(eq(importantPeople.id, personId));
+  const { accountId } = await requireSession();
+  await db
+    .delete(importantPeople)
+    .where(
+      and(
+        eq(importantPeople.accountId, accountId),
+        eq(importantPeople.id, personId)
+      )
+    );
   revalidatePath(`/clients/${clientId}`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// THEMES — recurring patterns the practitioner is noticing
+// THEMES
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function addTheme(formData: FormData) {
+  const { accountId } = await requireSession();
   const clientId = required(str(formData, "clientId"), "Client id");
   const label = required(str(formData, "label"), "Theme");
-  await db.insert(themes).values({ clientId, label });
+  await db.insert(themes).values({ accountId, clientId, label });
   revalidatePath(`/clients/${clientId}`);
 }
 
 export async function deleteTheme(themeId: string, clientId: string) {
-  await db.delete(themes).where(eq(themes.id, themeId));
+  const { accountId } = await requireSession();
+  await db
+    .delete(themes)
+    .where(and(eq(themes.accountId, accountId), eq(themes.id, themeId)));
   revalidatePath(`/clients/${clientId}`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// OBSERVATIONS — bulleted "what I keep noticing for them"
+// OBSERVATIONS
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function addObservation(formData: FormData) {
+  const { accountId } = await requireSession();
   const clientId = required(str(formData, "clientId"), "Client id");
   const body = required(str(formData, "body"), "Observation");
-  await db.insert(observations).values({ clientId, body });
+  await db.insert(observations).values({ accountId, clientId, body });
   revalidatePath(`/clients/${clientId}`);
 }
 
 export async function deleteObservation(observationId: string, clientId: string) {
-  await db.delete(observations).where(eq(observations.id, observationId));
+  const { accountId } = await requireSession();
+  await db
+    .delete(observations)
+    .where(
+      and(
+        eq(observations.accountId, accountId),
+        eq(observations.id, observationId)
+      )
+    );
   revalidatePath(`/clients/${clientId}`);
 }
 
@@ -1026,13 +1177,16 @@ export async function startGoogleConnect() {
 }
 
 export async function disconnectGoogleAction() {
+  const { accountId } = await requireSession();
   const { disconnectGoogle } = await import("./google-calendar");
-  await disconnectGoogle();
+  await disconnectGoogle(accountId);
   revalidatePath("/settings");
 }
 
 // Internal helper — best-effort Google Calendar push for a session.
 // Never throws; any Google failure is logged + returned as an error string.
+// Currently disabled in UI ("coming soon") but the code still runs if creds
+// happen to be configured — it's a no-op when they aren't.
 async function syncSessionToGoogle(
   sessionId: string
 ): Promise<{ ok: true; meetUrl?: string | null } | { ok: false; error: string }> {
@@ -1053,7 +1207,11 @@ async function syncSessionToGoogle(
     const client = clientRows[0];
     if (!client) return { ok: false, error: "Client not found" };
 
-    const settingsRows = await db.select().from(practitionerSettings).limit(1);
+    const settingsRows = await db
+      .select()
+      .from(practitionerSettings)
+      .where(eq(practitionerSettings.accountId, session.accountId))
+      .limit(1);
     const settings = settingsRows[0];
 
     const eventInput = {
@@ -1079,11 +1237,15 @@ async function syncSessionToGoogle(
 
     let result;
     if (session.googleEventId) {
-      result = await updateCalendarEvent(session.googleEventId, eventInput);
+      result = await updateCalendarEvent(
+        session.accountId,
+        session.googleEventId,
+        eventInput
+      );
       // If event was deleted on Google's side (returns null), recreate it
-      if (!result) result = await createCalendarEvent(eventInput);
+      if (!result) result = await createCalendarEvent(session.accountId, eventInput);
     } else {
-      result = await createCalendarEvent(eventInput);
+      result = await createCalendarEvent(session.accountId, eventInput);
     }
 
     if (!result) return { ok: true }; // Not connected — silent no-op
@@ -1107,11 +1269,14 @@ async function syncSessionToGoogle(
   }
 }
 
-async function deleteSessionFromGoogle(googleEventId: string | null) {
+async function deleteSessionFromGoogle(
+  accountId: string,
+  googleEventId: string | null
+) {
   if (!googleEventId) return;
   try {
     const { deleteCalendarEvent } = await import("./google-calendar");
-    await deleteCalendarEvent(googleEventId);
+    await deleteCalendarEvent(accountId, googleEventId);
   } catch (err) {
     console.warn("Google Calendar delete failed:", err);
   }
@@ -1131,16 +1296,19 @@ export type GenerateNotesActionResult = {
 export async function generateNotesForSession(
   formData: FormData
 ): Promise<GenerateNotesActionResult> {
+  const { accountId } = await requireSession();
   const sessionId = required(str(formData, "sessionId"), "Session id");
   const transcript = required(str(formData, "transcript"), "Transcript");
   const templateId = str(formData, "templateId");
   const replaceExisting = bool(formData, "replaceExisting");
 
-  // Look up the session + client for context
+  // Look up the session — must belong to the current account.
   const sessionRows = await db
     .select()
     .from(sessions)
-    .where(eq(sessions.id, sessionId))
+    .where(
+      and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId))
+    )
     .limit(1);
   const session = sessionRows[0];
   if (!session) return { ok: false, error: "Session not found" };
@@ -1148,19 +1316,25 @@ export async function generateNotesForSession(
   const clientRows = await db
     .select()
     .from(clients)
-    .where(eq(clients.id, session.clientId))
+    .where(
+      and(eq(clients.accountId, accountId), eq(clients.id, session.clientId))
+    )
     .limit(1);
   const client = clientRows[0];
   if (!client) return { ok: false, error: "Client not found" };
 
-  // Optional template lookup
   let templateName: string | null = null;
   let templateBody: string | null = null;
   if (templateId) {
     const tplRows = await db
       .select()
       .from(noteTemplates)
-      .where(eq(noteTemplates.id, templateId))
+      .where(
+        and(
+          eq(noteTemplates.accountId, accountId),
+          eq(noteTemplates.id, templateId)
+        )
+      )
       .limit(1);
     if (tplRows[0]) {
       templateName = tplRows[0].name;
@@ -1168,7 +1342,6 @@ export async function generateNotesForSession(
     }
   }
 
-  // Call the AI
   let result;
   try {
     const { generateNotesFromTranscript } = await import("./ai-notes");
@@ -1187,16 +1360,18 @@ export async function generateNotesForSession(
     };
   }
 
-  // Decide how to merge with existing notes
   const existingNotes = session.notes?.trim() ?? "";
-  const finalNotes = replaceExisting || existingNotes.length === 0
-    ? result.notes
-    : existingNotes + "\n\n---\n\n" + result.notes;
+  const finalNotes =
+    replaceExisting || existingNotes.length === 0
+      ? result.notes
+      : existingNotes + "\n\n---\n\n" + result.notes;
 
   await db
     .update(sessions)
     .set({ notes: finalNotes, updatedAt: new Date() })
-    .where(eq(sessions.id, sessionId));
+    .where(
+      and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId))
+    );
 
   revalidatePath(`/clients/${session.clientId}`);
 
@@ -1213,6 +1388,9 @@ export async function generateNotesForSession(
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function generateInvoice(sessionId: string, clientId: string) {
+  // requireSession isn't strictly needed here (the invoices helper looks up
+  // the session itself), but call it so unauthenticated requests still bounce.
+  await requireSession();
   const { generateInvoiceForSession } = await import("./invoices");
   await generateInvoiceForSession(sessionId);
   revalidatePath(`/clients/${clientId}`);

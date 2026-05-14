@@ -25,16 +25,16 @@ export default async function ClientsPage({
 }: {
   searchParams: Promise<{ filter?: string }>;
 }) {
-  const { email } = await requireSession();
+  const { email, accountId } = await requireSession();
   const { filter: filterRaw = "all" } = await searchParams;
   const filter = (
     FILTERS.some((f) => f.value === filterRaw) ? filterRaw : "all"
   ) as ClientFilter;
 
   const [clients, picker, settings] = await Promise.all([
-    listClients(filter),
-    listClientsForPicker(),
-    getSettings(),
+    listClients(accountId, filter),
+    listClientsForPicker(accountId),
+    getSettings(accountId),
   ]);
   const locale = asLocale(settings.uiLanguage);
 

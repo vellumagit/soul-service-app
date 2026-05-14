@@ -1,84 +1,62 @@
 "use server";
 
-// Magic-link auth server actions.
+// Email-as-auth: the user types their email, we check the allowlist,
+// find-or-create their account, set the cookie, redirect.
 //
-// Flow:
-//   1) /signin form submits → `requestMagicLink` checks the allowlist, issues
-//      a one-time token, persists its sha256 in `magic_links`, emails the
-//      raw token in a /auth/verify?t=… URL.
-//   2) User clicks email → /auth/verify route handler consumes the token and
-//      sets the session cookie, then redirects /.
-//   3) `signOutAction` clears the cookie.
+// This is deliberately permissive — anyone who knows an allowlisted email
+// can sign in. That's the tradeoff the practitioner accepted for simplicity.
+// "Elaborate on auth one day."
 
 import { redirect } from "next/navigation";
 import { isAllowed } from "./session";
-import { clearSessionCookie } from "./session-cookies";
-import { sendMagicLinkEmail } from "./resend";
-import { getAppUrl, issueMagicLinkToken } from "./auth-tokens";
+import { setSessionCookie, clearSessionCookie } from "./session-cookies";
+import { getOrCreateAccount } from "./account";
 
-export type RequestMagicLinkResult = {
+export type SignInResult = {
   ok: boolean;
   message: string;
 };
 
 /**
- * Submitted by the /signin form. We always return the same generic
- * "check your email" message — even if the email isn't allowlisted — so we
- * don't leak who has access. Server logs show what actually happened.
+ * Submitted by the /signin form. Checks allowlist, bootstraps account if new,
+ * sets session cookie, redirects home. Returns an error state if blocked.
  */
-export async function requestMagicLink(
-  _prev: RequestMagicLinkResult | undefined,
+export async function signInWithEmail(
+  _prev: SignInResult | undefined,
   formData: FormData
-): Promise<RequestMagicLinkResult> {
+): Promise<SignInResult> {
   const rawEmail = String(formData.get("email") ?? "")
     .trim()
     .toLowerCase();
+
   if (!rawEmail || !rawEmail.includes("@")) {
     return { ok: false, message: "Please enter a valid email address." };
   }
 
-  const generic: RequestMagicLinkResult = {
-    ok: true,
-    message:
-      "If that email is on the allowlist, a sign-in link is on its way. Check your inbox.",
-  };
-
   if (!isAllowed(rawEmail)) {
-    console.log(
-      `[auth] rejected sign-in request for non-allowlisted: ${rawEmail}`
-    );
-    return generic;
-  }
-
-  let token: string;
-  try {
-    token = await issueMagicLinkToken(rawEmail);
-  } catch (err) {
-    console.error("[auth] failed to issue token:", err);
+    console.log(`[auth] rejected sign-in for non-allowlisted: ${rawEmail}`);
     return {
       ok: false,
       message:
-        "Database error issuing your sign-in link. Try again in a moment.",
+        "This email isn't on the access list. If that's a mistake, ask the admin to add it.",
     };
   }
-
-  const url = `${getAppUrl()}/auth/verify?t=${token}`;
 
   try {
-    await sendMagicLinkEmail(rawEmail, url);
+    await getOrCreateAccount(rawEmail);
   } catch (err) {
-    console.error("[auth] failed to send magic-link email:", err);
+    console.error("[auth] account bootstrap failed:", err);
     return {
       ok: false,
-      message:
-        "We couldn't send the sign-in email. Check that RESEND_API_KEY is configured, then try again.",
+      message: "We couldn't set up your account just now. Try again in a moment.",
     };
   }
 
-  return generic;
+  await setSessionCookie(rawEmail);
+  redirect("/");
 }
 
-/** Server action used by the sign-out button. */
+/** Sign out — clear the cookie and bounce to /signin. */
 export async function signOutAction(): Promise<void> {
   await clearSessionCookie();
   redirect("/signin");
