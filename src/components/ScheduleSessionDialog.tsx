@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Modal } from "./Modal";
 import { Field, inputCls } from "./Form";
 import { scheduleSession } from "@/lib/actions";
@@ -33,6 +33,14 @@ export function ScheduleSessionDialog({
   const [error, setError] = useState<string | null>(null);
 
   const noClients = clients.length === 0;
+
+  // Keyboard shortcut `s` opens this dialog from anywhere.
+  useEffect(() => {
+    const handler = () => setOpen(true);
+    window.addEventListener("shortcuts:schedule-session", handler);
+    return () =>
+      window.removeEventListener("shortcuts:schedule-session", handler);
+  }, []);
 
   return (
     <>

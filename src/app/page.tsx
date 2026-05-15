@@ -6,10 +6,12 @@ import { NewClientDialog } from "@/components/NewClientDialog";
 import { MarkPaidDialog } from "@/components/MarkPaidDialog";
 import { TasksBlock } from "@/components/TasksBlock";
 import { CapacityStrip } from "@/components/CapacityStrip";
+import { SetupChecklist } from "@/components/SetupChecklist";
 import {
   getDashboardData,
   getCapacity,
   getSettings,
+  getSetupStatus,
   listClientsForPicker,
 } from "@/db/queries";
 import { shortTime, fullDate, relativeTime } from "@/lib/format";
@@ -19,15 +21,16 @@ export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   const { email, accountId } = await requireSession();
-  const [data, clientsList, capacity, settings] = await Promise.all([
-    getDashboardData(accountId),
-    listClientsForPicker(accountId),
-    getCapacity(accountId),
-    getSettings(accountId),
-  ]);
+  const [data, clientsList, capacity, settings, setupStatus] =
+    await Promise.all([
+      getDashboardData(accountId),
+      listClientsForPicker(accountId),
+      getCapacity(accountId),
+      getSettings(accountId),
+      getSetupStatus(accountId),
+    ]);
 
   const locale = asLocale(settings.uiLanguage);
-  const isFirstRun = data.totalClients === 0;
   const upcomingToday = data.todaySessions.filter(
     (s) => s.status === "scheduled"
   );
@@ -46,7 +49,10 @@ export default async function HomePage() {
         <p className="text-sm text-ink-500 mt-1">{fullDate(new Date())}</p>
       </div>
 
-      {isFirstRun ? (
+      {/* Setup checklist auto-hides when all 4 steps are done */}
+      <SetupChecklist status={setupStatus} clients={clientsList} />
+
+      {data.totalClients === 0 ? (
         <div className="border-2 border-dashed border-ink-200 rounded-lg p-12 text-center bg-white">
           <div className="text-base text-ink-900 font-medium mb-2">
             {t(locale, "home.firstRun.title")}

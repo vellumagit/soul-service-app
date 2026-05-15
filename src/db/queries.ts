@@ -35,6 +35,67 @@ import {
 } from "drizzle-orm";
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Setup status — drives the welcome checklist on Today.
+// Each flag answers a single yes/no about whether she's done that step.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type SetupStatus = {
+  hasBusinessInfo: boolean; // practitionerName + paymentInstructions
+  hasClient: boolean; // ≥1 client
+  hasSession: boolean; // ≥1 session ever scheduled or logged
+  hasNotes: boolean; // ≥1 session has notes saved
+};
+
+export async function getSetupStatus(accountId: string): Promise<SetupStatus> {
+  const [settings] = await db
+    .select({
+      practitionerName: practitionerSettings.practitionerName,
+      paymentInstructions: practitionerSettings.paymentInstructions,
+    })
+    .from(practitionerSettings)
+    .where(eq(practitionerSettings.accountId, accountId))
+    .limit(1);
+
+  const [clientCount] = await db
+    .select({ n: sql<number>`COUNT(*)::int` })
+    .from(clients)
+    .where(eq(clients.accountId, accountId));
+
+  const [sessionCount] = await db
+    .select({ n: sql<number>`COUNT(*)::int` })
+    .from(sessions)
+    .where(eq(sessions.accountId, accountId));
+
+  const [notesCount] = await db
+    .select({ n: sql<number>`COUNT(*)::int` })
+    .from(sessions)
+    .where(
+      and(
+        eq(sessions.accountId, accountId),
+        sql`${sessions.notes} IS NOT NULL AND length(trim(${sessions.notes})) > 0`
+      )
+    );
+
+  // Heuristic: "business info set" means she's written her name AND payment
+  // instructions. Either alone could be the seeded default.
+  const PLACEHOLDER_PAYMENT =
+    "Edit me in Settings — e.g. Venmo @yourhandle · Zelle to you@example.com";
+
+  return {
+    hasBusinessInfo: Boolean(
+      settings?.practitionerName &&
+        settings.practitionerName.trim().length > 0 &&
+        settings.paymentInstructions &&
+        settings.paymentInstructions.trim().length > 0 &&
+        settings.paymentInstructions !== PLACEHOLDER_PAYMENT
+    ),
+    hasClient: (clientCount?.n ?? 0) > 0,
+    hasSession: (sessionCount?.n ?? 0) > 0,
+    hasNotes: (notesCount?.n ?? 0) > 0,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Settings — one row per account, lazy-create on first read
 // ─────────────────────────────────────────────────────────────────────────────
 

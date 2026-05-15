@@ -256,6 +256,42 @@ export function SettingsForm({ settings }: { settings: PractitionerSettings }) {
         </div>
       </Section>
 
+      {/* Your data — export everything you've put into the app */}
+      <Section
+        title="Your data"
+        subtitle="Everything you put into this app is yours. Download it any time."
+      >
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <DataLink
+            href="/api/export/clients"
+            label="Clients"
+            description="All clients with profile fields, tags, and notes."
+          />
+          <DataLink
+            href="/api/export/sessions"
+            label="Sessions"
+            description="Every scheduled and past session with notes + payment info."
+          />
+          <DataLink
+            href="/api/export/payments"
+            label="Payments"
+            description="Paid + unpaid sessions for tax / accounting."
+          />
+          <DataLink
+            href="/api/export/backup"
+            label="Full backup (JSON)"
+            description="Everything in one structured file. Re-importable later."
+            primary
+          />
+        </div>
+        <p className="text-[11px] text-ink-400 mt-3 leading-relaxed">
+          CSVs open cleanly in Excel, Google Sheets, Numbers, etc. The full
+          backup is a JSON file containing every record across every table.
+          Files (avatars, attachments, invoice PDFs) live on Vercel Blob and
+          aren&apos;t included here — they&apos;re linked by URL in the JSON.
+        </p>
+      </Section>
+
       <div className="sticky bottom-0 bg-white border-t border-ink-100 -mx-4 md:-mx-6 px-4 md:px-6 py-3 flex items-center justify-end gap-3">
         {saved && (
           <span className="text-xs text-green-700">Saved.</span>
@@ -290,6 +326,52 @@ function Section({
       )}
       {children}
     </section>
+  );
+}
+
+// Download chip used in the "Your data" section. Anchor with `download`
+// attribute triggers the browser's save-as flow on the response stream.
+function DataLink({
+  href,
+  label,
+  description,
+  primary,
+}: {
+  href: string;
+  label: string;
+  description: string;
+  primary?: boolean;
+}) {
+  return (
+    <a
+      href={href}
+      download
+      className={`block border rounded-md p-3 transition hover:border-ink-400 ${
+        primary
+          ? "border-flame-200 bg-flame-50 hover:bg-flame-100"
+          : "border-ink-200 bg-white hover:bg-ink-50"
+      }`}
+    >
+      <div className="flex items-center gap-2">
+        <svg
+          className={`w-4 h-4 ${primary ? "text-flame-700" : "text-ink-500"}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          strokeWidth={2}
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+          />
+        </svg>
+        <span className="text-sm font-medium text-ink-900">{label}</span>
+      </div>
+      <p className="text-[11px] text-ink-500 mt-1 leading-relaxed">
+        {description}
+      </p>
+    </a>
   );
 }
 

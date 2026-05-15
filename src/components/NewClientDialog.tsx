@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Modal } from "./Modal";
 import { Field, inputCls } from "./Form";
 import { createClient } from "@/lib/actions";
@@ -14,6 +14,13 @@ export function NewClientDialog({
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Keyboard shortcut `n` dispatches this event globally — we open ourselves.
+  useEffect(() => {
+    const handler = () => setOpen(true);
+    window.addEventListener("shortcuts:new-client", handler);
+    return () => window.removeEventListener("shortcuts:new-client", handler);
+  }, []);
 
   return (
     <>

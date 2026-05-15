@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { SearchPalette } from "./SearchPalette";
 import { SignOutButton } from "./SignOutButton";
+import { KeyboardShortcuts, KeyboardShortcutsTrigger } from "./KeyboardShortcuts";
 import { LocaleProvider, useT } from "./LocaleProvider";
 import { DEFAULT_LOCALE, type Locale, type TranslationKey } from "@/lib/i18n";
 
@@ -81,6 +82,8 @@ function AppShellInner({
     href === "/" ? pathname === "/" : pathname.startsWith(href);
 
   return (
+    <>
+      <KeyboardShortcuts />
     <div className="flex min-h-screen">
       {/* Sidebar — visible md+ */}
       <aside className="hidden md:flex w-56 border-r border-ink-100 flex-col bg-white shrink-0">
@@ -144,6 +147,7 @@ function AppShellInner({
         </div>
       </main>
     </div>
+    </>
   );
 }
 
@@ -266,25 +270,34 @@ function SidebarFooter({ userEmail }: { userEmail?: string }) {
   const initial = (userEmail?.[0] || "S").toUpperCase();
   const display = userEmail || "Svitlana";
   return (
-    <div className="px-3 py-3 border-t border-ink-100 text-xs text-ink-500">
-      <div className="flex items-center justify-between gap-2 px-1">
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          <div className="w-6 h-6 rounded-md bg-flame-100 flex items-center justify-center text-[11px] font-semibold text-flame-700 shrink-0">
-            {initial}
-          </div>
-          <div className="min-w-0">
-            <div
-              className="truncate text-ink-700 leading-none"
-              title={display}
-            >
-              {display}
+    <div className="border-t border-ink-100">
+      <div className="px-3 py-2 flex items-center gap-3 text-[10px] uppercase tracking-wide text-ink-400">
+        <Link href="/status" className="hover:text-ink-700">
+          Status
+        </Link>
+        <span className="text-ink-200">·</span>
+        <KeyboardShortcutsTrigger />
+      </div>
+      <div className="px-3 pb-3 text-xs text-ink-500">
+        <div className="flex items-center justify-between gap-2 px-1">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <div className="w-6 h-6 rounded-md bg-flame-100 flex items-center justify-center text-[11px] font-semibold text-flame-700 shrink-0">
+              {initial}
             </div>
-            <div className="text-[10px] text-ink-400 mt-0.5 leading-none">
-              {t("sidebar.yourSpace")}
+            <div className="min-w-0">
+              <div
+                className="truncate text-ink-700 leading-none"
+                title={display}
+              >
+                {display}
+              </div>
+              <div className="text-[10px] text-ink-400 mt-0.5 leading-none">
+                {t("sidebar.yourSpace")}
+              </div>
             </div>
           </div>
+          {userEmail && <SignOutButton />}
         </div>
-        {userEmail && <SignOutButton />}
       </div>
     </div>
   );

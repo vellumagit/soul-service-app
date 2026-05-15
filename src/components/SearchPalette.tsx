@@ -48,6 +48,14 @@ export function SearchPalette() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
+  // `/` shortcut from KeyboardShortcuts → open + focus the palette
+  useEffect(() => {
+    const openHandler = () => setOpen(true);
+    window.addEventListener("shortcuts:focus-search", openHandler);
+    return () =>
+      window.removeEventListener("shortcuts:focus-search", openHandler);
+  }, []);
+
   // Open/close native dialog
   useEffect(() => {
     const el = dialogRef.current;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Modal } from "./Modal";
 import { Field, inputCls } from "./Form";
 import { scheduleSessionSeries } from "@/lib/actions";
@@ -61,6 +61,13 @@ export function ScheduleSeriesDialog({
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Keyboard shortcut `r` opens this dialog from anywhere.
+  useEffect(() => {
+    const handler = () => setOpen(true);
+    window.addEventListener("shortcuts:new-series", handler);
+    return () => window.removeEventListener("shortcuts:new-series", handler);
+  }, []);
 
   // Controlled bits we need for the live preview
   const [firstAt, setFirstAt] = useState<string>(defaultFirstAt());
