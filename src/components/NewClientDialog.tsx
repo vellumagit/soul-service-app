@@ -5,6 +5,7 @@ import { Modal } from "./Modal";
 import { Field, inputCls } from "./Form";
 import { createClient } from "@/lib/actions";
 import { LOCALE_LABELS, LOCALES } from "@/lib/i18n";
+import { rethrowIfRedirect } from "@/lib/redirect-error";
 
 export function NewClientDialog({
   trigger,
@@ -78,9 +79,14 @@ export function NewClientDialog({
             setSubmitting(true);
             setError(null);
             try {
+              // On success this redirects to /clients/<new-id>, throwing
+              // a NEXT_REDIRECT error that MUST propagate up to the framework
+              // for navigation to actually happen. The catch below rethrows
+              // it via rethrowIfRedirect() — only real errors get displayed.
               await createClient(fd);
               setOpen(false);
             } catch (err) {
+              rethrowIfRedirect(err);
               setError(err instanceof Error ? err.message : "Something went wrong");
             } finally {
               setSubmitting(false);

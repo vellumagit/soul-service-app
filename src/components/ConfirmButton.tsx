@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
+import { rethrowIfRedirect } from "@/lib/redirect-error";
 
 // A button that opens a real "Are you sure?" dialog before firing its action.
 // Use everywhere a destructive action would otherwise need a "tap again" hack.
@@ -80,6 +81,10 @@ export function ConfirmButton({
                   await onConfirm();
                   close();
                 } catch (err) {
+                  // If onConfirm called redirect(), let it propagate so
+                  // navigation actually happens — otherwise the dialog
+                  // would silently appear to "work" but stay put.
+                  rethrowIfRedirect(err);
                   setError(
                     err instanceof Error ? err.message : "Something went wrong"
                   );
