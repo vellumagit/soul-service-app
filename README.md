@@ -138,27 +138,38 @@ AUTH_DISABLED=true
 > Removing an email from `ALLOWED_EMAILS` immediately revokes access on the
 > next request, no DB change needed.
 
-## Session reminders (Vercel Cron)
+## Session reminders (hourly cron)
 
 Automatic email reminders to the client (default 24h before) and to the
 practitioner (default 1h before). Configurable per-account in Settings → Automations.
+
+The cron runs via **GitHub Actions** (`.github/workflows/cron-reminders.yml`)
+hitting our `/api/cron/reminders` endpoint hourly. We use GitHub Actions
+rather than Vercel Cron because Vercel's Hobby tier limits cron schedules.
 
 1. **Generate a CRON_SECRET** (any 32+-char random string):
    ```bash
    openssl rand -base64 32
    ```
-2. **Set `CRON_SECRET`** in `.env.local` and on Vercel (all environments).
-3. **Deploy.** Vercel auto-detects `vercel.json` and starts running the
-   hourly cron at `/api/cron/reminders`.
-4. **Verify:** Vercel → your project → **Crons** tab. You'll see
-   `0 * * * *` → `/api/cron/reminders` listed.
+2. **Set on Vercel** (all environments): `CRON_SECRET`.
+3. **Set as GitHub Actions secrets** (Settings → Secrets and variables →
+   Actions → New repository secret):
+   - `CRON_SECRET` — same value as on Vercel
+   - `APP_URL` — your live URL (e.g. `https://your-app.vercel.app`)
+4. **Push to master.** GitHub Actions auto-discovers the workflow and the
+   first scheduled run fires within ~5 min. You can also trigger manually:
+   Actions tab → "Hourly reminders" → Run workflow.
 
 Reminders are sent via Resend, so `RESEND_API_KEY` must also be set. They
-only go out for scheduled sessions with a future date. If a client doesn't
-have an email on file, their reminder is silently skipped.
+only go out for scheduled sessions with a future date. Clients without an
+email are silently skipped.
 
 Rescheduling a session clears the reminder bookkeeping so the new time
 gets a fresh reminder.
+
+> If you later upgrade Vercel to Pro and want to switch to Vercel Cron,
+> add a `vercel.json` at the repo root with `{"crons":[{"path":"/api/cron/reminders","schedule":"0 * * * *"}]}`
+> and disable the GitHub Actions workflow.
 
 ## Google Calendar setup (one-time, ~5 min)
 

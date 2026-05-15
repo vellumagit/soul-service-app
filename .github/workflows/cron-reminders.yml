@@ -1,0 +1,44 @@
+# GitHub Actions cron — hits the Soul Service reminders endpoint hourly.
+#
+# Why GitHub Actions instead of Vercel Cron:
+# - Vercel Hobby tier restricts cron schedules. GitHub Actions doesn't.
+# - Public repo, so this job is free + has no monthly minute cap.
+# - Same endpoint, same CRON_SECRET — if we later upgrade Vercel to Pro
+#   we can swap back to vercel.json without touching app code.
+#
+# Setup:
+# 1. Add a GitHub secret: Settings → Secrets and variables → Actions →
+#    New repository secret. Name: CRON_SECRET. Value: the same value you
+#    set in Vercel's env vars.
+# 2. Add another secret: APP_URL. Value: your production URL
+#    (e.g. https://your-app.vercel.app — no trailing slash).
+# 3. Push this file. Within ~5 min the first scheduled run fires.
+#    You can also click "Run workflow" on the Actions tab to test on demand.
+
+name: Hourly reminders
+
+on:
+  schedule:
+    # Every hour at minute 0. GitHub Actions runs in UTC. Schedules can be
+    # delayed under load — typically a few minutes, occasionally longer.
+    - cron: "0 * * * *"
+  # Manual trigger for testing — Actions tab → this workflow → Run workflow
+  workflow_dispatch:
+
+jobs:
+  send-reminders:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hit /api/cron/reminders
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$APP_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "::error::APP_URL or CRON_SECRET secret is not set"
+            exit 1
+          fi
+          response=$(curl --silent --show-error --fail \
+            --header "Authorization: Bearer $CRON_SECRET" \
+            "$APP_URL/api/cron/reminders")
+          echo "Response: $response"

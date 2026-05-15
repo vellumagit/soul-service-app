@@ -69,8 +69,8 @@ export default async function StatusPage() {
         process.env.CRON_SECRET && process.env.RESEND_API_KEY ? "ok" : "warn",
       detail:
         process.env.CRON_SECRET && process.env.RESEND_API_KEY
-          ? `Hourly cron at /api/cron/reminders. Client reminders: ${settings.clientReminderHours}h before. You: ${settings.practitionerReminderHours}h before.`
-          : "Needs CRON_SECRET and RESEND_API_KEY set on Vercel. See README.",
+          ? `Hourly cron via GitHub Actions → /api/cron/reminders. Client reminders: ${settings.clientReminderHours}h before. You: ${settings.practitionerReminderHours}h before.`
+          : "Needs CRON_SECRET on Vercel + the same value as a GitHub Actions secret, plus RESEND_API_KEY for emails. See README.",
     },
     {
       label: "Google Calendar + Meet",
