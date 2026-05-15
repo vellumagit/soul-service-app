@@ -71,6 +71,12 @@ function required<T>(value: T | null, fieldName: string): T {
   return value as T;
 }
 
+// Clamp reminder-hour settings to a sane range (0-168 = 0 hours to one week).
+function clampHours(n: number): number {
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(168, Math.floor(n)));
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // CLIENTS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -523,6 +529,10 @@ export async function rescheduleSession(formData: FormData) {
   const updates: Record<string, unknown> = {
     scheduledAt: new Date(scheduledAtRaw),
     updatedAt: new Date(),
+    // Clear reminder bookkeeping so the moved session gets fresh reminders
+    // for the new time.
+    clientReminderSentAt: null,
+    practitionerReminderSentAt: null,
   };
   if (durationMinutes !== null) updates.durationMinutes = durationMinutes;
 
@@ -929,6 +939,12 @@ export async function updateSettings(formData: FormData) {
       invoicePrefix: str(formData, "invoicePrefix") ?? "INV",
       autoInvoiceOnComplete: bool(formData, "autoInvoiceOnComplete"),
       autoUploadAiNotes: bool(formData, "autoUploadAiNotes"),
+      clientReminderHours: clampHours(
+        num(formData, "clientReminderHours") ?? 24
+      ),
+      practitionerReminderHours: clampHours(
+        num(formData, "practitionerReminderHours") ?? 1
+      ),
       updatedAt: new Date(),
     })
     .where(eq(practitionerSettings.accountId, accountId));

@@ -15,7 +15,8 @@ import { SESSION_COOKIE_NAME, getEmailFromToken } from "@/lib/session";
 // Public routes — anything starting with these prefixes is unprotected.
 const PUBLIC_PREFIXES = [
   "/signin",
-  "/api/auth/", // /api/auth/google/callback (Google Calendar OAuth, coming soon)
+  "/api/auth/", // /api/auth/google/callback (Google Calendar OAuth)
+  "/api/cron/", // Vercel Cron endpoints — verified by CRON_SECRET, not session
 ];
 
 // Always-allowed paths (regardless of auth)

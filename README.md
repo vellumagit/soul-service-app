@@ -138,6 +138,28 @@ AUTH_DISABLED=true
 > Removing an email from `ALLOWED_EMAILS` immediately revokes access on the
 > next request, no DB change needed.
 
+## Session reminders (Vercel Cron)
+
+Automatic email reminders to the client (default 24h before) and to the
+practitioner (default 1h before). Configurable per-account in Settings → Automations.
+
+1. **Generate a CRON_SECRET** (any 32+-char random string):
+   ```bash
+   openssl rand -base64 32
+   ```
+2. **Set `CRON_SECRET`** in `.env.local` and on Vercel (all environments).
+3. **Deploy.** Vercel auto-detects `vercel.json` and starts running the
+   hourly cron at `/api/cron/reminders`.
+4. **Verify:** Vercel → your project → **Crons** tab. You'll see
+   `0 * * * *` → `/api/cron/reminders` listed.
+
+Reminders are sent via Resend, so `RESEND_API_KEY` must also be set. They
+only go out for scheduled sessions with a future date. If a client doesn't
+have an email on file, their reminder is silently skipped.
+
+Rescheduling a session clears the reminder bookkeeping so the new time
+gets a fresh reminder.
+
 ## Google Calendar setup (one-time, ~5 min)
 
 For the auto-Meet-link + calendar-invite feature.
@@ -173,9 +195,9 @@ After that, scheduling a session in the app auto-creates a Calendar event with a
 - ✅ Clients directory + client file (timeline · sessions · documents · log · payments · intake)
 - ✅ Week calendar with click-to-open + sabbath day + now-line
 - ✅ Global exchange ledger
-- ✅ Auth — magic-link sign-in via Resend, allowlist gate
-- ⏳ Mutations (Schedule / Write log / Upload all wired as buttons but don't submit yet)
-- ⏳ Google Calendar + Meet integration
+- ✅ Auth — type-your-email sign-in, allowlist gate, per-account data isolation
+- ✅ Google Calendar + Meet integration (auto-Meet link, auto-invite, reschedule sync)
+- ✅ Session reminders (Vercel Cron, hourly, configurable per account)
 - ⏳ Stripe integration for the exchange ledger
 - ⏳ File uploads (storage TBD when migrating to Supabase or adding Vercel Blob)
 

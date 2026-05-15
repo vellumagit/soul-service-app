@@ -190,6 +190,56 @@ export function SettingsForm({ settings }: { settings: PractitionerSettings }) {
             description="When you generate notes from a transcript, save them straight to the session instead of waiting for you to click Insert. You can still edit afterwards."
           />
 
+          <div className="border-t border-ink-100 pt-4">
+            <div className="text-sm font-medium text-ink-900 mb-1">
+              Session reminders
+            </div>
+            <p className="text-xs text-ink-500 mb-3 leading-relaxed">
+              Automatic emails sent before each scheduled session. Sent via Resend
+              once the cron job is enabled on Vercel.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Field
+                label="Remind the client"
+                hint="Hours before the session. 0 = off."
+              >
+                <div className="flex items-center gap-2">
+                  <input
+                    name="clientReminderHours"
+                    type="number"
+                    min={0}
+                    max={168}
+                    defaultValue={settings.clientReminderHours}
+                    className={`${inputCls} w-24`}
+                  />
+                  <span className="text-sm text-ink-500">hours before</span>
+                </div>
+              </Field>
+              <Field
+                label="Remind me"
+                hint="Hours before the session. 0 = off."
+              >
+                <div className="flex items-center gap-2">
+                  <input
+                    name="practitionerReminderHours"
+                    type="number"
+                    min={0}
+                    max={168}
+                    defaultValue={settings.practitionerReminderHours}
+                    className={`${inputCls} w-24`}
+                  />
+                  <span className="text-sm text-ink-500">hours before</span>
+                </div>
+              </Field>
+            </div>
+            <p className="text-[11px] text-ink-400 mt-2 leading-relaxed">
+              Reminders only go out for sessions that have an email on file
+              (for the client) and only run once Vercel Cron is configured.
+              Rescheduling a session resets its reminder so the new time gets a
+              fresh email.
+            </p>
+          </div>
+
           <div className="rounded-md bg-flame-50 border border-flame-100 p-3">
             <div className="text-sm font-medium text-flame-700 mb-1">
               Follow-up cadence (locked in)

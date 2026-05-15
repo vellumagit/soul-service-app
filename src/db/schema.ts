@@ -189,6 +189,12 @@ export const sessions = pgTable(
     invoiceNumber: text("invoice_number"),
     invoiceGeneratedAt: timestamp("invoice_generated_at"),
 
+    // Reminder bookkeeping — set when the hourly cron sends a reminder so we
+    // never double-send. Cleared if the session is rescheduled (so a moved
+    // session gets a fresh reminder for the new time).
+    clientReminderSentAt: timestamp("client_reminder_sent_at"),
+    practitionerReminderSentAt: timestamp("practitioner_reminder_sent_at"),
+
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
@@ -524,6 +530,15 @@ export const practitionerSettings = pgTable("practitioner_settings", {
   // of waiting for the practitioner to click "Insert into notes". Lets her
   // run a transcript and walk away.
   autoUploadAiNotes: boolean("auto_upload_ai_notes").default(false).notNull(),
+
+  // Session reminder windows. The hourly cron at /api/cron/reminders looks
+  // for sessions ~N hours out where the relevant `*_reminder_sent_at` is
+  // still null, sends an email via Resend, then marks the timestamp.
+  // 0 = disabled for that audience.
+  clientReminderHours: integer("client_reminder_hours").default(24).notNull(),
+  practitionerReminderHours: integer("practitioner_reminder_hours")
+    .default(1)
+    .notNull(),
 
   // Google Calendar OAuth (one practitioner per app — single connected account).
   // Refresh tokens are long-lived; access tokens auto-refresh in google-calendar.ts.
