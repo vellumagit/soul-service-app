@@ -11,7 +11,6 @@ import {
   getSettings,
 } from "@/db/queries";
 import { shortDate } from "@/lib/format";
-import { SessionCard } from "@/components/SessionCard";
 import { GoalsBlock } from "@/components/GoalsBlock";
 import { AttachmentsBlock } from "@/components/AttachmentsBlock";
 import { QuickActions } from "@/components/QuickActions";
@@ -20,7 +19,8 @@ import { ActivityTimeline } from "@/components/ActivityTimeline";
 import { ScheduleSessionDialog } from "@/components/ScheduleSessionDialog";
 import { LogPastSessionDialog } from "@/components/LogPastSessionDialog";
 import { MarkdownRender } from "@/components/NotesEditor";
-import { WhereWeLeftOffCard } from "@/components/WhereWeLeftOffCard";
+import { WalkInCard } from "@/components/WalkInCard";
+import { SessionsLog } from "@/components/SessionsLog";
 import { SensitivityFlags } from "@/components/SensitivityFlags";
 import { PrivateNotesBlock } from "@/components/PrivateNotesBlock";
 import { PeopleInLifeBlock } from "@/components/PeopleInLifeBlock";
@@ -117,21 +117,8 @@ export default async function ClientProfilePage({
         resendConfigured={!!process.env.RESEND_API_KEY}
       />
 
-      {/* Stat strip — sessions / together since / next / paid / unpaid */}
-      <ClientStatStrip
-        clientId={client.id}
-        stats={{
-          sessionsHeld: completedSessions.length,
-          togetherSince: client.createdAt,
-          nextSessionAt: nextSession?.scheduledAt ?? null,
-          lifetimePaidCents: lifetimeCents,
-          unpaidCents,
-          unpaidCount,
-        }}
-      />
-
-      {/* Tabs */}
-      <div className="border-b border-ink-200 flex items-center mb-5 text-sm overflow-x-auto">
+      {/* Tabs — folder-divider style, visually sit on the content below */}
+      <div className="folder-tabs">
         {TABS.map((t) => {
           const count =
             t.key === "tasks"
@@ -148,11 +135,11 @@ export default async function ClientProfilePage({
               key={t.key}
               href={`/clients/${client.id}?tab=${t.key}`}
               data-active={tab === t.key}
-              className="subtab border-b-2 border-transparent px-3 py-2 text-ink-500 hover:text-ink-800 font-medium whitespace-nowrap"
+              className="folder-tab"
             >
               {t.label}
               {count !== null && count > 0 && (
-                <span className="ml-1.5 text-[10px] font-mono text-ink-400">
+                <span className="text-[10px] font-mono text-ink-400">
                   {count}
                 </span>
               )}
@@ -164,10 +151,21 @@ export default async function ClientProfilePage({
       {/* OVERVIEW — the dashboard */}
       {tab === "overview" && (
         <div className="space-y-5">
-          {/* Hero: pre-session digest */}
-          <WhereWeLeftOffCard
-            digest={digest}
-            clientName={client.fullName}
+          {/* Hero: the Walk-In Page — her voice, where we left off, coming up */}
+          <WalkInCard digest={digest} clientName={client.fullName} />
+
+          {/* Stat strip — moved here so it's part of Overview, not above the tabs.
+              Less prominent than a header, still scannable if she wants the numbers. */}
+          <ClientStatStrip
+            clientId={client.id}
+            stats={{
+              sessionsHeld: completedSessions.length,
+              togetherSince: client.createdAt,
+              nextSessionAt: nextSession?.scheduledAt ?? null,
+              lifetimePaidCents: lifetimeCents,
+              unpaidCents,
+              unpaidCount,
+            }}
           />
 
           {/* Three-column scan grid */}
@@ -297,8 +295,8 @@ export default async function ClientProfilePage({
       {tab === "activity" && <ActivityTimeline events={activity} />}
 
       {tab === "sessions" && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 mb-3">
+        <div>
+          <div className="flex items-center gap-2 mb-5">
             <ScheduleSessionDialog
               clients={allClients}
               defaultClientId={client.id}
@@ -314,14 +312,11 @@ export default async function ClientProfilePage({
               No sessions yet.
             </div>
           ) : (
-            file.sessions.map((s) => (
-              <SessionCard
-                key={s.id}
-                session={s}
-                noteTemplates={noteTpls}
-                autoUploadAiNotes={settings.autoUploadAiNotes}
-              />
-            ))
+            <SessionsLog
+              sessions={file.sessions}
+              noteTemplates={noteTpls}
+              autoUploadAiNotes={settings.autoUploadAiNotes}
+            />
           )}
         </div>
       )}
@@ -384,8 +379,8 @@ function ScanCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="border border-ink-200 rounded-md bg-white p-5">
-      <div className="text-[10px] uppercase tracking-wider text-ink-500 mb-3 font-semibold">
+    <div className="paper-card p-5">
+      <div className="font-serif italic text-sm text-ink-600 mb-3">
         {title}
       </div>
       {children}

@@ -216,6 +216,93 @@ body {
   border-color: var(--color-ink-900);
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+   File-feel styling — used on the client profile to push it past "CRM page"
+   toward "manila folder open on the desk."
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* Paper-cream card with a soft shadow so it reads as a physical sheet
+   resting on the page rather than a flat panel. Slightly warmer than
+   pure white. */
+.paper-card {
+  background: #fdfbf5; /* a touch warmer than --color-app-bg */
+  border: 1px solid #e8e0cc; /* warm border, replaces ink-200 */
+  border-radius: 6px;
+  box-shadow:
+    0 1px 0 rgba(60, 50, 30, 0.04),
+    0 2px 8px rgba(60, 50, 30, 0.06);
+}
+
+.paper-card--feature {
+  /* The Walk-In card gets a slight gradient + stronger shadow — the
+     "opening page" of the file. */
+  background: linear-gradient(180deg, #fefcf6 0%, #fbf6e9 100%);
+  border-color: #e0d3a8;
+  box-shadow:
+    0 1px 0 rgba(60, 50, 30, 0.05),
+    0 4px 16px rgba(60, 50, 30, 0.08);
+}
+
+/* Folder-tab divider style — used on the client profile tabs. Each tab
+   sits on the content below like a real folder divider. */
+.folder-tabs {
+  display: flex;
+  align-items: end;
+  gap: 2px;
+  border-bottom: 1px solid #e8e0cc;
+  margin-bottom: 20px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.folder-tab {
+  position: relative;
+  padding: 8px 14px 9px;
+  background: #f3eedd;
+  border: 1px solid #e0d6bb;
+  border-bottom: none;
+  border-top-left-radius: 6px;
+  border-top-right-radius: 6px;
+  color: var(--color-ink-500);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  margin-bottom: -1px; /* overlap the rule so the active one "joins" the content */
+  transition: background 100ms, color 100ms, transform 80ms;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.folder-tab:hover {
+  background: #f8f3e3;
+  color: var(--color-ink-800);
+}
+
+.folder-tab[data-active="true"] {
+  background: #fdfbf5;
+  color: var(--color-ink-900);
+  border-color: #e8e0cc;
+  /* Lift slightly so it visually "comes forward" */
+  transform: translateY(-1px);
+  z-index: 2;
+  /* Bottom border matches the paper-card so the tab merges with content */
+  box-shadow: 0 -1px 0 rgba(60, 50, 30, 0.04);
+}
+
+.folder-tab[data-active="true"]::after {
+  /* The little flame-colored bar on the active tab — like a colored
+     divider tab in a real folder. */
+  content: "";
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: -1px;
+  height: 2px;
+  background: var(--color-flame-600);
+}
+
 /* Markdown rendering — keep simple but readable */
 .md-render h1 {
   font-size: 1.125rem;
