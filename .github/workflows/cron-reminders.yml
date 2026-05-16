@@ -1,28 +1,32 @@
-# GitHub Actions cron — hits the Soul Service reminders endpoint hourly.
+# Scans the app's session-reminder queue once an hour.
+#
+# Why it's hourly:
+#   The Settings page lets each account pick when reminders go out (default
+#   24h before a session for the client, 1h before for the practitioner).
+#   To honor "1h before" accurately we have to poll at least hourly —
+#   otherwise the 1h window gets missed. Hourly is the polling cadence,
+#   NOT the email cadence: each session gets at most one of each reminder
+#   (tracked by `client_reminder_sent_at` / `practitioner_reminder_sent_at`
+#   columns), and accounts that set reminders to 0 get nothing.
 #
 # Why GitHub Actions instead of Vercel Cron:
-# - Vercel Hobby tier restricts cron schedules. GitHub Actions doesn't.
-# - Public repo, so this job is free + has no monthly minute cap.
-# - Same endpoint, same CRON_SECRET — if we later upgrade Vercel to Pro
-#   we can swap back to vercel.json without touching app code.
+#   Vercel Hobby tier restricts cron schedules. GitHub Actions doesn't.
+#   Free, no minute cap on public repos. If we upgrade Vercel Pro later,
+#   we can move this back to vercel.json.
 #
-# Setup:
-# 1. Add a GitHub secret: Settings → Secrets and variables → Actions →
-#    New repository secret. Name: CRON_SECRET. Value: the same value you
-#    set in Vercel's env vars.
-# 2. Add another secret: APP_URL. Value: your production URL
-#    (e.g. https://your-app.vercel.app — no trailing slash).
-# 3. Push this file. Within ~5 min the first scheduled run fires.
-#    You can also click "Run workflow" on the Actions tab to test on demand.
+# Setup (one-time):
+#   1. GitHub → Settings → Secrets and variables → Actions → New repository
+#      secret. Add:
+#      - CRON_SECRET — same value you set as CRON_SECRET on Vercel.
+#      - APP_URL — production URL, no trailing slash (e.g. https://soul-service-app.vercel.app)
+#   2. Push — the next scheduled run will fire within an hour. Or click
+#      "Run workflow" in the Actions tab to test on demand.
 
-name: Hourly reminders
+name: Check session reminders
 
 on:
   schedule:
-    # Every hour at minute 0. GitHub Actions runs in UTC. Schedules can be
-    # delayed under load — typically a few minutes, occasionally longer.
     - cron: "0 * * * *"
-  # Manual trigger for testing — Actions tab → this workflow → Run workflow
   workflow_dispatch:
 
 jobs:
@@ -34,10 +38,16 @@ jobs:
           APP_URL: ${{ secrets.APP_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
+          # Graceful skip when the secrets haven't been configured yet.
+          # Exits 0 (success) with a clear log line — avoids spamming you with
+          # "workflow failed" emails every hour during the setup window.
           if [ -z "$APP_URL" ] || [ -z "$CRON_SECRET" ]; then
-            echo "::error::APP_URL or CRON_SECRET secret is not set"
-            exit 1
+            echo "::notice::Skipped — APP_URL or CRON_SECRET secret is not set yet."
+            echo "::notice::Add them at github.com/<owner>/<repo>/settings/secrets/actions to enable session reminders."
+            exit 0
           fi
+
+          # Configured — actually call the endpoint.
           response=$(curl --silent --show-error --fail \
             --header "Authorization: Bearer $CRON_SECRET" \
             "$APP_URL/api/cron/reminders")
