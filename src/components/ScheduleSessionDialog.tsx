@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Modal } from "./Modal";
 import { Field, inputCls } from "./Form";
 import { scheduleSession } from "@/lib/actions";
+import { rethrowIfRedirect } from "@/lib/redirect-error";
 
 type ClientOption = { id: string; fullName: string };
 
@@ -106,6 +107,7 @@ export function ScheduleSessionDialog({
                 await scheduleSession(fd);
                 setOpen(false);
               } catch (err) {
+                rethrowIfRedirect(err);
                 setError(err instanceof Error ? err.message : "Something went wrong");
               } finally {
                 setSubmitting(false);

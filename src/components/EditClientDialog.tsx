@@ -7,6 +7,7 @@ import { ConfirmButton } from "./ConfirmButton";
 import { updateClient, deleteClient } from "@/lib/actions";
 import type { Client } from "@/db/schema";
 import { LOCALE_LABELS, LOCALES } from "@/lib/i18n";
+import { rethrowIfRedirect } from "@/lib/redirect-error";
 
 export function EditClientDialog({ client }: { client: Client }) {
   const [open, setOpen] = useState(false);
@@ -79,6 +80,7 @@ export function EditClientDialog({ client }: { client: Client }) {
               await updateClient(fd);
               setOpen(false);
             } catch (err) {
+              rethrowIfRedirect(err);
               setError(err instanceof Error ? err.message : "Something went wrong");
             } finally {
               setSubmitting(false);

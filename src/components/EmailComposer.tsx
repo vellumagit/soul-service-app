@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Modal } from "./Modal";
 import { Field, inputCls } from "./Form";
 import { logCommunication, sendClientEmail } from "@/lib/actions";
+import { rethrowIfRedirect } from "@/lib/redirect-error";
 import type { Client, EmailTemplate, Session } from "@/db/schema";
 
 // Simple variable substitution. Supports:
@@ -150,6 +151,7 @@ export function EmailComposer({
         setOpen(false);
       }
     } catch (err) {
+      rethrowIfRedirect(err);
       setError(err instanceof Error ? err.message : "Failed to send.");
     } finally {
       setSubmitting(false);

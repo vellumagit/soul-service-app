@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Modal } from "./Modal";
 import { Field, inputCls } from "./Form";
 import { generateNotesForSession } from "@/lib/actions";
+import { rethrowIfRedirect } from "@/lib/redirect-error";
 import type { NoteTemplate } from "@/db/schema";
 
 // "Generate notes from transcript" — pasted from Fathom/Otter/Tactiq/anywhere.
@@ -121,7 +122,16 @@ export function GenerateNotesDialog({
                 if (templateId) fd.append("templateId", templateId);
                 if (replaceExisting) fd.append("replaceExisting", "true");
 
-                const result = await generateNotesForSession(fd);
+                let result;
+                try {
+                  result = await generateNotesForSession(fd);
+                } catch (err) {
+                  rethrowIfRedirect(err);
+                  setError(
+                    err instanceof Error ? err.message : "Couldn't reach the AI."
+                  );
+                  return;
+                }
                 if (!result.ok) {
                   setError(result.error);
                 } else {

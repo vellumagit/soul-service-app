@@ -21,6 +21,7 @@ import { NotesEditor } from "./NotesEditor";
 import { GenerateInvoiceButton } from "./GenerateInvoiceButton";
 import { GenerateNotesDialog } from "./GenerateNotesDialog";
 import { RescheduleDialog } from "./RescheduleDialog";
+import { rethrowIfRedirect } from "@/lib/redirect-error";
 
 const STATUS_CHIP: Record<string, string> = {
   scheduled: "bg-flame-100 text-flame-700",
@@ -42,6 +43,7 @@ export function SessionCard({
 }) {
   const [open, setOpen] = useState(session.status === "scheduled");
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const isScheduled = session.status === "scheduled";
   const isCompleted = session.status === "completed";
@@ -105,8 +107,14 @@ export function SessionCard({
           <form
             action={async (fd) => {
               setSubmitting(true);
+              setError(null);
               try {
                 await updateSession(fd);
+              } catch (err) {
+                rethrowIfRedirect(err);
+                setError(
+                  err instanceof Error ? err.message : "Couldn't save."
+                );
               } finally {
                 setSubmitting(false);
               }
@@ -115,6 +123,12 @@ export function SessionCard({
           >
             <input type="hidden" name="id" value={session.id} />
             <input type="hidden" name="clientId" value={session.clientId} />
+
+            {error && (
+              <div className="text-xs text-red-700 bg-red-50 border border-red-100 rounded p-2">
+                {error}
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3">
               <Field label="Session type">

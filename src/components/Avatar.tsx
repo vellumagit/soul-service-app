@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import { uploadClientAvatar } from "@/lib/uploads";
 import { initials } from "@/lib/format";
+import { rethrowIfRedirect } from "@/lib/redirect-error";
 
 export function Avatar({
   clientId,
@@ -38,6 +39,7 @@ export function Avatar({
     try {
       await uploadClientAvatar(fd);
     } catch (err) {
+      rethrowIfRedirect(err);
       setError(err instanceof Error ? err.message : "Upload failed");
     } finally {
       setUploading(false);

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Modal } from "./Modal";
 import { Field, inputCls } from "./Form";
 import { logPastSession } from "@/lib/actions";
+import { rethrowIfRedirect } from "@/lib/redirect-error";
 
 type ClientOption = { id: string; fullName: string };
 
@@ -84,6 +85,7 @@ export function LogPastSessionDialog({
                 await logPastSession(fd);
                 setOpen(false);
               } catch (err) {
+                rethrowIfRedirect(err);
                 setError(
                   err instanceof Error ? err.message : "Something went wrong"
                 );

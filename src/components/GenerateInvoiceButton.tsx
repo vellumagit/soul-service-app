@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { generateInvoice } from "@/lib/actions";
+import { rethrowIfRedirect } from "@/lib/redirect-error";
 
 export function GenerateInvoiceButton({
   sessionId,
@@ -49,6 +50,7 @@ export function GenerateInvoiceButton({
               try {
                 await generateInvoice(sessionId, clientId);
               } catch (e) {
+                rethrowIfRedirect(e);
                 setError(e instanceof Error ? e.message : "Failed");
               }
             });
@@ -74,6 +76,7 @@ export function GenerateInvoiceButton({
             try {
               await generateInvoice(sessionId, clientId);
             } catch (e) {
+              rethrowIfRedirect(e);
               setError(e instanceof Error ? e.message : "Failed");
             }
           });

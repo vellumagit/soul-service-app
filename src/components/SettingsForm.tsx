@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Field, inputCls } from "./Form";
 import { updateSettings } from "@/lib/actions";
+import { rethrowIfRedirect } from "@/lib/redirect-error";
 import type { PractitionerSettings } from "@/db/schema";
 import {
   LOCALE_LABELS,
@@ -28,6 +29,7 @@ export function SettingsForm({ settings }: { settings: PractitionerSettings }) {
           setSaved(true);
           setTimeout(() => setSaved(false), 2500);
         } catch (e) {
+          rethrowIfRedirect(e);
           setError(e instanceof Error ? e.message : "Failed");
         } finally {
           setSubmitting(false);

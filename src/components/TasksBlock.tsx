@@ -11,6 +11,7 @@ import { Modal } from "./Modal";
 import { Field, inputCls } from "./Form";
 import { ConfirmButton } from "./ConfirmButton";
 import { shortDateTime } from "@/lib/format";
+import { rethrowIfRedirect } from "@/lib/redirect-error";
 
 // Loose row type — TasksBlock works for both full Task rows and slim
 // dashboard rows that only carry the fields it actually uses.
@@ -161,6 +162,7 @@ function TaskRowItem({
 function AddTaskInline({ clientId }: { clientId?: string }) {
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   if (!open) {
     return (
@@ -203,9 +205,13 @@ function AddTaskInline({ clientId }: { clientId?: string }) {
         id="add-task-form"
         action={async (fd) => {
           setSubmitting(true);
+          setError(null);
           try {
             await addTask(fd);
             setOpen(false);
+          } catch (err) {
+            rethrowIfRedirect(err);
+            setError(err instanceof Error ? err.message : "Couldn't add task.");
           } finally {
             setSubmitting(false);
           }
@@ -214,6 +220,11 @@ function AddTaskInline({ clientId }: { clientId?: string }) {
       >
         {clientId && (
           <input type="hidden" name="clientId" value={clientId} />
+        )}
+        {error && (
+          <div className="text-xs text-red-700 bg-red-50 border border-red-100 rounded p-2">
+            {error}
+          </div>
         )}
         <Field label="Task" required>
           <input

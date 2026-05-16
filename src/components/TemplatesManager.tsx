@@ -12,6 +12,7 @@ import {
   updateNoteTemplate,
   deleteNoteTemplate,
 } from "@/lib/actions";
+import { rethrowIfRedirect } from "@/lib/redirect-error";
 import { LOCALE_LABELS, LOCALE_SHORT, LOCALES, asLocale } from "@/lib/i18n";
 
 type Tpl = {
@@ -178,6 +179,7 @@ function TemplateForm({
             await action(fd);
             onClose();
           } catch (e) {
+            rethrowIfRedirect(e);
             setError(e instanceof Error ? e.message : "Failed");
           } finally {
             setSubmitting(false);

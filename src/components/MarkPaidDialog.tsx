@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Modal } from "./Modal";
 import { Field, inputCls } from "./Form";
 import { markSessionPaid } from "@/lib/actions";
+import { rethrowIfRedirect } from "@/lib/redirect-error";
 
 export function MarkPaidDialog({
   sessionId,
@@ -64,6 +65,7 @@ export function MarkPaidDialog({
               await markSessionPaid(fd);
               setOpen(false);
             } catch (err) {
+              rethrowIfRedirect(err);
               setError(
                 err instanceof Error ? err.message : "Something went wrong"
               );

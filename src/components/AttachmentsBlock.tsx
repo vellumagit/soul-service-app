@@ -1,11 +1,12 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useRef, useState } from "react";
 import { uploadAttachment } from "@/lib/uploads";
 import { deleteAttachment } from "@/lib/actions";
 import type { Attachment } from "@/db/schema";
 import { bytes, relativeTime } from "@/lib/format";
 import { ConfirmButton } from "./ConfirmButton";
+import { rethrowIfRedirect } from "@/lib/redirect-error";
 
 const KIND_LABEL: Record<string, string> = {
   note: "Note",
@@ -40,6 +41,7 @@ export function AttachmentsBlock({
         await uploadAttachment(fd);
       }
     } catch (err) {
+      rethrowIfRedirect(err);
       setError(err instanceof Error ? err.message : "Upload failed");
     } finally {
       setUploading(false);

@@ -5,6 +5,7 @@ import { addGoal, deleteGoal, updateGoalProgress } from "@/lib/actions";
 import type { Goal } from "@/db/schema";
 import { ConfirmButton } from "./ConfirmButton";
 import { Field, inputCls } from "./Form";
+import { rethrowIfRedirect } from "@/lib/redirect-error";
 
 export function GoalsBlock({
   clientId,
@@ -98,13 +99,18 @@ function AddGoalForm({
   onDone: () => void;
 }) {
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   return (
     <form
       action={async (fd) => {
         setSubmitting(true);
+        setError(null);
         try {
           await addGoal(fd);
           onDone();
+        } catch (err) {
+          rethrowIfRedirect(err);
+          setError(err instanceof Error ? err.message : "Couldn't add goal.");
         } finally {
           setSubmitting(false);
         }
@@ -112,6 +118,11 @@ function AddGoalForm({
       className="border border-ink-200 rounded-md p-3 space-y-3 bg-white"
     >
       <input type="hidden" name="clientId" value={clientId} />
+      {error && (
+        <div className="text-xs text-red-700 bg-red-50 border border-red-100 rounded p-2">
+          {error}
+        </div>
+      )}
       <Field label="Goal" required>
         <input
           name="label"

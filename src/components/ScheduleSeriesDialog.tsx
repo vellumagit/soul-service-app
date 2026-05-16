@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Modal } from "./Modal";
 import { Field, inputCls } from "./Form";
 import { scheduleSessionSeries } from "@/lib/actions";
+import { rethrowIfRedirect } from "@/lib/redirect-error";
 
 type ClientOption = { id: string; fullName: string };
 
@@ -155,6 +156,7 @@ export function ScheduleSeriesDialog({
                 }
                 setOpen(false);
               } catch (err) {
+                rethrowIfRedirect(err);
                 setError(
                   err instanceof Error ? err.message : "Couldn't create the series."
                 );
