@@ -32,6 +32,11 @@ export function ScheduleSessionDialog({
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Soft warning surfaced when the session was saved but Google sync failed
+  // (e.g. Google credentials are missing on the server, refresh token expired,
+  // network blip). The session is still saved — she just needs to know the
+  // Meet link + calendar invite didn't go out.
+  const [warning, setWarning] = useState<string | null>(null);
 
   const noClients = clients.length === 0;
 
@@ -103,9 +108,17 @@ export function ScheduleSessionDialog({
             action={async (fd) => {
               setSubmitting(true);
               setError(null);
+              setWarning(null);
               try {
-                await scheduleSession(fd);
-                setOpen(false);
+                const result = await scheduleSession(fd);
+                if (result.googleWarning) {
+                  // Session saved, but Google Calendar/Meet sync failed.
+                  // Keep the dialog open so she sees what happened — she may
+                  // want to paste a Meet link manually or fix the connection.
+                  setWarning(result.googleWarning);
+                } else {
+                  setOpen(false);
+                }
               } catch (err) {
                 rethrowIfRedirect(err);
                 setError(err instanceof Error ? err.message : "Something went wrong");
@@ -118,6 +131,21 @@ export function ScheduleSessionDialog({
             {error && (
               <div className="text-xs text-red-700 bg-red-50 border border-red-100 rounded p-2">
                 {error}
+              </div>
+            )}
+            {warning && (
+              <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded p-3 space-y-1">
+                <div className="font-semibold">
+                  Session saved, but Google Calendar didn&apos;t sync.
+                </div>
+                <div className="text-amber-700">
+                  {warning}
+                </div>
+                <div className="text-[11px] text-amber-700 pt-1">
+                  Your session is on the calendar in this app. No Meet link or
+                  client invite was generated — paste one manually below if you
+                  want, or reconnect Google in Settings.
+                </div>
               </div>
             )}
 

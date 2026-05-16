@@ -224,7 +224,18 @@ export async function deleteClient(clientId: string) {
 // SESSIONS
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function scheduleSession(formData: FormData) {
+/** Result of scheduling a session. `googleWarning` is non-null when the
+ *  session was saved but the calendar/Meet push failed — the UI should
+ *  surface it as a soft warning rather than a hard error. */
+export type ScheduleSessionResult = {
+  ok: true;
+  sessionId: string;
+  googleWarning: string | null;
+};
+
+export async function scheduleSession(
+  formData: FormData
+): Promise<ScheduleSessionResult> {
   const { accountId } = await requireSession();
   const clientId = required(str(formData, "clientId"), "Client");
   const type = str(formData, "type") ?? "Session";
@@ -247,11 +258,14 @@ export async function scheduleSession(formData: FormData) {
     .returning({ id: sessions.id });
 
   // Best-effort: push to Google Calendar (auto-generates Meet link + invites client)
-  await syncSessionToGoogle(created.id);
+  const sync = await syncSessionToGoogle(created.id);
+  const googleWarning = sync.ok === false ? sync.error : null;
 
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/calendar");
   revalidatePath("/");
+
+  return { ok: true, sessionId: created.id, googleWarning };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
