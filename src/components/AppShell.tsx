@@ -7,6 +7,7 @@ import { SearchPalette } from "./SearchPalette";
 import { SignOutButton } from "./SignOutButton";
 import { KeyboardShortcuts, KeyboardShortcutsTrigger } from "./KeyboardShortcuts";
 import { LocaleProvider, useT } from "./LocaleProvider";
+import { HelpBuddy } from "./HelpBuddy";
 import { DEFAULT_LOCALE, type Locale, type TranslationKey } from "@/lib/i18n";
 
 type NavItem = {
@@ -84,6 +85,7 @@ function AppShellInner({
   return (
     <>
       <KeyboardShortcuts />
+      <HelpBuddy />
     <div className="flex min-h-screen">
       {/* Sidebar — visible md+ */}
       <aside className="hidden md:flex w-56 border-r border-ink-100 flex-col bg-white shrink-0">
