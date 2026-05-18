@@ -181,6 +181,19 @@ export function ScheduleSeriesDialog({
               </div>
             )}
 
+            {/* DST-safe date list. The preview array is computed client-side
+                using the browser's local timezone, so weekly/biweekly/monthly
+                math correctly preserves "10am local" across DST boundaries.
+                If we let the server recompute from firstAt + cadence, it does
+                the math in UTC (Vercel) and every session after a DST shift
+                ends up an hour off. Submitting the precomputed list closes
+                that gap. */}
+            <input
+              type="hidden"
+              name="computedDates"
+              value={JSON.stringify(previewDates.map((d) => d.toISOString()))}
+            />
+
             <Field label="Client" required>
               <select
                 name="clientId"

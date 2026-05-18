@@ -213,9 +213,65 @@ export async function updateClient(formData: FormData) {
 
 export async function deleteClient(clientId: string) {
   const { accountId } = await requireSession();
+
+  // Before the DB cascade wipes the rows, collect every Blob URL we own so we
+  // can delete them too. Otherwise her Vercel Blob storage slowly fills with
+  // orphaned avatars, invoice PDFs, and attachments from deleted clients —
+  // and the URLs are public, so a copy in someone's chat history would still
+  // resolve. "Delete forever" should mean it.
+  const blobUrls: string[] = [];
+  try {
+    const [c] = await db
+      .select({ avatarUrl: clients.avatarUrl })
+      .from(clients)
+      .where(and(eq(clients.accountId, accountId), eq(clients.id, clientId)))
+      .limit(1);
+    if (c?.avatarUrl) blobUrls.push(c.avatarUrl);
+
+    const attachmentRows = await db
+      .select({ url: attachments.url })
+      .from(attachments)
+      .where(
+        and(
+          eq(attachments.accountId, accountId),
+          eq(attachments.clientId, clientId)
+        )
+      );
+    for (const a of attachmentRows) {
+      if (a.url) blobUrls.push(a.url);
+    }
+
+    const sessionRows = await db
+      .select({ invoiceUrl: sessions.invoiceUrl })
+      .from(sessions)
+      .where(
+        and(
+          eq(sessions.accountId, accountId),
+          eq(sessions.clientId, clientId)
+        )
+      );
+    for (const s of sessionRows) {
+      if (s.invoiceUrl) blobUrls.push(s.invoiceUrl);
+    }
+  } catch (e) {
+    console.warn("[deleteClient] couldn't enumerate Blob URLs:", e);
+  }
+
+  // Now delete the client — the DB cascade handles every related row.
   await db
     .delete(clients)
     .where(and(eq(clients.accountId, accountId), eq(clients.id, clientId)));
+
+  // Best-effort Blob cleanup. Never block or fail the delete on a Blob error.
+  if (blobUrls.length > 0 && process.env.BLOB_READ_WRITE_TOKEN) {
+    try {
+      const { del } = await import("@vercel/blob");
+      await del(blobUrls);
+    } catch (e) {
+      console.warn("[deleteClient] Blob delete failed (DB rows already gone):", e);
+    }
+  }
+
   revalidatePath("/clients");
   redirect("/clients");
 }
@@ -315,7 +371,34 @@ export async function scheduleSessionSeries(
       return { ok: false, error: "Couldn't parse the first session date/time." };
     }
 
-    const dates = computeSeriesDates(firstAt, frequency, occurrenceCount);
+    // Prefer the dates the CLIENT computed (it knows the practitioner's local
+    // timezone, so weekly/biweekly/monthly math survives DST boundaries —
+    // "Monday 10am" stays 10am local across the spring/fall shift). Fall back
+    // to a server-side computation if the field is missing (older clients, or
+    // somebody scripting the action).
+    let dates: Date[];
+    const computedDatesRaw = str(formData, "computedDates");
+    if (computedDatesRaw) {
+      try {
+        const parsed = JSON.parse(computedDatesRaw);
+        if (
+          Array.isArray(parsed) &&
+          parsed.length === occurrenceCount &&
+          parsed.every((s) => typeof s === "string")
+        ) {
+          dates = parsed.map((s) => new Date(s));
+          if (dates.some((d) => Number.isNaN(d.getTime()))) {
+            dates = computeSeriesDates(firstAt, frequency, occurrenceCount);
+          }
+        } else {
+          dates = computeSeriesDates(firstAt, frequency, occurrenceCount);
+        }
+      } catch {
+        dates = computeSeriesDates(firstAt, frequency, occurrenceCount);
+      }
+    } else {
+      dates = computeSeriesDates(firstAt, frequency, occurrenceCount);
+    }
 
     // Create the series row first so we can link sessions to it
     const [seriesRow] = await db
@@ -596,16 +679,48 @@ export async function cancelSession(sessionId: string, clientId: string) {
 
 export async function deleteSession(sessionId: string, clientId: string) {
   const { accountId } = await requireSession();
-  const existingRows = await db
-    .select({ googleEventId: sessions.googleEventId })
+  // Gather Google + Blob refs before deleting so we can clean up after.
+  const [existing] = await db
+    .select({
+      googleEventId: sessions.googleEventId,
+      invoiceUrl: sessions.invoiceUrl,
+    })
     .from(sessions)
     .where(and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId)))
     .limit(1);
 
+  // Session-scoped attachments (uploaded with this session). Client-scoped
+  // attachments without a sessionId are kept — they belong to the client
+  // file, not the session.
+  const sessionAttachments = await db
+    .select({ url: attachments.url })
+    .from(attachments)
+    .where(
+      and(
+        eq(attachments.accountId, accountId),
+        eq(attachments.sessionId, sessionId)
+      )
+    );
+
   await db
     .delete(sessions)
     .where(and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId)));
-  await deleteSessionFromGoogle(accountId, existingRows[0]?.googleEventId ?? null);
+  await deleteSessionFromGoogle(accountId, existing?.googleEventId ?? null);
+
+  // Best-effort Blob cleanup. The DB cascade already deleted the attachment
+  // rows; here we tidy up the files those rows pointed at.
+  const blobUrls = [
+    ...(existing?.invoiceUrl ? [existing.invoiceUrl] : []),
+    ...sessionAttachments.map((a) => a.url).filter((u): u is string => !!u),
+  ];
+  if (blobUrls.length > 0 && process.env.BLOB_READ_WRITE_TOKEN) {
+    try {
+      const { del } = await import("@vercel/blob");
+      await del(blobUrls);
+    } catch (e) {
+      console.warn("[deleteSession] Blob delete failed:", e);
+    }
+  }
 
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/calendar");
