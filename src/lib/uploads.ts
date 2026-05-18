@@ -30,6 +30,17 @@ export async function uploadClientAvatar(formData: FormData) {
   if (file.size > 5 * 1024 * 1024)
     throw new Error("Avatar must be under 5 MB");
 
+  // Look up the existing avatar URL so we can delete it after the new one
+  // uploads. `addRandomSuffix: true` below means each upload generates a NEW
+  // Blob with a unique filename — without this cleanup step, every avatar
+  // change leaves the previous file orphaned in storage forever.
+  const [existing] = await db
+    .select({ avatarUrl: clients.avatarUrl })
+    .from(clients)
+    .where(and(eq(clients.accountId, accountId), eq(clients.id, clientId)))
+    .limit(1);
+  const previousAvatarUrl = existing?.avatarUrl ?? null;
+
   const ext = file.name.includes(".") ? file.name.split(".").pop() : "jpg";
   const blob = await put(`accounts/${accountId}/avatars/${clientId}.${ext}`, file, {
     access: "public",
@@ -41,6 +52,17 @@ export async function uploadClientAvatar(formData: FormData) {
     .update(clients)
     .set({ avatarUrl: blob.url, updatedAt: new Date() })
     .where(and(eq(clients.accountId, accountId), eq(clients.id, clientId)));
+
+  // Best-effort cleanup of the old file. The new URL is already saved, so
+  // a failure here just leaves an orphan, not a broken UI.
+  if (previousAvatarUrl && previousAvatarUrl !== blob.url) {
+    try {
+      const { del } = await import("@vercel/blob");
+      await del(previousAvatarUrl);
+    } catch (e) {
+      console.warn("[uploadClientAvatar] couldn't delete previous avatar:", e);
+    }
+  }
 
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/clients");

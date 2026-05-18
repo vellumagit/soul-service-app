@@ -359,6 +359,12 @@ export async function generateInvoiceForSession(sessionId: string) {
     contentType: "application/pdf",
   });
 
+  // Remember any pre-existing PDF so we can clean it up after we point the
+  // session row at the new one. Without this, regenerating the invoice
+  // (e.g. after editing the session amount) leaves the stale PDF orphaned
+  // in Blob storage and still publicly accessible by URL.
+  const previousInvoiceUrl = session.invoiceUrl ?? null;
+
   await db
     .update(sessions)
     .set({
@@ -368,6 +374,15 @@ export async function generateInvoiceForSession(sessionId: string) {
       updatedAt: new Date(),
     })
     .where(eq(sessions.id, sessionId));
+
+  if (previousInvoiceUrl && previousInvoiceUrl !== blob.url) {
+    try {
+      const { del } = await import("@vercel/blob");
+      await del(previousInvoiceUrl);
+    } catch (e) {
+      console.warn("[generateInvoice] couldn't delete previous PDF:", e);
+    }
+  }
 
   return { url: blob.url, invoiceNumber };
 }
