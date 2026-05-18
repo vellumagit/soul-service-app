@@ -38,6 +38,7 @@ export function EditClientDialog({ client }: { client: Client }) {
       <Modal
         open={open}
         onClose={() => setOpen(false)}
+        locked={submitting}
         title="Edit client profile"
         size="lg"
         footer={

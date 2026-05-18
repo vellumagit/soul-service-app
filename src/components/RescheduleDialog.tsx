@@ -47,6 +47,7 @@ export function RescheduleDialog({
       <Modal
         open={open}
         onClose={() => setOpen(false)}
+        locked={submitting}
         title="Reschedule session"
         size="md"
         footer={

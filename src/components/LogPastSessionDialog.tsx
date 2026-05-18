@@ -50,6 +50,7 @@ export function LogPastSessionDialog({
       <Modal
         open={open}
         onClose={() => setOpen(false)}
+        locked={submitting}
         title="Log a past session"
         size="md"
         footer={

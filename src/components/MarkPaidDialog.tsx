@@ -34,6 +34,7 @@ export function MarkPaidDialog({
       <Modal
         open={open}
         onClose={() => setOpen(false)}
+        locked={submitting}
         title="Mark this session paid"
         size="sm"
         footer={

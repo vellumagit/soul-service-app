@@ -82,14 +82,29 @@ function TaskRowItem({
   showClient: boolean;
 }) {
   const [pending, start] = useTransition();
+  const [error, setError] = useState<string | null>(null);
   const isDone = !!task.completedAt;
   const isOverdue =
     !isDone && task.dueAt && new Date(task.dueAt) < new Date();
 
+  function onToggle() {
+    setError(null);
+    start(async () => {
+      try {
+        await toggleTaskComplete(task.id, task.clientId ?? null);
+      } catch (err) {
+        rethrowIfRedirect(err);
+        setError(
+          err instanceof Error ? err.message : "Couldn't update task."
+        );
+      }
+    });
+  }
+
   return (
     <li className="group flex items-start gap-2.5 py-1">
       <button
-        onClick={() => start(() => toggleTaskComplete(task.id, task.clientId ?? null))}
+        onClick={onToggle}
         disabled={pending}
         className={`mt-0.5 w-4 h-4 rounded border ${
           isDone
@@ -155,6 +170,11 @@ function TaskRowItem({
         confirmLabel="Yes, delete"
         onConfirm={() => deleteTask(task.id, task.clientId ?? null)}
       />
+      {error && (
+        <span className="text-[10px] text-red-700 ml-2 self-center">
+          {error}
+        </span>
+      )}
     </li>
   );
 }

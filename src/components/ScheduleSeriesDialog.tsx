@@ -122,6 +122,7 @@ export function ScheduleSeriesDialog({
       <Modal
         open={open}
         onClose={() => setOpen(false)}
+        locked={submitting}
         title="Create a recurring series"
         size="lg"
         footer={

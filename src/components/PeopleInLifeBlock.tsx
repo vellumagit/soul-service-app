@@ -127,6 +127,7 @@ function PersonForm({
     <Modal
       open={true}
       onClose={onClose}
+      locked={submitting}
       title={isNew ? "Add someone in their life" : `Edit ${person?.name}`}
       size="md"
       footer={

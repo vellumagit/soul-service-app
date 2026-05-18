@@ -4,6 +4,12 @@ import { useEffect, useRef, type ReactNode } from "react";
 
 // A dialog wrapper. `open` controls visibility; we proxy that to <dialog>.
 // Click-outside closes. Esc closes (built into <dialog>).
+//
+// `locked`: when true, the dialog ignores backdrop clicks, the close X, and
+// the native Esc-to-close behavior. Used while an action is in flight — we
+// don't want the practitioner to dismiss the dialog mid-submit and miss the
+// success/error feedback (or worse, miss a Google sync warning because the
+// modal vanished before the action returned).
 export function Modal({
   open,
   onClose,
@@ -11,6 +17,7 @@ export function Modal({
   children,
   footer,
   size = "md",
+  locked = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -18,6 +25,7 @@ export function Modal({
   children: ReactNode;
   footer?: ReactNode;
   size?: "sm" | "md" | "lg";
+  locked?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement | null>(null);
 
@@ -28,8 +36,20 @@ export function Modal({
     if (!open && el.open) el.close();
   }, [open]);
 
-  // Click-outside-content closes
+  // Block Esc while locked. The native <dialog>'s cancel event fires on Esc.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const cancelHandler = (e: Event) => {
+      if (locked) e.preventDefault();
+    };
+    el.addEventListener("cancel", cancelHandler);
+    return () => el.removeEventListener("cancel", cancelHandler);
+  }, [locked]);
+
+  // Click-outside-content closes — unless locked.
   function handleBackdropClick(e: React.MouseEvent<HTMLDialogElement>) {
+    if (locked) return;
     if (e.target === ref.current) onClose();
   }
 
@@ -51,8 +71,9 @@ export function Modal({
         <button
           type="button"
           onClick={onClose}
+          disabled={locked}
           aria-label="Close"
-          className="text-ink-400 hover:text-ink-800 p-1 -mr-1"
+          className="text-ink-400 hover:text-ink-800 p-1 -mr-1 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <svg
             className="w-4 h-4"

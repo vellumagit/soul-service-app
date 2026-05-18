@@ -77,6 +77,7 @@ export function ScheduleSessionDialog({
       <Modal
         open={open}
         onClose={() => setOpen(false)}
+        locked={submitting}
         title="Schedule a session"
         size="md"
         footer={

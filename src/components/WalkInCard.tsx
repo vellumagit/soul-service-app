@@ -9,6 +9,12 @@
 // This intentionally avoids stats and money. Those live in the strip below
 // for when they're actually wanted, not as the first thing the practitioner
 // reads about a person.
+//
+// "use client" because the "Schedule one →" empty-state link dispatches a
+// keyboard-shortcut event to open ScheduleSessionDialog. Without this directive
+// the inline onClick handler is silently dropped at server render time and the
+// link becomes a dead end (clicks scroll to top because href="#").
+"use client";
 
 import Link from "next/link";
 import type { ClientDigest } from "@/db/queries";

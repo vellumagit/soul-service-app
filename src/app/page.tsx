@@ -7,6 +7,7 @@ import { MarkPaidDialog } from "@/components/MarkPaidDialog";
 import { TasksBlock } from "@/components/TasksBlock";
 import { CapacityStrip } from "@/components/CapacityStrip";
 import { SetupChecklist } from "@/components/SetupChecklist";
+import { JoinMeetButton } from "@/components/JoinMeetButton";
 import {
   getDashboardData,
   getCapacity,
@@ -94,17 +95,7 @@ export default async function HomePage() {
                           {s.type} · {s.durationMinutes}m
                         </div>
                       </div>
-                      {s.meetUrl && (
-                        <a
-                          href={s.meetUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="bg-ink-900 hover:bg-ink-800 text-white text-xs font-medium px-3 py-1.5 rounded-md shrink-0"
-                        >
-                          Join Meet
-                        </a>
-                      )}
+                      {s.meetUrl && <JoinMeetButton href={s.meetUrl} />}
                     </Link>
                   ))}
                 </div>

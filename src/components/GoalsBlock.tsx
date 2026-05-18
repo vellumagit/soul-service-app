@@ -45,6 +45,30 @@ export function GoalsBlock({
 function GoalRow({ goal, clientId }: { goal: Goal; clientId: string }) {
   const [pending, start] = useTransition();
   const [progress, setProgress] = useState(goal.progress);
+  // Without this, a server error (auth expired, DB blip) silently rolls back
+  // the optimistic slider while the user sees nothing — they walk away
+  // thinking the new progress was saved. Surfacing the error gives them a
+  // chance to retry or reload.
+  const [error, setError] = useState<string | null>(null);
+
+  // Wrap the optimistic save: on failure, snap the slider back to the
+  // server's known value and show the message.
+  function commit() {
+    if (progress === goal.progress) return;
+    setError(null);
+    const newProgress = progress;
+    start(async () => {
+      try {
+        await updateGoalProgress(goal.id, clientId, newProgress);
+      } catch (err) {
+        rethrowIfRedirect(err);
+        setProgress(goal.progress); // visual rollback
+        setError(
+          err instanceof Error ? err.message : "Couldn't save the change."
+        );
+      }
+    });
+  }
 
   return (
     <div className="group">
@@ -60,17 +84,14 @@ function GoalRow({ goal, clientId }: { goal: Goal; clientId: string }) {
         max={100}
         value={progress}
         onChange={(e) => setProgress(parseInt(e.target.value, 10))}
-        onMouseUp={() => {
-          if (progress !== goal.progress)
-            start(() => updateGoalProgress(goal.id, clientId, progress));
-        }}
-        onTouchEnd={() => {
-          if (progress !== goal.progress)
-            start(() => updateGoalProgress(goal.id, clientId, progress));
-        }}
+        onMouseUp={commit}
+        onTouchEnd={commit}
         disabled={pending}
         className="w-full mt-1 accent-flame-600"
       />
+      {error && (
+        <div className="text-[11px] text-red-700 mt-1">{error}</div>
+      )}
       <div className="flex items-center justify-between gap-2">
         {goal.note && (
           <div className="text-[11px] text-ink-500 mt-0.5">{goal.note}</div>

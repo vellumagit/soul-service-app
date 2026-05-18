@@ -73,6 +73,7 @@ export function GenerateNotesDialog({
           // Defer reset so the close animation isn't jarring
           setTimeout(reset, 200);
         }}
+        locked={submitting}
         title="Generate notes from a transcript"
         size="lg"
         footer={

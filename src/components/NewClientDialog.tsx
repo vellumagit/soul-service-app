@@ -51,6 +51,7 @@ export function NewClientDialog({
       <Modal
         open={open}
         onClose={() => setOpen(false)}
+        locked={submitting}
         title="Add a new client"
         size="md"
         footer={

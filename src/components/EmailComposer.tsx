@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Modal } from "./Modal";
 import { Field, inputCls } from "./Form";
 import { logCommunication, sendClientEmail } from "@/lib/actions";
@@ -101,14 +101,32 @@ export function EmailComposer({
       ? templates
       : matchingTemplates;
 
+  // Template rendering: ONLY re-render when the user picks a different
+  // template. Stashing the context in a ref means new server-rendered prop
+  // references (the parent re-renders on every revalidation) don't trigger
+  // the effect and silently overwrite her in-flight subject/body edits.
+  const renderCtxRef = useRef({
+    client,
+    nextSession,
+    lastSession,
+    paymentInstructions,
+    templates,
+  });
+  renderCtxRef.current = {
+    client,
+    nextSession,
+    lastSession,
+    paymentInstructions,
+    templates,
+  };
   useEffect(() => {
     if (!templateId) return;
-    const tpl = templates.find((x) => x.id === templateId);
+    const ctx = renderCtxRef.current;
+    const tpl = ctx.templates.find((x) => x.id === templateId);
     if (!tpl) return;
-    const ctx = { client, nextSession, lastSession, paymentInstructions };
     setSubject(render(tpl.subject, ctx));
     setBody(render(tpl.body, ctx));
-  }, [templateId, templates, client, nextSession, lastSession, paymentInstructions]);
+  }, [templateId]);
 
   const noEmail = !client.email;
 
@@ -196,6 +214,7 @@ export function EmailComposer({
       <Modal
         open={open}
         onClose={() => setOpen(false)}
+        locked={submitting}
         title={`Email ${client.fullName}`}
         size="lg"
         footer={

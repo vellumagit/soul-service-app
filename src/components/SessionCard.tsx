@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   updateSession,
   cancelSession,
@@ -44,6 +44,34 @@ export function SessionCard({
   const [open, setOpen] = useState(session.status === "scheduled");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Dirty = the form has unsaved typing. Flipped true on any onInput,
+  // back to false when the action returns or the user collapses with confirm.
+  // Two guard rails:
+  //   1. window beforeunload — covers closing the tab, navigating away,
+  //      reloading. Browser shows its native "Leave site?" prompt.
+  //   2. clicking the card header to collapse asks for confirmation, since
+  //      collapsing unmounts the form and loses everything she typed.
+  const [dirty, setDirty] = useState(false);
+
+  useEffect(() => {
+    if (!dirty) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [dirty]);
+
+  function tryCollapse() {
+    if (dirty) {
+      const ok = window.confirm(
+        "You have unsaved changes in this session. Leave anyway?"
+      );
+      if (!ok) return;
+    }
+    setOpen(false);
+    setDirty(false);
+  }
 
   const isScheduled = session.status === "scheduled";
   const isCompleted = session.status === "completed";
@@ -55,7 +83,7 @@ export function SessionCard({
     >
       <button
         type="button"
-        onClick={() => setOpen(!open)}
+        onClick={() => (open ? tryCollapse() : setOpen(true))}
         className="w-full flex items-center gap-3 px-4 py-3 hover:bg-ink-50 text-left"
       >
         <svg
@@ -110,6 +138,9 @@ export function SessionCard({
               setError(null);
               try {
                 await updateSession(fd);
+                // Save succeeded — clear the dirty flag so collapsing /
+                // navigating away no longer prompts.
+                setDirty(false);
               } catch (err) {
                 rethrowIfRedirect(err);
                 setError(
@@ -118,6 +149,9 @@ export function SessionCard({
               } finally {
                 setSubmitting(false);
               }
+            }}
+            onInput={() => {
+              if (!dirty) setDirty(true);
             }}
             className="space-y-4"
           >
@@ -196,6 +230,12 @@ export function SessionCard({
             </div>
 
             <div className="flex items-center justify-end gap-2">
+              {dirty && !submitting && (
+                <span className="text-[11px] text-amber-700 flex items-center gap-1 mr-auto">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                  Unsaved changes
+                </span>
+              )}
               {isScheduled && (
                 <button
                   type="submit"
