@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -26,6 +26,21 @@ export function NotesEditor({
   const ref = useRef<HTMLTextAreaElement | null>(null);
   const [value, setValue] = useState(defaultValue ?? "");
   const [mode, setMode] = useState<"write" | "preview">("write");
+
+  // Sync to defaultValue when the prop actually changes from its last-seen
+  // value. This lets external writes — most importantly the AI-notes flow,
+  // which writes the generated notes to the DB and triggers a revalidation —
+  // show up in the editor without a hard reload. We track the last-seen
+  // default in a ref so we only react to real changes, not to React just
+  // re-rendering with the same prop.
+  const lastDefault = useRef(defaultValue ?? "");
+  useEffect(() => {
+    const next = defaultValue ?? "";
+    if (next !== lastDefault.current) {
+      lastDefault.current = next;
+      setValue(next);
+    }
+  }, [defaultValue]);
 
   function update(v: string) {
     setValue(v);
@@ -155,29 +170,40 @@ export function NotesEditor({
         </button>
       </div>
 
-      {mode === "write" ? (
-        <textarea
-          ref={ref}
-          name={name}
-          value={value}
-          rows={rows}
-          placeholder={placeholder}
-          onChange={(e) => update(e.target.value)}
-          onKeyDown={(e) => {
-            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
-              e.preventDefault();
-              wrap("**");
-            }
-            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "i") {
-              e.preventDefault();
-              wrap("_");
-            }
-          }}
-          className="w-full px-3 py-2.5 text-sm outline-none focus:bg-ink-50/30 transition resize-y"
-          style={{ minHeight: `${rows * 1.6}em`, fontFamily: "var(--font-sans)" }}
-        />
-      ) : (
-        <div className="px-4 py-3 text-sm md-render" style={{ minHeight: `${rows * 1.6}em` }}>
+      {/* The textarea stays mounted at all times so the form always carries
+          its current value. When the user toggles to Preview we just hide it
+          and render the rendered markdown on top. Unmounting it (the previous
+          approach) meant the form lost the `notes` field — submitting from
+          Preview mode wiped notes to null. */}
+      <textarea
+        ref={ref}
+        name={name}
+        value={value}
+        rows={rows}
+        placeholder={placeholder}
+        onChange={(e) => update(e.target.value)}
+        onKeyDown={(e) => {
+          if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
+            e.preventDefault();
+            wrap("**");
+          }
+          if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "i") {
+            e.preventDefault();
+            wrap("_");
+          }
+        }}
+        className="w-full px-3 py-2.5 text-sm outline-none focus:bg-ink-50/30 transition resize-y"
+        style={{
+          minHeight: `${rows * 1.6}em`,
+          fontFamily: "var(--font-sans)",
+          display: mode === "write" ? "block" : "none",
+        }}
+      />
+      {mode === "preview" && (
+        <div
+          className="px-4 py-3 text-sm md-render"
+          style={{ minHeight: `${rows * 1.6}em` }}
+        >
           {value.trim().length > 0 ? (
             <MarkdownRender body={value} />
           ) : (
