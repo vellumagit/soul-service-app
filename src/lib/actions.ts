@@ -18,7 +18,7 @@ import {
   themes,
   observations,
 } from "@/db/schema";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { getSettings } from "@/db/queries";
 import { requireSession } from "./session-cookies";
 
@@ -473,7 +473,42 @@ export async function cancelSessionSeries(
       )
     );
 
-  // Delete future scheduled sessions in the series.
+  // Gather the future scheduled sessions BEFORE deleting them — we need their
+  // Google event IDs to clean up the client's calendar too. Without this, a
+  // 10-session series cancellation would silently leave 9 events on her
+  // Google Calendar with nothing pointing at them from our app.
+  const futureRows = await db
+    .select({ id: sessions.id, googleEventId: sessions.googleEventId })
+    .from(sessions)
+    .where(
+      and(
+        eq(sessions.accountId, accountId),
+        eq(sessions.seriesId, seriesId),
+        eq(sessions.status, "scheduled"),
+        sql`${sessions.scheduledAt} > ${now.toISOString()}`
+      )
+    );
+
+  // Best-effort clean up on Google. Don't block on failures — the DB delete
+  // below is the source of truth for our app, and a later resync (or the
+  // self-heal in syncSessionToGoogle) can clean up stragglers.
+  const withGoogleEvent = futureRows
+    .filter((r): r is { id: string; googleEventId: string } => !!r.googleEventId);
+  if (withGoogleEvent.length > 0) {
+    try {
+      const { deleteCalendarEventsForSessions } = await import(
+        "./google-calendar"
+      );
+      await deleteCalendarEventsForSessions(accountId, withGoogleEvent);
+    } catch (e) {
+      console.warn(
+        "[cancelSessionSeries] Google cleanup failed (continuing with DB delete):",
+        e
+      );
+    }
+  }
+
+  // Delete the future scheduled sessions.
   await db.execute(
     sql`DELETE FROM sessions
         WHERE account_id = ${accountId}
@@ -1316,7 +1351,27 @@ export async function deleteObservation(observationId: string, clientId: string)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function startGoogleConnect() {
+  const { accountId } = await requireSession();
   const { getGoogleAuthUrl } = await import("./google-calendar");
+
+  // Set an ITP-safe state cookie BEFORE redirecting to Google. Safari's
+  // Intelligent Tracking Prevention can sometimes strip the main session
+  // cookie when the request flows through a cross-site redirect chain
+  // (accounts.google.com → us). When that happens, the OAuth callback finds
+  // `requireSession()` returns no email and bounces to /signin, even though
+  // the user completed the OAuth grant. This first-party, path-scoped cookie
+  // is short-lived and same-site=lax, so ITP leaves it alone. The callback
+  // checks it before falling back to the session cookie.
+  const { cookies } = await import("next/headers");
+  const cookieStore = await cookies();
+  cookieStore.set("gcal_oauth_state", accountId, {
+    httpOnly: true,
+    sameSite: "lax",
+    maxAge: 600, // 10 minutes
+    path: "/api/auth/google/callback",
+    secure: process.env.NODE_ENV === "production",
+  });
+
   const url = getGoogleAuthUrl();
   redirect(url);
 }
@@ -1381,6 +1436,7 @@ async function syncSessionToGoogle(
     } = await import("./google-calendar");
 
     let result;
+    let didCreate = false; // tracks whether we just CREATED (vs updated)
     if (session.googleEventId) {
       result = await updateCalendarEvent(
         session.accountId,
@@ -1388,21 +1444,59 @@ async function syncSessionToGoogle(
         eventInput
       );
       // If event was deleted on Google's side (returns null), recreate it
-      if (!result) result = await createCalendarEvent(session.accountId, eventInput);
+      if (!result) {
+        result = await createCalendarEvent(session.accountId, eventInput);
+        didCreate = !!result;
+      }
     } else {
       result = await createCalendarEvent(session.accountId, eventInput);
+      didCreate = !!result;
     }
 
     if (!result) return { ok: true }; // Not connected — silent no-op
 
-    await db
-      .update(sessions)
-      .set({
-        googleEventId: result.eventId,
-        meetUrl: result.meetUrl ?? session.meetUrl,
-        updatedAt: new Date(),
-      })
-      .where(eq(sessions.id, sessionId));
+    if (didCreate) {
+      // Conditional write per the GCal playbook (lesson 4): if a concurrent
+      // call (e.g. two server actions racing on the same session) created
+      // another event in between, its eventId is already on the row. Don't
+      // overwrite — that would orphan the first event with nothing pointing
+      // at it. The `isNull` guard means only the first writer wins.
+      const updated = await db
+        .update(sessions)
+        .set({
+          googleEventId: result.eventId,
+          meetUrl: result.meetUrl ?? session.meetUrl,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(eq(sessions.id, sessionId), isNull(sessions.googleEventId))
+        )
+        .returning({ id: sessions.id });
+
+      if (updated.length === 0) {
+        // Someone beat us to it. Delete OUR newly-created event so the row
+        // ends up pointing at exactly one calendar event.
+        try {
+          const { deleteCalendarEvent } = await import("./google-calendar");
+          await deleteCalendarEvent(session.accountId, result.eventId);
+        } catch (e) {
+          console.warn(
+            "[syncSessionToGoogle] couldn't delete orphan event after race:",
+            e
+          );
+        }
+      }
+    } else {
+      // We updated an existing event — just store the (possibly refreshed)
+      // Meet link. No race risk here because we're not creating a new event.
+      await db
+        .update(sessions)
+        .set({
+          meetUrl: result.meetUrl ?? session.meetUrl,
+          updatedAt: new Date(),
+        })
+        .where(eq(sessions.id, sessionId));
+    }
 
     return { ok: true, meetUrl: result.meetUrl };
   } catch (err) {

@@ -10,6 +10,7 @@ import {
   getSetupStatus,
 } from "@/db/queries";
 import { getGoogleConnectionStatus } from "@/lib/google-calendar";
+import { isTokenEncryptionConfigured } from "@/lib/token-crypto";
 import { asLocale, t } from "@/lib/i18n";
 
 export const dynamic = "force-dynamic";
@@ -84,6 +85,13 @@ export default async function StatusPage() {
         : process.env.GOOGLE_CLIENT_ID
         ? "Google client credentials set, but you haven't connected this account yet. Go to Settings → Google Calendar & Meet → Connect."
         : "Set GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET in env vars first. See README for the 5-min Google Cloud Console setup.",
+    },
+    {
+      label: "OAuth token encryption at rest",
+      state: isTokenEncryptionConfigured() ? "ok" : "warn",
+      detail: isTokenEncryptionConfigured()
+        ? "Google OAuth tokens are encrypted with AES-256-GCM before being written to the DB. A leaked DB backup won't expose your calendar access."
+        : "TOKEN_ENCRYPTION_KEY isn't set, so OAuth tokens are stored in plaintext. Generate one with `node -e \"console.log('base64:' + require('crypto').randomBytes(32).toString('base64'))\"` and add it as an env var on Vercel to encrypt them. Existing tokens upgrade automatically on the next refresh.",
     },
     {
       label: "Multi-language UI (English · Русский · Українська)",

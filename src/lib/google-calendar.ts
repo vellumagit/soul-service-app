@@ -13,8 +13,9 @@
 import "server-only";
 import { google } from "googleapis";
 import { db } from "@/db";
-import { practitionerSettings } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { practitionerSettings, sessions } from "@/db/schema";
+import { and, eq, gte, inArray, isNotNull, isNull } from "drizzle-orm";
+import { encryptToken, decryptToken } from "./token-crypto";
 
 // Scopes we request: full calendar event management (read + write own events).
 // "calendar.events" is narrower than "calendar" — only events, not calendar lists.
@@ -54,7 +55,15 @@ export function getGoogleAuthUrl(): string {
   const client = getOAuthClient();
   return client.generateAuthUrl({
     access_type: "offline", // required to get a refresh token
-    prompt: "consent", // forces refresh_token even on re-consent
+    // Both prompts together (per the GCal lessons playbook):
+    //   - select_account: forces the account chooser every time, so she can't
+    //     accidentally reconnect with whichever Google account her browser
+    //     happens to be signed into. Critical safety on shared devices.
+    //   - consent: ensures a refresh token is issued on EVERY grant. Without
+    //     this, Google only issues a refresh token on the very first grant;
+    //     subsequent reconnects (after a UI disconnect) silently return no
+    //     refresh token and background token refresh stops working.
+    prompt: "select_account consent",
     scope: SCOPES,
   });
 }
@@ -76,13 +85,15 @@ export async function exchangeGoogleCode(code: string, accountId: string) {
   const userInfo = await oauth2.userinfo.get();
   const email = userInfo.data.email ?? null;
 
-  // Update the existing settings row for this account (settings is 1:1 with account
-  // and gets created at sign-in time, so it always exists).
+  // Update the existing settings row for this account (settings is 1:1 with
+  // account and gets created at sign-in time, so it always exists). Tokens
+  // are encrypted at rest — a leaked DB backup or read access to this row
+  // shouldn't hand someone full Calendar access without also having the key.
   await db
     .update(practitionerSettings)
     .set({
-      googleAccessToken: tokens.access_token ?? null,
-      googleRefreshToken: tokens.refresh_token,
+      googleAccessToken: encryptToken(tokens.access_token ?? null),
+      googleRefreshToken: encryptToken(tokens.refresh_token),
       googleTokenExpiresAt: tokens.expiry_date
         ? new Date(tokens.expiry_date)
         : null,
@@ -95,7 +106,14 @@ export async function exchangeGoogleCode(code: string, accountId: string) {
   return { email };
 }
 
-// Public — disconnect: revoke the token at Google, then null out our copy
+// Public — disconnect: clean up future Soul Service events from her Google
+// Calendar, revoke the token at Google, then null out our copy.
+//
+// Per the GCal playbook (lesson 10): we only null `googleEventId` on session
+// rows for which the Google delete confirmed success (2xx, 404, or 410 — the
+// last two mean the event was already gone). If a delete fails (network blip,
+// rate limit), we keep the ID so a later resync can find and clean the event,
+// rather than orphaning it on her calendar with no way to track it.
 export async function disconnectGoogle(accountId: string) {
   const settingsRows = await db
     .select()
@@ -105,14 +123,25 @@ export async function disconnectGoogle(accountId: string) {
   const settings = settingsRows[0];
   if (!settings?.googleRefreshToken) return;
 
+  // ── Step 1: clean up future events on her calendar ───────────────────────
+  // We do this BEFORE revoking the token, since cleanup needs API access.
+  await cleanupAccountCalendarEvents(accountId).catch((e) => {
+    console.warn("[disconnect] event cleanup failed (continuing):", e);
+  });
+
+  // ── Step 2: revoke at Google (best-effort) ───────────────────────────────
   try {
     const client = getOAuthClient();
-    client.setCredentials({ refresh_token: settings.googleRefreshToken });
-    await client.revokeCredentials();
+    const refreshToken = decryptToken(settings.googleRefreshToken);
+    if (refreshToken) {
+      client.setCredentials({ refresh_token: refreshToken });
+      await client.revokeCredentials();
+    }
   } catch (e) {
     console.warn("Google revoke failed (continuing with local clear):", e);
   }
 
+  // ── Step 3: clear all the connection state on her settings row ───────────
   await db
     .update(practitionerSettings)
     .set({
@@ -126,6 +155,86 @@ export async function disconnectGoogle(accountId: string) {
     .where(eq(practitionerSettings.accountId, accountId));
 }
 
+/** Delete every future Soul-Service-managed event from the connected calendar.
+ *  Only nulls `session.googleEventId` for confirmed-gone events — failed
+ *  deletes keep their IDs so a later sync can retry. */
+async function cleanupAccountCalendarEvents(accountId: string): Promise<void> {
+  const now = new Date();
+  const future = await db
+    .select({ id: sessions.id, googleEventId: sessions.googleEventId })
+    .from(sessions)
+    .where(
+      and(
+        eq(sessions.accountId, accountId),
+        isNotNull(sessions.googleEventId),
+        gte(sessions.scheduledAt, now)
+      )
+    );
+  await deleteCalendarEventsForSessions(
+    accountId,
+    future.map((r) => ({ id: r.id, googleEventId: r.googleEventId! }))
+  );
+}
+
+/** Reusable: delete a specific set of Google events and null the matching
+ *  `googleEventId` only for the ones we successfully removed.
+ *
+ *  Sequential with a 150ms gap to stay under Google's 600 req/min/user quota
+ *  (per the GCal playbook lesson 6). Past events that have already happened
+ *  should be filtered out by the caller — we don't second-guess the input
+ *  here, deleting historical events is occasionally what the caller wants
+ *  (e.g. nuking a whole series). */
+export async function deleteCalendarEventsForSessions(
+  accountId: string,
+  rows: { id: string; googleEventId: string }[]
+): Promise<{ cleared: string[]; failed: string[] }> {
+  const cleared: string[] = [];
+  const failed: string[] = [];
+  if (rows.length === 0) return { cleared, failed };
+
+  const auth = await getAuthedClient(accountId);
+  if (!auth) {
+    // Not connected to Google — nothing to delete. Don't null the IDs,
+    // since they may belong to a calendar we're no longer authed against.
+    return { cleared, failed };
+  }
+  const calendar = google.calendar({ version: "v3", auth });
+
+  for (const row of rows) {
+    try {
+      await calendar.events.delete({
+        calendarId: "primary",
+        eventId: row.googleEventId,
+        sendUpdates: "all",
+      });
+      cleared.push(row.id);
+    } catch (err) {
+      if (isNotFoundError(err)) {
+        // Already gone on Google's side — still counts as cleaned.
+        cleared.push(row.id);
+      } else {
+        console.warn(
+          `[gcal] failed to delete event ${row.googleEventId}:`,
+          err
+        );
+        failed.push(row.id);
+      }
+    }
+    await new Promise((r) => setTimeout(r, 150));
+  }
+
+  if (cleared.length > 0) {
+    await db
+      .update(sessions)
+      .set({ googleEventId: null, updatedAt: new Date() })
+      .where(
+        and(eq(sessions.accountId, accountId), inArray(sessions.id, cleared))
+      );
+  }
+
+  return { cleared, failed };
+}
+
 // Returns an authed OAuth2 client with a fresh access token, or null if not
 // connected. Auto-refreshes expired tokens and persists the new access token.
 async function getAuthedClient(accountId: string) {
@@ -137,22 +246,36 @@ async function getAuthedClient(accountId: string) {
   const settings = settingsRows[0];
   if (!settings?.googleRefreshToken) return null;
 
+  // Tokens are encrypted at rest. decryptToken handles legacy plaintext rows
+  // transparently (returns them as-is) so the migration is invisible.
+  const refreshToken = decryptToken(settings.googleRefreshToken);
+  const accessToken = decryptToken(settings.googleAccessToken);
+  if (!refreshToken) return null;
+
   const client = getOAuthClient();
   client.setCredentials({
-    access_token: settings.googleAccessToken,
-    refresh_token: settings.googleRefreshToken,
+    access_token: accessToken,
+    refresh_token: refreshToken,
     expiry_date: settings.googleTokenExpiresAt?.getTime() ?? null,
   });
 
+  // The googleapis SDK emits a "tokens" event whenever it refreshes. Re-encrypt
+  // the new access token before persisting. We also upgrade any legacy
+  // plaintext refresh tokens in the same write — this gradually migrates rows
+  // that pre-date encryption without forcing a reconnect.
   client.on("tokens", async (tokens) => {
     if (tokens.access_token) {
       await db
         .update(practitionerSettings)
         .set({
-          googleAccessToken: tokens.access_token,
+          googleAccessToken: encryptToken(tokens.access_token),
           googleTokenExpiresAt: tokens.expiry_date
             ? new Date(tokens.expiry_date)
             : null,
+          // If the row's refresh token is still plaintext (legacy), re-encrypt
+          // it now. tokens.refresh_token from this event is only populated on
+          // initial grant, so we re-encrypt the value we already have.
+          googleRefreshToken: encryptToken(refreshToken),
           updatedAt: new Date(),
         })
         .where(eq(practitionerSettings.accountId, accountId));
