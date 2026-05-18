@@ -198,7 +198,7 @@ export default async function ClientsPage({
                     </td>
                     <td
                       className={`px-4 py-2.5 text-xs ${
-                        c.nextSessionAt ? "text-flame-700" : "text-ink-300"
+                        c.nextSessionAt ? "text-plum-700" : "text-ink-300"
                       }`}
                     >
                       {c.nextSessionAt ? relativeTime(c.nextSessionAt) : "—"}
@@ -250,7 +250,7 @@ function Avatar({
   }
   return (
     <div
-      className="rounded-md bg-flame-100 text-flame-700 flex items-center justify-center font-semibold shrink-0"
+      className="rounded-md bg-plum-100 text-plum-700 flex items-center justify-center font-semibold shrink-0"
       style={{
         width: size,
         height: size,

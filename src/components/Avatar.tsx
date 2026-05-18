@@ -49,7 +49,7 @@ export function Avatar({
   return (
     <div className="relative shrink-0">
       <div
-        className={`${sizeCls} rounded-md overflow-hidden bg-flame-100 text-flame-700 flex items-center justify-center font-semibold`}
+        className={`${sizeCls} rounded-md overflow-hidden bg-plum-100 text-plum-700 flex items-center justify-center font-semibold`}
       >
         {url ? (
           // eslint-disable-next-line @next/next/no-img-element

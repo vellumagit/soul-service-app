@@ -88,7 +88,7 @@ export function toneFor(s: string | null | undefined): string {
 }
 
 const AVATAR_TONE_CLASSES: Record<string, string> = {
-  flame: "bg-flame-100 text-flame-700",
+  flame: "bg-plum-100 text-plum-700",
   green: "bg-green-100 text-green-700",
   rose: "bg-rose-100 text-rose-600",
   blue: "bg-blue-100 text-blue-700",

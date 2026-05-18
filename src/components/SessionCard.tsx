@@ -24,7 +24,7 @@ import { RescheduleDialog } from "./RescheduleDialog";
 import { rethrowIfRedirect } from "@/lib/redirect-error";
 
 const STATUS_CHIP: Record<string, string> = {
-  scheduled: "bg-flame-100 text-flame-700",
+  scheduled: "bg-plum-100 text-plum-700",
   completed: "bg-green-50 text-green-700",
   cancelled: "bg-ink-100 text-ink-500",
   no_show: "bg-amber-50 text-amber-700",
@@ -345,7 +345,7 @@ export function SessionCard({
                 href={session.meetUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="text-xs text-flame-700 hover:underline"
+                className="text-xs text-plum-700 hover:underline"
               >
                 Meet link ↗
               </a>

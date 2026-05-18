@@ -39,15 +39,27 @@ export function SetupChecklist({
   const total = 4;
 
   return (
-    <div className="border border-flame-100 bg-gradient-to-br from-flame-50 to-white rounded-lg p-5 mb-6">
+    <div
+      className="rounded-xl p-5 mb-6"
+      style={{
+        background:
+          "linear-gradient(135deg, var(--color-plum-50) 0%, var(--color-parchment) 100%)",
+        border: "1px solid var(--color-plum-100)",
+        boxShadow:
+          "0 1px 0 rgba(70, 50, 60, 0.03), 0 4px 16px rgba(70, 50, 60, 0.05)",
+      }}
+    >
       <div className="flex items-baseline justify-between mb-4">
         <div>
-          <h2 className="text-sm font-semibold text-ink-900">
+          <h2
+            className="text-lg text-ink-900 serif"
+            style={{ fontWeight: 500, letterSpacing: "-0.01em" }}
+          >
             Get your space set up
           </h2>
-          <p className="text-xs text-ink-500 mt-0.5">
-            A few one-time things to make this yours. Hides automatically when
-            you&apos;re done.
+          <p className="text-xs text-ink-500 mt-1 italic serif-italic">
+            A few one-time things to make this yours. Hides itself when you&apos;re
+            settled.
           </p>
         </div>
         <div className="text-[11px] text-ink-500 font-mono shrink-0">
@@ -68,7 +80,7 @@ export function SetupChecklist({
           {!status.hasBusinessInfo && (
             <Link
               href="/settings"
-              className="text-xs text-flame-700 hover:underline font-medium shrink-0"
+              className="text-xs text-plum-700 hover:underline font-medium shrink-0"
             >
               Open Settings →
             </Link>
@@ -89,7 +101,7 @@ export function SetupChecklist({
               trigger={(open) => (
                 <button
                   onClick={open}
-                  className="text-xs text-flame-700 hover:underline font-medium shrink-0"
+                  className="text-xs text-plum-700 hover:underline font-medium shrink-0"
                 >
                   Add client →
                 </button>
@@ -113,7 +125,7 @@ export function SetupChecklist({
               trigger={(open) => (
                 <button
                   onClick={open}
-                  className="text-xs text-flame-700 hover:underline font-medium shrink-0"
+                  className="text-xs text-plum-700 hover:underline font-medium shrink-0"
                 >
                   Schedule →
                 </button>

@@ -25,7 +25,7 @@ export function GenerateInvoiceButton({
           href={invoiceUrl}
           target="_blank"
           rel="noreferrer"
-          className="text-xs text-flame-700 hover:underline font-medium inline-flex items-center gap-1"
+          className="text-xs text-plum-700 hover:underline font-medium inline-flex items-center gap-1"
         >
           <svg
             className="w-3 h-3"
@@ -82,7 +82,7 @@ export function GenerateInvoiceButton({
           });
         }}
         disabled={pending}
-        className="text-xs text-flame-700 hover:underline font-medium"
+        className="text-xs text-plum-700 hover:underline font-medium"
       >
         {pending ? "Generating…" : "Generate invoice"}
       </button>

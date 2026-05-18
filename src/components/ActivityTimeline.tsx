@@ -6,7 +6,7 @@ const KIND_META: Record<
   { color: string; icon: string }
 > = {
   client_created: { color: "bg-ink-100 text-ink-600", icon: "✨" },
-  session_scheduled: { color: "bg-flame-100 text-flame-700", icon: "📅" },
+  session_scheduled: { color: "bg-plum-100 text-plum-700", icon: "📅" },
   session_completed: { color: "bg-green-50 text-green-700", icon: "✓" },
   session_cancelled: { color: "bg-ink-100 text-ink-500", icon: "×" },
   session_paid: { color: "bg-green-50 text-green-700", icon: "$" },
@@ -14,7 +14,7 @@ const KIND_META: Record<
   task_created: { color: "bg-amber-50 text-amber-700", icon: "•" },
   task_completed: { color: "bg-green-50 text-green-700", icon: "✓" },
   communication: { color: "bg-purple-50 text-purple-700", icon: "✉" },
-  invoice_generated: { color: "bg-flame-100 text-flame-700", icon: "📄" },
+  invoice_generated: { color: "bg-plum-100 text-plum-700", icon: "📄" },
 };
 
 export function ActivityTimeline({

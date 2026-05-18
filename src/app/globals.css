@@ -1,39 +1,90 @@
 @import "tailwindcss";
 
+/*  ─────────────────────────────────────────────────────────────────────────
+    Soul Service design tokens — "Vesper" palette.
+
+    Deliberately distinct from any "warm-gray + orange flame" SaaS look. The
+    practitioner does inner work; the app should feel like a quiet room at
+    dusk with a candle, not a CRM dashboard.
+
+      • plum (primary)     dusky muted plum, never loud
+      • honey (secondary)  soft warm gold for emphasis + success
+      • sage (tertiary)    grounding green for subtle differentiation
+      • ink (text/chrome)  warm mauve-grays, slightly cooler than Sollos's
+                            ink so it doesn't look orange-tinted
+      • parchment / linen  the warm cream surface system
+      • font-serif         Fraunces, used sparingly for headers/pull-quotes
+    ───────────────────────────────────────────────────────────────────────── */
+
 @theme {
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+  --font-serif: var(--font-fraunces), ui-serif, Georgia, "Times New Roman", serif;
 
-  /* Ink — warm stones for body text and chrome */
-  --color-ink-50:  #fafaf9;
-  --color-ink-100: #f5f5f4;
-  --color-ink-200: #e7e5e4;
-  --color-ink-300: #d6d3d1;
-  --color-ink-400: #a8a29e;
-  --color-ink-500: #78716c;
-  --color-ink-600: #57534e;
-  --color-ink-700: #44403c;
-  --color-ink-800: #292524;
-  --color-ink-900: #1c1917;
+  /* Ink — warm mauve-tinged grays for body text and chrome. The palette is
+     pulled slightly toward plum so it doesn't fight the primary, but stays
+     readable as a neutral. */
+  --color-ink-50:  #faf7f4;
+  --color-ink-100: #f1ece6;
+  --color-ink-200: #e1d8d0;
+  --color-ink-300: #ccc0b5;
+  --color-ink-400: #a39689;
+  --color-ink-500: #786b60;
+  --color-ink-600: #564a42;
+  --color-ink-700: #3d342e;
+  --color-ink-800: #2a221d;
+  --color-ink-900: #1a1411;
 
-  /* Flame — primary accent. Warm without being loud. */
-  --color-flame-50:  #fef6ee;
-  --color-flame-100: #fdead7;
-  --color-flame-500: #ea580c;
-  --color-flame-600: #c2410c;
-  --color-flame-700: #9a3412;
+  /* Plum — primary accent. Dusty, contemplative; the "candle in a quiet
+     room" colour. Never saturated. */
+  --color-plum-50:  #faf3f5;
+  --color-plum-100: #f1e2e8;
+  --color-plum-200: #e3c8d2;
+  --color-plum-300: #cea3b3;
+  --color-plum-400: #b07e92;
+  --color-plum-500: #8d6378;
+  --color-plum-600: #735064;
+  --color-plum-700: #5a3f4f;
+  --color-plum-800: #443040;
 
-  /* Body surface — a hair warmer than pure white. Nothing dramatic;
-     just removes the clinical flatness on long reading sessions. */
-  --color-app-bg: #fdfcfa;
+  /* Honey — warm gold for emphasis, "saved/paid" affirmation, gentle
+     highlights. The gold-thread on a hand-bound notebook. */
+  --color-honey-50:  #fbf5e7;
+  --color-honey-100: #f6e8c5;
+  --color-honey-300: #e0bd80;
+  --color-honey-500: #c9a26a;
+  --color-honey-700: #9b7a47;
+
+  /* Sage — quiet grounding green. Used sparingly for differentiating
+     secondary actions or contextual tags. */
+  --color-sage-50:  #f3f5f0;
+  --color-sage-100: #e1e7da;
+  --color-sage-500: #8a9b85;
+  --color-sage-700: #5d6f5a;
+
+  /* Body surface — warm linen. A hair pinker than pure cream so the page
+     feels like paper warmed by lamplight. */
+  --color-app-bg: #faf6f0;
+
+  /* Parchment — the surface for cards and panels. A touch warmer still. */
+  --color-parchment: #fdf9f1;
+  --color-parchment-edge: #ead9c1;
 }
 
 body {
-  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  /* Inter has stylistic-set variants — turn on a few that subtly soften the
+     forms (cv02 single-storey g, cv11 single-storey a, etc.). */
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11", "ss01";
   background: var(--color-app-bg);
+  color: var(--color-ink-800);
 }
 
-/* — Reusable utilities ported from prototype — */
+::selection {
+  background: var(--color-plum-100);
+  color: var(--color-plum-700);
+}
+
+/* — Reusable utilities — */
 
 .kbd {
   font-family: var(--font-mono);
@@ -68,9 +119,25 @@ body {
   background: var(--color-ink-50);
 }
 
-::selection {
-  background: var(--color-flame-100);
-  color: var(--color-flame-700);
+/*  ─────────────────────────────────────────────────────────────────────────
+    Serif headers — when applied directly to any element, gives it the
+    Fraunces feel with the slight optical-size tweaks that make it feel
+    contemplative rather than businessy.
+    ───────────────────────────────────────────────────────────────────────── */
+.serif {
+  font-family: var(--font-serif);
+  font-feature-settings: "ss01", "ss02";
+  /* Fraunces has SOFT + opsz variable axes — push opsz toward display so
+     glyphs feel slightly more elegant at the sizes we use. */
+  font-variation-settings: "opsz" 36, "SOFT" 30;
+  letter-spacing: -0.005em;
+}
+.serif-italic {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-feature-settings: "ss01", "ss02";
+  font-variation-settings: "opsz" 36, "SOFT" 60;
+  letter-spacing: -0.005em;
 }
 
 /* Calendar grid lines on day columns (every 48px = 1 hour) */
@@ -84,13 +151,13 @@ body {
   );
 }
 .day-col.today {
-  background-color: var(--color-flame-50);
+  background-color: var(--color-plum-50);
   background-image: repeating-linear-gradient(
     to bottom,
     transparent,
     transparent 47px,
-    var(--color-flame-100) 47px,
-    var(--color-flame-100) 48px
+    var(--color-plum-100) 47px,
+    var(--color-plum-100) 48px
   );
 }
 .day-col.sabbath {
@@ -108,7 +175,7 @@ body {
   position: absolute;
   left: 4px;
   right: 4px;
-  border-radius: 4px;
+  border-radius: 6px;
   padding: 4px 6px;
   cursor: pointer;
   overflow: hidden;
@@ -119,7 +186,7 @@ body {
 }
 .cal-block:hover {
   transform: translateX(1px);
-  box-shadow: 0 2px 8px rgba(28, 25, 23, 0.08);
+  box-shadow: 0 2px 10px rgba(60, 48, 60, 0.10);
   z-index: 5;
 }
 .cal-block .t {
@@ -139,14 +206,16 @@ body {
   margin-top: 1px;
 }
 
-/* Tone variants for calendar blocks + chips */
-.tone-flame  { background: #fef6ee; border-color: #ea580c; color: #9a3412; }
-.tone-green  { background: #f0fdf4; border-color: #22c55e; color: #15803d; }
-.tone-purple { background: #faf5ff; border-color: #a855f7; color: #7e22ce; }
-.tone-rose   { background: #fff1f2; border-color: #fb7185; color: #be123c; }
-.tone-blue   { background: #eff6ff; border-color: #3b82f6; color: #1e40af; }
-.tone-amber  { background: #fffbeb; border-color: #f59e0b; color: #a16207; }
-.tone-ink    { background: #fafaf9; border-color: #78716c; color: #44403c; }
+/* Tone variants for calendar blocks + chips — softened to match the palette.
+   Less primary-color saturation, more "dusk garden" hues. */
+.tone-plum   { background: #faf3f5; border-color: #8d6378; color: #5a3f4f; }
+.tone-flame  { background: #faf3f5; border-color: #8d6378; color: #5a3f4f; }
+.tone-green  { background: #f0f5ee; border-color: #8a9b85; color: #4a5946; }
+.tone-purple { background: #f5f0f8; border-color: #9b85a8; color: #5e497b; }
+.tone-rose   { background: #fbf1f0; border-color: #d18378; color: #94413a; }
+.tone-blue   { background: #f0f3f8; border-color: #7d92b3; color: #354e76; }
+.tone-amber  { background: #fbf5e7; border-color: #c9a26a; color: #7c5f33; }
+.tone-ink    { background: #faf7f4; border-color: #786b60; color: #3d342e; }
 
 /* Timeline connector line between events */
 .timeline-item { position: relative; }
@@ -171,22 +240,8 @@ body {
 .bar > span {
   display: block;
   height: 100%;
-  background: var(--color-flame-600);
+  background: linear-gradient(90deg, var(--color-plum-500), var(--color-plum-600));
   border-radius: 999px;
-}
-
-/* Folder-tab indicator on file header */
-.folder-tab { position: relative; }
-.folder-tab::after {
-  content: "";
-  position: absolute;
-  right: -1px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 4px;
-  height: 40%;
-  background: var(--color-flame-600);
-  border-radius: 0 2px 2px 0;
 }
 
 .sabbath-label {
@@ -203,53 +258,57 @@ body {
   pointer-events: none;
 }
 
-/* Active nav item */
+/* Active nav item — quiet plum bar on the left */
 .nav-item[data-active="true"] {
-  background: var(--color-ink-50);
+  background: var(--color-plum-50);
   color: var(--color-ink-900);
-  box-shadow: inset 2px 0 0 var(--color-flame-600);
+  box-shadow: inset 3px 0 0 var(--color-plum-500);
 }
 
 /* Active subtab */
 .subtab[data-active="true"] {
   color: var(--color-ink-900);
-  border-color: var(--color-ink-900);
+  border-color: var(--color-plum-500);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
    File-feel styling — used on the client profile to push it past "CRM page"
    toward "manila folder open on the desk."
+
+   In the Vesper palette these are warm parchment instead of straw-yellow,
+   with softer, more diffused shadows.
    ───────────────────────────────────────────────────────────────────────── */
 
-/* Paper-cream card with a soft shadow so it reads as a physical sheet
-   resting on the page rather than a flat panel. Slightly warmer than
-   pure white. */
 .paper-card {
-  background: #fdfbf5; /* a touch warmer than --color-app-bg */
-  border: 1px solid #e8e0cc; /* warm border, replaces ink-200 */
-  border-radius: 6px;
+  background: var(--color-parchment);
+  border: 1px solid var(--color-parchment-edge);
+  border-radius: 10px;
   box-shadow:
-    0 1px 0 rgba(60, 50, 30, 0.04),
-    0 2px 8px rgba(60, 50, 30, 0.06);
+    0 1px 0 rgba(70, 50, 60, 0.03),
+    0 4px 16px rgba(70, 50, 60, 0.06);
 }
 
 .paper-card--feature {
-  /* The Walk-In card gets a slight gradient + stronger shadow — the
-     "opening page" of the file. */
-  background: linear-gradient(180deg, #fefcf6 0%, #fbf6e9 100%);
-  border-color: #e0d3a8;
+  /* The Walk-In card — slightly more presence, a hint of dusk-light gradient.
+     This is the "opening page" of the file. */
+  background:
+    linear-gradient(180deg, #fdf9f1 0%, #f7eddd 100%);
+  border-color: #e3d1b4;
+  border-radius: 12px;
   box-shadow:
-    0 1px 0 rgba(60, 50, 30, 0.05),
-    0 4px 16px rgba(60, 50, 30, 0.08);
+    0 1px 0 rgba(70, 50, 60, 0.04),
+    0 6px 24px rgba(70, 50, 60, 0.08),
+    inset 0 1px 0 rgba(255, 252, 244, 0.6);
 }
 
-/* Folder-tab divider style — used on the client profile tabs. Each tab
-   sits on the content below like a real folder divider. */
+/* Folder-tab divider style — used on the client profile tabs. Each tab sits
+   on the content below like a real folder divider. Softer corners and tones
+   here than in the prototype. */
 .folder-tabs {
   display: flex;
   align-items: end;
   gap: 2px;
-  border-bottom: 1px solid #e8e0cc;
+  border-bottom: 1px solid var(--color-parchment-edge);
   margin-bottom: 20px;
   overflow-x: auto;
   scrollbar-width: thin;
@@ -258,17 +317,17 @@ body {
 .folder-tab {
   position: relative;
   padding: 8px 14px 9px;
-  background: #f3eedd;
-  border: 1px solid #e0d6bb;
+  background: #f1e8d6;
+  border: 1px solid #e0d2b8;
   border-bottom: none;
-  border-top-left-radius: 6px;
-  border-top-right-radius: 6px;
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
   color: var(--color-ink-500);
   font-size: 13px;
   font-weight: 500;
   white-space: nowrap;
-  margin-bottom: -1px; /* overlap the rule so the active one "joins" the content */
-  transition: background 100ms, color 100ms, transform 80ms;
+  margin-bottom: -1px;
+  transition: background 120ms, color 120ms, transform 80ms;
   text-decoration: none;
   display: inline-flex;
   align-items: center;
@@ -276,58 +335,64 @@ body {
 }
 
 .folder-tab:hover {
-  background: #f8f3e3;
+  background: #f7eddd;
   color: var(--color-ink-800);
 }
 
 .folder-tab[data-active="true"] {
-  background: #fdfbf5;
+  background: var(--color-parchment);
   color: var(--color-ink-900);
-  border-color: #e8e0cc;
-  /* Lift slightly so it visually "comes forward" */
+  border-color: var(--color-parchment-edge);
   transform: translateY(-1px);
   z-index: 2;
-  /* Bottom border matches the paper-card so the tab merges with content */
-  box-shadow: 0 -1px 0 rgba(60, 50, 30, 0.04);
+  box-shadow: 0 -1px 0 rgba(70, 50, 60, 0.04);
 }
 
 .folder-tab[data-active="true"]::after {
-  /* The little flame-colored bar on the active tab — like a colored
-     divider tab in a real folder. */
+  /* Plum bar on active tab — the colored divider in a real folder. */
   content: "";
   position: absolute;
   left: 14px;
   right: 14px;
   bottom: -1px;
   height: 2px;
-  background: var(--color-flame-600);
+  background: var(--color-plum-500);
 }
 
-/* Markdown rendering — keep simple but readable */
+/* ─────────────────────────────────────────────────────────────────────────
+   Markdown rendering — keep simple but readable. Headers shift to the
+   serif so notes feel more like a journal page. ───────────────────────── */
+
+.md-render h1,
+.md-render h2,
+.md-render h3 {
+  font-family: var(--font-serif);
+  font-variation-settings: "opsz" 24, "SOFT" 30;
+  color: var(--color-ink-900);
+  letter-spacing: -0.005em;
+}
 .md-render h1 {
-  font-size: 1.125rem;
-  font-weight: 600;
+  font-size: 1.25rem;
+  font-weight: 500;
   margin-top: 0.75rem;
   margin-bottom: 0.5rem;
-  color: var(--color-ink-900);
 }
 .md-render h2 {
-  font-size: 1rem;
-  font-weight: 600;
+  font-size: 1.1rem;
+  font-weight: 500;
   margin-top: 0.75rem;
   margin-bottom: 0.4rem;
-  color: var(--color-ink-900);
 }
 .md-render h3 {
-  font-size: 0.95rem;
-  font-weight: 600;
+  font-size: 1rem;
+  font-weight: 500;
   margin-top: 0.6rem;
   margin-bottom: 0.3rem;
   color: var(--color-ink-800);
 }
 .md-render p {
   margin: 0.4rem 0;
-  line-height: 1.6;
+  line-height: 1.7;
 }
 .md-render ul,
 .md-render ol {
@@ -342,7 +407,7 @@ body {
 }
 .md-render li {
   margin: 0.2rem 0;
-  line-height: 1.5;
+  line-height: 1.6;
 }
 .md-render strong {
   font-weight: 600;
@@ -352,11 +417,13 @@ body {
   font-style: italic;
 }
 .md-render blockquote {
-  border-left: 2px solid var(--color-flame-500);
+  border-left: 2px solid var(--color-plum-500);
   padding-left: 0.75rem;
   margin: 0.5rem 0;
   color: var(--color-ink-600);
   font-style: italic;
+  font-family: var(--font-serif);
+  font-variation-settings: "opsz" 18, "SOFT" 60;
 }
 .md-render code {
   font-family: var(--font-mono);
@@ -366,8 +433,10 @@ body {
   font-size: 0.9em;
 }
 .md-render a {
-  color: var(--color-flame-700);
+  color: var(--color-plum-600);
   text-decoration: underline;
+  text-decoration-color: var(--color-plum-300);
+  text-underline-offset: 2px;
 }
 .md-render hr {
   border: 0;

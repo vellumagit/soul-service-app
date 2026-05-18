@@ -105,7 +105,7 @@ export function MonthCalendar({
                 inMonth ? "bg-white" : "bg-ink-50/40",
                 i % 7 === 6 ? "border-r-0" : "",
                 i >= 35 ? "border-b-0" : "",
-                isToday ? "ring-2 ring-flame-500 ring-inset" : "",
+                isToday ? "ring-2 ring-plum-500 ring-inset" : "",
               ].join(" ")}
             >
               {/* Date number — links to that week */}
@@ -117,7 +117,7 @@ export function MonthCalendar({
                   className={[
                     "text-[11px] font-mono",
                     inMonth ? "text-ink-700" : "text-ink-300",
-                    isToday ? "text-flame-700 font-semibold" : "",
+                    isToday ? "text-plum-700 font-semibold" : "",
                   ].join(" ")}
                 >
                   {d.getDate()}

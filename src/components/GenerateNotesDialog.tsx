@@ -49,7 +49,7 @@ export function GenerateNotesDialog({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="text-xs text-flame-700 hover:underline font-medium inline-flex items-center gap-1"
+        className="text-xs text-plum-700 hover:underline font-medium inline-flex items-center gap-1"
       >
         <svg
           className="w-3 h-3"
@@ -208,7 +208,7 @@ Speaker 2 (00:00:07): Honestly, the week was hard. There were moments where..."
                   type="checkbox"
                   checked={replaceExisting}
                   onChange={(e) => setReplaceExisting(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 accent-flame-600"
+                  className="mt-0.5 w-4 h-4 accent-plum-600"
                 />
                 <span className="flex-1 text-ink-700">
                   Replace existing notes

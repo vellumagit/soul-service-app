@@ -45,9 +45,9 @@ export function WalkInCard({
       {quote && (
         <div className="mb-5">
           <blockquote className="font-serif italic text-xl md:text-2xl text-ink-800 leading-snug">
-            <span className="text-flame-700">&ldquo;</span>
+            <span className="text-plum-700">&ldquo;</span>
             {quote}
-            <span className="text-flame-700">&rdquo;</span>
+            <span className="text-plum-700">&rdquo;</span>
           </blockquote>
           <div className="text-[11px] text-ink-500 mt-2 tracking-wide">
             {quoteIsHerWords ? (
@@ -170,7 +170,7 @@ export function WalkInCard({
                     new CustomEvent("shortcuts:schedule-session")
                   );
                 }}
-                className="text-flame-700 hover:underline not-italic"
+                className="text-plum-700 hover:underline not-italic"
               >
                 Schedule one →
               </Link>

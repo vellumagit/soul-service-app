@@ -73,7 +73,7 @@ export function ClientHeader({
                 {client.email && (
                   <a
                     href={`mailto:${client.email}`}
-                    className="hover:text-flame-700"
+                    className="hover:text-plum-700"
                   >
                     {client.email}
                   </a>
@@ -84,7 +84,7 @@ export function ClientHeader({
                 {client.phone && (
                   <a
                     href={`tel:${client.phone}`}
-                    className="hover:text-flame-700"
+                    className="hover:text-plum-700"
                   >
                     {client.phone}
                   </a>
@@ -108,7 +108,7 @@ export function ClientHeader({
 
             {/* Working on — large, italic, prominent */}
             {client.workingOn && (
-              <div className="mt-4 text-base text-ink-800 italic leading-relaxed border-l-2 border-flame-500 pl-3">
+              <div className="mt-4 text-base text-ink-800 italic leading-relaxed border-l-2 border-plum-500 pl-3">
                 {client.workingOn}
               </div>
             )}

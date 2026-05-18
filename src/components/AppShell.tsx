@@ -88,7 +88,16 @@ function AppShellInner({
       <HelpBuddy />
     <div className="flex min-h-screen">
       {/* Sidebar — visible md+ */}
-      <aside className="hidden md:flex w-56 border-r border-ink-100 flex-col bg-white shrink-0">
+      {/* Sidebar — pulled toward parchment cream so the chrome shares a warm
+          family with the cards instead of looking like a clinical white rail. */}
+      <aside
+        className="hidden md:flex w-56 border-r flex-col shrink-0"
+        style={{
+          background:
+            "linear-gradient(180deg, var(--color-parchment) 0%, var(--color-app-bg) 100%)",
+          borderColor: "var(--color-parchment-edge)",
+        }}
+      >
         <SidebarBrand />
         <SidebarNav isActive={isActive} />
         <SidebarFooter userEmail={userEmail} />
@@ -114,7 +123,10 @@ function AppShellInner({
         <SidebarFooter userEmail={userEmail} />
       </aside>
 
-      <main className="flex-1 flex flex-col min-w-0 bg-white">
+      {/* Main reading column — kept on the warm app background so the whole
+          page reads like one continuous sheet of paper instead of a white box
+          inside a chrome frame. */}
+      <main className="flex-1 flex flex-col min-w-0">
         <header className="border-b border-ink-100 px-4 md:px-6 h-12 flex items-center gap-3 text-sm">
           {/* Hamburger on mobile */}
           <button
@@ -191,15 +203,30 @@ function Breadcrumb({
 function SidebarBrand({ onClose }: { onClose?: () => void }) {
   return (
     <div className="px-4 py-4 border-b border-ink-100 flex items-center justify-between">
-      <Link href="/" className="flex items-center gap-2">
-        <div className="w-7 h-7 rounded-md bg-ink-900 flex items-center justify-center">
-          <div className="w-2.5 h-2.5 rounded-full bg-flame-500" />
+      <Link href="/" className="flex items-center gap-2.5">
+        {/* Logo mark — a soft plum dot rising out of warm parchment, ringed in
+            honey gold. Reads more like a candle/sun than a tech logo. */}
+        <div
+          className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
+          style={{
+            background:
+              "radial-gradient(circle at 30% 30%, var(--color-parchment) 0%, var(--color-parchment-edge) 100%)",
+            boxShadow:
+              "inset 0 0 0 1px var(--color-honey-300), 0 1px 2px rgba(60, 40, 50, 0.08)",
+          }}
+        >
+          <div className="w-3 h-3 rounded-full bg-plum-500 shadow-sm" />
         </div>
         <div>
-          <div className="text-sm font-semibold text-ink-900 tracking-tight leading-none">
+          <div
+            className="text-base text-ink-900 leading-none serif"
+            style={{ fontWeight: 500, letterSpacing: "-0.01em" }}
+          >
             Soul Service
           </div>
-          <div className="text-[10px] text-ink-400 mt-0.5">for Svitlana</div>
+          <div className="text-[10px] text-ink-500 mt-1 italic serif-italic">
+            for Svitlana
+          </div>
         </div>
       </Link>
       {onClose && (
@@ -283,7 +310,7 @@ function SidebarFooter({ userEmail }: { userEmail?: string }) {
       <div className="px-3 pb-3 text-xs text-ink-500">
         <div className="flex items-center justify-between gap-2 px-1">
           <div className="flex items-center gap-2 min-w-0 flex-1">
-            <div className="w-6 h-6 rounded-md bg-flame-100 flex items-center justify-center text-[11px] font-semibold text-flame-700 shrink-0">
+            <div className="w-6 h-6 rounded-md bg-plum-100 flex items-center justify-center text-[11px] font-semibold text-plum-700 shrink-0">
               {initial}
             </div>
             <div className="min-w-0">

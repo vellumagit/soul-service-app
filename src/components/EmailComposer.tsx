@@ -191,7 +191,7 @@ export function EmailComposer({
       ) : (
         <button
           onClick={() => setOpen(true)}
-          className="text-xs text-flame-700 hover:underline font-medium inline-flex items-center gap-1"
+          className="text-xs text-plum-700 hover:underline font-medium inline-flex items-center gap-1"
           disabled={noEmail}
           title={noEmail ? "Add an email address first" : "Compose email"}
         >

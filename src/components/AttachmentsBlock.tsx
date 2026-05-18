@@ -50,7 +50,7 @@ export function AttachmentsBlock({
 
   return (
     <div className="space-y-4">
-      <div className="border-2 border-dashed border-ink-300 rounded-md p-6 text-center hover:border-flame-500 transition">
+      <div className="border-2 border-dashed border-ink-300 rounded-md p-6 text-center hover:border-plum-500 transition">
         <div className="flex items-center justify-center gap-3 mb-3">
           <label className="text-xs text-ink-500">Type:</label>
           <select
@@ -58,7 +58,7 @@ export function AttachmentsBlock({
             onChange={(e) =>
               setKind(e.target.value as keyof typeof KIND_LABEL)
             }
-            className="text-sm px-2 py-1 border border-ink-200 rounded outline-none focus:border-flame-600"
+            className="text-sm px-2 py-1 border border-ink-200 rounded outline-none focus:border-plum-600"
           >
             {Object.entries(KIND_LABEL).map(([v, l]) => (
               <option key={v} value={v}>
@@ -124,7 +124,7 @@ export function AttachmentsBlock({
                       href={a.url}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-ink-900 hover:text-flame-700 text-sm flex items-center gap-2"
+                      className="text-ink-900 hover:text-plum-700 text-sm flex items-center gap-2"
                     >
                       <svg
                         className="w-3.5 h-3.5 text-ink-400 shrink-0"

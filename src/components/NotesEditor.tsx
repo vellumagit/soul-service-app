@@ -146,7 +146,7 @@ export function NotesEditor({
                 if (t) insertTemplate(t);
                 e.target.value = "";
               }}
-              className="text-xs px-2 py-0.5 border border-ink-200 rounded outline-none focus:border-flame-600 bg-white"
+              className="text-xs px-2 py-0.5 border border-ink-200 rounded outline-none focus:border-plum-600 bg-white"
               title="Insert template"
             >
               <option value="">+ template</option>

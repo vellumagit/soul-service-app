@@ -129,7 +129,7 @@ export function WeekCalendar({
             <div key={i}>
               <div
                 className={`text-xs uppercase tracking-wider mb-2 ${
-                  isToday ? "text-flame-700 font-semibold" : "text-ink-500"
+                  isToday ? "text-plum-700 font-semibold" : "text-ink-500"
                 }`}
               >
                 {DAY_NAMES[i]} · {fullDate(d)}
@@ -148,7 +148,7 @@ export function WeekCalendar({
                       className="block border border-ink-200 rounded-md p-3 bg-white hover:bg-ink-50"
                     >
                       <div className="flex items-center gap-3">
-                        <span className="font-mono text-sm text-flame-700 font-medium">
+                        <span className="font-mono text-sm text-plum-700 font-medium">
                           {shortTime(s.scheduledAt)}
                         </span>
                         <div className="flex-1 min-w-0">
@@ -196,14 +196,14 @@ export function WeekCalendar({
               >
                 <div
                   className={`text-[10px] uppercase tracking-wider ${
-                    isToday ? "text-flame-700" : "text-ink-500"
+                    isToday ? "text-plum-700" : "text-ink-500"
                   }`}
                 >
                   {DAY_NAMES[i]}
                 </div>
                 <div className="mt-0.5">
                   {isToday ? (
-                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-flame-600 text-white text-xs font-semibold">
+                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-plum-600 text-white text-xs font-semibold">
                       {d.getDate()}
                     </span>
                   ) : (
@@ -291,7 +291,7 @@ export function WeekCalendar({
                       right: 0,
                       top: (nowHour - HOUR_START) * PX_PER_HOUR,
                       height: 1,
-                      background: "var(--color-flame-600)",
+                      background: "var(--color-plum-600)",
                       zIndex: 3,
                       pointerEvents: "none",
                     }}
@@ -304,7 +304,7 @@ export function WeekCalendar({
                         width: 8,
                         height: 8,
                         borderRadius: 999,
-                        background: "var(--color-flame-600)",
+                        background: "var(--color-plum-600)",
                       }}
                     />
                   </div>

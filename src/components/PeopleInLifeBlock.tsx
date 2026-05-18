@@ -91,7 +91,7 @@ export function PeopleInLifeBlock({
 
       <button
         onClick={() => setAdding(true)}
-        className="mt-3 text-xs text-flame-700 hover:underline font-medium"
+        className="mt-3 text-xs text-plum-700 hover:underline font-medium"
       >
         + Add someone
       </button>
@@ -230,7 +230,7 @@ function PersonForm({
             type="checkbox"
             name="deceased"
             defaultChecked={person ? !person.isAlive : false}
-            className="w-4 h-4 accent-flame-600"
+            className="w-4 h-4 accent-plum-600"
           />
           <span className="text-ink-700">This person has passed</span>
         </label>

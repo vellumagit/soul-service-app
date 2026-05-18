@@ -18,7 +18,7 @@ export function EditClientDialog({ client }: { client: Client }) {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="text-xs text-flame-700 hover:underline font-medium inline-flex items-center gap-1"
+        className="text-xs text-plum-700 hover:underline font-medium inline-flex items-center gap-1"
       >
         <svg
           className="w-3 h-3"

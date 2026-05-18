@@ -109,7 +109,7 @@ function TaskRowItem({
         className={`mt-0.5 w-4 h-4 rounded border ${
           isDone
             ? "bg-green-600 border-green-600"
-            : "border-ink-300 hover:border-flame-600"
+            : "border-ink-300 hover:border-plum-600"
         } flex items-center justify-center shrink-0`}
         aria-label={isDone ? "Mark incomplete" : "Mark complete"}
       >
@@ -151,7 +151,7 @@ function TaskRowItem({
             {showClient && task.clientName && (
               <Link
                 href={`/clients/${task.clientId}`}
-                className="text-ink-600 hover:text-flame-700"
+                className="text-ink-600 hover:text-plum-700"
               >
                 {task.clientName}
               </Link>
@@ -188,7 +188,7 @@ function AddTaskInline({ clientId }: { clientId?: string }) {
     return (
       <button
         onClick={() => setOpen(true)}
-        className="text-xs text-flame-700 hover:underline font-medium"
+        className="text-xs text-plum-700 hover:underline font-medium"
       >
         + Add task
       </button>

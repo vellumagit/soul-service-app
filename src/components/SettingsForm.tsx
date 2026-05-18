@@ -242,8 +242,8 @@ export function SettingsForm({ settings }: { settings: PractitionerSettings }) {
             </p>
           </div>
 
-          <div className="rounded-md bg-flame-50 border border-flame-100 p-3">
-            <div className="text-sm font-medium text-flame-700 mb-1">
+          <div className="rounded-md bg-plum-50 border border-plum-100 p-3">
+            <div className="text-sm font-medium text-plum-700 mb-1">
               Follow-up cadence (locked in)
             </div>
             <p className="text-xs text-ink-700 leading-relaxed">
@@ -350,13 +350,13 @@ function DataLink({
       download
       className={`block border rounded-md p-3 transition hover:border-ink-400 ${
         primary
-          ? "border-flame-200 bg-flame-50 hover:bg-flame-100"
+          ? "border-plum-200 bg-plum-50 hover:bg-plum-100"
           : "border-ink-200 bg-white hover:bg-ink-50"
       }`}
     >
       <div className="flex items-center gap-2">
         <svg
-          className={`w-4 h-4 ${primary ? "text-flame-700" : "text-ink-500"}`}
+          className={`w-4 h-4 ${primary ? "text-plum-700" : "text-ink-500"}`}
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -394,7 +394,7 @@ function Toggle({
         type="checkbox"
         name={name}
         defaultChecked={defaultChecked}
-        className="mt-0.5 w-4 h-4 accent-flame-600"
+        className="mt-0.5 w-4 h-4 accent-plum-600"
       />
       <div className="flex-1">
         <div className="text-sm text-ink-900">{label}</div>

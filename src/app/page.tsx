@@ -84,7 +84,7 @@ export default async function HomePage() {
                       href={`/clients/${s.clientId}`}
                       className="flex items-center gap-3 px-4 py-3 hover:bg-ink-50"
                     >
-                      <div className="font-mono text-sm text-flame-700 font-medium w-20 shrink-0">
+                      <div className="font-mono text-sm text-plum-700 font-medium w-20 shrink-0">
                         {shortTime(s.scheduledAt)}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -160,7 +160,7 @@ export default async function HomePage() {
                       action={
                         <Link
                           href={`/clients/${s.clientId}?tab=sessions`}
-                          className="text-xs text-flame-700 hover:underline font-medium"
+                          className="text-xs text-plum-700 hover:underline font-medium"
                         >
                           Write notes →
                         </Link>
@@ -189,7 +189,7 @@ export default async function HomePage() {
                       action={
                         <Link
                           href={`/clients/${c.id}`}
-                          className="text-xs text-flame-700 hover:underline font-medium"
+                          className="text-xs text-plum-700 hover:underline font-medium"
                         >
                           Reach out →
                         </Link>

@@ -219,7 +219,7 @@ function StatusBadge({ state }: { state: StatusRow["state"] }) {
     ok: { bg: "bg-green-100", fg: "text-green-700", label: "OK" },
     warn: { bg: "bg-amber-100", fg: "text-amber-700", label: "OFF" },
     off: { bg: "bg-ink-100", fg: "text-ink-600", label: "NOT YET" },
-    soon: { bg: "bg-flame-50", fg: "text-flame-700", label: "SOON" },
+    soon: { bg: "bg-plum-50", fg: "text-plum-700", label: "SOON" },
   }[state];
 
   return (

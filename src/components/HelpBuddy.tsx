@@ -123,7 +123,7 @@ export function HelpBuddy() {
           ${
             open
               ? "bg-ink-900 text-white px-3 py-2"
-              : "bg-flame-600 text-white px-4 py-2.5 hover:bg-flame-700"
+              : "bg-plum-600 text-white px-4 py-2.5 hover:bg-plum-700"
           }`}
       >
         {open ? (
@@ -176,8 +176,8 @@ export function HelpBuddy() {
       >
         {/* Header */}
         <div className="px-4 py-3 border-b border-ink-100 flex items-center gap-2">
-          <div className="w-7 h-7 rounded-full bg-flame-100 flex items-center justify-center">
-            <div className="w-2 h-2 rounded-full bg-flame-600" />
+          <div className="w-7 h-7 rounded-full bg-plum-100 flex items-center justify-center">
+            <div className="w-2 h-2 rounded-full bg-plum-600" />
           </div>
           <div className="flex-1 min-w-0">
             <div className="text-sm font-semibold text-ink-900 leading-tight">
@@ -264,13 +264,13 @@ export function HelpBuddy() {
               rows={1}
               placeholder="Ask anything about the app…"
               disabled={sending}
-              className="flex-1 resize-none text-sm leading-relaxed bg-ink-50 border border-ink-200 rounded-md px-3 py-2 focus:outline-none focus:border-flame-500 focus:bg-white disabled:opacity-60 max-h-32"
+              className="flex-1 resize-none text-sm leading-relaxed bg-ink-50 border border-ink-200 rounded-md px-3 py-2 focus:outline-none focus:border-plum-500 focus:bg-white disabled:opacity-60 max-h-32"
             />
             <button
               type="button"
               onClick={send}
               disabled={sending || input.trim().length === 0}
-              className="shrink-0 text-sm font-medium px-3 py-2 rounded-md bg-flame-600 text-white hover:bg-flame-700 disabled:bg-ink-200 disabled:text-ink-400"
+              className="shrink-0 text-sm font-medium px-3 py-2 rounded-md bg-plum-600 text-white hover:bg-plum-700 disabled:bg-ink-200 disabled:text-ink-400"
             >
               Send
             </button>
@@ -292,7 +292,7 @@ function Bubble({ message }: { message: ChatMessage }) {
         className={`max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed
           ${
             isUser
-              ? "bg-flame-600 text-white"
+              ? "bg-plum-600 text-white"
               : "bg-ink-50 border border-ink-100 text-ink-800"
           }`}
       >

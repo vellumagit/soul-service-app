@@ -190,7 +190,7 @@ export function LogPastSessionDialog({
                   name="paid"
                   checked={paid}
                   onChange={(e) => setPaid(e.target.checked)}
-                  className="accent-flame-600 w-4 h-4"
+                  className="accent-plum-600 w-4 h-4"
                 />
                 Already paid
               </label>

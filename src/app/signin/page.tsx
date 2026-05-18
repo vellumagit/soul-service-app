@@ -24,18 +24,35 @@ export default async function SignInPage({
   const locale = DEFAULT_LOCALE;
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-ink-50 px-4">
+    <div
+      className="min-h-screen flex items-center justify-center px-4"
+      style={{
+        background:
+          "radial-gradient(120% 80% at 50% 0%, var(--color-plum-50) 0%, var(--color-app-bg) 60%)",
+      }}
+    >
       <div className="w-full max-w-sm">
-        <div className="flex items-center gap-2 mb-8 justify-center">
-          <div className="w-8 h-8 rounded-md bg-ink-900 flex items-center justify-center">
-            <div className="w-3 h-3 rounded-full bg-flame-500" />
+        <div className="flex items-center gap-3 mb-8 justify-center">
+          <div
+            className="w-10 h-10 rounded-full flex items-center justify-center"
+            style={{
+              background:
+                "radial-gradient(circle at 30% 30%, var(--color-parchment) 0%, var(--color-parchment-edge) 100%)",
+              boxShadow:
+                "inset 0 0 0 1px var(--color-honey-300), 0 2px 8px rgba(80, 50, 70, 0.08)",
+            }}
+          >
+            <div className="w-3.5 h-3.5 rounded-full bg-plum-500 shadow-sm" />
           </div>
-          <div className="text-base font-semibold text-ink-900 tracking-tight">
+          <div
+            className="text-xl text-ink-900 serif"
+            style={{ fontWeight: 500, letterSpacing: "-0.01em" }}
+          >
             Soul Service
           </div>
         </div>
 
-        <div className="bg-white border border-ink-200 rounded-lg p-6 shadow-sm">
+        <div className="paper-card p-6">
           <h1 className="text-lg font-semibold text-ink-900 mb-1">
             {t(locale, "signin.title")}
           </h1>

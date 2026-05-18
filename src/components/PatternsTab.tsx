@@ -77,7 +77,7 @@ export function PatternsTab({
                         <span className="text-ink-500">{s.arrivedAs}</span>
                       )}
                       {s.arrivedAs && s.leftAs && (
-                        <span className="text-flame-600 mx-1.5">→</span>
+                        <span className="text-plum-600 mx-1.5">→</span>
                       )}
                       {s.leftAs && (
                         <span className="text-green-700">{s.leftAs}</span>
@@ -110,7 +110,7 @@ export function PatternsTab({
                   </div>
                   <div className="h-1.5 bg-ink-100 rounded-full overflow-hidden mt-1">
                     <div
-                      className="h-full bg-flame-500"
+                      className="h-full bg-plum-500"
                       style={{ width: `${pct}%` }}
                     />
                   </div>
@@ -205,12 +205,12 @@ function ThemesBlock({
             onKeyDown={(e) => {
               if (e.key === "Escape") setAdding(false);
             }}
-            className="px-2 py-0.5 border border-ink-300 rounded text-xs outline-none focus:border-flame-600 w-32"
+            className="px-2 py-0.5 border border-ink-300 rounded text-xs outline-none focus:border-plum-600 w-32"
           />
           <button
             type="submit"
             disabled={submitting}
-            className="text-[10px] text-flame-700 font-medium"
+            className="text-[10px] text-plum-700 font-medium"
           >
             {submitting ? "…" : "add"}
           </button>
@@ -225,7 +225,7 @@ function ThemesBlock({
       ) : (
         <button
           onClick={() => setAdding(true)}
-          className="text-xs text-flame-700 hover:underline"
+          className="text-xs text-plum-700 hover:underline"
         >
           + add
         </button>
@@ -292,7 +292,7 @@ function ObservationsBlock({
             required
             rows={2}
             placeholder="Something you keep noticing across sessions"
-            className="w-full px-2 py-1 border border-ink-200 rounded text-sm outline-none focus:border-flame-600"
+            className="w-full px-2 py-1 border border-ink-200 rounded text-sm outline-none focus:border-plum-600"
           />
           <div className="flex items-center justify-end gap-2">
             <button
@@ -314,7 +314,7 @@ function ObservationsBlock({
       ) : (
         <button
           onClick={() => setAdding(true)}
-          className="mt-3 text-xs text-flame-700 hover:underline font-medium"
+          className="mt-3 text-xs text-plum-700 hover:underline font-medium"
         >
           + add observation
         </button>

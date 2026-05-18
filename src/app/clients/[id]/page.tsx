@@ -188,7 +188,7 @@ export default async function ClientProfilePage({
                   work together.{" "}
                   <Link
                     href={`/clients/${client.id}?tab=patterns`}
-                    className="text-flame-700 hover:underline"
+                    className="text-plum-700 hover:underline"
                   >
                     Open Patterns →
                   </Link>
@@ -229,7 +229,7 @@ export default async function ClientProfilePage({
                   <div className="text-right">
                     <Link
                       href={`/clients/${client.id}?tab=patterns`}
-                      className="text-xs text-flame-700 hover:underline"
+                      className="text-xs text-plum-700 hover:underline"
                     >
                       Open Patterns →
                     </Link>
@@ -379,8 +379,11 @@ function ScanCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="paper-card p-5">
-      <div className="font-serif italic text-sm text-ink-600 mb-3">
+    <div className="paper-card p-6">
+      <div
+        className="serif-italic text-base text-plum-700 mb-3"
+        style={{ fontWeight: 400, letterSpacing: "-0.005em" }}
+      >
         {title}
       </div>
       {children}

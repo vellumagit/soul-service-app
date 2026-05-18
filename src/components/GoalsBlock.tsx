@@ -33,7 +33,7 @@ export function GoalsBlock({
       ) : (
         <button
           onClick={() => setAdding(true)}
-          className="text-xs text-flame-700 hover:underline font-medium"
+          className="text-xs text-plum-700 hover:underline font-medium"
         >
           + Add goal
         </button>
@@ -87,7 +87,7 @@ function GoalRow({ goal, clientId }: { goal: Goal; clientId: string }) {
         onMouseUp={commit}
         onTouchEnd={commit}
         disabled={pending}
-        className="w-full mt-1 accent-flame-600"
+        className="w-full mt-1 accent-plum-600"
       />
       {error && (
         <div className="text-[11px] text-red-700 mt-1">{error}</div>

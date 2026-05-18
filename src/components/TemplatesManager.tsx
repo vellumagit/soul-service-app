@@ -49,7 +49,7 @@ export function TemplatesManager({
         </div>
         <button
           onClick={() => setCreating(true)}
-          className="text-xs text-flame-700 hover:underline font-medium"
+          className="text-xs text-plum-700 hover:underline font-medium"
         >
           + New
         </button>

@@ -126,7 +126,7 @@ export default async function PaymentsPage({
                       s.paid
                         ? "bg-green-50 text-green-700"
                         : s.status === "scheduled"
-                        ? "bg-flame-100 text-flame-700"
+                        ? "bg-plum-100 text-plum-700"
                         : "bg-amber-50 text-amber-700"
                     }`}
                   >
@@ -199,7 +199,7 @@ export default async function PaymentsPage({
                           s.paid
                             ? "bg-green-50 text-green-700"
                             : s.status === "scheduled"
-                            ? "bg-flame-100 text-flame-700"
+                            ? "bg-plum-100 text-plum-700"
                             : s.status === "completed"
                             ? "bg-amber-50 text-amber-700"
                             : "bg-ink-100 text-ink-500"

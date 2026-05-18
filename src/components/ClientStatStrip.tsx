@@ -123,7 +123,7 @@ function Cell({
 }) {
   const valueCls = {
     default: "text-ink-900",
-    flame: "text-flame-700",
+    flame: "text-plum-700",
     amber: "text-amber-700",
     muted: "text-ink-500",
   }[accent];

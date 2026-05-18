@@ -22,13 +22,13 @@ export function WhereWeLeftOffCard({
   }
 
   return (
-    <div className="border border-flame-200 bg-gradient-to-br from-flame-50 to-white rounded-lg p-5">
-      <div className="text-[10px] uppercase tracking-wider text-flame-700 font-semibold mb-3">
+    <div className="border border-plum-200 bg-gradient-to-br from-plum-50 to-white rounded-lg p-5">
+      <div className="text-[10px] uppercase tracking-wider text-plum-700 font-semibold mb-3">
         Before you sit with {clientName.split(" ")[0]}
       </div>
 
       {digest.nextSession && (
-        <div className="mb-4 pb-4 border-b border-flame-100">
+        <div className="mb-4 pb-4 border-b border-plum-100">
           <div className="text-[10px] uppercase tracking-wider text-ink-500 mb-1">
             Next session
           </div>
@@ -44,7 +44,7 @@ export function WhereWeLeftOffCard({
               href={digest.nextSession.meetUrl}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1.5 mt-2 text-xs font-medium text-flame-700 hover:text-flame-600"
+              className="inline-flex items-center gap-1.5 mt-2 text-xs font-medium text-plum-700 hover:text-plum-600"
             >
               Join Meet ↗
             </a>
@@ -85,7 +85,7 @@ export function WhereWeLeftOffCard({
               </div>
             )}
             {digest.lastSession.notesExcerpt && (
-              <div className="text-xs text-ink-600 mt-2 leading-relaxed bg-white border border-flame-100 rounded p-2 line-clamp-4">
+              <div className="text-xs text-ink-600 mt-2 leading-relaxed bg-white border border-plum-100 rounded p-2 line-clamp-4">
                 {digest.lastSession.notesExcerpt}
               </div>
             )}
