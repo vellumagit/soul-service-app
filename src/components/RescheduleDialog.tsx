@@ -5,6 +5,7 @@ import { Modal } from "./Modal";
 import { Field, inputCls } from "./Form";
 import { rescheduleSession } from "@/lib/actions";
 import { rethrowIfRedirect } from "@/lib/redirect-error";
+import { LocalDateTimeInput } from "./LocalDateTimeInput";
 
 // Reschedule a session — change date/time and optionally duration. If Google
 // Calendar is connected, the event is updated and the client is notified.
@@ -101,9 +102,8 @@ export function RescheduleDialog({
 
           <div className="grid grid-cols-[1fr_auto] gap-3">
             <Field label="New date &amp; time" required>
-              <input
+              <LocalDateTimeInput
                 name="scheduledAt"
-                type="datetime-local"
                 required
                 defaultValue={initialWhen}
                 className={inputCls}

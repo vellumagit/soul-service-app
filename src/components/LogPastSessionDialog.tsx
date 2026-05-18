@@ -5,6 +5,7 @@ import { Modal } from "./Modal";
 import { Field, inputCls } from "./Form";
 import { logPastSession } from "@/lib/actions";
 import { rethrowIfRedirect } from "@/lib/redirect-error";
+import { LocalDateTimeInput } from "./LocalDateTimeInput";
 
 type ClientOption = { id: string; fullName: string };
 
@@ -132,9 +133,8 @@ export function LogPastSessionDialog({
 
             <div className="grid grid-cols-[1fr_auto] gap-3">
               <Field label="When did it happen?" required>
-                <input
+                <LocalDateTimeInput
                   name="scheduledAt"
-                  type="datetime-local"
                   required
                   defaultValue={defaultWhen()}
                   className={inputCls}

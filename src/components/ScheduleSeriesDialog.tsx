@@ -22,6 +22,14 @@ function defaultFirstAt() {
   return local.toISOString().slice(0, 16);
 }
 
+// Convert a datetime-local string (no timezone marker) to a proper ISO string
+// using the browser's local timezone. Mirrors LocalDateTimeInput — needed
+// inline here because this dialog uses a controlled input for the live preview.
+function localToIso(local: string): string {
+  const d = new Date(local);
+  return Number.isNaN(d.getTime()) ? local : d.toISOString();
+}
+
 function formatPreview(d: Date): string {
   return d.toLocaleString(undefined, {
     weekday: "short",
@@ -211,13 +219,21 @@ export function ScheduleSeriesDialog({
             </div>
 
             <Field label="First session" required>
+              {/* Visible input has no `name` so its tz-less local string
+                  doesn't reach the server. The hidden field carries the
+                  same moment as a tz-aware ISO string (the server parses
+                  that correctly). */}
               <input
-                name="firstAt"
                 type="datetime-local"
                 required
                 value={firstAt}
                 onChange={(e) => setFirstAt(e.target.value)}
                 className={inputCls}
+              />
+              <input
+                type="hidden"
+                name="firstAt"
+                value={firstAt ? localToIso(firstAt) : ""}
               />
             </Field>
 

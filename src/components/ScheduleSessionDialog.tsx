@@ -5,6 +5,7 @@ import { Modal } from "./Modal";
 import { Field, inputCls } from "./Form";
 import { scheduleSession } from "@/lib/actions";
 import { rethrowIfRedirect } from "@/lib/redirect-error";
+import { LocalDateTimeInput } from "./LocalDateTimeInput";
 
 type ClientOption = { id: string; fullName: string };
 
@@ -176,9 +177,12 @@ export function ScheduleSessionDialog({
 
             <div className="grid grid-cols-[1fr_auto] gap-3">
               <Field label="Date & time" required>
-                <input
+                {/* LocalDateTimeInput submits an ISO string with her browser's
+                    timezone applied — without this, the server would parse the
+                    bare datetime-local string as UTC and shift the session by
+                    her UTC offset. */}
+                <LocalDateTimeInput
                   name="scheduledAt"
-                  type="datetime-local"
                   required
                   defaultValue={defaultWhen()}
                   className={inputCls}
