@@ -8,6 +8,7 @@ import { SignOutButton } from "./SignOutButton";
 import { KeyboardShortcuts, KeyboardShortcutsTrigger } from "./KeyboardShortcuts";
 import { LocaleProvider, useT } from "./LocaleProvider";
 import { HelpBuddy } from "./HelpBuddy";
+import { FlashNotifier } from "./FlashNotifier";
 import { DEFAULT_LOCALE, type Locale, type TranslationKey } from "@/lib/i18n";
 
 type NavItem = {
@@ -86,6 +87,7 @@ function AppShellInner({
     <>
       <KeyboardShortcuts />
       <HelpBuddy />
+      <FlashNotifier />
     <div className="flex min-h-screen">
       {/* Sidebar — visible md+ */}
       {/* Sidebar — pulled toward parchment cream so the chrome shares a warm
