@@ -1383,6 +1383,63 @@ export async function disconnectGoogleAction() {
   revalidatePath("/settings");
 }
 
+/** Diagnostic: create a probe Google Calendar event, immediately delete it,
+ *  and return either success or the actual Google error message. Lets the
+ *  practitioner figure out why sync is failing without us needing to dig
+ *  into Vercel logs. */
+export type TestGoogleResult =
+  | { ok: true; meetUrl: string | null; htmlLink: string | null }
+  | { ok: false; error: string };
+
+export async function testGoogleConnectionAction(): Promise<TestGoogleResult> {
+  const { accountId } = await requireSession();
+  const { createCalendarEvent, deleteCalendarEvent } = await import(
+    "./google-calendar"
+  );
+
+  try {
+    // Place the probe an hour in the future so it doesn't show up at "now"
+    // even if cleanup somehow fails.
+    const startAt = new Date(Date.now() + 60 * 60 * 1000);
+    const result = await createCalendarEvent(accountId, {
+      summary: "[Soul Service probe — safe to delete]",
+      description:
+        "Diagnostic event from the Status page. We're deleting it immediately. If you see this on your calendar, please dismiss — it means cleanup didn't fire.\n\nCreated by Soul Service",
+      startAt,
+      durationMinutes: 5,
+      attendeeEmail: null,
+      practitionerEmail: null,
+    });
+
+    if (!result) {
+      return {
+        ok: false,
+        error:
+          "Google isn't connected for this account, or the refresh token is gone. Try disconnect + reconnect in Settings.",
+      };
+    }
+
+    // Best-effort cleanup. If delete fails she'll see the probe event briefly
+    // — annoying but not destructive.
+    try {
+      await deleteCalendarEvent(accountId, result.eventId);
+    } catch (e) {
+      console.warn("[testGoogleConnection] probe cleanup failed:", e);
+    }
+
+    return {
+      ok: true,
+      meetUrl: result.meetUrl,
+      htmlLink: result.htmlLink,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Unknown error",
+    };
+  }
+}
+
 // Internal helper — best-effort Google Calendar push for a session.
 // Never throws; any Google failure is logged + returned as an error string.
 // Currently disabled in UI ("coming soon") but the code still runs if creds

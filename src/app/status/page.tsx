@@ -11,6 +11,7 @@ import {
 } from "@/db/queries";
 import { getGoogleConnectionStatus } from "@/lib/google-calendar";
 import { isTokenEncryptionConfigured } from "@/lib/token-crypto";
+import { TestGoogleButton } from "@/components/TestGoogleButton";
 import { asLocale, t } from "@/lib/i18n";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +20,9 @@ type StatusRow = {
   label: string;
   state: "ok" | "warn" | "soon" | "off";
   detail: string;
+  /** Optional inline UI to render under the detail — e.g. a "Test connection"
+   *  button for diagnosing rows that say "OK" but don't actually work. */
+  extra?: React.ReactNode;
 };
 
 export default async function StatusPage() {
@@ -81,10 +85,11 @@ export default async function StatusPage() {
         ? "off"
         : "warn",
       detail: googleStatus.connected
-        ? `Connected as ${googleStatus.email}. Schedule a session → Calendar event + Meet link created automatically.`
+        ? `Connected as ${googleStatus.email}. Schedule a session → Calendar event + Meet link created automatically. If sessions aren't appearing on your Google calendar, click "Test Google connection" to see why.`
         : process.env.GOOGLE_CLIENT_ID
         ? "Google client credentials set, but you haven't connected this account yet. Go to Settings → Google Calendar & Meet → Connect."
         : "Set GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET in env vars first. See README for the 5-min Google Cloud Console setup.",
+      extra: googleStatus.connected ? <TestGoogleButton /> : null,
     },
     {
       label: "OAuth token encryption at rest",
@@ -200,6 +205,7 @@ export default async function StatusPage() {
                 <div className="text-xs text-ink-500 mt-0.5 leading-relaxed">
                   {row.detail}
                 </div>
+                {row.extra}
               </div>
             </li>
           ))}
