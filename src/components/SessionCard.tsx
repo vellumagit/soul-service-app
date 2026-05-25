@@ -24,6 +24,7 @@ import { RescheduleDialog } from "./RescheduleDialog";
 import { rethrowIfRedirect } from "@/lib/redirect-error";
 import { notify } from "./FlashNotifier";
 import { describeSaveError } from "@/lib/save-error";
+import { PushToGoogleButton } from "./PushToGoogleButton";
 
 const STATUS_CHIP: Record<string, string> = {
   scheduled: "bg-plum-100 text-plum-700",
@@ -366,6 +367,10 @@ export function SessionCard({
                 Meet link ↗
               </a>
             )}
+            <PushToGoogleButton
+              sessionId={session.id}
+              hasGoogleEvent={!!session.googleEventId}
+            />
             <div className="flex-1" />
             <ConfirmButton
               label={

@@ -119,15 +119,18 @@ export function ScheduleSessionDialog({
                 // save failed.
                 setOpen(false);
                 if (result.googleWarning) {
-                  // Tell her about the Google miss as a non-blocking flash.
+                  // Tell her about the Google miss as a non-blocking flash —
+                  // and include the ACTUAL Google error so she knows whether
+                  // to reconnect, fix scopes, etc. Linking to /status lets
+                  // her run the diagnostic + try the bulk catch-up button
+                  // after fixing.
                   notify({
                     kind: "warning",
-                    title: "Session saved — but Google didn't sync",
-                    body:
-                      "No Meet link or calendar invite went out. The session is on your in-app calendar. Reconnect Google to fix.",
-                    actionHref: "/settings",
-                    actionLabel: "Open Settings",
-                    ttlMs: 14000,
+                    title: "Session saved — Google didn't sync",
+                    body: `${result.googleWarning.slice(0, 220)} · Reconnect Google in Settings, then sync from Status.`,
+                    actionHref: "/status",
+                    actionLabel: "Diagnose",
+                    ttlMs: 16000,
                   });
                 } else {
                   notify({

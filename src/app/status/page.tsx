@@ -12,6 +12,7 @@ import {
 import { getGoogleConnectionStatus } from "@/lib/google-calendar";
 import { isTokenEncryptionConfigured } from "@/lib/token-crypto";
 import { TestGoogleButton } from "@/components/TestGoogleButton";
+import { SyncAllSessionsButton } from "@/components/SyncAllSessionsButton";
 import { asLocale, t } from "@/lib/i18n";
 
 export const dynamic = "force-dynamic";
@@ -89,7 +90,12 @@ export default async function StatusPage() {
         : process.env.GOOGLE_CLIENT_ID
         ? "Google client credentials set, but you haven't connected this account yet. Go to Settings → Google Calendar & Meet → Connect."
         : "Set GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET in env vars first. See README for the 5-min Google Cloud Console setup.",
-      extra: googleStatus.connected ? <TestGoogleButton /> : null,
+      extra: googleStatus.connected ? (
+        <>
+          <TestGoogleButton />
+          <SyncAllSessionsButton />
+        </>
+      ) : null,
     },
     {
       label: "OAuth token encryption at rest",

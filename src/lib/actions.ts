@@ -1440,6 +1440,106 @@ export async function testGoogleConnectionAction(): Promise<TestGoogleResult> {
   }
 }
 
+/** Public sync-one action — push a specific session to Google Calendar on
+ *  demand. Used by the "Push to Google Calendar" button on session cards so
+ *  she can backfill sessions that were saved while Google was broken (or
+ *  retry after fixing the connection). Self-heals 404/410 inside
+ *  syncSessionToGoogle's existing flow. Account-scoped: only her own
+ *  sessions are touchable. */
+export type SyncSessionResult =
+  | { ok: true; meetUrl: string | null }
+  | { ok: false; error: string };
+
+export async function syncSessionToGoogleAction(
+  sessionId: string
+): Promise<SyncSessionResult> {
+  const { accountId } = await requireSession();
+  // Re-verify the session belongs to the calling account.
+  const [row] = await db
+    .select({ id: sessions.id })
+    .from(sessions)
+    .where(and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId)))
+    .limit(1);
+  if (!row) {
+    return { ok: false, error: "Session not found in your account." };
+  }
+  const result = await syncSessionToGoogle(sessionId);
+  if (!result.ok) return result;
+  revalidatePath("/");
+  revalidatePath("/calendar");
+  return { ok: true, meetUrl: result.meetUrl ?? null };
+}
+
+/** Bulk catch-up — finds her unsynced sessions and pushes each to Google
+ *  Calendar in sequence. Rate-limited to ~6 per second (well under Google's
+ *  600 req/min/user quota). Capped at MAX per call so a single click fits
+ *  inside Vercel's function timeout; for bigger backlogs she clicks again
+ *  and the response tells her how many remain.
+ *
+ *  Past + future, in chronological order — past first so when she scrolls
+ *  back through her Google calendar today she sees history landing as it
+ *  catches up. */
+const SYNC_BATCH_MAX = 25;
+
+export type SyncAllResult = {
+  synced: number;
+  failed: number;
+  remaining: number;
+  firstError: string | null;
+};
+
+export async function syncAllUnsyncedToGoogleAction(): Promise<SyncAllResult> {
+  const { accountId } = await requireSession();
+
+  // Find unsynced sessions for this account. We intentionally include past
+  // sessions — practitioners go back to look up "what did we do last
+  // Tuesday" on their phone calendar, so the history matters too. Skip
+  // cancelled (those wouldn't belong on Google anyway).
+  const unsynced = await db
+    .select({ id: sessions.id })
+    .from(sessions)
+    .where(
+      and(
+        eq(sessions.accountId, accountId),
+        isNull(sessions.googleEventId),
+        // exclude cancelled — they shouldn't appear on her calendar at all
+        sql`${sessions.status} <> 'cancelled'`
+      )
+    )
+    .orderBy(sessions.scheduledAt);
+
+  if (unsynced.length === 0) {
+    return { synced: 0, failed: 0, remaining: 0, firstError: null };
+  }
+
+  const batch = unsynced.slice(0, SYNC_BATCH_MAX);
+  const remaining = Math.max(0, unsynced.length - batch.length);
+
+  let synced = 0;
+  let failed = 0;
+  let firstError: string | null = null;
+
+  for (const row of batch) {
+    const result = await syncSessionToGoogle(row.id);
+    if (result.ok) {
+      synced++;
+    } else {
+      failed++;
+      if (firstError === null) firstError = result.error;
+    }
+    // ~150ms between calls keeps us comfortably under the 600/min quota.
+    await new Promise((r) => setTimeout(r, 150));
+  }
+
+  if (synced > 0) {
+    revalidatePath("/");
+    revalidatePath("/calendar");
+    revalidatePath("/status");
+  }
+
+  return { synced, failed, remaining, firstError };
+}
+
 // Internal helper — best-effort Google Calendar push for a session.
 // Never throws; any Google failure is logged + returned as an error string.
 // Currently disabled in UI ("coming soon") but the code still runs if creds
