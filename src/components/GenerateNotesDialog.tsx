@@ -1,11 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Modal } from "./Modal";
 import { Field, inputCls } from "./Form";
 import { generateNotesForSession } from "@/lib/actions";
 import { rethrowIfRedirect } from "@/lib/redirect-error";
 import type { NoteTemplate } from "@/db/schema";
+import { useDraft } from "@/lib/useDraft";
+import {
+  DraftRestoreBanner,
+  SaveStatusChip,
+} from "./DraftRestoreBanner";
 
 // "Generate notes from transcript" — pasted from Fathom/Otter/Tactiq/anywhere.
 // Sends to Claude (server-side), gets back markdown structured to a template,
@@ -34,6 +39,26 @@ export function GenerateNotesDialog({
     noteTemplates[0]?.id ?? ""
   );
   const [replaceExisting, setReplaceExisting] = useState(false);
+
+  // Autosave the pasted transcript. Pasted transcripts can be many thousands
+  // of characters — losing one to an accidental dialog close (or her
+  // navigating away to look something up) is a real moment of pain. The
+  // draft is keyed per-session so each session keeps its own paste safe.
+  const draft = useDraft<string>(
+    open ? `session:${sessionId}:transcript` : null,
+    ""
+  );
+  const storedTranscript = open ? draft.readStoredValue() : null;
+  const draftHasContent =
+    !!storedTranscript &&
+    storedTranscript.trim().length > 0 &&
+    storedTranscript !== transcript;
+
+  // When the user types/pastes, mirror into the draft store.
+  useEffect(() => {
+    if (open && transcript.length > 0) draft.saveDraft(transcript);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transcript, open]);
 
   function reset() {
     setTranscript("");
@@ -136,6 +161,9 @@ export function GenerateNotesDialog({
                 if (!result.ok) {
                   setError(result.error);
                 } else {
+                  // Notes landed on the session — the transcript draft is
+                  // no longer useful to keep around.
+                  draft.clearDraft();
                   const note =
                     result.cacheReadTokens > 0
                       ? `Cached system prompt was reused (${result.cacheReadTokens.toLocaleString()} tokens at ~10% cost).`
@@ -162,6 +190,18 @@ export function GenerateNotesDialog({
               Meet&apos;s built-in transcription — anywhere. The AI will write
               session notes in your voice using the template you pick.
             </p>
+
+            {draftHasContent && (
+              <DraftRestoreBanner
+                ageMs={draft.storedAgeMs}
+                onRestore={() => {
+                  const stored = draft.readStoredValue();
+                  if (stored != null) setTranscript(stored);
+                  draft.discardStored();
+                }}
+                onDiscard={() => draft.discardStored()}
+              />
+            )}
 
             {error && (
               <div className="text-xs text-red-700 bg-red-50 border border-red-100 rounded p-2">
@@ -200,6 +240,9 @@ export function GenerateNotesDialog({
 Speaker 2 (00:00:07): Honestly, the week was hard. There were moments where..."
                 className={`${inputCls} font-mono text-xs resize-y`}
               />
+              <div className="flex justify-end mt-1">
+                <SaveStatusChip status={draft.status} />
+              </div>
             </Field>
 
             {hasExistingNotes && (

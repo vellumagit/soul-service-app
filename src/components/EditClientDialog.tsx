@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Modal } from "./Modal";
 import { Field, inputCls } from "./Form";
 import { ConfirmButton } from "./ConfirmButton";
@@ -8,11 +8,63 @@ import { updateClient, deleteClient } from "@/lib/actions";
 import type { Client } from "@/db/schema";
 import { LOCALE_LABELS, LOCALES } from "@/lib/i18n";
 import { rethrowIfRedirect } from "@/lib/redirect-error";
+import { useDraft } from "@/lib/useDraft";
+import {
+  DraftRestoreBanner,
+  SaveStatusChip,
+} from "./DraftRestoreBanner";
+import { notify } from "./FlashNotifier";
+import { describeSaveError } from "@/lib/save-error";
 
 export function EditClientDialog({ client }: { client: Client }) {
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Whole-form autosave keyed by client id. Hook is inert until open.
+  const formRef = useRef<HTMLFormElement>(null);
+  const draft = useDraft<Record<string, string>>(
+    open ? `client:${client.id}:edit` : null,
+    {}
+  );
+  const storedDraft = open ? draft.readStoredValue() : null;
+  // Only show "restore?" if the stored draft differs from what the server
+  // currently has — i.e. there's something to restore that isn't already in
+  // the live row. Compare against the form's defaultValues by examining the
+  // current `client` props.
+  const draftDiffersFromServer =
+    !!storedDraft &&
+    Object.entries(storedDraft).some(([k, v]) => {
+      const current = (client as unknown as Record<string, unknown>)[k];
+      const currentStr =
+        current == null ? "" : Array.isArray(current) ? current.join(", ") : String(current);
+      return v !== currentStr && (v ?? "").trim() !== "";
+    });
+
+  function snapshotForm() {
+    if (!formRef.current) return;
+    const fd = new FormData(formRef.current);
+    const obj: Record<string, string> = {};
+    for (const [k, v] of fd.entries()) {
+      if (typeof v === "string") obj[k] = v;
+    }
+    draft.saveDraft(obj);
+  }
+
+  function restoreDraftIntoForm() {
+    if (!formRef.current) return;
+    const stored = draft.readStoredValue();
+    if (!stored) return;
+    for (const [name, value] of Object.entries(stored)) {
+      // namedItem can return Element | RadioNodeList — skip the latter
+      // (radio groups). For singular elements, set value via duck-typing.
+      const el = formRef.current.elements.namedItem(name);
+      if (el && !(el instanceof RadioNodeList) && "value" in el) {
+        (el as { value: string }).value = value;
+      }
+    }
+    draft.discardStored();
+  }
 
   return (
     <>
@@ -74,15 +126,35 @@ export function EditClientDialog({ client }: { client: Client }) {
       >
         <form
           id="edit-client-form"
+          ref={formRef}
+          onInput={snapshotForm}
           action={async (fd) => {
             setSubmitting(true);
             setError(null);
             try {
               await updateClient(fd);
+              // updateClient doesn't redirect — it just revalidates. Once the
+              // server confirmed the write, the localStorage draft is stale,
+              // so drop it.
+              draft.clearDraft();
               setOpen(false);
+              notify({
+                kind: "success",
+                title: "Profile saved",
+                ttlMs: 2500,
+              });
             } catch (err) {
               rethrowIfRedirect(err);
-              setError(err instanceof Error ? err.message : "Something went wrong");
+              const info = describeSaveError(err);
+              setError(info.message);
+              if (info.offline) {
+                notify({
+                  kind: "warning",
+                  title: "You're offline",
+                  body: "Your typing is saved locally — try again once you're back online.",
+                  ttlMs: 10000,
+                });
+              }
             } finally {
               setSubmitting(false);
             }
@@ -91,11 +163,23 @@ export function EditClientDialog({ client }: { client: Client }) {
         >
           <input type="hidden" name="id" value={client.id} />
 
+          {draftDiffersFromServer && (
+            <DraftRestoreBanner
+              ageMs={draft.storedAgeMs}
+              onRestore={restoreDraftIntoForm}
+              onDiscard={() => draft.discardStored()}
+            />
+          )}
+
           {error && (
             <div className="text-xs text-red-700 bg-red-50 border border-red-100 rounded p-2">
               {error}
             </div>
           )}
+
+          <div className="flex justify-end -mb-2">
+            <SaveStatusChip status={draft.status} />
+          </div>
 
           <div className="grid grid-cols-2 gap-3">
             <Field label="Full name" required>

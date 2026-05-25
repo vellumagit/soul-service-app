@@ -3,11 +3,22 @@
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { useDraft } from "@/lib/useDraft";
+import {
+  DraftRestoreBanner,
+  SaveStatusChip,
+} from "./DraftRestoreBanner";
 
 type Template = { id: string; name: string; body: string };
 
 // Markdown editor: textarea + toolbar (B / I / list / heading / link) + preview toggle.
 // Wraps current selection. Saves as plain markdown text.
+//
+// Autosave: if `draftKey` is passed, every keystroke quietly persists the
+// current text to localStorage (debounced ~500ms). When she returns to the
+// same record we offer to restore — and once the parent's save action lands
+// and the new `defaultValue` arrives via revalidation, the draft is cleared
+// (the server is now the source of truth).
 export function NotesEditor({
   name,
   defaultValue,
@@ -15,6 +26,7 @@ export function NotesEditor({
   rows = 8,
   placeholder,
   onChange,
+  draftKey,
 }: {
   name?: string;
   defaultValue?: string;
@@ -22,10 +34,15 @@ export function NotesEditor({
   rows?: number;
   placeholder?: string;
   onChange?: (val: string) => void;
+  /** Unique key for autosave (e.g. `session:<id>:notes`). Omit to disable. */
+  draftKey?: string | null;
 }) {
   const ref = useRef<HTMLTextAreaElement | null>(null);
   const [value, setValue] = useState(defaultValue ?? "");
   const [mode, setMode] = useState<"write" | "preview">("write");
+
+  // Autosave wiring. When draftKey is falsy the hook is inert.
+  const draft = useDraft<string>(draftKey ?? null, defaultValue ?? "");
 
   // Sync to defaultValue when the prop actually changes from its last-seen
   // value. This lets external writes — most importantly the AI-notes flow,
@@ -33,18 +50,25 @@ export function NotesEditor({
   // show up in the editor without a hard reload. We track the last-seen
   // default in a ref so we only react to real changes, not to React just
   // re-rendering with the same prop.
+  //
+  // When the defaultValue changes from outside (i.e. a successful save came
+  // back through revalidation), the server is now the source of truth and we
+  // clear any local draft. This is the "save always commits" guarantee from
+  // the editor's side: once the new server value arrives, the draft goes.
   const lastDefault = useRef(defaultValue ?? "");
   useEffect(() => {
     const next = defaultValue ?? "";
     if (next !== lastDefault.current) {
       lastDefault.current = next;
       setValue(next);
+      draft.clearDraft();
     }
-  }, [defaultValue]);
+  }, [defaultValue, draft]);
 
   function update(v: string) {
     setValue(v);
     onChange?.(v);
+    if (draftKey) draft.saveDraft(v);
   }
 
   function wrap(prefix: string, suffix = prefix) {
@@ -89,7 +113,25 @@ export function NotesEditor({
     requestAnimationFrame(() => t.focus());
   }
 
+  function restoreDraft() {
+    const stored = draft.readStoredValue();
+    if (stored != null) {
+      update(stored);
+    }
+    draft.discardStored();
+  }
+
   return (
+    <div className="space-y-2">
+      {/* Restore banner — only shows when a stale draft is waiting AND we
+          haven't just imported the same text from the server. */}
+      {draftKey && draft.hasStoredDraft && draft.readStoredValue() !== value && (
+        <DraftRestoreBanner
+          ageMs={draft.storedAgeMs}
+          onRestore={restoreDraft}
+          onDiscard={() => draft.discardStored()}
+        />
+      )}
     <div className="border border-ink-200 rounded-md bg-white overflow-hidden">
       <div className="flex items-center gap-1 px-2 py-1.5 border-b border-ink-100 bg-ink-50/50 flex-wrap">
         <ToolbarButton
@@ -161,6 +203,10 @@ export function NotesEditor({
 
         <div className="flex-1" />
 
+        {/* Quiet "Draft saved" / "Saving..." indicator — only renders when
+            draftKey is in use and after the first autosave fires. */}
+        {draftKey && <SaveStatusChip status={draft.status} />}
+
         <button
           type="button"
           onClick={() => setMode(mode === "write" ? "preview" : "write")}
@@ -211,6 +257,7 @@ export function NotesEditor({
           )}
         </div>
       )}
+    </div>
     </div>
   );
 }

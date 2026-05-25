@@ -1,11 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Modal } from "./Modal";
 import { Field, inputCls } from "./Form";
 import { createClient } from "@/lib/actions";
 import { LOCALE_LABELS, LOCALES } from "@/lib/i18n";
-import { rethrowIfRedirect } from "@/lib/redirect-error";
+import { isRedirectError } from "@/lib/redirect-error";
+import { useDraft } from "@/lib/useDraft";
+import {
+  DraftRestoreBanner,
+  SaveStatusChip,
+} from "./DraftRestoreBanner";
 
 export function NewClientDialog({
   trigger,
@@ -15,6 +20,47 @@ export function NewClientDialog({
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Autosave the whole form to localStorage as she types. Keyed by
+  // "new-client" (only one new-client form can be open at a time). Hook
+  // is inert until the dialog actually mounts the form.
+  const formRef = useRef<HTMLFormElement>(null);
+  const draft = useDraft<Record<string, string>>(
+    open ? "new-client" : null,
+    {}
+  );
+
+  // Whether to show the restore banner. Computed lazily — only when the
+  // dialog opens AND a non-empty draft is in storage.
+  const storedDraft = open ? draft.readStoredValue() : null;
+  const draftNonEmpty =
+    !!storedDraft && Object.values(storedDraft).some((v) => v && v.trim() !== "");
+
+  function snapshotForm() {
+    if (!formRef.current) return;
+    const fd = new FormData(formRef.current);
+    const obj: Record<string, string> = {};
+    for (const [k, v] of fd.entries()) {
+      if (typeof v === "string") obj[k] = v;
+    }
+    draft.saveDraft(obj);
+  }
+
+  function restoreDraftIntoForm() {
+    if (!formRef.current) return;
+    const stored = draft.readStoredValue();
+    if (!stored) return;
+    for (const [name, value] of Object.entries(stored)) {
+      // namedItem can return Element | RadioNodeList — skip the latter
+      // (radio groups, which we don't have on these forms). For singular
+      // elements, set value via duck-typing on `value`.
+      const el = formRef.current.elements.namedItem(name);
+      if (el && !(el instanceof RadioNodeList) && "value" in el) {
+        (el as { value: string }).value = value;
+      }
+    }
+    draft.discardStored();
+  }
 
   // Keyboard shortcut `n` dispatches this event globally — we open ourselves.
   useEffect(() => {
@@ -76,6 +122,10 @@ export function NewClientDialog({
       >
         <form
           id="new-client-form"
+          ref={formRef}
+          // Autosave the whole form on every input event. Debounced inside
+          // useDraft so we don't hammer localStorage.
+          onInput={snapshotForm}
           action={async (fd) => {
             setSubmitting(true);
             setError(null);
@@ -85,9 +135,18 @@ export function NewClientDialog({
               // for navigation to actually happen. The catch below rethrows
               // it via rethrowIfRedirect() — only real errors get displayed.
               await createClient(fd);
+              // Unreachable in the success case (createClient redirects),
+              // but kept here for the non-redirecting future.
+              draft.clearDraft();
               setOpen(false);
             } catch (err) {
-              rethrowIfRedirect(err);
+              if (isRedirectError(err)) {
+                // Success — the action redirected. Clear the draft BEFORE
+                // letting the framework process the redirect, so when she
+                // lands on the new client page the autosave stash is gone.
+                draft.clearDraft();
+                throw err;
+              }
               setError(err instanceof Error ? err.message : "Something went wrong");
             } finally {
               setSubmitting(false);
@@ -100,11 +159,23 @@ export function NewClientDialog({
             them. You can edit anything later from their profile.
           </p>
 
+          {draftNonEmpty && (
+            <DraftRestoreBanner
+              ageMs={draft.storedAgeMs}
+              onRestore={restoreDraftIntoForm}
+              onDiscard={() => draft.discardStored()}
+            />
+          )}
+
           {error && (
             <div className="text-xs text-red-700 bg-red-50 border border-red-100 rounded p-2">
               {error}
             </div>
           )}
+
+          <div className="flex justify-end -mb-2">
+            <SaveStatusChip status={draft.status} />
+          </div>
 
           <Field label="Full name" required>
             <input

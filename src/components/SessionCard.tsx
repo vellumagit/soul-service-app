@@ -22,6 +22,8 @@ import { GenerateInvoiceButton } from "./GenerateInvoiceButton";
 import { GenerateNotesDialog } from "./GenerateNotesDialog";
 import { RescheduleDialog } from "./RescheduleDialog";
 import { rethrowIfRedirect } from "@/lib/redirect-error";
+import { notify } from "./FlashNotifier";
+import { describeSaveError } from "@/lib/save-error";
 
 const STATUS_CHIP: Record<string, string> = {
   scheduled: "bg-plum-100 text-plum-700",
@@ -134,6 +136,7 @@ export function SessionCard({
         <div className="border-t border-ink-100 px-4 py-4 bg-ink-50/40 space-y-4">
           <form
             action={async (fd) => {
+              const isMarkComplete = fd.get("markComplete") === "true";
               setSubmitting(true);
               setError(null);
               try {
@@ -141,11 +144,23 @@ export function SessionCard({
                 // Save succeeded — clear the dirty flag so collapsing /
                 // navigating away no longer prompts.
                 setDirty(false);
+                notify({
+                  kind: "success",
+                  title: isMarkComplete ? "Session marked complete" : "Session saved",
+                  ttlMs: 2500,
+                });
               } catch (err) {
                 rethrowIfRedirect(err);
-                setError(
-                  err instanceof Error ? err.message : "Couldn't save."
-                );
+                const info = describeSaveError(err);
+                setError(info.message);
+                if (info.offline) {
+                  notify({
+                    kind: "warning",
+                    title: "You're offline",
+                    body: "Your typing is saved locally — try again once you're back online.",
+                    ttlMs: 10000,
+                  });
+                }
               } finally {
                 setSubmitting(false);
               }
@@ -216,6 +231,7 @@ export function SessionCard({
               <NotesEditor
                 name="notes"
                 defaultValue={session.notes ?? ""}
+                draftKey={`session:${session.id}:notes`}
                 templates={noteTemplates.map((t) => ({
                   id: t.id,
                   name: t.name,
