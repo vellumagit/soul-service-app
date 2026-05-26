@@ -1655,13 +1655,43 @@ async function syncSessionToGoogle(
         .where(eq(sessions.id, sessionId));
     }
 
+    // Success — clear any stale error on the settings row so the Status
+    // page stops shouting about a problem that's been fixed.
+    await db
+      .update(practitionerSettings)
+      .set({
+        googleLastError: null,
+        googleLastErrorAt: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(practitionerSettings.accountId, session.accountId));
+
     return { ok: true, meetUrl: result.meetUrl };
   } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : "Sync failed";
     console.warn("Google Calendar sync failed:", err);
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : "Sync failed",
-    };
+    // Persist the error on the settings row so /status can surface it later.
+    // Best-effort — don't fail the action if this write itself errors.
+    try {
+      const [s] = await db
+        .select({ accountId: sessions.accountId })
+        .from(sessions)
+        .where(eq(sessions.id, sessionId))
+        .limit(1);
+      if (s) {
+        await db
+          .update(practitionerSettings)
+          .set({
+            googleLastError: errorMsg.slice(0, 1000),
+            googleLastErrorAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(practitionerSettings.accountId, s.accountId));
+      }
+    } catch (writeErr) {
+      console.warn("[syncSessionToGoogle] couldn't persist error:", writeErr);
+    }
+    return { ok: false, error: errorMsg };
   }
 }
 

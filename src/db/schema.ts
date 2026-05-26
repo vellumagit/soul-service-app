@@ -547,6 +547,14 @@ export const practitionerSettings = pgTable("practitioner_settings", {
   googleTokenExpiresAt: timestamp("google_token_expires_at"),
   googleCalendarEmail: text("google_calendar_email"), // the connected Google account
   googleConnectedAt: timestamp("google_connected_at"),
+  // Last error the Calendar sync hit for this account. Updated by
+  // syncSessionToGoogle on every failure, cleared on the next success.
+  // Surfaced on /status so she (and we) can see why sync is failing without
+  // having to dig through Vercel logs. Includes the raw message from Google
+  // — "Google Calendar API has not been used in project N", "invalid_grant",
+  // scope errors, etc.
+  googleLastError: text("google_last_error"),
+  googleLastErrorAt: timestamp("google_last_error_at"),
 
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

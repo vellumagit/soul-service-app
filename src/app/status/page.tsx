@@ -80,8 +80,13 @@ export default async function StatusPage() {
     },
     {
       label: "Google Calendar + Meet",
+      // If we've recently seen an actual sync failure, downgrade the badge
+      // even though OAuth itself is still technically "connected" — she
+      // shouldn't see green when calendar inserts are failing.
       state: googleStatus.connected
-        ? "ok"
+        ? settings.googleLastError
+          ? "warn"
+          : "ok"
         : process.env.GOOGLE_CLIENT_ID
         ? "off"
         : "warn",
@@ -92,6 +97,28 @@ export default async function StatusPage() {
         : "Set GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET in env vars first. See README for the 5-min Google Cloud Console setup.",
       extra: googleStatus.connected ? (
         <>
+          {settings.googleLastError && (
+            <div className="mt-3 text-xs rounded-md p-3 bg-red-50 border border-red-100 text-red-800 leading-relaxed">
+              <div className="font-semibold mb-1">
+                Last Google error
+                {settings.googleLastErrorAt && (
+                  <span className="font-normal text-red-700/80 ml-1.5">
+                    · {settings.googleLastErrorAt.toLocaleString()}
+                  </span>
+                )}
+              </div>
+              <pre className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-red-900">
+                {settings.googleLastError}
+              </pre>
+              <div className="text-[10px] text-red-700/80 mt-2">
+                This message comes straight from Google. Common fixes:
+                disconnect + reconnect in Settings (refreshes the OAuth
+                grant); or, if it mentions an API not being enabled, ask
+                Brian to enable the Google Calendar API in the Google Cloud
+                project that issued these credentials.
+              </div>
+            </div>
+          )}
           <TestGoogleButton />
           <SyncAllSessionsButton />
         </>
