@@ -273,7 +273,7 @@ export default async function ClientProfilePage({
           </div>
 
           {/* Practitioner-only private notes */}
-          <PrivateNotesBlock body={client.privateNotes} />
+          <PrivateNotesBlock clientId={client.id} body={client.privateNotes} />
 
           {/* Emergency contact — small footer-ish block */}
           {client.emergencyName && (

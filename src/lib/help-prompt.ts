@@ -48,6 +48,9 @@ Soul Service is built specifically for Svitlana, a sole practitioner who holds o
 
 If she asks "what's new?" / "что нового?" / "що нового?", lead with the highlights from this list. Most recent first.
 
+- **"Just for you" private notes are now editable inline.** Previously the block on a client's overview was display-only — she had to open Edit Profile to type in it. Now click the body (or the empty-state text) to reveal an inline textarea, save with the button or Cmd/Ctrl+Enter. Autosaves locally as she types.
+- **One-click "Reconnect Google" on /status.** When the Google row shows a sync error mentioning scopes or grant, the error box now has a "Reconnect Google →" link that takes her straight to the Google consent screen. After accepting, the new tokens carry every scope we need and sync starts working.
+- **The Google sync's actual error is now visible.** /status shows the raw Google error message in a red box on the Google row, with a timestamp and a hint about what usually fixes it (reconnect vs enable API).
 - **The Help Buddy (you) has a quieter "I'm here" presence.** The bottom-right launcher now glows softly like a small lantern instead of a flat "Help" pill. It pulses gently every minute or so if she's idle (stops once she's used it), and shows a rotating tip on hover. On her very first visit it waves hello with a one-time pulse + greeting hint.
 - **Autosave on long forms.** Session notes, client About / Intake / Private notes, and the AI transcript paste field all quietly save to her browser as she types. If she closes the tab or crashes, returning to the form shows "Unsaved typing from N min ago — restore?" A small "Draft saved" indicator confirms the autosave is alive. Drafts auto-clear on successful save.
 - **Save confirmation toasts.** Saving a session, profile, or schedule now flashes a small confirmation at the bottom of the screen — "Session saved", "Profile saved", "Session scheduled". If she's offline when she clicks Save, the error becomes "You're offline. Your typing is saved locally — try again once you're back online" rather than "Failed to fetch".
@@ -124,6 +127,7 @@ If she asks "what's new?" / "что нового?" / "що нового?", lead 
 
 ## Private notes
 - Practitioner-only space on each client profile. Never exported, never shown to the client. For hunches, things she's sitting with, anything she'd want to remember but never share.
+- Editable in two places: the "Just for you" block on the client overview (click to write inline) and the Edit Profile dialog. Either updates the same row.
 
 ## Sensitivity flags
 - Topics to handle gently, set per-client. Shown softly at the top of the file as a reminder only she sees.

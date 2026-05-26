@@ -13,6 +13,7 @@ import { getGoogleConnectionStatus } from "@/lib/google-calendar";
 import { isTokenEncryptionConfigured } from "@/lib/token-crypto";
 import { TestGoogleButton } from "@/components/TestGoogleButton";
 import { SyncAllSessionsButton } from "@/components/SyncAllSessionsButton";
+import { ReconnectGoogleButton } from "@/components/ReconnectGoogleButton";
 import { asLocale, t } from "@/lib/i18n";
 
 export const dynamic = "force-dynamic";
@@ -110,12 +111,16 @@ export default async function StatusPage() {
               <pre className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-red-900">
                 {settings.googleLastError}
               </pre>
-              <div className="text-[10px] text-red-700/80 mt-2">
-                This message comes straight from Google. Common fixes:
-                disconnect + reconnect in Settings (refreshes the OAuth
-                grant); or, if it mentions an API not being enabled, ask
-                Brian to enable the Google Calendar API in the Google Cloud
-                project that issued these credentials.
+              <div className="text-[11px] text-red-700/90 mt-2 leading-relaxed">
+                This message comes straight from Google.{" "}
+                <strong>If it mentions scopes, grant, or permission</strong>{" "}
+                — the fix is to reconnect Google, which forces a fresh
+                consent screen and re-grants every scope we need:{" "}
+                <ReconnectGoogleButton variant="inline" />.
+                <br />
+                If it mentions an API not being enabled, ask Brian to enable
+                the Google Calendar API in the Google Cloud project that
+                issued these credentials.
               </div>
             </div>
           )}

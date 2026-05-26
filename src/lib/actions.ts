@@ -211,6 +211,34 @@ export async function updateClient(formData: FormData) {
   revalidatePath("/clients");
 }
 
+/** Standalone updater for the "Just for you" private-notes block on a
+ *  client's overview. We don't want to make her open the full Edit Profile
+ *  dialog just to jot a hunch — she should be able to write into the box
+ *  she's looking at. Cleared to null if she empties the body. */
+export async function updateClientPrivateNotes(
+  clientId: string,
+  body: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const { accountId } = await requireSession();
+    const trimmed = body.trim();
+    await db
+      .update(clients)
+      .set({
+        privateNotes: trimmed.length === 0 ? null : body,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(clients.accountId, accountId), eq(clients.id, clientId)));
+    revalidatePath(`/clients/${clientId}`);
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Couldn't save private notes",
+    };
+  }
+}
+
 export async function deleteClient(clientId: string) {
   const { accountId } = await requireSession();
 
