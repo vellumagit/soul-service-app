@@ -10,6 +10,7 @@ import { MonthCalendar } from "@/components/MonthCalendar";
 import { QuickActions } from "@/components/QuickActions";
 import { ScheduleSessionDialog } from "@/components/ScheduleSessionDialog";
 import { ScheduleSeriesDialog } from "@/components/ScheduleSeriesDialog";
+import { CalendarJumpToDate } from "@/components/CalendarJumpToDate";
 import { requireSession } from "@/lib/session-cookies";
 import { asLocale, t } from "@/lib/i18n";
 
@@ -173,6 +174,13 @@ export default async function CalendarPage({
         </div>
 
         <div className="text-sm font-medium text-ink-700">{rangeLabel}</div>
+
+        {/* Jump-to-date picker — primary way to navigate to a specific past
+            (or future) date without clicking Prev/Next over and over. */}
+        <CalendarJumpToDate
+          view={view}
+          currentStart={(view === "month" ? monthStart : weekStart).toISOString()}
+        />
 
         <div className="flex-1" />
 
