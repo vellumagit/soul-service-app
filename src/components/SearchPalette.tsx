@@ -2,9 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  parseDateQuery,
+  formatDateLabel,
+  looksDateIsh,
+} from "@/lib/parse-date-query";
 
 type SearchResult = {
-  kind: "client" | "session" | "file" | "task";
+  kind: "client" | "session" | "file" | "task" | "date";
   id: string;
   title: string;
   subtitle?: string;
@@ -16,6 +21,7 @@ const KIND_ICON: Record<string, string> = {
   session: "📅",
   file: "📎",
   task: "✓",
+  date: "📆",
 };
 
 const KIND_LABEL: Record<string, string> = {
@@ -23,7 +29,40 @@ const KIND_LABEL: Record<string, string> = {
   session: "Session",
   file: "File",
   task: "Task",
+  date: "Jump",
 };
+
+/** Build synthetic "Jump to date" results from the user's query.
+ *  Returns 0 or 1 entries — prepended above the server results so dates
+ *  always appear at the top when she's typing one. */
+function dateResultsFromQuery(query: string): SearchResult[] {
+  const parsed = parseDateQuery(query);
+  if (parsed) {
+    const iso = parsed.toISOString();
+    return [
+      {
+        kind: "date",
+        id: `date-${iso}`,
+        title: `Jump to ${formatDateLabel(parsed)}`,
+        subtitle: "Open the calendar at the week containing this date",
+        href: `/calendar?view=week&start=${encodeURIComponent(iso)}`,
+      },
+    ];
+  }
+  // Unparseable but looks date-ish → offer the picker.
+  if (looksDateIsh(query)) {
+    return [
+      {
+        kind: "date",
+        id: "date-picker",
+        title: "Jump to a date…",
+        subtitle: "Opens the calendar with the date picker focused",
+        href: "/calendar?openDatePicker=1",
+      },
+    ];
+  }
+  return [];
+}
 
 export function SearchPalette() {
   const router = useRouter();
@@ -73,13 +112,20 @@ export function SearchPalette() {
     }
   }, [open]);
 
-  // Debounced search
+  // Debounced search. Date results are computed locally from the query and
+  // prepended above whatever the server matches — typing "may 4" should
+  // surface "Jump to Mon, May 4, 2026" instantly, before/even-if no
+  // session-note matches that text.
   useEffect(() => {
     if (query.trim().length < 2) {
       setResults([]);
       setLoading(false);
       return;
     }
+
+    // Compute date jumps immediately — pure client-side, no network.
+    const dateResults = dateResultsFromQuery(query);
+
     setLoading(true);
     const t = setTimeout(async () => {
       try {
@@ -88,12 +134,32 @@ export function SearchPalette() {
           { cache: "no-store" }
         );
         const data = await res.json();
-        setResults(data.results ?? []);
+        const serverResults = (data.results ?? []) as SearchResult[];
+        setResults([...dateResults, ...serverResults]);
+        setActiveIdx(0);
+      } catch {
+        // Network failed — still show the date jump if we have one, so the
+        // palette never feels totally broken offline.
+        setResults(dateResults);
         setActiveIdx(0);
       } finally {
         setLoading(false);
       }
     }, 150);
+
+    // While the debounce is pending, show the date hint right away so the
+    // "jump to date" affordance never has the visible 150ms lag.
+    if (dateResults.length > 0) {
+      setResults((prev) => {
+        // If prev already starts with this same date result, leave as-is.
+        if (prev[0]?.id === dateResults[0].id) return prev;
+        // Otherwise keep any existing non-date results below and refresh the
+        // date row at the top.
+        const nonDate = prev.filter((r) => r.kind !== "date");
+        return [...dateResults, ...nonDate];
+      });
+    }
+
     return () => clearTimeout(t);
   }, [query]);
 

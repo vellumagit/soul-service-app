@@ -1,13 +1,21 @@
 // Groups SessionCards by month so the Sessions tab reads like a paper log —
 // month-headed pages flipping back through her history — rather than a flat
 // list of database rows.
+//
+// The month header is a quiet link to the calendar at that month — gives her
+// a one-click way to jump from "this client's April" to "everything I did in
+// April" without losing her place. Hover to reveal the link affordance so the
+// regular reading view stays clean.
 
+import Link from "next/link";
 import { SessionCard } from "./SessionCard";
 import type { NoteTemplate, Session } from "@/db/schema";
 
 type Group = {
   key: string;
   label: string; // e.g. "April 2026"
+  /** ISO at noon UTC on the 1st of the month — for the Calendar deep-link. */
+  monthStartIso: string;
   sessions: Session[];
 };
 
@@ -28,7 +36,12 @@ function groupByMonth(sessions: Session[]): Group[] {
         month: "long",
         year: "numeric",
       });
-      return { key, label, sessions: group };
+      // Noon UTC on the 1st — avoids any edge-of-day timezone weirdness when
+      // the Calendar page interprets it back into a month boundary.
+      const monthStartIso = new Date(
+        Date.UTC(year, month, 1, 12, 0, 0)
+      ).toISOString();
+      return { key, label, monthStartIso, sessions: group };
     });
 }
 
@@ -47,11 +60,23 @@ export function SessionsLog({
     <div className="space-y-8">
       {groups.map((group) => (
         <div key={group.key}>
-          {/* Month header — serif, with a hairline rule that runs the width */}
-          <div className="flex items-baseline gap-3 mb-3">
-            <h3 className="font-serif text-lg text-ink-700 italic">
+          {/* Month header — serif title is a quiet link to the calendar at
+              that month. Plain ink on idle, hint of plum on hover so the
+              link affordance only shows up when she's actually pointing at it. */}
+          <div className="flex items-baseline gap-3 mb-3 group">
+            <Link
+              href={`/calendar?view=month&start=${encodeURIComponent(group.monthStartIso)}`}
+              className="font-serif text-lg text-ink-700 italic hover:text-plum-700 transition-colors inline-flex items-baseline gap-1.5"
+              title={`Open ${group.label} on the calendar`}
+            >
               {group.label}
-            </h3>
+              <span
+                className="text-[10px] not-italic text-plum-500 opacity-0 group-hover:opacity-100 transition-opacity translate-y-[-1px]"
+                aria-hidden="true"
+              >
+                →
+              </span>
+            </Link>
             <div className="flex-1 border-t border-ink-200" />
             <span className="text-[10px] uppercase tracking-wider text-ink-400 font-mono">
               {group.sessions.length}{" "}

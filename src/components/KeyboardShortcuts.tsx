@@ -28,6 +28,7 @@ const SHORTCUTS = [
   { keys: ["g", "k"], action: "Go to Calendar" },
   { keys: ["g", "p"], action: "Go to Payments" },
   { keys: ["g", "s"], action: "Go to Settings" },
+  { keys: ["g", "d"], action: "Jump to a date (opens calendar picker)" },
   { keys: ["g", "?"], action: "Go to Status" },
 ];
 
@@ -105,6 +106,10 @@ export function KeyboardShortcuts() {
           p: "/payments",
           s: "/settings",
           "?": "/status",
+          // `g d` jumps to the Calendar with the date picker auto-opened.
+          // The CalendarJumpToDate component reads ?openDatePicker=1 on
+          // mount and focuses + opens its native picker.
+          d: "/calendar?openDatePicker=1",
         };
         const href = dest[e.key];
         resetSequence();

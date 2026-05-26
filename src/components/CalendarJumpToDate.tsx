@@ -10,8 +10,8 @@
 // The /calendar page already understands `start` and computes the right week
 // or month boundary from it, so we just need to feed it the chosen date.
 
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 
 export function CalendarJumpToDate({
   view,
@@ -22,7 +22,31 @@ export function CalendarJumpToDate({
   currentStart: string;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [value, setValue] = useState(currentStart.slice(0, 10));
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  // If she arrived via the `g d` keyboard shortcut (which navigates to
+  // /calendar?openDatePicker=1) — or any other entry point that sets that
+  // query param — auto-focus the input and pop open the native picker. Most
+  // browsers honour HTMLInputElement.showPicker() since Chrome 99 / FF 101 /
+  // Safari 16; older ones fall back to just focusing, which still lets her
+  // type or tap-to-open.
+  useEffect(() => {
+    if (searchParams.get("openDatePicker") !== "1") return;
+    const el = inputRef.current;
+    if (!el) return;
+    el.focus();
+    type WithShowPicker = HTMLInputElement & { showPicker?: () => void };
+    const elx = el as WithShowPicker;
+    if (typeof elx.showPicker === "function") {
+      try {
+        elx.showPicker();
+      } catch {
+        /* some browsers throw if not user-activated — fine, focus is enough */
+      }
+    }
+  }, [searchParams]);
 
   function jumpTo(dateStr: string) {
     if (!dateStr) return;
@@ -52,6 +76,7 @@ export function CalendarJumpToDate({
         />
       </svg>
       <input
+        ref={inputRef}
         type="date"
         value={value}
         onChange={(e) => {
