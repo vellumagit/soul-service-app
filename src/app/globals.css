@@ -443,3 +443,114 @@ body {
   border-top: 1px solid var(--color-ink-200);
   margin: 0.75rem 0;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Help Buddy — the "Navi" launcher. A small glowing presence in the bottom
+   right that gently calls out when idle. Three layered animations:
+
+     • `.help-buddy-glow`         — always-on slow ambient halo (~4s cycle)
+     • `.help-buddy-pulse`        — periodic outward ring when she's been
+                                    idle for a while, gentle "ahem"
+     • `.help-buddy-greet`        — bigger one-time arrival pulse the first
+                                    time she lands on the app
+
+   Idle/typing detection happens in JS; CSS just exposes the classes the
+   component toggles on the button. ───────────────────────────────────── */
+
+@keyframes hb-glow {
+  0%, 100% {
+    box-shadow:
+      0 0 0 0 rgba(201, 162, 106, 0.0),
+      0 4px 14px rgba(141, 99, 120, 0.35);
+  }
+  50% {
+    box-shadow:
+      0 0 0 6px rgba(201, 162, 106, 0.18),
+      0 4px 20px rgba(141, 99, 120, 0.45);
+  }
+}
+
+@keyframes hb-pulse-ring {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(1.7);
+    opacity: 0;
+  }
+}
+
+@keyframes hb-greet {
+  0% { transform: scale(1); }
+  20% { transform: scale(1.1); }
+  40% { transform: scale(0.95); }
+  60% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+/* Slow ambient honey-gold halo on the closed button. Cheap, always running. */
+.help-buddy-glow {
+  animation: hb-glow 4.5s ease-in-out infinite;
+}
+
+/* The pulse ring is a sibling absolute element behind the button. JS adds
+   the `is-pulsing` class for a short window during an idle-pulse moment. */
+.help-buddy-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  pointer-events: none;
+  background: var(--color-honey-300);
+  opacity: 0;
+}
+.help-buddy-ring.is-pulsing {
+  animation: hb-pulse-ring 1.8s ease-out 2;
+}
+
+/* One-shot wave-hello when she first sees the buddy. */
+.help-buddy-greet {
+  animation: hb-greet 1.4s ease-in-out 1;
+}
+
+/* The little speech bubble hint that appears on hover with rotating tips. */
+.help-buddy-hint {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  right: 0;
+  background: var(--color-ink-900);
+  color: var(--color-ink-50);
+  font-size: 12px;
+  line-height: 1.35;
+  padding: 7px 11px;
+  border-radius: 8px;
+  white-space: nowrap;
+  max-width: 280px;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 180ms ease, transform 180ms ease;
+  pointer-events: none;
+  box-shadow: 0 6px 20px rgba(28, 25, 23, 0.18);
+}
+.help-buddy-hint::after {
+  content: "";
+  position: absolute;
+  right: 18px;
+  bottom: -4px;
+  width: 8px;
+  height: 8px;
+  background: var(--color-ink-900);
+  transform: rotate(45deg);
+}
+.help-buddy-hint.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .help-buddy-glow,
+  .help-buddy-ring.is-pulsing,
+  .help-buddy-greet {
+    animation: none !important;
+  }
+}

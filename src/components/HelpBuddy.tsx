@@ -1,23 +1,55 @@
 "use client";
 
-// Floating Help Buddy — an in-app AI chat. The button lives in the bottom
-// corner on every page; clicking opens a side panel where she can ask
-// "how do I…", "where is…", or "is there a…". Claude answers from the
-// system prompt at src/lib/help-prompt.ts.
+// Floating Help Buddy — an in-app AI chat with a "Navi-from-Zelda" quality.
+// The button is a small honey-glowing presence in the bottom-right corner of
+// every page. It gently calls to the practitioner without being annoying:
 //
-// Design notes:
-// - Conversation lives in component state. Cleared on full reload. That's
-//   fine for v1 — the buddy is a quick-reference helper, not a journal.
+//   - Slow ambient halo always on (4.5s glow cycle) so it reads as alive
+//     even when she's not looking at it
+//   - One-time greeting pulse on her very first visit (stored in localStorage)
+//   - Periodic idle pulse + rotating hover hint AFTER she's been on the
+//     page for a while without engaging, and only IF she hasn't opened the
+//     buddy recently. Stops calling once she's actually used it.
+//   - All of this respects prefers-reduced-motion.
+//
+// Clicking opens a side panel where she asks "how do I…", "where is…",
+// "what's new?" etc. Claude answers from src/lib/help-prompt.ts.
+//
+// Design notes for the chat itself:
+// - Conversation lives in component state. Cleared on full reload.
 // - We send the WHOLE history each turn so Claude has context. The
 //   system prompt is cached by the API route, so the marginal cost of
 //   long threads is tiny.
-// - No streaming for v1. Most replies land in 2-4 seconds; a spinner is
-//   enough. Streaming can come later if it feels worth the complexity.
-// - Markdown rendering on assistant replies — the prompt encourages
-//   short paragraphs, numbered steps, inline code for buttons/paths.
+// - No streaming for v1.
+// - Markdown rendering on assistant replies.
 
 import { useEffect, useRef, useState } from "react";
 import { MarkdownRender } from "./NotesEditor";
+
+// Rotating hover hints — change every couple of hours by index. Keep them
+// short, specific, and useful (no "Hi there!" filler). Each one points to a
+// real feature she might not know about.
+const HOVER_HINTS = [
+  "Stuck? Tell me what you're trying to do.",
+  "Try: \"what's new?\"",
+  "Looking for a session from last month? Type the date in Cmd+K.",
+  "Press `g d` to jump to any date on the calendar.",
+  "Notes autosave — close the tab anytime, your typing comes back.",
+  "Need a Meet link for an old session? Click \"Push to Google Calendar\" on the card.",
+  "Click any month header on a client's Sessions tab to see the whole-app calendar for that month.",
+];
+
+// Localstorage keys
+const LS_GREETED = "ss.help-buddy.greeted";       // "1" after the first hello
+const LS_LAST_OPENED = "ss.help-buddy.lastOpened"; // ms timestamp
+const LS_HINT_INDEX = "ss.help-buddy.hintIndex";   // rotating tip cursor
+
+// Idle pulse: trigger every IDLE_INTERVAL_MS as long as she's been idle for
+// at least IDLE_THRESHOLD_MS AND hasn't opened the panel in OPEN_QUIET_MS.
+// Numbers tuned to be inviting, not naggy.
+const IDLE_THRESHOLD_MS = 25_000; // 25s of no movement before we'd pulse
+const IDLE_INTERVAL_MS = 90_000;  // try at most once every 90s
+const OPEN_QUIET_MS = 8 * 60_000; // skip pulses for 8 min after she opens it
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -35,8 +67,124 @@ export function HelpBuddy() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // ── Navi state: greeting, hover hint, idle pulse ───────────────────────
+  // True for ~1.4s on the very first visit ever (localStorage-gated).
+  const [greeting, setGreeting] = useState(false);
+  // True while the hover-hint speech bubble is showing.
+  const [hintVisible, setHintVisible] = useState(false);
+  // Which hint to show — advances on every reveal.
+  const [hintIndex, setHintIndex] = useState(0);
+  // True briefly when the idle-pulse ring should animate.
+  const [pulsing, setPulsing] = useState(false);
+  // Tracks the last time she did anything (mouse/key/scroll).
+  const lastActivityRef = useRef<number>(
+    typeof performance !== "undefined" ? performance.now() : 0
+  );
+
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // First-visit greeting: pulse + hint, exactly once per browser.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.localStorage.getItem(LS_GREETED) === "1") return;
+    // Delay so she sees the page land before the buddy waves.
+    const t = setTimeout(() => {
+      setGreeting(true);
+      setHintIndex(0);
+      setHintVisible(true);
+      window.localStorage.setItem(LS_GREETED, "1");
+      // Hide the hint after a few seconds — she can still hover any time.
+      setTimeout(() => setHintVisible(false), 5500);
+      // Drop the one-shot greeting class after the animation finishes.
+      setTimeout(() => setGreeting(false), 1600);
+    }, 1200);
+    return () => clearTimeout(t);
+  }, []);
+
+  // Restore where in the hint rotation she is, so re-visits don't replay
+  // the same tip every time.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = window.localStorage.getItem(LS_HINT_INDEX);
+    if (stored) {
+      const n = parseInt(stored, 10);
+      if (Number.isFinite(n)) setHintIndex(n % HOVER_HINTS.length);
+    }
+  }, []);
+
+  // Idle activity tracker. We don't need precision — just "has she touched
+  // anything recently?" so we know when to call to her.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    function bump() {
+      lastActivityRef.current = performance.now();
+    }
+    const events: (keyof WindowEventMap)[] = [
+      "mousemove",
+      "keydown",
+      "scroll",
+      "touchstart",
+    ];
+    events.forEach((e) => window.addEventListener(e, bump, { passive: true }));
+    return () =>
+      events.forEach((e) => window.removeEventListener(e, bump));
+  }, []);
+
+  // Periodic idle-pulse: every IDLE_INTERVAL_MS, IF she's been idle for at
+  // least IDLE_THRESHOLD_MS AND the panel is closed AND she hasn't opened
+  // it recently — emit one quiet ring. The pulse animation runs for ~3.6s
+  // (2 cycles of the keyframes), then resets.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (open) return;
+
+    const interval = setInterval(() => {
+      const now = performance.now();
+      const idleFor = now - lastActivityRef.current;
+      if (idleFor < IDLE_THRESHOLD_MS) return;
+
+      // Quiet down for a while after she opens the panel — no point calling
+      // if she just used it.
+      const lastOpened = parseInt(
+        window.localStorage.getItem(LS_LAST_OPENED) ?? "0",
+        10
+      );
+      if (Date.now() - lastOpened < OPEN_QUIET_MS) return;
+
+      setPulsing(true);
+      // Match the animation length (1.8s × 2 iterations).
+      setTimeout(() => setPulsing(false), 3700);
+    }, IDLE_INTERVAL_MS);
+
+    return () => clearInterval(interval);
+  }, [open]);
+
+  // Hover handlers — show the next rotating hint.
+  function onHoverEnter() {
+    if (open) return;
+    setHintVisible(true);
+  }
+  function onHoverLeave() {
+    setHintVisible(false);
+  }
+
+  // Each time the hint becomes visible (and isn't the first-visit one),
+  // advance the rotation so the next hover shows a different tip.
+  useEffect(() => {
+    if (!hintVisible || typeof window === "undefined") return;
+    const next = (hintIndex + 1) % HOVER_HINTS.length;
+    // Defer the advance so she sees the CURRENT one this hover; the
+    // increment takes effect on the NEXT reveal.
+    const t = setTimeout(() => {
+      setHintIndex(next);
+      window.localStorage.setItem(LS_HINT_INDEX, String(next));
+    }, 1200);
+    return () => clearTimeout(t);
+    // We deliberately depend only on hintVisible so a re-render doesn't
+    // re-trigger the rotation while the bubble is still showing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hintVisible]);
 
   // Auto-scroll to bottom on new messages / when opening.
   useEffect(() => {
@@ -45,11 +193,18 @@ export function HelpBuddy() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, open, sending]);
 
-  // Focus the input when the panel opens.
+  // Focus the input when the panel opens. Also stamp the "last opened" time
+  // so the idle pulse goes quiet for a while.
   useEffect(() => {
     if (open) {
-      // Defer so the panel is mounted/transitioned before focus.
       requestAnimationFrame(() => inputRef.current?.focus());
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(LS_LAST_OPENED, String(Date.now()));
+      }
+      // Hide any lingering hint and stop the pulse — she's engaging now.
+      setHintVisible(false);
+      setPulsing(false);
+      setGreeting(false);
     }
   }, [open]);
 
@@ -114,51 +269,88 @@ export function HelpBuddy() {
 
   return (
     <>
-      {/* Floating launch button — bottom-right, above everything */}
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-label={open ? "Close help buddy" : "Open help buddy"}
-        className={`fixed bottom-5 right-5 z-40 flex items-center gap-2 rounded-full shadow-lg transition-all
-          ${
-            open
-              ? "bg-ink-900 text-white px-3 py-2"
-              : "bg-plum-600 text-white px-4 py-2.5 hover:bg-plum-700"
-          }`}
+      {/* Floating launcher — a small glowing presence in the corner.
+          Hosts the idle-pulse ring as a sibling (so the ring can scale past
+          the button bounds without clipping) and the hover-hint as a child
+          (so it absolute-positions relative to the launcher). */}
+      <div
+        className="fixed bottom-5 right-5 z-40"
+        onMouseEnter={onHoverEnter}
+        onMouseLeave={onHoverLeave}
+        onFocus={onHoverEnter}
+        onBlur={onHoverLeave}
       >
-        {open ? (
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            strokeWidth={2}
+        {/* Hover hint (also shown on first-visit greeting). Hidden by default;
+            class toggle reveals it with a small fade-up. */}
+        {!open && (
+          <div
+            className={`help-buddy-hint ${hintVisible ? "is-visible" : ""}`}
+            role="tooltip"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
-        ) : (
-          <>
+            {HOVER_HINTS[hintIndex]}
+          </div>
+        )}
+
+        {/* Idle-pulse ring — sits behind the button, scales outward when
+            `is-pulsing` is on. Empty div + pure CSS animation, very cheap. */}
+        {!open && (
+          <span
+            aria-hidden="true"
+            className={`help-buddy-ring ${pulsing || greeting ? "is-pulsing" : ""}`}
+          />
+        )}
+
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          aria-label={open ? "Close help buddy" : "Open help buddy"}
+          className={`relative flex items-center justify-center rounded-full shadow-lg transition-all
+            ${
+              open
+                ? "bg-ink-900 text-white w-10 h-10"
+                : `w-12 h-12 text-white help-buddy-glow ${greeting ? "help-buddy-greet" : ""}`
+            }`}
+          style={
+            open
+              ? undefined
+              : {
+                  // Plum-to-honey radial — like a small lantern flame.
+                  background:
+                    "radial-gradient(circle at 35% 30%, var(--color-honey-300) 0%, var(--color-plum-500) 55%, var(--color-plum-700) 100%)",
+                }
+          }
+        >
+          {open ? (
             <svg
               className="w-4 h-4"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
-              strokeWidth={1.8}
+              strokeWidth={2}
             >
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                d="M6 18L18 6M6 6l12 12"
               />
             </svg>
-            <span className="text-sm font-medium">Help</span>
-          </>
-        )}
-      </button>
+          ) : (
+            // A tiny inner "spark" — gives the impression of a presence
+            // inside the lantern rather than a flat button.
+            <span
+              aria-hidden="true"
+              className="block rounded-full"
+              style={{
+                width: 8,
+                height: 8,
+                background:
+                  "radial-gradient(circle, rgba(255, 248, 220, 0.95) 0%, rgba(255, 230, 170, 0.55) 60%, transparent 100%)",
+                boxShadow: "0 0 8px rgba(255, 230, 170, 0.7)",
+              }}
+            />
+          )}
+        </button>
+      </div>
 
       {/* Panel — slides up from the right */}
       <div
