@@ -1111,6 +1111,105 @@ export async function search(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Anniversaries / birthdays — what to surface on Today
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type AnniversaryEvent =
+  | {
+      kind: "birthday";
+      clientId: string;
+      clientName: string;
+      /** Years old today (null if dob has no year, which can happen if she
+       *  typed "00-04-15"-style placeholders, though our form prevents it). */
+      yearsOld: number | null;
+    }
+  | {
+      kind: "first-session";
+      clientId: string;
+      clientName: string;
+      /** How many years ago today the first session was. 1, 2, 3, … */
+      yearsTogether: number;
+    };
+
+/** Find every client whose birthday is today (month + day match) and every
+ *  client whose first-ever session was on today's date in a previous year.
+ *  Computed in JS rather than SQL because Postgres date-part queries against
+ *  text-stored dates are awkward and the dataset is small. */
+export async function getTodaysAnniversaries(
+  accountId: string
+): Promise<AnniversaryEvent[]> {
+  const today = new Date();
+  const todayMonth = today.getMonth(); // 0-11
+  const todayDate = today.getDate();
+  const thisYear = today.getFullYear();
+
+  // Pull every non-archived client with a dob OR a first session, in one
+  // round-trip. Cheap for any practitioner's lifetime client count.
+  const rows = await db
+    .select({
+      id: clients.id,
+      fullName: clients.fullName,
+      dob: clients.dob,
+      // First non-cancelled session anywhere in time
+      firstSessionAt: sql<Date | null>`(
+        SELECT MIN(${sessions.scheduledAt})
+        FROM ${sessions}
+        WHERE ${sessions.clientId} = ${clients.id}
+          AND ${sessions.status} <> 'cancelled'
+      )`,
+    })
+    .from(clients)
+    .where(
+      and(eq(clients.accountId, accountId), ne(clients.status, "archived"))
+    );
+
+  const events: AnniversaryEvent[] = [];
+
+  for (const c of rows) {
+    // Birthday match — dob is a string ("YYYY-MM-DD") OR a Date depending
+    // on the driver. Normalize.
+    if (c.dob) {
+      const dobDate =
+        typeof c.dob === "string" ? new Date(c.dob + "T12:00:00Z") : new Date(c.dob);
+      if (
+        !Number.isNaN(dobDate.getTime()) &&
+        dobDate.getUTCMonth() === todayMonth &&
+        dobDate.getUTCDate() === todayDate
+      ) {
+        const dobYear = dobDate.getUTCFullYear();
+        const yearsOld =
+          dobYear > 1900 && dobYear <= thisYear ? thisYear - dobYear : null;
+        events.push({
+          kind: "birthday",
+          clientId: c.id,
+          clientName: c.fullName,
+          yearsOld,
+        });
+      }
+    }
+
+    // First-session anniversary — same calendar day, earlier year
+    if (c.firstSessionAt) {
+      const fs = new Date(c.firstSessionAt);
+      if (
+        fs.getMonth() === todayMonth &&
+        fs.getDate() === todayDate &&
+        fs.getFullYear() < thisYear
+      ) {
+        events.push({
+          kind: "first-session",
+          clientId: c.id,
+          clientName: c.fullName,
+          yearsTogether: thisYear - fs.getFullYear(),
+        });
+      }
+    }
+  }
+
+  return events;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Dashboard
 // ─────────────────────────────────────────────────────────────────────────────
 

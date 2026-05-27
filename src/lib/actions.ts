@@ -107,6 +107,9 @@ export async function createClient(formData: FormData) {
       howTheyFoundMe: str(formData, "howTheyFoundMe"),
       preferredLanguage: locale(formData, "preferredLanguage"),
       primarySessionType: firstSessionType,
+      // Birthday (full ISO date, "YYYY-MM-DD"). Optional. Surfaces on the
+      // Today page when month+day match.
+      dob: str(formData, "dob"),
       tags: tagsFromString(str(formData, "tags")),
       sensitivities: tagsFromString(str(formData, "sensitivities")),
       emergencyName: str(formData, "emergencyName"),
@@ -192,6 +195,7 @@ export async function updateClient(formData: FormData) {
       howTheyFoundMe: str(formData, "howTheyFoundMe"),
       preferredLanguage: locale(formData, "preferredLanguage"),
       primarySessionType: str(formData, "primarySessionType"),
+      dob: str(formData, "dob"),
       tags: tagsFromString(str(formData, "tags")),
       sensitivities: tagsFromString(str(formData, "sensitivities")),
       emergencyName: str(formData, "emergencyName"),

@@ -209,6 +209,17 @@ export function NewClientDialog({
             </Field>
           </div>
 
+          <Field
+            label="Birthday"
+            hint="Optional. When it comes around, you'll see it on Today."
+          >
+            <input
+              name="dob"
+              type="date"
+              className={`${inputCls} md:w-64`}
+            />
+          </Field>
+
           <Field label="What they're working on" hint="Short phrase you'll see in the client list">
             <input
               name="workingOn"

@@ -14,8 +14,10 @@ import {
   getCapacity,
   getSettings,
   getSetupStatus,
+  getTodaysAnniversaries,
   listClientsForPicker,
 } from "@/db/queries";
+import { OnThisDayCard } from "@/components/OnThisDayCard";
 import { shortTime, fullDate, relativeTime } from "@/lib/format";
 import { asLocale, t } from "@/lib/i18n";
 
@@ -23,13 +25,14 @@ export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   const { email, accountId } = await requireSession();
-  const [data, clientsList, capacity, settings, setupStatus] =
+  const [data, clientsList, capacity, settings, setupStatus, anniversaries] =
     await Promise.all([
       getDashboardData(accountId),
       listClientsForPicker(accountId),
       getCapacity(accountId),
       getSettings(accountId),
       getSetupStatus(accountId),
+      getTodaysAnniversaries(accountId),
     ]);
 
   const locale = asLocale(settings.uiLanguage);
@@ -53,6 +56,10 @@ export default async function HomePage() {
 
       {/* Setup checklist auto-hides when all 4 steps are done */}
       <SetupChecklist status={setupStatus} clients={clientsList} />
+
+      {/* "On this day" — birthdays + work anniversaries that fall today.
+          Auto-hides when empty so it doesn't clutter on most days. */}
+      <OnThisDayCard events={anniversaries} />
 
       {data.totalClients === 0 ? (
         <div className="border-2 border-dashed border-ink-200 rounded-lg p-12 text-center bg-white">

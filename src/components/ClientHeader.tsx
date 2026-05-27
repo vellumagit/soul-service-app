@@ -24,6 +24,7 @@ export function ClientHeader({
   paymentInstructions,
   allClients,
   resendConfigured = false,
+  togetherSince,
 }: {
   client: Client;
   emailTemplates: EmailTemplate[];
@@ -32,7 +33,13 @@ export function ClientHeader({
   paymentInstructions: string | null;
   allClients: { id: string; fullName: string }[];
   resendConfigured?: boolean;
+  /** First non-cancelled session date for this client. Falls back to
+   *  client.createdAt if she hasn't had a session yet. Drives the small
+   *  "Together since…" anchor in the header. */
+  togetherSince: Date | null;
 }) {
+  const anchorDate = togetherSince ?? client.createdAt;
+  const togetherLine = formatTogetherSince(anchorDate);
   return (
     <div className="bg-white border border-ink-200 rounded-lg overflow-hidden mb-5">
       <div className="p-5 md:p-6">
@@ -106,6 +113,14 @@ export function ClientHeader({
               </div>
             )}
 
+            {/* "Together since…" — small serif anchor line. Roots her in
+                the length of the relationship every time she opens the file. */}
+            {togetherLine && (
+              <div className="mt-2 text-[12px] text-ink-500 italic serif-italic">
+                {togetherLine}
+              </div>
+            )}
+
             {/* Working on — large, italic, prominent */}
             {client.workingOn && (
               <div className="mt-4 text-base text-ink-800 italic leading-relaxed border-l-2 border-plum-500 pl-3">
@@ -172,4 +187,34 @@ export function ClientHeader({
       </div>
     </div>
   );
+}
+
+/** Format the "Together since…" anchor.
+ *  < 1 month → "Just beginning"
+ *  1-11 months → "Together 4 months"
+ *  12+ months → "Together 1 year" / "Together 2 years"
+ *  On the actual anniversary day → adds " · anniversary today" */
+function formatTogetherSince(date: Date | null): string | null {
+  if (!date) return null;
+  const start = new Date(date);
+  if (Number.isNaN(start.getTime())) return null;
+  const now = new Date();
+  const ms = now.getTime() - start.getTime();
+  if (ms < 0) return null; // future-dated (shouldn't happen, defensive)
+
+  const days = Math.floor(ms / (1000 * 60 * 60 * 24));
+  if (days < 14) return "Just beginning";
+
+  const months = Math.floor(days / 30.4);
+  const years = Math.floor(days / 365.25);
+
+  // Mark anniversary day specifically.
+  const isAnniversary =
+    now.getMonth() === start.getMonth() && now.getDate() === start.getDate();
+  const tail = isAnniversary && years > 0 ? " · anniversary today" : "";
+
+  if (years >= 1) {
+    return `Together ${years} ${years === 1 ? "year" : "years"}${tail}`;
+  }
+  return `Together ${months} ${months === 1 ? "month" : "months"}${tail}`;
 }

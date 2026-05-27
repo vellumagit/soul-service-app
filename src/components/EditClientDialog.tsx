@@ -236,6 +236,24 @@ export function EditClientDialog({ client }: { client: Client }) {
             </Field>
           </div>
 
+          <Field
+            label="Birthday"
+            hint="Optional. When it comes around, you'll see it on Today."
+          >
+            <input
+              name="dob"
+              type="date"
+              defaultValue={
+                client.dob
+                  ? typeof client.dob === "string"
+                    ? client.dob
+                    : new Date(client.dob).toISOString().slice(0, 10)
+                  : ""
+              }
+              className={`${inputCls} md:w-64`}
+            />
+          </Field>
+
           <Field label="What they're working on" hint="One line, shows in the client list">
             <input
               name="workingOn"

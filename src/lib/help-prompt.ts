@@ -48,6 +48,8 @@ Soul Service is built specifically for Svitlana, a sole practitioner who holds o
 
 If she asks "what's new?" / "что нового?" / "що нового?", lead with the highlights from this list. Most recent first.
 
+- **Birthdays + work anniversaries quietly surface on Today.** New "Birthday" field on every client (optional). When a client's birthday OR their first-session anniversary lands on today's date, a small honey-tinted "On this day" card appears at the top of Today: "It's Maria's birthday today · 34. A quick note would land soft." or "2 years with Vlado today. Worth noticing." Auto-hides on days without anniversaries — most days will be quiet.
+- **"Together since…" line on every client overview.** Small serif anchor in the header — "Just beginning" / "Together 4 months" / "Together 2 years". Marks anniversary days specifically: "Together 1 year · anniversary today." Roots her in the length of the relationship every time she opens the file. Uses first non-cancelled session (falls back to when she added the client).
 - **Your work together — a journey timeline on every client overview.** A small horizontal arc just below the Walk-In card: every session as a marker, time across, completed (filled plum) / scheduled (ringed plum) / cancelled (gray ×). Sessions where she captured a "never want to forget" line in The Closing get a honey-gold ✦ star above them — those are the anchor moments of the arc. A "now" tick shows where today sits in the story. Hover any marker for the date and the never-forget line; click to jump to that session.
 - **Sabbath days — the calendar honors her off-time.** In Settings she can mark any weekdays as days she keeps for herself. Calendar week + month views shade those columns/cells with a soft diagonal pattern (and "Off" labels on the week view). When she picks a date in Schedule Session that falls on a sabbath day, a quiet amber hint appears: "Saturday is a day you've marked off. Schedule anyway — or change the date." Never blocks; just notices. Empty by default — she opts in.
 - **The Threshold — a doorway view for the moment before a session.** Five minutes before walking in, she taps "Walk in →" on any upcoming session (Today, the client overview's Coming-up card, or the session card itself) and lands on a full-bleed, phone-first prep page. Her name + the time at the top. The intention as a serif pull-quote. Where she left off last session — arrived / left / what she wanted to remember from the previous Closing. Themes still alive. Sensitivities to hold gently. Join Meet at the bottom. No chrome, no sidebar — just what she needs to settle in. Pairs with The Closing as the two bookends of every session.
@@ -80,6 +82,14 @@ If she asks "what's new?" / "что нового?" / "що нового?", lead 
 - Notes autosave as she types — even if she closes the tab her writing won't be lost.
 - Reschedule, cancel, or delete from inside the session card.
 - Each session card shows a Google sync chip: "✓ On your calendar" or a "Push to Google Calendar" button if it hasn't synced yet.
+
+## Warmth — birthdays + anniversaries
+- Every client has an optional **Birthday** field (Edit profile → Birthday). When the date comes around, it surfaces on Today.
+- The Today page has a quiet honey-tinted **"On this day"** card that appears only when something matches. Two kinds of notes:
+  - **Birthday**: "It's Maria's birthday today · 34. A quick note would land soft."
+  - **First-session anniversary** (each year): "2 years with Vlado today. Worth noticing."
+- Both link to the client's file. Never demands an action — just notices.
+- Every client overview header now carries a small serif **"Together since…"** line right under the name: "Just beginning" / "Together 4 months" / "Together 2 years". On the actual anniversary day it adds " · anniversary today." Uses the first non-cancelled session date (falls back to when she added the client).
 
 ## The Journey (your work together — a timeline)
 - Every client overview now has a horizontal arc just below the Walk-In card: every session for that client placed proportionally on a timeline, from the first session (left) to today / the last scheduled session (right).

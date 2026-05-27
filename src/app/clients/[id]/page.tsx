@@ -107,7 +107,9 @@ export default async function ClientProfilePage({
         sensitivities={(client.sensitivities ?? []) as string[]}
       />
 
-      {/* Header — identity, status, working-on, tags, action buttons */}
+      {/* Header — identity, status, working-on, tags, action buttons. The
+          togetherSince anchor uses the first non-cancelled session (falls
+          back to client.createdAt inside ClientHeader). */}
       <ClientHeader
         client={client}
         emailTemplates={emailTpls}
@@ -116,6 +118,12 @@ export default async function ClientProfilePage({
         paymentInstructions={settings.paymentInstructions}
         allClients={allClients}
         resendConfigured={!!process.env.RESEND_API_KEY}
+        togetherSince={
+          file.sessions
+            .filter((s) => s.status !== "cancelled")
+            .map((s) => s.scheduledAt)
+            .sort((a, b) => a.getTime() - b.getTime())[0] ?? null
+        }
       />
 
       {/* Tabs — folder-divider style, visually sit on the content below */}
