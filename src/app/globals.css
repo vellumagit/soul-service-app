@@ -74,47 +74,183 @@
 /*  ─────────────────────────────────────────────────────────────────────────
     Time-of-day theming.
 
-    A subtle shift in the page's surface tones based on local hour, so the
-    app feels like the practitioner's room rather than a flat web page. The
-    `data-time-of-day` attribute is set on <html> by `TimeOfDayProvider`
-    (mounted in AppShell). We only override the two surface tokens — every
-    other token (plum, honey, ink) stays locked so the design language
-    doesn't drift.
+    The app surface shifts across the day, like the practitioner's room
+    actually responding to the sun. Six bands, set by `TimeOfDayProvider`
+    on <html data-time-of-day=...>:
 
-      • morning (5-9)   — cooler, fresher, like sun through a kitchen window
-      • midday  (9-16)  — default linen, no override needed
-      • dusk    (16-20) — warmer rose tint, the candle starts to matter
-      • night   (20-5)  — deepest parchment, warm lamplight glow
+      dawn      5–7    cool blues warming into peach — sunrise at the top
+      morning   7–10   fresh, slightly cool linen
+      midday   10–16   default warm linen (no overrides)
+      dusk     16–19   golden hour — warm sunset glow at the bottom
+      evening  19–22   deeper rose, a hint of stars beginning to appear
+      night    22–5    deepest warm parchment, full twinkling starfield
 
-    Transitions are slow (~2s) so when the page is held open across a band
-    boundary the shift is felt as ambience, not as a re-render.
+    Plum / honey / ink stay locked — only the parchment surface tokens
+    and the atmosphere overlays (.atmosphere-starfield + .atmosphere-horizon,
+    rendered by TimeOfDayProvider) move. Transitions are slow (~3s) so
+    band changes feel like ambient drift, not a re-render.
     ───────────────────────────────────────────────────────────────────────── */
 
 body {
-  transition: background-color 2s ease;
+  transition: background-color 3s ease;
+}
+
+html[data-time-of-day="dawn"] {
+  --color-app-bg: #edeef3;        /* cool pre-dawn blue-gray */
+  --color-parchment: #f6f1eb;     /* parchment with a peach hint */
+  --color-parchment-edge: #dccbb6;
 }
 
 html[data-time-of-day="morning"] {
-  --color-app-bg: #f7f5f1;
-  --color-parchment: #fcfaf4;
+  --color-app-bg: #f4f3ec;
+  --color-parchment: #fcfaf3;
   --color-parchment-edge: #e6dccb;
 }
 
 html[data-time-of-day="dusk"] {
-  --color-app-bg: #f9f1e6;
-  --color-parchment: #fdf6e8;
-  --color-parchment-edge: #ecd2af;
+  --color-app-bg: #f6e6ce;        /* warm gold cream */
+  --color-parchment: #fbeed5;
+  --color-parchment-edge: #e3c089;
+}
+
+html[data-time-of-day="evening"] {
+  --color-app-bg: #efdac4;        /* deeper rose-cream, sun nearly gone */
+  --color-parchment: #f8e3c5;
+  --color-parchment-edge: #d9b285;
 }
 
 html[data-time-of-day="night"] {
-  --color-app-bg: #f5ecdc;
-  --color-parchment: #fbf2df;
-  --color-parchment-edge: #e4c79e;
+  --color-app-bg: #e8d3b6;        /* deepest warm parchment, lamplight */
+  --color-parchment: #f4dcb9;
+  --color-parchment-edge: #ccaa78;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Atmosphere layers — two fixed-position overlays mounted by
+   TimeOfDayProvider, both pointer-events-none. Sit behind the app
+   content (the main AppShell flex container is bumped to z-index 1
+   so these stay tucked under it).
+
+   .atmosphere-starfield — a constellation of small radial-gradient dots,
+     hand-placed across the viewport. Opacity transitions in over a few
+     seconds when night arrives; brightness oscillates for twinkle.
+
+   .atmosphere-horizon  — a single soft gradient ellipse that becomes a
+     sunrise (top), sunset (bottom-warm), or evening glow (bottom-rose)
+     depending on the band.
+   ───────────────────────────────────────────────────────────────────────── */
+
+.atmosphere-starfield,
+.atmosphere-horizon {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0;
+  transition: opacity 6s ease, background 4s ease;
+}
+
+/* The starfield itself — about 30 hand-placed stars at varying brightness
+   and size, scattered with intention (sparser around the center where
+   content usually sits, denser around the edges). Colors lean warm-cream
+   to feel like lamplight reflecting in a window pane, not clinical white. */
+.atmosphere-starfield {
+  background-image:
+    radial-gradient(1.5px 1.5px at 4% 9%, rgba(255, 244, 220, 0.95), transparent 60%),
+    radial-gradient(1px 1px at 11% 17%, rgba(255, 244, 220, 0.75), transparent 60%),
+    radial-gradient(2px 2px at 18% 6%, rgba(255, 248, 232, 0.90), transparent 60%),
+    radial-gradient(1px 1px at 22% 24%, rgba(255, 240, 210, 0.65), transparent 60%),
+    radial-gradient(1.5px 1.5px at 7% 32%, rgba(255, 244, 220, 0.80), transparent 60%),
+    radial-gradient(1px 1px at 28% 13%, rgba(255, 248, 230, 0.70), transparent 60%),
+    radial-gradient(1px 1px at 36% 5%, rgba(255, 244, 220, 0.85), transparent 60%),
+    radial-gradient(2px 2px at 41% 19%, rgba(255, 248, 232, 0.90), transparent 60%),
+    radial-gradient(1px 1px at 48% 8%, rgba(255, 240, 210, 0.65), transparent 60%),
+    radial-gradient(1.5px 1.5px at 55% 14%, rgba(255, 244, 220, 0.80), transparent 60%),
+    radial-gradient(1px 1px at 62% 4%, rgba(255, 248, 230, 0.75), transparent 60%),
+    radial-gradient(1px 1px at 70% 11%, rgba(255, 244, 220, 0.70), transparent 60%),
+    radial-gradient(2px 2px at 78% 7%, rgba(255, 248, 232, 0.95), transparent 60%),
+    radial-gradient(1px 1px at 85% 18%, rgba(255, 240, 210, 0.65), transparent 60%),
+    radial-gradient(1.5px 1.5px at 92% 6%, rgba(255, 244, 220, 0.85), transparent 60%),
+    radial-gradient(1px 1px at 96% 26%, rgba(255, 244, 220, 0.70), transparent 60%),
+    /* mid-band, sparser */
+    radial-gradient(1px 1px at 3% 48%, rgba(255, 244, 220, 0.60), transparent 60%),
+    radial-gradient(1px 1px at 14% 62%, rgba(255, 240, 210, 0.55), transparent 60%),
+    radial-gradient(1.5px 1.5px at 88% 44%, rgba(255, 244, 220, 0.65), transparent 60%),
+    radial-gradient(1px 1px at 97% 58%, rgba(255, 248, 230, 0.60), transparent 60%),
+    /* lower band — fewer, dimmer (the eye reads them as further away) */
+    radial-gradient(1px 1px at 6% 76%, rgba(255, 244, 220, 0.45), transparent 60%),
+    radial-gradient(1px 1px at 24% 84%, rgba(255, 240, 210, 0.40), transparent 60%),
+    radial-gradient(1px 1px at 73% 81%, rgba(255, 244, 220, 0.45), transparent 60%),
+    radial-gradient(1.5px 1.5px at 94% 74%, rgba(255, 248, 230, 0.50), transparent 60%);
+}
+
+/* Twinkle on the brightness filter — kept off the opacity property so the
+   fade-in transition (which animates opacity) doesn't fight the keyframes.
+   Long, slow, varied period — a real night sky's twinkle is gentle. */
+@keyframes atmosphere-twinkle {
+  0%, 100% { filter: brightness(0.78); }
+  50%      { filter: brightness(1.12); }
+}
+
+html[data-time-of-day="evening"] .atmosphere-starfield {
+  opacity: 0.40;
+}
+html[data-time-of-day="night"] .atmosphere-starfield {
+  opacity: 1;
+  animation: atmosphere-twinkle 9s ease-in-out infinite;
+}
+
+/* Horizon glow — one big soft ellipse positioned at the top of the
+   viewport for dawn (sunrise) or the bottom for dusk/evening (sunset).
+   The color shifts feel like the sun actually being there. */
+html[data-time-of-day="dawn"] .atmosphere-horizon {
+  opacity: 1;
+  background: radial-gradient(
+    ellipse 90vw 38vh at 50% 0%,
+    rgba(255, 175, 130, 0.42) 0%,
+    rgba(255, 200, 160, 0.18) 35%,
+    transparent 70%
+  );
+}
+html[data-time-of-day="dusk"] .atmosphere-horizon {
+  opacity: 1;
+  background: radial-gradient(
+    ellipse 100vw 42vh at 50% 100%,
+    rgba(230, 120, 70, 0.45) 0%,
+    rgba(240, 160, 100, 0.22) 35%,
+    transparent 70%
+  );
+}
+html[data-time-of-day="evening"] .atmosphere-horizon {
+  opacity: 1;
+  background: radial-gradient(
+    ellipse 110vw 38vh at 50% 100%,
+    rgba(160, 80, 100, 0.38) 0%,
+    rgba(190, 110, 130, 0.18) 40%,
+    transparent 75%
+  );
+}
+html[data-time-of-day="night"] .atmosphere-horizon {
+  /* Faint deep-indigo wash at the bottom — the horizon line still hints
+     at where the sun went down hours ago. */
+  opacity: 1;
+  background: radial-gradient(
+    ellipse 120vw 30vh at 50% 100%,
+    rgba(60, 50, 90, 0.25) 0%,
+    transparent 75%
+  );
 }
 
 @media (prefers-reduced-motion: reduce) {
   body {
     transition: none;
+  }
+  .atmosphere-starfield,
+  .atmosphere-horizon {
+    transition: none;
+  }
+  .atmosphere-starfield {
+    animation: none !important;
   }
 }
 

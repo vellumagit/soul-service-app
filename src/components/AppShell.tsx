@@ -99,7 +99,11 @@ function AppShellInner({
       <HelpBuddy />
       <FlashNotifier />
       <TimeOfDayProvider />
-    <div className="flex min-h-screen">
+    {/* relative + z-index keeps the app content above the time-of-day
+        atmosphere layers (starfield + horizon glow), which sit at z-index 0
+        behind everything. Without this, the starfield's stacking context
+        would float over the page. */}
+    <div className="flex min-h-screen relative" style={{ zIndex: 1 }}>
       {/* Sidebar — visible md+ */}
       {/* Sidebar — pulled toward parchment cream so the chrome shares a warm
           family with the cards instead of looking like a clinical white rail. */}
