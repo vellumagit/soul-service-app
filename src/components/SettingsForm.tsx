@@ -5,6 +5,7 @@ import { Field, inputCls } from "./Form";
 import { updateSettings } from "@/lib/actions";
 import { rethrowIfRedirect } from "@/lib/redirect-error";
 import type { PractitionerSettings } from "@/db/schema";
+import { SabbathDayPicker } from "./SabbathDayPicker";
 import {
   LOCALE_LABELS,
   LOCALES,
@@ -255,6 +256,11 @@ export function SettingsForm({ settings }: { settings: PractitionerSettings }) {
               task list.
             </p>
           </div>
+
+          {/* Sabbath days — her opt-in weekly off days */}
+          <SabbathDayPicker
+            initial={(settings.sabbathDays ?? []) as string[]}
+          />
         </div>
       </Section>
 

@@ -20,20 +20,57 @@ function defaultWhen() {
   return local.toISOString().slice(0, 16);
 }
 
+// JS Date.getDay() index → ISO weekday name. Used to check the picked
+// date against her sabbathDays setting.
+const WEEKDAY_NAME = [
+  "sunday",
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+];
+const WEEKDAY_LABEL = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+];
+
 export function ScheduleSessionDialog({
   clients,
   defaultClientId,
   defaultType,
   trigger,
+  sabbathDays = [],
 }: {
   clients: ClientOption[];
   defaultClientId?: string;
   defaultType?: string | null;
   trigger?: (open: () => void) => React.ReactNode;
+  /** Lowercase ISO weekday names she's marked as sacred-off. When the picked
+   *  date falls on one, a quiet amber hint reminds her — never blocks. */
+  sabbathDays?: string[];
 }) {
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The current value of the datetime-local picker — used to detect when
+  // the chosen day is one she's marked off.
+  const [pickedWhen, setPickedWhen] = useState<string>(defaultWhen());
+
+  const sabbathSet = new Set(sabbathDays.map((d) => d.toLowerCase()));
+  const pickedDate = pickedWhen ? new Date(pickedWhen) : null;
+  const pickedWeekday =
+    pickedDate && !Number.isNaN(pickedDate.getTime())
+      ? pickedDate.getDay()
+      : -1;
+  const pickedIsSabbath =
+    pickedWeekday >= 0 && sabbathSet.has(WEEKDAY_NAME[pickedWeekday]);
   // NOTE: Google sync failures used to keep the dialog open with an amber
   // warning — but that read as "save failed" to users and they'd retry, ending
   // up with duplicate sessions. Now the session save closes the dialog
@@ -189,6 +226,7 @@ export function ScheduleSessionDialog({
                   name="scheduledAt"
                   required
                   defaultValue={defaultWhen()}
+                  onChange={(localValue) => setPickedWhen(localValue)}
                   className={inputCls}
                 />
               </Field>
@@ -204,6 +242,28 @@ export function ScheduleSessionDialog({
                 />
               </Field>
             </div>
+
+            {/* Sabbath gentle reminder — never blocks, just notices. Only
+                shows when the picked weekday matches one she's marked off. */}
+            {pickedIsSabbath && pickedWeekday >= 0 && (
+              <div
+                className="text-xs rounded-md p-3 leading-relaxed"
+                style={{
+                  background: "var(--color-honey-50)",
+                  border: "1px solid var(--color-honey-100)",
+                  color: "var(--color-ink-700)",
+                }}
+              >
+                <span
+                  className="serif-italic text-honey-700 mr-1.5"
+                  style={{ fontWeight: 500 }}
+                >
+                  {WEEKDAY_LABEL[pickedWeekday]}
+                </span>
+                is a day you&apos;ve marked off. Schedule anyway — or change
+                the date.
+              </div>
+            )}
 
             <Field label="Google Meet link" hint="Paste the link after creating it in Google Meet">
               <input

@@ -1191,12 +1191,39 @@ export async function updateSettings(formData: FormData) {
       practitionerReminderHours: clampHours(
         num(formData, "practitionerReminderHours") ?? 1
       ),
+      // Sabbath days — comma-separated lowercase ISO weekday names from the
+      // form's hidden field (the day-toggle picker UI maintains it).
+      // Filter to known values so a junk submission can't poison the array.
+      sabbathDays: parseSabbathDays(str(formData, "sabbathDays")),
       updatedAt: new Date(),
     })
     .where(eq(practitionerSettings.accountId, accountId));
 
   revalidatePath("/settings");
   revalidatePath("/");
+  revalidatePath("/calendar");
+}
+
+const VALID_WEEKDAYS = new Set([
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+  "sunday",
+]);
+
+function parseSabbathDays(raw: string | null): string[] {
+  if (!raw) return [];
+  return Array.from(
+    new Set(
+      raw
+        .split(",")
+        .map((d) => d.trim().toLowerCase())
+        .filter((d) => VALID_WEEKDAYS.has(d))
+    )
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

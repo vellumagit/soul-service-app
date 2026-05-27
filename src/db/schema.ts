@@ -10,7 +10,7 @@ import {
   boolean,
   index,
 } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Enums
@@ -548,6 +548,16 @@ export const practitionerSettings = pgTable("practitioner_settings", {
   practitionerReminderHours: integer("practitioner_reminder_hours")
     .default(1)
     .notNull(),
+
+  // Sabbath days — lowercase ISO weekday names she's marked off.
+  // ("monday", "tuesday", ..., "sunday"). Empty by default; the app
+  // never assumes she rests on any particular day. When set, calendar
+  // views render those columns differently and scheduling shows a soft
+  // reminder. Reminders that would fire on a sabbath day get skipped.
+  sabbathDays: text("sabbath_days")
+    .array()
+    .notNull()
+    .default(sql`'{}'::text[]`),
 
   // Google Calendar OAuth (one practitioner per app — single connected account).
   // Refresh tokens are long-lived; access tokens auto-refresh in google-calendar.ts.

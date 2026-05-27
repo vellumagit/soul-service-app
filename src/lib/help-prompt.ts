@@ -48,6 +48,7 @@ Soul Service is built specifically for Svitlana, a sole practitioner who holds o
 
 If she asks "what's new?" / "что нового?" / "що нового?", lead with the highlights from this list. Most recent first.
 
+- **Sabbath days — the calendar honors her off-time.** In Settings she can mark any weekdays as days she keeps for herself. Calendar week + month views shade those columns/cells with a soft diagonal pattern (and "Off" labels on the week view). When she picks a date in Schedule Session that falls on a sabbath day, a quiet amber hint appears: "Saturday is a day you've marked off. Schedule anyway — or change the date." Never blocks; just notices. Empty by default — she opts in.
 - **The Threshold — a doorway view for the moment before a session.** Five minutes before walking in, she taps "Walk in →" on any upcoming session (Today, the client overview's Coming-up card, or the session card itself) and lands on a full-bleed, phone-first prep page. Her name + the time at the top. The intention as a serif pull-quote. Where she left off last session — arrived / left / what she wanted to remember from the previous Closing. Themes still alive. Sensitivities to hold gently. Join Meet at the bottom. No chrome, no sidebar — just what she needs to settle in. Pairs with The Closing as the two bookends of every session.
 - **The Closing — a quiet ritual after each session.** When she marks a session complete, a small modal now opens with three optional prompts: "What landed?" / "What do you want to remember?" / "Anything [client] said you'd never want to forget?" All three are optional, all skippable, autosaved as she types. Saved reflections appear on the session card afterwards (serif italic, plum-tinted) alongside her regular notes. A small plum spark icon on the card header marks sessions she's reflected on. She can revisit and edit any closing later via the "Edit" link, or "Reflect on this session" if she skipped it the first time.
 - **"Just for you" private notes are now editable inline.** Previously the block on a client's overview was display-only — she had to open Edit Profile to type in it. Now click the body (or the empty-state text) to reveal an inline textarea, save with the button or Cmd/Ctrl+Enter. Autosaves locally as she types.
@@ -78,6 +79,13 @@ If she asks "what's new?" / "что нового?" / "що нового?", lead 
 - Notes autosave as she types — even if she closes the tab her writing won't be lost.
 - Reschedule, cancel, or delete from inside the session card.
 - Each session card shows a Google sync chip: "✓ On your calendar" or a "Push to Google Calendar" button if it hasn't synced yet.
+
+## Sabbath days (her off-time, honored)
+- Settings → "Sabbath days" → toggle any of seven weekday chips on. Days she keeps for herself; the app makes no assumption — empty = she works all days.
+- Calendar week view shades sabbath columns with a soft diagonal pattern and a quiet "Off" label.
+- Calendar month view tints sabbath cells with the same pattern.
+- Scheduling a session that lands on a sabbath day shows a soft amber hint ("Saturday is a day you've marked off — schedule anyway, or change the date"). Never blocks.
+- Reminders that would fire on a sabbath day get skipped (this is a planned refinement — currently shows in the UI but reminder skipping isn't fully wired yet).
 
 ## The Threshold (pre-session prep view)
 - Five minutes before walking into a session, she pulls this up on her phone (or desktop). Full-bleed, contemplative, no sidebar/nav chrome — just the content she needs to settle in.

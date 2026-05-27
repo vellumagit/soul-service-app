@@ -25,14 +25,30 @@ const MAX_CHIPS_PER_DAY = 3;
  * Click a session chip → opens that session on the client's profile.
  * Click an empty day → opens the week view anchored to that week.
  */
+const WEEKDAY_NAME = [
+  "sunday",
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+];
+
 export function MonthCalendar({
   monthStart,
   sessions,
+  sabbathDays = [],
 }: {
   /** ISO of the first day of the month being viewed, at 00:00 local. */
   monthStart: string;
   sessions: CalSession[];
+  /** Lowercase ISO weekday names she's marked as sacred-off. */
+  sabbathDays?: string[];
 }) {
+  const sabbathSet = new Set(sabbathDays.map((d) => d.toLowerCase()));
+  const isSabbath = (date: Date) =>
+    sabbathSet.has(WEEKDAY_NAME[date.getDay()]);
   const anchor = new Date(monthStart);
   const year = anchor.getFullYear();
   const month = anchor.getMonth();
@@ -97,16 +113,29 @@ export function MonthCalendar({
           weekStart.setDate(d.getDate() - d.getDay());
           const weekHref = `/calendar?view=week&start=${weekStart.toISOString()}`;
 
+          const off = isSabbath(d);
           return (
             <div
               key={i}
               className={[
                 "min-h-[96px] border-r border-b border-ink-100 last:border-r-0 p-1.5 flex flex-col gap-1 relative group",
-                inMonth ? "bg-white" : "bg-ink-50/40",
+                inMonth
+                  ? off
+                    ? "bg-ink-50"
+                    : "bg-white"
+                  : "bg-ink-50/40",
                 i % 7 === 6 ? "border-r-0" : "",
                 i >= 35 ? "border-b-0" : "",
                 isToday ? "ring-2 ring-plum-500 ring-inset" : "",
               ].join(" ")}
+              style={
+                off && inMonth
+                  ? {
+                      backgroundImage:
+                        "repeating-linear-gradient(135deg, transparent 0 8px, var(--color-ink-100) 8px 9px)",
+                    }
+                  : undefined
+              }
             >
               {/* Date number — links to that week */}
               <Link

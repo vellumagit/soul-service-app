@@ -301,6 +301,7 @@ export default async function ClientProfilePage({
               clients={allClients}
               defaultClientId={client.id}
               defaultType={client.primarySessionType}
+              sabbathDays={(settings.sabbathDays ?? []) as string[]}
             />
             <LogPastSessionDialog
               clients={allClients}

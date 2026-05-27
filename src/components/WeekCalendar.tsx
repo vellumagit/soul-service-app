@@ -20,12 +20,28 @@ const HOUR_END = 21;
 const PX_PER_HOUR = 48;
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
+// JS Date.getDay() → ISO weekday name (lowercase).
+// JS: 0=Sun, 1=Mon, ..., 6=Sat. Maps to the strings stored in
+// practitioner_settings.sabbath_days.
+const WEEKDAY_NAME = [
+  "sunday",
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+];
+
 export function WeekCalendar({
   weekStart,
   sessions,
+  sabbathDays = [],
 }: {
   weekStart: string;
   sessions: CalSession[];
+  /** Lowercase ISO weekday names she's marked as sacred-off. Empty = none. */
+  sabbathDays?: string[];
 }) {
   const router = useRouter();
   const start = new Date(weekStart);
@@ -42,6 +58,11 @@ export function WeekCalendar({
     d.setDate(d.getDate() + i);
     return d;
   });
+
+  const sabbathSet = new Set(sabbathDays.map((d) => d.toLowerCase()));
+  function isSabbath(date: Date): boolean {
+    return sabbathSet.has(WEEKDAY_NAME[date.getDay()]);
+  }
 
   const sessionsByDay: CalSession[][] = Array.from({ length: 7 }, () => []);
   sessions.forEach((r) => {
@@ -247,15 +268,20 @@ export function WeekCalendar({
           </div>
 
           {/* Day columns */}
-          {days.map((_, dayIdx) => {
+          {days.map((d, dayIdx) => {
             const isToday = dayIdx === todayDayIndex;
+            const isOff = isSabbath(d);
             return (
               <div
                 key={dayIdx}
                 className={`day-col relative ${
                   dayIdx < 6 ? "border-r border-ink-100" : ""
-                } ${isToday ? "today" : ""}`}
+                } ${isToday ? "today" : ""} ${isOff ? "sabbath" : ""}`}
               >
+                {/* Small "off" label centered in sabbath columns, behind any
+                    sessions. The CSS positions it absolutely and rotates
+                    slightly so it reads as a quiet annotation, not a heading. */}
+                {isOff && <span className="sabbath-label">Off</span>}
                 {sessionsByDay[dayIdx].map((s) => {
                   const d = new Date(s.scheduledAt);
                   const startH = d.getHours() + d.getMinutes() / 60;

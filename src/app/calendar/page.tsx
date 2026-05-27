@@ -204,19 +204,25 @@ export default async function CalendarPage({
 
         {/* Action buttons */}
         <ScheduleSeriesDialog clients={clients} />
-        <ScheduleSessionDialog clients={clients} />
+        <ScheduleSessionDialog
+          clients={clients}
+          sabbathDays={(settings.sabbathDays ?? []) as string[]}
+        />
       </div>
 
-      {/* The calendar itself */}
+      {/* The calendar itself. Sabbath days come straight from settings —
+          both views render them with a soft shaded background. */}
       {view === "month" ? (
         <MonthCalendar
           monthStart={monthStart.toISOString()}
           sessions={sessionData}
+          sabbathDays={(settings.sabbathDays ?? []) as string[]}
         />
       ) : (
         <WeekCalendar
           weekStart={weekStart.toISOString()}
           sessions={sessionData}
+          sabbathDays={(settings.sabbathDays ?? []) as string[]}
         />
       )}
     </AppShell>
