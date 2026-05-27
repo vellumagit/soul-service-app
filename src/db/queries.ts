@@ -328,6 +328,7 @@ export type ClientDigest = {
     notesExcerpt: string | null;
   } | null;
   nextSession: {
+    id: string;
     when: Date;
     type: string;
     durationMinutes: number;
@@ -454,6 +455,7 @@ export async function getClientDigest(
       : null,
     nextSession: next
       ? {
+          id: next.id,
           when: next.scheduledAt,
           type: next.type,
           durationMinutes: next.durationMinutes,
@@ -790,6 +792,120 @@ export async function getSessionWithClient(accountId: string, id: string) {
     .limit(1);
   if (!rows[0]) return null;
   return { session: rows[0].sessions, client: rows[0].clients };
+}
+
+/** Everything she needs in the doorway, in one query. Used by /sessions/[id]/prep
+ *  — the full-bleed "Threshold" view she pulls up 5 min before walking into a
+ *  session. Returns null if the session doesn't belong to her account. */
+export type SessionPrep = {
+  session: {
+    id: string;
+    clientId: string;
+    type: string;
+    scheduledAt: Date;
+    durationMinutes: number;
+    intention: string | null;
+    meetUrl: string | null;
+    status: string;
+  };
+  client: {
+    id: string;
+    fullName: string;
+    workingOn: string | null;
+    sensitivities: string[];
+    avatarUrl: string | null;
+  };
+  /** The most recent completed session for this client, if any. */
+  lastSession: {
+    id: string;
+    scheduledAt: Date;
+    type: string;
+    arrivedAs: string | null;
+    leftAs: string | null;
+    notesExcerpt: string | null;
+    closingLanded: string | null;
+    closingRemember: string | null;
+    closingNeverForget: string | null;
+  } | null;
+  /** Active themes (tag-cloud) — gives her the "still alive" texture. */
+  themes: { id: string; label: string }[];
+};
+
+export async function getSessionPrep(
+  accountId: string,
+  sessionId: string
+): Promise<SessionPrep | null> {
+  const [pair] = await db
+    .select()
+    .from(sessions)
+    .innerJoin(clients, eq(sessions.clientId, clients.id))
+    .where(and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId)))
+    .limit(1);
+  if (!pair) return null;
+
+  const s = pair.sessions;
+  const c = pair.clients;
+
+  // Most recent completed session for this client, EXCLUDING this one.
+  const [last] = await db
+    .select()
+    .from(sessions)
+    .where(
+      and(
+        eq(sessions.accountId, accountId),
+        eq(sessions.clientId, c.id),
+        eq(sessions.status, "completed"),
+        sql`${sessions.id} <> ${sessionId}`
+      )
+    )
+    .orderBy(desc(sessions.scheduledAt))
+    .limit(1);
+
+  // Recent themes (up to 12), newest-first by creation.
+  const themeRows = await db
+    .select({ id: themes.id, label: themes.label })
+    .from(themes)
+    .where(
+      and(eq(themes.accountId, accountId), eq(themes.clientId, c.id))
+    )
+    .orderBy(desc(themes.createdAt))
+    .limit(12);
+
+  return {
+    session: {
+      id: s.id,
+      clientId: s.clientId,
+      type: s.type,
+      scheduledAt: s.scheduledAt,
+      durationMinutes: s.durationMinutes,
+      intention: s.intention,
+      meetUrl: s.meetUrl,
+      status: s.status,
+    },
+    client: {
+      id: c.id,
+      fullName: c.fullName,
+      workingOn: c.workingOn,
+      sensitivities: (c.sensitivities ?? []) as string[],
+      avatarUrl: c.avatarUrl,
+    },
+    lastSession: last
+      ? {
+          id: last.id,
+          scheduledAt: last.scheduledAt,
+          type: last.type,
+          arrivedAs: last.arrivedAs,
+          leftAs: last.leftAs,
+          notesExcerpt: last.notes
+            ? last.notes.slice(0, 280) + (last.notes.length > 280 ? "…" : "")
+            : null,
+          closingLanded: last.closingLanded,
+          closingRemember: last.closingRemember,
+          closingNeverForget: last.closingNeverForget,
+        }
+      : null,
+    themes: themeRows,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

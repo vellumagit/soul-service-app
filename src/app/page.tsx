@@ -8,6 +8,7 @@ import { TasksBlock } from "@/components/TasksBlock";
 import { CapacityStrip } from "@/components/CapacityStrip";
 import { SetupChecklist } from "@/components/SetupChecklist";
 import { JoinMeetButton } from "@/components/JoinMeetButton";
+import { WalkInButton } from "@/components/WalkInButton";
 import {
   getDashboardData,
   getCapacity,
@@ -95,6 +96,7 @@ export default async function HomePage() {
                           {s.type} · {s.durationMinutes}m
                         </div>
                       </div>
+                      <WalkInButton sessionId={s.id} />
                       {s.meetUrl && <JoinMeetButton href={s.meetUrl} />}
                     </Link>
                   ))}

@@ -26,6 +26,7 @@ import { notify } from "./FlashNotifier";
 import { describeSaveError } from "@/lib/save-error";
 import { PushToGoogleButton } from "./PushToGoogleButton";
 import { ClosingRitualDialog } from "./ClosingRitualDialog";
+import { WalkInButton } from "./WalkInButton";
 
 const STATUS_CHIP: Record<string, string> = {
   scheduled: "bg-plum-100 text-plum-700",
@@ -381,6 +382,7 @@ export function SessionCard({
           <div className="border-t border-ink-100 pt-3 flex items-center gap-2 flex-wrap">
             {isScheduled && (
               <>
+                <WalkInButton sessionId={session.id} />
                 <RescheduleDialog
                   sessionId={session.id}
                   clientId={session.clientId}

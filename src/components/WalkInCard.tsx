@@ -19,6 +19,7 @@
 import Link from "next/link";
 import type { ClientDigest } from "@/db/queries";
 import { fullDate, relativeTime, shortTime } from "@/lib/format";
+import { WalkInButton } from "./WalkInButton";
 
 export function WalkInCard({
   digest,
@@ -143,16 +144,20 @@ export function WalkInCard({
                 {digest.nextSession.durationMinutes}m
               </div>
 
-              {digest.nextSession.meetUrl ? (
-                <a
-                  href={digest.nextSession.meetUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-3 inline-flex items-center gap-1.5 bg-ink-900 hover:bg-ink-800 text-white text-xs font-medium px-3 py-1.5 rounded"
-                >
-                  Join Meet ↗
-                </a>
-              ) : (
+              <div className="mt-3 flex items-center gap-2 flex-wrap">
+                <WalkInButton sessionId={digest.nextSession.id} size="md" />
+                {digest.nextSession.meetUrl && (
+                  <a
+                    href={digest.nextSession.meetUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 bg-ink-900 hover:bg-ink-800 text-white text-sm font-medium px-3 py-1.5 rounded-md"
+                  >
+                    Join Meet ↗
+                  </a>
+                )}
+              </div>
+              {!digest.nextSession.meetUrl && (
                 <div className="text-xs text-ink-400 italic mt-2">
                   No Meet link yet. Connect Google Calendar in Settings to
                   auto-generate one.

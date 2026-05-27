@@ -48,6 +48,7 @@ Soul Service is built specifically for Svitlana, a sole practitioner who holds o
 
 If she asks "what's new?" / "что нового?" / "що нового?", lead with the highlights from this list. Most recent first.
 
+- **The Threshold — a doorway view for the moment before a session.** Five minutes before walking in, she taps "Walk in →" on any upcoming session (Today, the client overview's Coming-up card, or the session card itself) and lands on a full-bleed, phone-first prep page. Her name + the time at the top. The intention as a serif pull-quote. Where she left off last session — arrived / left / what she wanted to remember from the previous Closing. Themes still alive. Sensitivities to hold gently. Join Meet at the bottom. No chrome, no sidebar — just what she needs to settle in. Pairs with The Closing as the two bookends of every session.
 - **The Closing — a quiet ritual after each session.** When she marks a session complete, a small modal now opens with three optional prompts: "What landed?" / "What do you want to remember?" / "Anything [client] said you'd never want to forget?" All three are optional, all skippable, autosaved as she types. Saved reflections appear on the session card afterwards (serif italic, plum-tinted) alongside her regular notes. A small plum spark icon on the card header marks sessions she's reflected on. She can revisit and edit any closing later via the "Edit" link, or "Reflect on this session" if she skipped it the first time.
 - **"Just for you" private notes are now editable inline.** Previously the block on a client's overview was display-only — she had to open Edit Profile to type in it. Now click the body (or the empty-state text) to reveal an inline textarea, save with the button or Cmd/Ctrl+Enter. Autosaves locally as she types.
 - **One-click "Reconnect Google" on /status.** When the Google row shows a sync error mentioning scopes or grant, the error box now has a "Reconnect Google →" link that takes her straight to the Google consent screen. After accepting, the new tokens carry every scope we need and sync starts working.
@@ -77,6 +78,12 @@ If she asks "what's new?" / "что нового?" / "що нового?", lead 
 - Notes autosave as she types — even if she closes the tab her writing won't be lost.
 - Reschedule, cancel, or delete from inside the session card.
 - Each session card shows a Google sync chip: "✓ On your calendar" or a "Push to Google Calendar" button if it hasn't synced yet.
+
+## The Threshold (pre-session prep view)
+- Five minutes before walking into a session, she pulls this up on her phone (or desktop). Full-bleed, contemplative, no sidebar/nav chrome — just the content she needs to settle in.
+- URL: \`/sessions/<sessionId>/prep\`. Entry points: "Walk in →" link on Today's upcoming-session rows, on the WalkInCard "Coming up" section of every client overview, and on any scheduled session card's action row.
+- What it shows: client name + the time + how long; sensitivities to hold gently (honey-tinted reminder); her stated intention as a serif pull-quote (or workingOn fallback); where she left off last time (arrived as / left as) plus the previous Closing's "never want to forget" line if she captured one; themes still alive; a big "Join Meet" button at the bottom.
+- Designed as a ritual doorway — pairs with The Closing as the two bookends of every session. Settling into / settling out of.
 
 ## The Closing Ritual
 - After she marks a session complete, a small modal opens offering three quiet prompts she can answer or skip:
@@ -219,6 +226,7 @@ If she asks "what's new?" / "что нового?" / "що нового?", lead 
 | Want to | Go to |
 |---|---|
 | See today + upcoming + tasks | / (Today) |
+| Prep view for a specific session (the Threshold) | /sessions/<id>/prep — or click "Walk in →" anywhere |
 | All clients | /clients |
 | Specific client | /clients/<id> (or use search: Cmd+K or /) |
 | Week or month calendar | /calendar |
