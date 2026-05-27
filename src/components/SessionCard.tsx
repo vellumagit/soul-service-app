@@ -25,6 +25,7 @@ import { rethrowIfRedirect } from "@/lib/redirect-error";
 import { notify } from "./FlashNotifier";
 import { describeSaveError } from "@/lib/save-error";
 import { PushToGoogleButton } from "./PushToGoogleButton";
+import { ClosingRitualDialog } from "./ClosingRitualDialog";
 
 const STATUS_CHIP: Record<string, string> = {
   scheduled: "bg-plum-100 text-plum-700",
@@ -35,10 +36,14 @@ const STATUS_CHIP: Record<string, string> = {
 
 export function SessionCard({
   session,
+  clientName,
   noteTemplates = [],
   autoUploadAiNotes = false,
 }: {
   session: Session;
+  /** Used to address her by name in the Closing Ritual prompts. Optional —
+   *  if omitted (legacy callers) we fall back to "this person." */
+  clientName?: string;
   noteTemplates?: NoteTemplate[];
   /** When true, the AI-notes dialog auto-closes after a successful generation
    *  instead of showing the "Done — close to review" confirmation step. */
@@ -47,6 +52,10 @@ export function SessionCard({
   const [open, setOpen] = useState(session.status === "scheduled");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The Closing Ritual modal. Opens automatically when she marks a session
+  // complete for the first time (closingCompletedAt is null), and on-demand
+  // via the "Reflect on this session" link for already-completed sessions.
+  const [closingOpen, setClosingOpen] = useState(false);
   // Dirty = the form has unsaved typing. Flipped true on any onInput,
   // back to false when the action returns or the user collapses with confirm.
   // Two guard rails:
@@ -131,6 +140,28 @@ export function SessionCard({
             {session.paid ? "PAID" : "UNPAID"}
           </span>
         )}
+        {/* Tiny "closed" mark — only when she's actually saved reflections,
+            not when she's skipped. Lets her see at a glance which sessions
+            she's sat with. */}
+        {isCompleted &&
+          session.closingCompletedAt &&
+          (session.closingLanded ||
+            session.closingRemember ||
+            session.closingNeverForget) && (
+            <span
+              className="shrink-0 text-plum-500"
+              title="You reflected on this session"
+              aria-label="Closed"
+            >
+              <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                <path
+                  fillRule="evenodd"
+                  d="M9.243 3.03a1 1 0 011.514 0l1.92 2.22 2.94-.21a1 1 0 011.07 1.07l-.21 2.94 2.22 1.92a1 1 0 010 1.514l-2.22 1.92.21 2.94a1 1 0 01-1.07 1.07l-2.94-.21-1.92 2.22a1 1 0 01-1.514 0l-1.92-2.22-2.94.21a1 1 0 01-1.07-1.07l.21-2.94L1.3 11.77a1 1 0 010-1.514l2.22-1.92-.21-2.94a1 1 0 011.07-1.07l2.94.21 1.92-2.22z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </span>
+          )}
       </button>
 
       {open && (
@@ -150,6 +181,13 @@ export function SessionCard({
                   title: isMarkComplete ? "Session marked complete" : "Session saved",
                   ttlMs: 2500,
                 });
+                // If she just marked it complete AND hasn't done the closing
+                // ritual on this session yet, open the ritual modal. The
+                // ritual is opt-in (Skip for now is a valid choice) — it
+                // just appears, doesn't insist.
+                if (isMarkComplete && !session.closingCompletedAt) {
+                  setClosingOpen(true);
+                }
               } catch (err) {
                 rethrowIfRedirect(err);
                 const info = describeSaveError(err);
@@ -274,6 +312,13 @@ export function SessionCard({
             </div>
           </form>
 
+          {/* The Closing — appears for completed sessions. Either renders the
+              saved reflections (with a quiet Edit link) or, if she hasn't
+              done the ritual yet, offers a soft "Reflect on this session"
+              entry point. Mirrors the same data the post-completion modal
+              writes. */}
+          {isCompleted && <ClosingSection session={session} onOpen={() => setClosingOpen(true)} />}
+
           {/* Payment row */}
           <div className="border-t border-ink-100 pt-3 flex items-center gap-3 text-sm flex-wrap">
             <div className="text-ink-500 text-xs">Payment</div>
@@ -385,6 +430,117 @@ export function SessionCard({
           </div>
         </div>
       )}
+
+      {/* The Closing Ritual modal — opens automatically when she marks the
+          session complete for the first time, and on-demand via the "Reflect"
+          link inside the closing section. */}
+      <ClosingRitualDialog
+        open={closingOpen}
+        onClose={() => setClosingOpen(false)}
+        sessionId={session.id}
+        clientName={clientName ?? "this person"}
+        initial={{
+          landed: session.closingLanded ?? "",
+          remember: session.closingRemember ?? "",
+          neverForget: session.closingNeverForget ?? "",
+        }}
+      />
+    </div>
+  );
+}
+
+// Read-only display + edit affordance for the saved Closing on completed
+// sessions. Three flavors:
+//   1. no closingCompletedAt → "Reflect on this session" invite (no content yet)
+//   2. completed, all three fields empty → quiet "(skipped)" with re-open link
+//   3. content present → render each filled field in serif italic, plum-tinted
+function ClosingSection({
+  session,
+  onOpen,
+}: {
+  session: Session;
+  onOpen: () => void;
+}) {
+  const closed = !!session.closingCompletedAt;
+  const landed = session.closingLanded?.trim() ?? "";
+  const remember = session.closingRemember?.trim() ?? "";
+  const neverForget = session.closingNeverForget?.trim() ?? "";
+  const hasContent = landed || remember || neverForget;
+
+  // Case 1 — never closed, never reflected
+  if (!closed) {
+    return (
+      <div className="border-t border-ink-100 pt-3">
+        <button
+          type="button"
+          onClick={onOpen}
+          className="text-xs serif-italic text-plum-700 hover:underline"
+          style={{ fontWeight: 400 }}
+        >
+          Reflect on this session →
+        </button>
+      </div>
+    );
+  }
+
+  // Case 2 — closed via Skip
+  if (!hasContent) {
+    return (
+      <div className="border-t border-ink-100 pt-3 flex items-center gap-3 text-xs text-ink-400">
+        <span className="italic">Closing skipped.</span>
+        <button
+          type="button"
+          onClick={onOpen}
+          className="text-plum-700 hover:underline"
+        >
+          Reflect now →
+        </button>
+      </div>
+    );
+  }
+
+  // Case 3 — saved reflections to render
+  return (
+    <div className="border-t border-ink-100 pt-4">
+      <div className="flex items-baseline justify-between mb-2">
+        <div
+          className="serif-italic text-sm text-plum-700"
+          style={{ fontWeight: 400 }}
+        >
+          The Closing
+        </div>
+        <button
+          type="button"
+          onClick={onOpen}
+          className="text-[11px] text-ink-500 hover:text-plum-700 hover:underline"
+        >
+          Edit
+        </button>
+      </div>
+      <div className="space-y-3">
+        {landed && (
+          <ClosingLine label="What landed" body={landed} />
+        )}
+        {remember && (
+          <ClosingLine label="What to remember" body={remember} />
+        )}
+        {neverForget && (
+          <ClosingLine label="Never want to forget" body={neverForget} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ClosingLine({ label, body }: { label: string; body: string }) {
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-wider text-ink-400 font-semibold">
+        {label}
+      </div>
+      <div className="text-sm text-ink-700 italic leading-relaxed mt-0.5 whitespace-pre-wrap">
+        {body}
+      </div>
     </div>
   );
 }

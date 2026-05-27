@@ -48,6 +48,7 @@ Soul Service is built specifically for Svitlana, a sole practitioner who holds o
 
 If she asks "what's new?" / "что нового?" / "що нового?", lead with the highlights from this list. Most recent first.
 
+- **The Closing — a quiet ritual after each session.** When she marks a session complete, a small modal now opens with three optional prompts: "What landed?" / "What do you want to remember?" / "Anything [client] said you'd never want to forget?" All three are optional, all skippable, autosaved as she types. Saved reflections appear on the session card afterwards (serif italic, plum-tinted) alongside her regular notes. A small plum spark icon on the card header marks sessions she's reflected on. She can revisit and edit any closing later via the "Edit" link, or "Reflect on this session" if she skipped it the first time.
 - **"Just for you" private notes are now editable inline.** Previously the block on a client's overview was display-only — she had to open Edit Profile to type in it. Now click the body (or the empty-state text) to reveal an inline textarea, save with the button or Cmd/Ctrl+Enter. Autosaves locally as she types.
 - **One-click "Reconnect Google" on /status.** When the Google row shows a sync error mentioning scopes or grant, the error box now has a "Reconnect Google →" link that takes her straight to the Google consent screen. After accepting, the new tokens carry every scope we need and sync starts working.
 - **The Google sync's actual error is now visible.** /status shows the raw Google error message in a red box on the Google row, with a timestamp and a hint about what usually fixes it (reconnect vs enable API).
@@ -76,6 +77,16 @@ If she asks "what's new?" / "что нового?" / "що нового?", lead 
 - Notes autosave as she types — even if she closes the tab her writing won't be lost.
 - Reschedule, cancel, or delete from inside the session card.
 - Each session card shows a Google sync chip: "✓ On your calendar" or a "Push to Google Calendar" button if it hasn't synced yet.
+
+## The Closing Ritual
+- After she marks a session complete, a small modal opens offering three quiet prompts she can answer or skip:
+  - "What landed?" — the thing she'd describe to a colleague in one sentence
+  - "What do you want to remember?" — a texture, a turn, a moment
+  - "Anything [client] said you'd never want to forget?" — their words, as close as she can
+- All three are optional. "Skip for now" is a first-class choice. Skipping still records that the closing was attended to (so she doesn't get re-prompted), but she can always come back via "Reflect on this session" on the completed card.
+- Saved reflections render on the session card afterwards (serif italic, plum-tinted) alongside her regular notes — distinct, contemplative. A small plum spark icon on the card header marks sessions she's reflected on. She can edit a closing later via the "Edit" link.
+- Autosaves locally so closing the modal mid-thought never loses what she was writing.
+- The closing is part of the broader "ritual" direction: tools for paying attention to the work, not just tracking it. Pre-session prep view, anniversaries, and journey timelines are coming next in the same family.
 
 ## AI session notes
 - Open a session card → click "AI: structure from transcript" → paste a transcript (from Fathom, Otter, Tactiq, Google Meet's built-in transcript — anywhere) → click Generate. Claude turns it into clean structured notes in third-person observational style. She can edit afterwards.

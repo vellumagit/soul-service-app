@@ -314,6 +314,7 @@ export default async function ClientProfilePage({
           ) : (
             <SessionsLog
               sessions={file.sessions}
+              clientName={client.fullName}
               noteTemplates={noteTpls}
               autoUploadAiNotes={settings.autoUploadAiNotes}
             />

@@ -211,6 +211,60 @@ export async function updateClient(formData: FormData) {
   revalidatePath("/clients");
 }
 
+/** Save the Closing Ritual for a session — three optional reflections
+ *  she captures right after a session is marked complete. `skip`-mode
+ *  passes empty strings; we still stamp closingCompletedAt so the UI
+ *  doesn't keep prompting. */
+export type SaveClosingResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
+export async function saveSessionClosing(
+  sessionId: string,
+  landed: string,
+  remember: string,
+  neverForget: string
+): Promise<SaveClosingResult> {
+  try {
+    const { accountId } = await requireSession();
+    const trim = (s: string) => {
+      const t = s.trim();
+      return t.length === 0 ? null : t;
+    };
+    await db
+      .update(sessions)
+      .set({
+        closingLanded: trim(landed),
+        closingRemember: trim(remember),
+        closingNeverForget: trim(neverForget),
+        closingCompletedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId))
+      );
+
+    // Refresh the surfaces that show closings: client profile (Sessions tab
+    // + overview's Recent activity), the calendar, and Today (the closing
+    // can show as a small "you reflected on Vlado · 4pm" later).
+    const [s] = await db
+      .select({ clientId: sessions.clientId })
+      .from(sessions)
+      .where(eq(sessions.id, sessionId))
+      .limit(1);
+    if (s) revalidatePath(`/clients/${s.clientId}`);
+    revalidatePath("/calendar");
+    revalidatePath("/");
+
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Couldn't save closing",
+    };
+  }
+}
+
 /** Standalone updater for the "Just for you" private-notes block on a
  *  client's overview. We don't want to make her open the full Edit Profile
  *  dialog just to jot a hunch — she should be able to write into the box

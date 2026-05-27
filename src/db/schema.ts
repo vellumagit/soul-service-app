@@ -168,6 +168,15 @@ export const sessions = pgTable(
     leftAs: text("left_as"), // how they left (free text)
     notes: text("notes"), // practitioner's session notes
 
+    // The Closing — a quiet ritual the app offers after a session is marked
+    // complete. Three optional prompts, separate from notes so the timeline
+    // and arc views can read them cheaply. closingCompletedAt is set when
+    // she finishes (saved OR explicitly skipped) so the UI stops nagging.
+    closingLanded: text("closing_landed"),
+    closingRemember: text("closing_remember"),
+    closingNeverForget: text("closing_never_forget"),
+    closingCompletedAt: timestamp("closing_completed_at"),
+
     meetUrl: text("meet_url"),
     googleEventId: text("google_event_id"),
 

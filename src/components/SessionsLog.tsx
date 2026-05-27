@@ -47,10 +47,15 @@ function groupByMonth(sessions: Session[]): Group[] {
 
 export function SessionsLog({
   sessions,
+  clientName,
   noteTemplates,
   autoUploadAiNotes,
 }: {
   sessions: Session[];
+  /** The client these sessions belong to — passed through to SessionCard so
+   *  the Closing Ritual dialog can address her by name ("Sit with Maria for
+   *  a moment…"). */
+  clientName: string;
   noteTemplates: NoteTemplate[];
   autoUploadAiNotes?: boolean;
 }) {
@@ -89,6 +94,7 @@ export function SessionsLog({
               <SessionCard
                 key={s.id}
                 session={s}
+                clientName={clientName}
                 noteTemplates={noteTemplates}
                 autoUploadAiNotes={autoUploadAiNotes}
               />
