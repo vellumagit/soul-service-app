@@ -71,6 +71,53 @@
   --color-parchment-edge: #ead9c1;
 }
 
+/*  ─────────────────────────────────────────────────────────────────────────
+    Time-of-day theming.
+
+    A subtle shift in the page's surface tones based on local hour, so the
+    app feels like the practitioner's room rather than a flat web page. The
+    `data-time-of-day` attribute is set on <html> by `TimeOfDayProvider`
+    (mounted in AppShell). We only override the two surface tokens — every
+    other token (plum, honey, ink) stays locked so the design language
+    doesn't drift.
+
+      • morning (5-9)   — cooler, fresher, like sun through a kitchen window
+      • midday  (9-16)  — default linen, no override needed
+      • dusk    (16-20) — warmer rose tint, the candle starts to matter
+      • night   (20-5)  — deepest parchment, warm lamplight glow
+
+    Transitions are slow (~2s) so when the page is held open across a band
+    boundary the shift is felt as ambience, not as a re-render.
+    ───────────────────────────────────────────────────────────────────────── */
+
+body {
+  transition: background-color 2s ease;
+}
+
+html[data-time-of-day="morning"] {
+  --color-app-bg: #f7f5f1;
+  --color-parchment: #fcfaf4;
+  --color-parchment-edge: #e6dccb;
+}
+
+html[data-time-of-day="dusk"] {
+  --color-app-bg: #f9f1e6;
+  --color-parchment: #fdf6e8;
+  --color-parchment-edge: #ecd2af;
+}
+
+html[data-time-of-day="night"] {
+  --color-app-bg: #f5ecdc;
+  --color-parchment: #fbf2df;
+  --color-parchment-edge: #e4c79e;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body {
+    transition: none;
+  }
+}
+
 body {
   /* Inter has stylistic-set variants — turn on a few that subtly soften the
      forms (cv02 single-storey g, cv11 single-storey a, etc.). */

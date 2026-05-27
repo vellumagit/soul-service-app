@@ -34,9 +34,17 @@ type ClosingState = {
   landed: string;
   remember: string;
   neverForget: string;
+  /** Optional named milestone — separate from the three reflections. If she
+   *  pins a name here, the session becomes an anchor on the journey timeline. */
+  milestoneLabel: string;
 };
 
-const EMPTY: ClosingState = { landed: "", remember: "", neverForget: "" };
+const EMPTY: ClosingState = {
+  landed: "",
+  remember: "",
+  neverForget: "",
+  milestoneLabel: "",
+};
 
 export function ClosingRitualDialog({
   open,
@@ -70,10 +78,12 @@ export function ClosingRitualDialog({
     !!stored &&
     (stored.landed !== state.landed ||
       stored.remember !== state.remember ||
-      stored.neverForget !== state.neverForget) &&
+      stored.neverForget !== state.neverForget ||
+      stored.milestoneLabel !== state.milestoneLabel) &&
     (stored.landed.trim() !== "" ||
       stored.remember.trim() !== "" ||
-      stored.neverForget.trim() !== "");
+      stored.neverForget.trim() !== "" ||
+      stored.milestoneLabel.trim() !== "");
 
   // Re-seed state on open if `initial` changes (parent passed new data).
   const lastInitial = useRef<ClosingState>(initial ?? EMPTY);
@@ -109,7 +119,10 @@ export function ClosingRitualDialog({
         sessionId,
         toSave.landed,
         toSave.remember,
-        toSave.neverForget
+        toSave.neverForget,
+        // Only pass milestone when she's in "save" mode — skipping shouldn't
+        // touch any existing milestone label.
+        mode === "save" ? toSave.milestoneLabel : undefined
       );
       if (!result.ok) {
         setError(result.error);
@@ -218,10 +231,46 @@ export function ClosingRitualDialog({
           disabled={submitting}
         />
 
+        {/* Optional milestone — gets its own quiet block above the footer,
+            because pinning a milestone is a different kind of act than the
+            three reflections. Bordered + honey-tinted so it's recognizable. */}
+        <div
+          className="rounded-md p-3"
+          style={{
+            background: "var(--color-honey-50)",
+            border: "1px solid var(--color-honey-100)",
+          }}
+        >
+          <label className="block">
+            <span
+              className="serif-italic text-sm text-honey-700"
+              style={{ fontWeight: 500 }}
+            >
+              Mark this session as a milestone? (optional)
+            </span>
+            <span className="block text-[11px] text-ink-500 mt-0.5 leading-snug">
+              A short name for what just happened. Becomes a labelled anchor on
+              the timeline. E.g. &ldquo;first breakthrough&rdquo;, &ldquo;she
+              said it out loud&rdquo;, &ldquo;moved out&rdquo;.
+            </span>
+            <input
+              type="text"
+              value={state.milestoneLabel}
+              onChange={(e) =>
+                update({ ...state, milestoneLabel: e.target.value })
+              }
+              disabled={submitting}
+              maxLength={80}
+              placeholder="leave empty to skip"
+              className="mt-2 w-full px-3 py-1.5 text-sm border border-honey-100 rounded bg-white outline-none focus:border-honey-300 focus:ring-1 focus:ring-honey-100"
+            />
+          </label>
+        </div>
+
         <div className="flex items-center justify-between pt-1">
           <SaveStatusChip status={draft.status} />
           <span className="text-[10px] text-ink-400 italic">
-            All three are optional. None of this is shared with {firstName}.
+            All fields optional. None of this is shared with {firstName}.
           </span>
         </div>
       </div>

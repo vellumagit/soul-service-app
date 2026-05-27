@@ -9,6 +9,7 @@ import { KeyboardShortcuts, KeyboardShortcutsTrigger } from "./KeyboardShortcuts
 import { LocaleProvider, useT } from "./LocaleProvider";
 import { HelpBuddy } from "./HelpBuddy";
 import { FlashNotifier } from "./FlashNotifier";
+import { TimeOfDayProvider } from "./TimeOfDayProvider";
 import { DEFAULT_LOCALE, type Locale, type TranslationKey } from "@/lib/i18n";
 
 type NavItem = {
@@ -22,6 +23,7 @@ const NAV: NavItem[] = [
   { href: "/clients", labelKey: "nav.clients", icon: "clients" },
   { href: "/calendar", labelKey: "nav.calendar", icon: "calendar" },
   { href: "/payments", labelKey: "nav.payments", icon: "payments" },
+  { href: "/practice", labelKey: "nav.practice", icon: "practice" },
   { href: "/settings", labelKey: "nav.settings", icon: "settings" },
 ];
 
@@ -34,6 +36,9 @@ const ICON: Record<string, string> = {
     "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z",
   payments:
     "M3 10h18M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z",
+  // A small bound book — Year in Review feels like opening her journal
+  practice:
+    "M4 6a2 2 0 012-2h11a1 1 0 011 1v14a1 1 0 01-1 1H6a2 2 0 01-2-2V6zm0 0c0-1.105.895-2 2-2h11M9 8h6M9 12h4",
   settings:
     "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z",
 };
@@ -88,6 +93,7 @@ function AppShellInner({
       <KeyboardShortcuts />
       <HelpBuddy />
       <FlashNotifier />
+      <TimeOfDayProvider />
     <div className="flex min-h-screen">
       {/* Sidebar — visible md+ */}
       {/* Sidebar — pulled toward parchment cream so the chrome shares a warm

@@ -445,6 +445,7 @@ export function SessionCard({
           landed: session.closingLanded ?? "",
           remember: session.closingRemember ?? "",
           neverForget: session.closingNeverForget ?? "",
+          milestoneLabel: session.milestoneLabel ?? "",
         }}
       />
     </div>
@@ -467,7 +468,8 @@ function ClosingSection({
   const landed = session.closingLanded?.trim() ?? "";
   const remember = session.closingRemember?.trim() ?? "";
   const neverForget = session.closingNeverForget?.trim() ?? "";
-  const hasContent = landed || remember || neverForget;
+  const milestone = session.milestoneLabel?.trim() ?? "";
+  const hasContent = landed || remember || neverForget || milestone;
 
   // Case 1 — never closed, never reflected
   if (!closed) {
@@ -519,6 +521,23 @@ function ClosingSection({
           Edit
         </button>
       </div>
+      {/* Milestone chip — sits above the closing reflections because pinning
+          a name is the most "this mattered" act she can do in the ritual. */}
+      {milestone && (
+        <div className="mb-3">
+          <span
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium"
+            style={{
+              background: "var(--color-honey-50)",
+              color: "var(--color-honey-700)",
+              border: "1px solid var(--color-honey-100)",
+            }}
+          >
+            <span aria-hidden="true">◆</span>
+            {milestone}
+          </span>
+        </div>
+      )}
       <div className="space-y-3">
         {landed && (
           <ClosingLine label="What landed" body={landed} />

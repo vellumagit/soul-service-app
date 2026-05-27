@@ -27,6 +27,7 @@ const SHORTCUTS = [
   { keys: ["g", "c"], action: "Go to Clients" },
   { keys: ["g", "k"], action: "Go to Calendar" },
   { keys: ["g", "p"], action: "Go to Payments" },
+  { keys: ["g", "y"], action: "Go to Your practice (year in review)" },
   { keys: ["g", "s"], action: "Go to Settings" },
   { keys: ["g", "d"], action: "Jump to a date (opens calendar picker)" },
   { keys: ["g", "?"], action: "Go to Status" },
@@ -104,6 +105,7 @@ export function KeyboardShortcuts() {
           c: "/clients",
           k: "/calendar",
           p: "/payments",
+          y: "/practice",
           s: "/settings",
           "?": "/status",
           // `g d` jumps to the Calendar with the date picker auto-opened.

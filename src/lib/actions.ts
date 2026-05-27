@@ -227,7 +227,10 @@ export async function saveSessionClosing(
   sessionId: string,
   landed: string,
   remember: string,
-  neverForget: string
+  neverForget: string,
+  /** Optional milestone label set inside the Closing dialog. If she leaves
+   *  it blank we don't touch the existing milestone (whether set or null). */
+  milestoneLabel?: string
 ): Promise<SaveClosingResult> {
   try {
     const { accountId } = await requireSession();
@@ -235,15 +238,29 @@ export async function saveSessionClosing(
       const t = s.trim();
       return t.length === 0 ? null : t;
     };
+    // Build the patch incrementally so we only touch milestone when the
+    // caller explicitly passed something. "" means "clear it"; undefined
+    // means "leave whatever's there alone."
+    const patch: Record<string, unknown> = {
+      closingLanded: trim(landed),
+      closingRemember: trim(remember),
+      closingNeverForget: trim(neverForget),
+      closingCompletedAt: new Date(),
+      updatedAt: new Date(),
+    };
+    if (milestoneLabel !== undefined) {
+      const ms = milestoneLabel.trim();
+      if (ms.length === 0) {
+        patch.milestoneLabel = null;
+        patch.milestoneAt = null;
+      } else {
+        patch.milestoneLabel = ms.slice(0, 80);
+        patch.milestoneAt = sql`COALESCE(${sessions.milestoneAt}, NOW())`;
+      }
+    }
     await db
       .update(sessions)
-      .set({
-        closingLanded: trim(landed),
-        closingRemember: trim(remember),
-        closingNeverForget: trim(neverForget),
-        closingCompletedAt: new Date(),
-        updatedAt: new Date(),
-      })
+      .set(patch)
       .where(
         and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId))
       );
@@ -259,12 +276,60 @@ export async function saveSessionClosing(
     if (s) revalidatePath(`/clients/${s.clientId}`);
     revalidatePath("/calendar");
     revalidatePath("/");
+    revalidatePath("/practice");
 
     return { ok: true };
   } catch (err) {
     return {
       ok: false,
       error: err instanceof Error ? err.message : "Couldn't save closing",
+    };
+  }
+}
+
+/** Pin / unpin / rename a session's milestone label. Passing an empty
+ *  string clears the milestone. Idempotent — overwriting is fine. */
+export type SetMilestoneResult = { ok: true } | { ok: false; error: string };
+
+export async function setSessionMilestone(
+  sessionId: string,
+  label: string
+): Promise<SetMilestoneResult> {
+  try {
+    const { accountId } = await requireSession();
+    const trimmed = label.trim();
+    const labelToWrite = trimmed.length === 0 ? null : trimmed.slice(0, 80);
+    await db
+      .update(sessions)
+      .set({
+        milestoneLabel: labelToWrite,
+        // Stamp on FIRST mark; on subsequent edits keep the original stamp.
+        // We do this with COALESCE so the first save sets it and later saves
+        // leave it alone. Clearing the label nulls both.
+        milestoneAt:
+          labelToWrite === null
+            ? null
+            : sql`COALESCE(${sessions.milestoneAt}, NOW())`,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId))
+      );
+
+    const [s] = await db
+      .select({ clientId: sessions.clientId })
+      .from(sessions)
+      .where(eq(sessions.id, sessionId))
+      .limit(1);
+    if (s) revalidatePath(`/clients/${s.clientId}`);
+    revalidatePath("/calendar");
+    revalidatePath("/practice");
+
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Couldn't pin milestone",
     };
   }
 }

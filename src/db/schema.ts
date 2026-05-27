@@ -177,6 +177,13 @@ export const sessions = pgTable(
     closingNeverForget: text("closing_never_forget"),
     closingCompletedAt: timestamp("closing_completed_at"),
 
+    // Milestone — she can pin a session as a named anchor moment ("first
+    // breakthrough", "she said it out loud"). Null label = not a milestone.
+    // milestoneAt records when she pinned it (which can differ from the
+    // session's scheduledAt if she comes back later to mark a past session).
+    milestoneLabel: text("milestone_label"),
+    milestoneAt: timestamp("milestone_at"),
+
     meetUrl: text("meet_url"),
     googleEventId: text("google_event_id"),
 

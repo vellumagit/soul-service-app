@@ -48,6 +48,9 @@ Soul Service is built specifically for Svitlana, a sole practitioner who holds o
 
 If she asks "what's new?" / "что нового?" / "що нового?", lead with the highlights from this list. Most recent first.
 
+- **Your year — an annual digest of the practice.** New page at \`/practice\` (sidebar: "Your practice", shortcut \`g y\`). A year-end letter, not a stats dashboard. Hero sentence: "In 2026 you held 47 sessions with 12 people. That's about 70 hours of held time, across 5 months." Then: "Lines you didn't want to forget" (pulled from every Closing's never-forget field), Milestones, "What kept coming up" (themes across all clients), New beginnings (people who walked in for the first time this year), Years crossed (clients whose anniversary fell in this year), and "The rhythm of your year" — a small no-axis bar chart. Year picker top-right to look at past years (back to 2020).
+- **Milestone markers — pin any session as a named anchor moment.** Inside The Closing modal there's now an optional honey-tinted "Mark this session as a milestone?" field. Type a short name like "first breakthrough", "she said it out loud", "moved out", and the session becomes a labelled anchor: a ◆ diamond + visible label on the client's journey timeline, a small ◆ chip on the session card, and a named entry in the Year in review. Optional — most sessions won't have one. The diamond takes precedence over the ✦ never-forget star when both apply (no stacking symbols).
+- **Time-of-day theming.** The app's surface tones shift subtly with her local hour — cooler in the morning, default at midday, warm rose at dusk, deeper lamplight at night. Plum, honey, ink stay locked; only the parchment background drifts. Transition is slow (~2s) and respects \`prefers-reduced-motion\`. The feel is: the room around her changes a little as the day goes by, the work itself stays steady.
 - **Birthdays + work anniversaries quietly surface on Today.** New "Birthday" field on every client (optional). When a client's birthday OR their first-session anniversary lands on today's date, a small honey-tinted "On this day" card appears at the top of Today: "It's Maria's birthday today · 34. A quick note would land soft." or "2 years with Vlado today. Worth noticing." Auto-hides on days without anniversaries — most days will be quiet.
 - **"Together since…" line on every client overview.** Small serif anchor in the header — "Just beginning" / "Together 4 months" / "Together 2 years". Marks anniversary days specifically: "Together 1 year · anniversary today." Roots her in the length of the relationship every time she opens the file. Uses first non-cancelled session (falls back to when she added the client).
 - **Your work together — a journey timeline on every client overview.** A small horizontal arc just below the Walk-In card: every session as a marker, time across, completed (filled plum) / scheduled (ringed plum) / cancelled (gray ×). Sessions where she captured a "never want to forget" line in The Closing get a honey-gold ✦ star above them — those are the anchor moments of the arc. A "now" tick shows where today sits in the story. Hover any marker for the date and the never-forget line; click to jump to that session.
@@ -95,10 +98,33 @@ If she asks "what's new?" / "что нового?" / "що нового?", lead 
 - Every client overview now has a horizontal arc just below the Walk-In card: every session for that client placed proportionally on a timeline, from the first session (left) to today / the last scheduled session (right).
 - Marker styles: filled plum for completed, ringed plum for upcoming, gray × for cancelled.
 - Sessions where she captured a "never want to forget" line in The Closing get a honey-gold ✦ star above them. Those are the anchor moments of the arc.
+- Sessions she's explicitly pinned as a milestone (via The Closing's "Mark this session as a milestone?" field) get a honey-gold ◆ diamond above the dot AND a short label visible right on the arc (e.g. "first breakthrough"). The diamond takes precedence over the ✦ star — milestones are stronger anchors than never-forget lines.
 - A small "now" tick shows where today sits along the line.
 - Hover/tap any marker for a tooltip with the date + type + the never-forget line (if any). Click navigates to that session on the Sessions tab.
 - The header reads "Your work together · N months · M held" — gives her the shape at a glance.
-- First piece of the Arc cluster (alongside the Ritual cluster — Closing / Threshold / Sabbath). Milestone markers and a "year in review" view are coming.
+- Part of the Arc cluster (with Milestones + Year in review).
+
+## Milestones (named anchor moments)
+- Inside The Closing modal, below the three reflection fields, there's an optional honey-tinted block: "Mark this session as a milestone?" — a short text input (max 80 chars).
+- Suggested phrasings: "first breakthrough", "she said it out loud", "moved out", "named the pattern". Her language, her call.
+- Effects when a milestone is pinned:
+  - ◆ diamond + visible label on the client's journey timeline (anchored at the session's position).
+  - ◆ chip on the session card itself, above the closing reflections.
+  - A bullet in the Year in review's "Milestones" section, linking back to that session.
+- Optional and reversible — she can empty the field on a later edit to un-pin it. Most sessions won't be milestones; that's the point.
+
+## Your year (the annual digest)
+- URL \`/practice\` — sidebar item "Your practice", or shortcut \`g y\`. The Arc cluster's payoff page: the year held in one scroll.
+- Year picker top-right; defaults to the current year, capped 2020 to current.
+- Hero sentence in serif italic: "In <year> you held N sessions with M people. That's about H hours of held time, across X months."
+- Sections that appear when there's anything to show:
+  - **Lines you didn't want to forget** — every never-forget line she captured in The Closing this year, with the client name and session date, linking back to that session.
+  - **Milestones** — every session she named as a milestone, chip + client name + date.
+  - **What kept coming up** — top themes across all clients this year, as a tag cloud with counts.
+  - **New beginnings** — people who walked in for the first time this year.
+  - **Years crossed** — clients whose first-session anniversary fell in this year (1 year, 2 years, etc.).
+  - **The rhythm of your year** — a small no-axis 12-month bar chart of sessions held per month.
+- Empty state when nothing has happened in a given year: "Nothing held in <year> yet. Come back when there's an arc to show."
 
 ## Sabbath days (her off-time, honored)
 - Settings → "Sabbath days" → toggle any of seven weekday chips on. Days she keeps for herself; the app makes no assumption — empty = she works all days.
@@ -218,7 +244,7 @@ If she asks "what's new?" / "что нового?" / "що нового?", lead 
 ## Keyboard shortcuts
 - Press ? anywhere to see them all.
 - Single keys: n (new client), s (schedule session), r (new recurring series), / (focus search).
-- "g <letter>" sequences: g t (Today), g c (Clients), g k (Calendar), g p (Payments), g s (Settings), g d (jump to a date — opens calendar with picker), g ? (Status).
+- "g <letter>" sequences: g t (Today), g c (Clients), g k (Calendar), g p (Payments), g y (Your practice — year in review), g s (Settings), g d (jump to a date — opens calendar with picker), g ? (Status).
 
 ## Search palette (Cmd+K or /)
 - Searches across clients, session notes, files, and open tasks.
@@ -260,6 +286,7 @@ If she asks "what's new?" / "что нового?" / "що нового?", lead 
 | Week or month calendar | /calendar |
 | Jump to a specific date | /calendar — date picker in the toolbar, or press \`g d\`, or type a date in Cmd+K |
 | Payments ledger | /payments |
+| Your year — the annual digest of her practice | /practice (or press \`g y\`) |
 | Business info, templates, automations, language | /settings |
 | What's set up + diagnostics + bulk sync to Google | /status |
 

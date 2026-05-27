@@ -35,6 +35,10 @@ type TimelinePoint = {
   status: string;
   hasNeverForget: boolean;
   neverForgetLine: string | null;
+  /** Pinned milestone label (e.g. "first breakthrough"). Null = not a
+   *  milestone. Milestones get a diamond + visible label instead of just
+   *  the dot, because they're explicitly-named anchor moments. */
+  milestoneLabel: string | null;
 };
 
 const MIN_DAYS_SPAN = 14; // ensure markers aren't all on top of each other
@@ -61,6 +65,10 @@ export function JourneyTimeline({
         hasNeverForget:
           !!s.closingNeverForget && s.closingNeverForget.trim().length > 0,
         neverForgetLine: s.closingNeverForget,
+        milestoneLabel:
+          s.milestoneLabel && s.milestoneLabel.trim().length > 0
+            ? s.milestoneLabel.trim()
+            : null,
       }))
       .sort((a, b) => a.date.getTime() - b.date.getTime());
   }, [sessions]);
@@ -132,12 +140,13 @@ export function JourneyTimeline({
         Began {fullDate(firstAt)}.
       </div>
 
-      {/* The arc itself — relative-positioned canvas; markers absolute. */}
-      <div className="relative w-full" style={{ height: 64 }}>
-        {/* Baseline */}
+      {/* The arc itself — relative-positioned canvas; markers absolute.
+          Taller now to make room for milestone labels above the line. */}
+      <div className="relative w-full" style={{ height: 96 }}>
+        {/* Baseline — pushed down so labels above have room. */}
         <div
           className="absolute left-0 right-0 bg-ink-200"
-          style={{ top: 30, height: 1 }}
+          style={{ top: 60, height: 1 }}
         />
 
         {/* Today tick — only shown if today is somewhere inside the span */}
@@ -148,19 +157,20 @@ export function JourneyTimeline({
           >
             <div className="absolute inset-y-0 w-px bg-plum-300" />
             <div
-              className="absolute top-0 -translate-x-1/2 text-[9px] uppercase tracking-wider text-plum-600 font-semibold whitespace-nowrap"
-              style={{ paddingTop: 0 }}
+              className="absolute -translate-x-1/2 text-[9px] uppercase tracking-wider text-plum-600 font-semibold whitespace-nowrap"
+              style={{ top: 48 }}
             >
               now
             </div>
           </div>
         )}
 
-        {/* Session markers */}
+        {/* Session markers — centered on the baseline (top: 60). */}
         {points.map((p) => {
           const left = xPercent(p.date);
           const isCancelled = p.status === "cancelled";
           const isCompleted = p.status === "completed";
+          const isMilestone = !!p.milestoneLabel;
           return (
             <Link
               key={p.id}
@@ -169,18 +179,45 @@ export function JourneyTimeline({
               onMouseLeave={() => setHoveredId(null)}
               onFocus={() => setHoveredId(p.id)}
               onBlur={() => setHoveredId(null)}
-              aria-label={`${p.type} on ${fullDate(p.date)}`}
+              aria-label={`${p.type} on ${fullDate(p.date)}${
+                p.milestoneLabel ? ` — ${p.milestoneLabel}` : ""
+              }`}
               className="absolute group"
               style={{
                 left: `calc(${left}% - ${MARKER_SIZE / 2}px)`,
-                top: 30 - MARKER_SIZE / 2,
+                top: 60 - MARKER_SIZE / 2,
                 width: MARKER_SIZE,
                 height: MARKER_SIZE,
               }}
             >
-              {/* The honey star for "never forget" sessions — sits ABOVE the
-                  marker so it reads as an anchor of the arc. */}
-              {p.hasNeverForget && (
+              {/* Milestone label + diamond — sit above the dot. The label is
+                  always visible so the named anchors of the arc are readable
+                  at a glance. */}
+              {isMilestone && (
+                <>
+                  <span
+                    aria-hidden="true"
+                    className="absolute left-1/2 -translate-x-1/2 text-honey-600"
+                    style={{ top: -16, fontSize: 11, lineHeight: 1 }}
+                  >
+                    ◆
+                  </span>
+                  <span
+                    className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] text-honey-700 font-medium"
+                    style={{ top: -32, lineHeight: 1 }}
+                    title={p.milestoneLabel ?? undefined}
+                  >
+                    {p.milestoneLabel && p.milestoneLabel.length > 24
+                      ? p.milestoneLabel.slice(0, 22) + "…"
+                      : p.milestoneLabel}
+                  </span>
+                </>
+              )}
+
+              {/* The honey star for "never forget" sessions WITHOUT a
+                  milestone — when both apply, the milestone diamond takes
+                  precedence (don't stack symbols). */}
+              {!isMilestone && p.hasNeverForget && (
                 <span
                   aria-hidden="true"
                   className="absolute left-1/2 -translate-x-1/2 text-honey-500"
@@ -190,6 +227,7 @@ export function JourneyTimeline({
                   ✦
                 </span>
               )}
+
               {isCancelled ? (
                 <span
                   aria-hidden="true"
@@ -218,7 +256,7 @@ export function JourneyTimeline({
             className="absolute text-[9px] text-ink-400 font-mono whitespace-nowrap"
             style={{
               left: `${xPercent(m.date)}%`,
-              top: 40,
+              top: 70,
               transform: "translateX(-50%)",
             }}
           >
@@ -253,14 +291,22 @@ export function JourneyTimeline({
           </div>
         ) : (
           <div className="text-[11px] text-ink-400 italic">
-            Hover a dot to see what was there
-            {points.some((p) => p.hasNeverForget) && (
+            Hover a dot to see what was there.
+            {points.some((p) => p.milestoneLabel) && (
               <>
-                . <span className="text-honey-700">✦</span> marks sessions with
-                a line you didn&apos;t want to forget
+                {" "}
+                <span className="text-honey-700">◆</span> = pinned milestones.
               </>
             )}
-            .
+            {points.some(
+              (p) => !p.milestoneLabel && p.hasNeverForget
+            ) && (
+              <>
+                {" "}
+                <span className="text-honey-700">✦</span> = a line you
+                didn&apos;t want to forget.
+              </>
+            )}
           </div>
         )}
       </div>

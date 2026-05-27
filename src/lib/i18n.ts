@@ -45,6 +45,7 @@ export type TranslationKey =
   | "nav.clients"
   | "nav.calendar"
   | "nav.payments"
+  | "nav.practice"
   | "nav.settings"
   // Sidebar footer
   | "sidebar.yourSpace"
@@ -119,6 +120,7 @@ const en: Record<TranslationKey, string> = {
   "nav.clients": "Clients",
   "nav.calendar": "Calendar",
   "nav.payments": "Payments",
+  "nav.practice": "Your practice",
   "nav.settings": "Settings",
   // Sidebar footer
   "sidebar.yourSpace": "your space",
@@ -196,6 +198,7 @@ const ru: Record<TranslationKey, string> = {
   "nav.clients": "Клиенты",
   "nav.calendar": "Календарь",
   "nav.payments": "Платежи",
+  "nav.practice": "Ваша практика",
   "nav.settings": "Настройки",
   // Sidebar footer
   "sidebar.yourSpace": "ваше пространство",
@@ -273,6 +276,7 @@ const uk: Record<TranslationKey, string> = {
   "nav.clients": "Клієнти",
   "nav.calendar": "Календар",
   "nav.payments": "Платежі",
+  "nav.practice": "Ваша практика",
   "nav.settings": "Налаштування",
   // Sidebar footer
   "sidebar.yourSpace": "ваш простір",

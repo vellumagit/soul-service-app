@@ -26,11 +26,14 @@ import {
   and,
   or,
   gte,
+  gt,
   lte,
+  lt,
   sql,
   isNotNull,
   isNull,
   ilike,
+  inArray,
   ne,
 } from "drizzle-orm";
 
@@ -1207,6 +1210,215 @@ export async function getTodaysAnniversaries(
   }
 
   return events;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Year in review — "Your practice this year"
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type YearInReview = {
+  year: number;
+  /** Total non-cancelled sessions held this calendar year (status=completed
+   *  or status=scheduled that already happened). */
+  sessionsHeld: number;
+  /** Unique clients she met with this year. */
+  clientsSeen: number;
+  /** Sum of session durations in minutes, completed sessions only. */
+  totalMinutes: number;
+  /** Months in the year she had at least one session in. */
+  monthsActive: number;
+  /** Top themes across all clients this year (label + how many clients used it). */
+  topThemes: { label: string; count: number }[];
+  /** Milestones pinned to sessions this year — show as a small ledger. */
+  milestones: {
+    sessionId: string;
+    clientId: string;
+    clientName: string;
+    label: string;
+    sessionAt: Date;
+  }[];
+  /** "Never want to forget" lines from this year — the most precious threads. */
+  anchorMoments: {
+    sessionId: string;
+    clientId: string;
+    clientName: string;
+    line: string;
+    sessionAt: Date;
+  }[];
+  /** Clients whose first session was in this year — new beginnings. */
+  newBeginnings: { clientId: string; clientName: string; firstAt: Date }[];
+  /** Clients whose first-session anniversary fell within this year — those
+   *  she crossed a year (or more) with. */
+  anniversariesPassed: {
+    clientId: string;
+    clientName: string;
+    yearsTogether: number;
+    date: Date;
+  }[];
+  /** Sessions per month, for a small rhythm chart. Length 12, index 0 = Jan. */
+  monthlyRhythm: number[];
+};
+
+export async function getYearInReview(
+  accountId: string,
+  year: number
+): Promise<YearInReview> {
+  const yearStart = new Date(year, 0, 1);
+  const yearEnd = new Date(year + 1, 0, 1);
+
+  // All sessions IN this year (any status), joined to clients for names
+  const sessionRows = await db
+    .select({
+      id: sessions.id,
+      clientId: sessions.clientId,
+      clientName: clients.fullName,
+      scheduledAt: sessions.scheduledAt,
+      durationMinutes: sessions.durationMinutes,
+      status: sessions.status,
+      closingNeverForget: sessions.closingNeverForget,
+      milestoneLabel: sessions.milestoneLabel,
+      milestoneAt: sessions.milestoneAt,
+    })
+    .from(sessions)
+    .innerJoin(clients, eq(sessions.clientId, clients.id))
+    .where(
+      and(
+        eq(sessions.accountId, accountId),
+        gte(sessions.scheduledAt, yearStart),
+        lt(sessions.scheduledAt, yearEnd)
+      )
+    );
+
+  const held = sessionRows.filter((s) => s.status !== "cancelled");
+  const completed = sessionRows.filter((s) => s.status === "completed");
+  const sessionsHeld = held.length;
+  const clientsSeen = new Set(held.map((s) => s.clientId)).size;
+  const totalMinutes = completed.reduce((sum, s) => sum + s.durationMinutes, 0);
+  const monthsActive = new Set(
+    held.map((s) => new Date(s.scheduledAt).getMonth())
+  ).size;
+
+  const monthlyRhythm = Array.from({ length: 12 }, () => 0);
+  for (const s of held) monthlyRhythm[new Date(s.scheduledAt).getMonth()]++;
+
+  // Themes: pull every theme for every client she met this year. Count by
+  // label (case-insensitive), tally distinct clients.
+  const heldClientIds = Array.from(new Set(held.map((s) => s.clientId)));
+  let themeRows: { label: string; clientId: string }[] = [];
+  if (heldClientIds.length > 0) {
+    themeRows = await db
+      .select({ label: themes.label, clientId: themes.clientId })
+      .from(themes)
+      .where(
+        and(
+          eq(themes.accountId, accountId),
+          inArray(themes.clientId, heldClientIds)
+        )
+      );
+  }
+  const themeBuckets = new Map<string, Set<string>>();
+  for (const t of themeRows) {
+    const key = t.label.trim().toLowerCase();
+    if (!key) continue;
+    if (!themeBuckets.has(key)) themeBuckets.set(key, new Set());
+    themeBuckets.get(key)!.add(t.clientId);
+  }
+  const topThemes = Array.from(themeBuckets.entries())
+    .map(([label, clientSet]) => ({
+      // Use the first occurrence's original casing for display
+      label:
+        themeRows.find((t) => t.label.trim().toLowerCase() === label)?.label ??
+        label,
+      count: clientSet.size,
+    }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 12);
+
+  // Milestones pinned this year — could be on past sessions she revisited,
+  // so we filter by milestoneAt (when she pinned it) rather than by session
+  // date. But include the session's own scheduledAt for context.
+  const milestoneRows = sessionRows
+    .filter(
+      (s) =>
+        s.milestoneLabel &&
+        s.milestoneLabel.trim().length > 0 &&
+        s.milestoneAt &&
+        s.milestoneAt >= yearStart &&
+        s.milestoneAt < yearEnd
+    )
+    .map((s) => ({
+      sessionId: s.id,
+      clientId: s.clientId,
+      clientName: s.clientName,
+      label: s.milestoneLabel!.trim(),
+      sessionAt: s.scheduledAt,
+    }))
+    .sort((a, b) => a.sessionAt.getTime() - b.sessionAt.getTime());
+
+  // Anchor moments — closingNeverForget lines from sessions THIS year
+  const anchorMoments = sessionRows
+    .filter(
+      (s) => s.closingNeverForget && s.closingNeverForget.trim().length > 0
+    )
+    .map((s) => ({
+      sessionId: s.id,
+      clientId: s.clientId,
+      clientName: s.clientName,
+      line: s.closingNeverForget!.trim(),
+      sessionAt: s.scheduledAt,
+    }))
+    .sort((a, b) => a.sessionAt.getTime() - b.sessionAt.getTime());
+
+  // New beginnings: clients whose FIRST non-cancelled session was within
+  // this year (regardless of which year that first session falls in within
+  // the row set — we need to look across ALL their sessions). Cheap join.
+  const firstSessionRows = await db
+    .select({
+      clientId: sessions.clientId,
+      clientName: clients.fullName,
+      firstAt: sql<Date>`MIN(${sessions.scheduledAt})`.as("firstAt"),
+    })
+    .from(sessions)
+    .innerJoin(clients, eq(sessions.clientId, clients.id))
+    .where(
+      and(eq(sessions.accountId, accountId), ne(sessions.status, "cancelled"))
+    )
+    .groupBy(sessions.clientId, clients.fullName);
+  const newBeginnings = firstSessionRows
+    .filter((r) => r.firstAt >= yearStart && r.firstAt < yearEnd)
+    .sort((a, b) => a.firstAt.getTime() - b.firstAt.getTime());
+
+  // Anniversaries that passed this year — first session in an earlier year,
+  // their (month, day) anniversary fell within `year`. Years together = year
+  // minus the year of first session.
+  const anniversariesPassed = firstSessionRows
+    .filter((r) => r.firstAt < yearStart) // started before this year
+    .map((r) => {
+      const fs = new Date(r.firstAt);
+      const anniv = new Date(year, fs.getMonth(), fs.getDate());
+      return {
+        clientId: r.clientId,
+        clientName: r.clientName,
+        yearsTogether: year - fs.getFullYear(),
+        date: anniv,
+      };
+    })
+    .filter((r) => r.date >= yearStart && r.date < yearEnd)
+    .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  return {
+    year,
+    sessionsHeld,
+    clientsSeen,
+    totalMinutes,
+    monthsActive,
+    topThemes,
+    milestones: milestoneRows,
+    anchorMoments,
+    newBeginnings,
+    anniversariesPassed,
+    monthlyRhythm,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
