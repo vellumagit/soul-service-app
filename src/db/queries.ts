@@ -1372,7 +1372,16 @@ export async function getYearInReview(
   // New beginnings: clients whose FIRST non-cancelled session was within
   // this year (regardless of which year that first session falls in within
   // the row set — we need to look across ALL their sessions). Cheap join.
-  const firstSessionRows = await db
+  //
+  // CRITICAL: the neon-http driver returns MIN(timestamp) aggregates as
+  // STRINGS, not Date objects, even though `sql<Date>` types it as Date.
+  // Comparing a string with a Date silently coerces both to NaN and returns
+  // false for every comparison — which previously made newBeginnings and
+  // anniversariesPassed always empty in prod. Normalize to Date at the
+  // boundary so everything downstream is safe. The same caution applies
+  // anywhere else MIN/MAX(timestamp) is read; the existing codebase already
+  // wraps `lastSessionAt`/`nextSessionAt` in `new Date(...)` for this reason.
+  const firstSessionRowsRaw = await db
     .select({
       clientId: sessions.clientId,
       clientName: clients.fullName,
@@ -1384,17 +1393,26 @@ export async function getYearInReview(
       and(eq(sessions.accountId, accountId), ne(sessions.status, "cancelled"))
     )
     .groupBy(sessions.clientId, clients.fullName);
+  const firstSessionRows = firstSessionRowsRaw.map((r) => ({
+    clientId: r.clientId,
+    clientName: r.clientName,
+    firstAt: new Date(r.firstAt),
+  }));
+
   const newBeginnings = firstSessionRows
     .filter((r) => r.firstAt >= yearStart && r.firstAt < yearEnd)
     .sort((a, b) => a.firstAt.getTime() - b.firstAt.getTime());
 
   // Anniversaries that passed this year — first session in an earlier year,
   // their (month, day) anniversary fell within `year`. Years together = year
-  // minus the year of first session.
+  // minus the year of first session. Leap-day note: a Feb 29 first session
+  // in a non-leap target year rolls forward to Mar 1 (JS Date semantics),
+  // which is a tolerable surprise — better than silently missing the
+  // anniversary altogether.
   const anniversariesPassed = firstSessionRows
     .filter((r) => r.firstAt < yearStart) // started before this year
     .map((r) => {
-      const fs = new Date(r.firstAt);
+      const fs = r.firstAt;
       const anniv = new Date(year, fs.getMonth(), fs.getDate());
       return {
         clientId: r.clientId,

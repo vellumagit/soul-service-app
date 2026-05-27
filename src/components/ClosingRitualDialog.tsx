@@ -97,7 +97,13 @@ export function ClosingRitualDialog({
       setState(next);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initial?.landed, initial?.remember, initial?.neverForget]);
+  }, [
+    open,
+    initial?.landed,
+    initial?.remember,
+    initial?.neverForget,
+    initial?.milestoneLabel,
+  ]);
 
   function update(next: ClosingState) {
     setState(next);

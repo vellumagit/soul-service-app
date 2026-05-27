@@ -258,22 +258,28 @@ export async function saveSessionClosing(
         patch.milestoneAt = sql`COALESCE(${sessions.milestoneAt}, NOW())`;
       }
     }
-    await db
+    // Single round-trip: UPDATE + return the clientId, both scoped to the
+    // caller's accountId. If 0 rows match (wrong session id, or a session
+    // that doesn't belong to this account), `returning()` yields [] and we
+    // surface that as an error instead of silently no-op'ing. Previously the
+    // follow-up SELECT was unscoped, which meant a wrong-account UUID could
+    // trigger a revalidatePath on someone else's client.
+    const updated = await db
       .update(sessions)
       .set(patch)
       .where(
         and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId))
-      );
+      )
+      .returning({ clientId: sessions.clientId });
+
+    if (updated.length === 0) {
+      return { ok: false, error: "Session not found" };
+    }
 
     // Refresh the surfaces that show closings: client profile (Sessions tab
     // + overview's Recent activity), the calendar, and Today (the closing
     // can show as a small "you reflected on Vlado · 4pm" later).
-    const [s] = await db
-      .select({ clientId: sessions.clientId })
-      .from(sessions)
-      .where(eq(sessions.id, sessionId))
-      .limit(1);
-    if (s) revalidatePath(`/clients/${s.clientId}`);
+    revalidatePath(`/clients/${updated[0].clientId}`);
     revalidatePath("/calendar");
     revalidatePath("/");
     revalidatePath("/practice");
@@ -299,7 +305,10 @@ export async function setSessionMilestone(
     const { accountId } = await requireSession();
     const trimmed = label.trim();
     const labelToWrite = trimmed.length === 0 ? null : trimmed.slice(0, 80);
-    await db
+    // Same pattern as saveSessionClosing — UPDATE with .returning() so we
+    // get the clientId back in a single account-scoped round-trip and can
+    // fail fast on a wrong-account UUID.
+    const updated = await db
       .update(sessions)
       .set({
         milestoneLabel: labelToWrite,
@@ -314,14 +323,14 @@ export async function setSessionMilestone(
       })
       .where(
         and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId))
-      );
+      )
+      .returning({ clientId: sessions.clientId });
 
-    const [s] = await db
-      .select({ clientId: sessions.clientId })
-      .from(sessions)
-      .where(eq(sessions.id, sessionId))
-      .limit(1);
-    if (s) revalidatePath(`/clients/${s.clientId}`);
+    if (updated.length === 0) {
+      return { ok: false, error: "Session not found" };
+    }
+
+    revalidatePath(`/clients/${updated[0].clientId}`);
     revalidatePath("/calendar");
     revalidatePath("/practice");
 
