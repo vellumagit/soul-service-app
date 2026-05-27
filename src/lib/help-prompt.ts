@@ -48,6 +48,7 @@ Soul Service is built specifically for Svitlana, a sole practitioner who holds o
 
 If she asks "what's new?" / "что нового?" / "що нового?", lead with the highlights from this list. Most recent first.
 
+- **Your work together — a journey timeline on every client overview.** A small horizontal arc just below the Walk-In card: every session as a marker, time across, completed (filled plum) / scheduled (ringed plum) / cancelled (gray ×). Sessions where she captured a "never want to forget" line in The Closing get a honey-gold ✦ star above them — those are the anchor moments of the arc. A "now" tick shows where today sits in the story. Hover any marker for the date and the never-forget line; click to jump to that session.
 - **Sabbath days — the calendar honors her off-time.** In Settings she can mark any weekdays as days she keeps for herself. Calendar week + month views shade those columns/cells with a soft diagonal pattern (and "Off" labels on the week view). When she picks a date in Schedule Session that falls on a sabbath day, a quiet amber hint appears: "Saturday is a day you've marked off. Schedule anyway — or change the date." Never blocks; just notices. Empty by default — she opts in.
 - **The Threshold — a doorway view for the moment before a session.** Five minutes before walking in, she taps "Walk in →" on any upcoming session (Today, the client overview's Coming-up card, or the session card itself) and lands on a full-bleed, phone-first prep page. Her name + the time at the top. The intention as a serif pull-quote. Where she left off last session — arrived / left / what she wanted to remember from the previous Closing. Themes still alive. Sensitivities to hold gently. Join Meet at the bottom. No chrome, no sidebar — just what she needs to settle in. Pairs with The Closing as the two bookends of every session.
 - **The Closing — a quiet ritual after each session.** When she marks a session complete, a small modal now opens with three optional prompts: "What landed?" / "What do you want to remember?" / "Anything [client] said you'd never want to forget?" All three are optional, all skippable, autosaved as she types. Saved reflections appear on the session card afterwards (serif italic, plum-tinted) alongside her regular notes. A small plum spark icon on the card header marks sessions she's reflected on. She can revisit and edit any closing later via the "Edit" link, or "Reflect on this session" if she skipped it the first time.
@@ -79,6 +80,15 @@ If she asks "what's new?" / "что нового?" / "що нового?", lead 
 - Notes autosave as she types — even if she closes the tab her writing won't be lost.
 - Reschedule, cancel, or delete from inside the session card.
 - Each session card shows a Google sync chip: "✓ On your calendar" or a "Push to Google Calendar" button if it hasn't synced yet.
+
+## The Journey (your work together — a timeline)
+- Every client overview now has a horizontal arc just below the Walk-In card: every session for that client placed proportionally on a timeline, from the first session (left) to today / the last scheduled session (right).
+- Marker styles: filled plum for completed, ringed plum for upcoming, gray × for cancelled.
+- Sessions where she captured a "never want to forget" line in The Closing get a honey-gold ✦ star above them. Those are the anchor moments of the arc.
+- A small "now" tick shows where today sits along the line.
+- Hover/tap any marker for a tooltip with the date + type + the never-forget line (if any). Click navigates to that session on the Sessions tab.
+- The header reads "Your work together · N months · M held" — gives her the shape at a glance.
+- First piece of the Arc cluster (alongside the Ritual cluster — Closing / Threshold / Sabbath). Milestone markers and a "year in review" view are coming.
 
 ## Sabbath days (her off-time, honored)
 - Settings → "Sabbath days" → toggle any of seven weekday chips on. Days she keeps for herself; the app makes no assumption — empty = she works all days.

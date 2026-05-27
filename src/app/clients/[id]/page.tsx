@@ -20,6 +20,7 @@ import { ScheduleSessionDialog } from "@/components/ScheduleSessionDialog";
 import { LogPastSessionDialog } from "@/components/LogPastSessionDialog";
 import { MarkdownRender } from "@/components/NotesEditor";
 import { WalkInCard } from "@/components/WalkInCard";
+import { JourneyTimeline } from "@/components/JourneyTimeline";
 import { SessionsLog } from "@/components/SessionsLog";
 import { SensitivityFlags } from "@/components/SensitivityFlags";
 import { PrivateNotesBlock } from "@/components/PrivateNotesBlock";
@@ -153,6 +154,16 @@ export default async function ClientProfilePage({
         <div className="space-y-5">
           {/* Hero: the Walk-In Page — her voice, where we left off, coming up */}
           <WalkInCard digest={digest} clientName={client.fullName} />
+
+          {/* The arc — every session as a marker on a horizontal line.
+              Sessions with a "never forget" closing get a honey star above.
+              Hover any marker for the detail, click to jump to that session. */}
+          {file.sessions.length > 0 && (
+            <JourneyTimeline
+              clientId={client.id}
+              sessions={file.sessions}
+            />
+          )}
 
           {/* Stat strip — moved here so it's part of Overview, not above the tabs.
               Less prominent than a header, still scannable if she wants the numbers. */}
