@@ -138,6 +138,9 @@ export async function listClients(
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
+  // /clients shows clients — by default this means NOT leads. Network entries
+  // (is_lead = true) live on /network. The query is filtered at the DB level
+  // so the page doesn't pay for fetching+discarding lead rows.
   const list = await db
     .select({
       id: clients.id,
@@ -155,7 +158,7 @@ export async function listClients(
       nextSessionAt: sql<Date | null>`(SELECT MIN(${sessions.scheduledAt}) FROM ${sessions} WHERE ${sessions.clientId} = ${clients.id} AND ${sessions.status} = 'scheduled')`,
     })
     .from(clients)
-    .where(eq(clients.accountId, accountId))
+    .where(and(eq(clients.accountId, accountId), eq(clients.isLead, false)))
     .orderBy(asc(clients.fullName));
 
   return list.filter((c) => {
@@ -180,6 +183,117 @@ export async function listClients(
         cutoff.setDate(cutoff.getDate() - 30);
         return new Date(c.createdAt) >= cutoff;
       }
+      default:
+        return true;
+    }
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Network — light contact-book of people orbiting the practice before (and
+// optionally after) they become clients.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type NetworkFilter = "all" | "recent" | "no-source" | "warm";
+
+export type NetworkEntry = {
+  id: string;
+  fullName: string;
+  avatarUrl: string | null;
+  source: string | null; // howTheyFoundMe
+  metOn: string | null; // ISO date string from Postgres DATE column
+  metViaClientId: string | null;
+  metViaClientName: string | null; // joined display name when linked
+  email: string | null;
+  phone: string | null;
+  workingOn: string | null;
+  tags: string[];
+  notesCount: number; // communications + observations + tasks combined
+  createdAt: Date;
+  /** Most recent activity touch — max of communications.occurred_at and
+   *  clients.updated_at. Used for sort + the "last touched" column. */
+  lastTouchedAt: Date | null;
+};
+
+export async function listNetwork(
+  accountId: string,
+  filter: NetworkFilter = "all"
+): Promise<NetworkEntry[]> {
+  // Self-join clients to resolve metViaClientId → metViaClientName in one trip.
+  const referrer = {
+    id: sql`referrer.id`.as("referrer_id"),
+    fullName: sql`referrer.full_name`.as("referrer_full_name"),
+  } as const;
+  const list = await db
+    .select({
+      id: clients.id,
+      fullName: clients.fullName,
+      avatarUrl: clients.avatarUrl,
+      source: clients.howTheyFoundMe,
+      metOn: clients.metOn,
+      metViaClientId: clients.metViaClientId,
+      metViaClientName: sql<string | null>`referrer.full_name`,
+      email: clients.email,
+      phone: clients.phone,
+      workingOn: clients.workingOn,
+      tags: clients.tags,
+      createdAt: clients.createdAt,
+      updatedAt: clients.updatedAt,
+      // Light "activity" signal — how much she's written in / around them.
+      // Used to surface warm leads at the top.
+      noteHits: sql<number>`(
+        (SELECT COUNT(*)::int FROM ${communications} WHERE ${communications.clientId} = ${clients.id})
+      + (SELECT COUNT(*)::int FROM ${observations} WHERE ${observations.clientId} = ${clients.id})
+      + (SELECT COUNT(*)::int FROM ${tasks} WHERE ${tasks.clientId} = ${clients.id})
+      )`,
+      lastCommAt: sql<Date | null>`(SELECT MAX(${communications.occurredAt}) FROM ${communications} WHERE ${communications.clientId} = ${clients.id})`,
+    })
+    .from(clients)
+    .leftJoin(
+      sql`${clients} AS referrer`,
+      sql`referrer.id = ${clients.metViaClientId}`
+    )
+    .where(and(eq(clients.accountId, accountId), eq(clients.isLead, true)))
+    .orderBy(desc(clients.createdAt));
+  void referrer; // alias kept for clarity even though we read via raw sql
+
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+  const mapped: NetworkEntry[] = list.map((r) => {
+    // Convert MAX(timestamp) string → Date (same neon-http aggregate caveat
+    // as elsewhere in this file).
+    const lastComm = r.lastCommAt ? new Date(r.lastCommAt) : null;
+    const updated = new Date(r.updatedAt);
+    const lastTouchedAt =
+      lastComm && lastComm > updated ? lastComm : updated;
+    return {
+      id: r.id,
+      fullName: r.fullName,
+      avatarUrl: r.avatarUrl,
+      source: r.source,
+      metOn: r.metOn,
+      metViaClientId: r.metViaClientId,
+      metViaClientName: r.metViaClientName,
+      email: r.email,
+      phone: r.phone,
+      workingOn: r.workingOn,
+      tags: r.tags,
+      notesCount: r.noteHits,
+      createdAt: new Date(r.createdAt),
+      lastTouchedAt,
+    };
+  });
+
+  return mapped.filter((c) => {
+    switch (filter) {
+      case "recent":
+        return c.createdAt >= thirtyDaysAgo;
+      case "no-source":
+        return !c.source || c.source.trim().length === 0;
+      case "warm":
+        // Anyone she's written something about — comms / observations / tasks
+        return c.notesCount > 0;
       default:
         return true;
     }

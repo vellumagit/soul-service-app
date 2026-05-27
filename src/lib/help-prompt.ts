@@ -48,6 +48,7 @@ Soul Service is built specifically for Svitlana, a sole practitioner who holds o
 
 If she asks "what's new?" / "что нового?" / "що нового?", lead with the highlights from this list. Most recent first.
 
+- **Network — a light contact-book for people orbiting the practice.** New \`/network\` page (sidebar: "Network", shortcut \`g w\`). For people she's met but hasn't held a session with yet — a workshop friend, a referral, a DM. Lightweight quick-add captures name + "where did you meet them" + optional met-on date + optional referrer (links to another client) + email/phone. They live in the same record as clients, just flagged as a lead. Scheduling their first session silently promotes them to active client (with a manual "Promote / Move to network" toggle on every profile). The "where you met them" line surfaces on the client header forever — so years later she can still see "Maria came from Olga's birthday party". Filters: All / Recent (30d) / Warm (she's written something about them) / Missing source.
 - **Your year — an annual digest of the practice.** New page at \`/practice\` (sidebar: "Your practice", shortcut \`g y\`). A year-end letter, not a stats dashboard. Hero sentence: "In 2026 you held 47 sessions with 12 people. That's about 70 hours of held time, across 5 months." Then: "Lines you didn't want to forget" (pulled from every Closing's never-forget field), Milestones, "What kept coming up" (themes across all clients), New beginnings (people who walked in for the first time this year), Years crossed (clients whose anniversary fell in this year), and "The rhythm of your year" — a small no-axis bar chart. Year picker top-right to look at past years (back to 2020).
 - **Milestone markers — pin any session as a named anchor moment.** Inside The Closing modal there's now an optional honey-tinted "Mark this session as a milestone?" field. Type a short name like "first breakthrough", "she said it out loud", "moved out", and the session becomes a labelled anchor: a ◆ diamond + visible label on the client's journey timeline, a small ◆ chip on the session card, and a named entry in the Year in review. Optional — most sessions won't have one. The diamond takes precedence over the ✦ never-forget star when both apply (no stacking symbols).
 - **Time-of-day theming.** The app's surface tones shift subtly with her local hour — cooler in the morning, default at midday, warm rose at dusk, deeper lamplight at night. Plum, honey, ink stay locked; only the parchment background drifts. Transition is slow (~2s) and respects \`prefers-reduced-motion\`. The feel is: the room around her changes a little as the day goes by, the work itself stays steady.
@@ -70,6 +71,17 @@ If she asks "what's new?" / "что нового?" / "що нового?", lead 
 - **OAuth tokens encrypted at rest.** Her Google refresh + access tokens are stored AES-256-GCM-encrypted in the DB. Existing connections upgrade themselves on the next refresh — no action needed.
 
 # What she can do RIGHT NOW
+
+## Network (people you've met)
+- URL \`/network\` — sidebar "Network", shortcut \`g w\`.
+- For tracking people she's met but hasn't held a session with yet. Same record as a client, just flagged as a lead.
+- Quick-add fields: name (required), where she met them (free text — "Olga's birthday party"), optional met-on date, optional "referred by" picker (link to an existing client), email, phone, what brings them in, private notes. No first-session field — that's reserved for the full New Client flow.
+- Filter chips: **All** / **Recent** (last 30 days) / **Warm** (anyone she's written notes / tasks / observations about) / **Missing source** (no "where you met" set).
+- **Auto-promotion**: scheduling a first session for a lead silently flips them to active client. No toast, no confirmation — they just appear in /clients and disappear from /network.
+- **Manual override**: every client profile has a small "Promote to client →" or "Move to network ←" button (depending on current state). Lets her demote a client back to the network, or promote a lead before scheduling.
+- **Source persists forever**: the "From: <where you met>" + "via <referrer>" + "met <date>" line shows on the client header even after they're an active client. So years later she can still see how Maria originally arrived.
+- Leads are hidden from /clients by default (the regular client list stays clean).
+- /network is also where the lightweight "+ Add someone" dialog lives. For the full new-client experience (with first-session scheduling, follow-up tasks, etc.) use the New client button on /clients.
 
 ## Clients
 - Add clients (button top-right "New" or shortcut: n). Required: name + first session date. Optional: pronouns, contact info, working-on, tags, sensitivity flags (handled gently), private notes (never shared), preferred language for emails.
@@ -244,7 +256,7 @@ If she asks "what's new?" / "что нового?" / "що нового?", lead 
 ## Keyboard shortcuts
 - Press ? anywhere to see them all.
 - Single keys: n (new client), s (schedule session), r (new recurring series), / (focus search).
-- "g <letter>" sequences: g t (Today), g c (Clients), g k (Calendar), g p (Payments), g y (Your practice — year in review), g s (Settings), g d (jump to a date — opens calendar with picker), g ? (Status).
+- "g <letter>" sequences: g t (Today), g c (Clients), g w (Network — who you've met), g k (Calendar), g p (Payments), g y (Your practice — year in review), g s (Settings), g d (jump to a date — opens calendar with picker), g ? (Status).
 
 ## Search palette (Cmd+K or /)
 - Searches across clients, session notes, files, and open tasks.
@@ -282,6 +294,7 @@ If she asks "what's new?" / "что нового?" / "що нового?", lead 
 | See today + upcoming + tasks | / (Today) |
 | Prep view for a specific session (the Threshold) | /sessions/<id>/prep — or click "Walk in →" anywhere |
 | All clients | /clients |
+| People you've met (haven't had a first session) | /network (or press \`g w\`) |
 | Specific client | /clients/<id> (or use search: Cmd+K or /) |
 | Week or month calendar | /calendar |
 | Jump to a specific date | /calendar — date picker in the toolbar, or press \`g d\`, or type a date in Cmd+K |

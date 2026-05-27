@@ -16,7 +16,15 @@ import {
 import { notify } from "./FlashNotifier";
 import { describeSaveError } from "@/lib/save-error";
 
-export function EditClientDialog({ client }: { client: Client }) {
+export function EditClientDialog({
+  client,
+  referrerOptions = [],
+}: {
+  client: Client;
+  /** Optional list of other clients to offer in the "Referred by" picker.
+   *  Pass from the page server component. Self-referral is filtered out. */
+  referrerOptions?: { id: string; fullName: string }[];
+}) {
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -289,12 +297,46 @@ export function EditClientDialog({ client }: { client: Client }) {
                 placeholder="What you usually do with this person"
               />
             </Field>
-            <Field label="How they found me">
+            <Field
+              label="Where you met"
+              hint="Reused as the network 'source' field."
+            >
               <input
                 name="howTheyFoundMe"
                 defaultValue={client.howTheyFoundMe ?? ""}
                 className={inputCls}
+                placeholder="e.g. Olga&rsquo;s birthday party"
               />
+            </Field>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Date you met" hint="Optional — separate from the first session date.">
+              <input
+                name="metOn"
+                type="date"
+                defaultValue={client.metOn ?? ""}
+                className={inputCls}
+              />
+            </Field>
+            <Field
+              label="Referred by"
+              hint="Optional — link to another client."
+            >
+              <select
+                name="metViaClientId"
+                defaultValue={client.metViaClientId ?? ""}
+                className={inputCls}
+              >
+                <option value="">—</option>
+                {referrerOptions
+                  .filter((r) => r.id !== client.id)
+                  .map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.fullName}
+                    </option>
+                  ))}
+              </select>
             </Field>
           </div>
 

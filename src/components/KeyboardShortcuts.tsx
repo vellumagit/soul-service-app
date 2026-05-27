@@ -25,6 +25,7 @@ const SHORTCUTS = [
   { keys: ["r"], action: "New recurring series" },
   { keys: ["g", "t"], action: "Go to Today" },
   { keys: ["g", "c"], action: "Go to Clients" },
+  { keys: ["g", "w"], action: "Go to Network (people you've met)" },
   { keys: ["g", "k"], action: "Go to Calendar" },
   { keys: ["g", "p"], action: "Go to Payments" },
   { keys: ["g", "y"], action: "Go to Your practice (year in review)" },
@@ -103,6 +104,11 @@ export function KeyboardShortcuts() {
         const dest: Record<string, string> = {
           t: "/",
           c: "/clients",
+          // `g n` would collide with the single-key `n` (new client) since the
+          // sequence resets if `g` is missed. `g w` for "network" because it
+          // visually echoes the W of "Who I've met." Comfortable on the
+          // keyboard, doesn't clash.
+          w: "/network",
           k: "/calendar",
           p: "/payments",
           y: "/practice",

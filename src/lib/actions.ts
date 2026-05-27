@@ -105,6 +105,8 @@ export async function createClient(formData: FormData) {
       intakeNotes: str(formData, "intakeNotes"),
       privateNotes: str(formData, "privateNotes"),
       howTheyFoundMe: str(formData, "howTheyFoundMe"),
+      metOn: str(formData, "metOn"),
+      metViaClientId: str(formData, "metViaClientId"),
       preferredLanguage: locale(formData, "preferredLanguage"),
       primarySessionType: firstSessionType,
       // Birthday (full ISO date, "YYYY-MM-DD"). Optional. Surfaces on the
@@ -193,6 +195,8 @@ export async function updateClient(formData: FormData) {
       intakeNotes: str(formData, "intakeNotes"),
       privateNotes: str(formData, "privateNotes"),
       howTheyFoundMe: str(formData, "howTheyFoundMe"),
+      metOn: str(formData, "metOn"),
+      metViaClientId: str(formData, "metViaClientId"),
       preferredLanguage: locale(formData, "preferredLanguage"),
       primarySessionType: str(formData, "primarySessionType"),
       dob: str(formData, "dob"),
@@ -213,6 +217,88 @@ export async function updateClient(formData: FormData) {
 
   revalidatePath(`/clients/${id}`);
   revalidatePath("/clients");
+  revalidatePath("/network");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NETWORK — leads / contact-book layer
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Lightweight quick-add for the /network page. Captures the essentials
+ *  (name + how she met them) and stamps `is_lead = true`. No first-session
+ *  field — that's what triggers auto-promotion later. */
+export type AddLeadResult =
+  | { ok: true; clientId: string }
+  | { ok: false; error: string };
+
+export async function addLead(formData: FormData): Promise<AddLeadResult> {
+  try {
+    const { accountId } = await requireSession();
+    const fullName = required(str(formData, "fullName"), "Full name");
+
+    const [created] = await db
+      .insert(clients)
+      .values({
+        accountId,
+        fullName,
+        isLead: true,
+        howTheyFoundMe: str(formData, "howTheyFoundMe"),
+        metOn: str(formData, "metOn"),
+        metViaClientId: str(formData, "metViaClientId"),
+        email: str(formData, "email"),
+        phone: str(formData, "phone"),
+        workingOn: str(formData, "workingOn"),
+        privateNotes: str(formData, "privateNotes"),
+        preferredLanguage: locale(formData, "preferredLanguage"),
+        // Leads default to "new" so they sort cleanly if she later switches
+        // them to a client without explicitly setting a status.
+        status: "new",
+      })
+      .returning({ id: clients.id });
+
+    revalidatePath("/network");
+    revalidatePath("/clients");
+    return { ok: true, clientId: created.id };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Couldn't add to network",
+    };
+  }
+}
+
+/** Manual lead/client toggle from the profile. Auto-promotion happens
+ *  silently when a session is first scheduled (see scheduleSession),
+ *  but she can also demote a client back into the network or promote a
+ *  lead without scheduling. */
+export type SetLeadStatusResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
+export async function setClientLeadStatus(
+  clientId: string,
+  isLead: boolean
+): Promise<SetLeadStatusResult> {
+  try {
+    const { accountId } = await requireSession();
+    const updated = await db
+      .update(clients)
+      .set({ isLead, updatedAt: new Date() })
+      .where(and(eq(clients.accountId, accountId), eq(clients.id, clientId)))
+      .returning({ id: clients.id });
+    if (updated.length === 0) {
+      return { ok: false, error: "Person not found" };
+    }
+    revalidatePath(`/clients/${clientId}`);
+    revalidatePath("/clients");
+    revalidatePath("/network");
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Couldn't update",
+    };
+  }
 }
 
 /** Save the Closing Ritual for a session — three optional reflections
@@ -473,6 +559,21 @@ export async function scheduleSession(
     })
     .returning({ id: sessions.id });
 
+  // Auto-promote: if this client was in the network (is_lead = true),
+  // scheduling their first session moves them into the active client list.
+  // Silent — no toast. She'll see them disappear from /network and appear
+  // on /clients. Manual override is still available from the profile.
+  await db
+    .update(clients)
+    .set({ isLead: false, updatedAt: new Date() })
+    .where(
+      and(
+        eq(clients.accountId, accountId),
+        eq(clients.id, clientId),
+        eq(clients.isLead, true)
+      )
+    );
+
   // Best-effort: push to Google Calendar (auto-generates Meet link + invites client)
   const sync = await syncSessionToGoogle(created.id);
   const googleWarning = sync.ok === false ? sync.error : null;
@@ -480,6 +581,7 @@ export async function scheduleSession(
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/calendar");
   revalidatePath("/");
+  revalidatePath("/network");
 
   return { ok: true, sessionId: created.id, googleWarning };
 }
@@ -596,9 +698,23 @@ export async function scheduleSessionSeries(
 
     await db.insert(sessions).values(sessionRows);
 
+    // Same auto-promote logic as the single-session case — if this client
+    // was still in the network, kicking off a series moves them out.
+    await db
+      .update(clients)
+      .set({ isLead: false, updatedAt: new Date() })
+      .where(
+        and(
+          eq(clients.accountId, accountId),
+          eq(clients.id, clientId),
+          eq(clients.isLead, true)
+        )
+      );
+
     revalidatePath(`/clients/${clientId}`);
     revalidatePath("/calendar");
     revalidatePath("/");
+    revalidatePath("/network");
 
     return { ok: true, seriesId: seriesRow.id, created: sessionRows.length };
   } catch (err) {

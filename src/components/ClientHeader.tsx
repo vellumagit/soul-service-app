@@ -1,12 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import type { Client } from "@/db/schema";
 import { Avatar } from "./Avatar";
 import { EditClientDialog } from "./EditClientDialog";
 import { ScheduleSessionDialog } from "./ScheduleSessionDialog";
 import { LogPastSessionDialog } from "./LogPastSessionDialog";
 import { EmailComposer } from "./EmailComposer";
+import { setClientLeadStatus } from "@/lib/actions";
+import { notify } from "./FlashNotifier";
 import type { EmailTemplate, Session } from "@/db/schema";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -40,6 +43,36 @@ export function ClientHeader({
 }) {
   const anchorDate = togetherSince ?? client.createdAt;
   const togetherLine = formatTogetherSince(anchorDate);
+  const [promotingLead, setPromotingLead] = useState(false);
+
+  // Find referrer name for the small "via …" line (no extra query — already
+  // in allClients, which is the picker list).
+  const referrer = client.metViaClientId
+    ? allClients.find((c) => c.id === client.metViaClientId)
+    : null;
+
+  async function toggleLead() {
+    if (promotingLead) return;
+    setPromotingLead(true);
+    try {
+      const next = !client.isLead;
+      const res = await setClientLeadStatus(client.id, next);
+      if (!res.ok) {
+        notify({ kind: "warning", title: "Couldn't update", body: res.error });
+        return;
+      }
+      notify({
+        kind: "success",
+        title: next
+          ? `Moved back to your network`
+          : `Promoted to active client`,
+        ttlMs: 3000,
+      });
+    } finally {
+      setPromotingLead(false);
+    }
+  }
+
   return (
     <div className="bg-white border border-ink-200 rounded-lg overflow-hidden mb-5">
       <div className="p-5 md:p-6">
@@ -70,8 +103,17 @@ export function ClientHeader({
               >
                 {client.status.toUpperCase()}
               </span>
+              {client.isLead && (
+                <span
+                  className="chip border bg-honey-50 text-honey-700"
+                  style={{ borderColor: "var(--color-honey-100)" }}
+                  title="In your network — no first session yet. Scheduling one will move them to active clients."
+                >
+                  NETWORK
+                </span>
+              )}
               <div className="flex-1" />
-              <EditClientDialog client={client} />
+              <EditClientDialog client={client} referrerOptions={allClients} />
             </div>
 
             {/* Contact line */}
@@ -118,6 +160,41 @@ export function ClientHeader({
             {togetherLine && (
               <div className="mt-2 text-[12px] text-ink-500 italic serif-italic">
                 {togetherLine}
+              </div>
+            )}
+
+            {/* "From: <source>" — the network-source line. Persists even after
+                a lead promotes to client, so years from now she can still see
+                how Maria originally arrived. Only renders when something's set. */}
+            {(client.howTheyFoundMe || client.metOn || referrer) && (
+              <div className="mt-1 text-[12px] text-ink-500 flex flex-wrap gap-x-2 gap-y-0.5">
+                {client.howTheyFoundMe && (
+                  <span>
+                    <span className="text-ink-400">From:</span>{" "}
+                    <span className="text-ink-700">
+                      {client.howTheyFoundMe}
+                    </span>
+                  </span>
+                )}
+                {referrer && (
+                  <span>
+                    <span className="text-ink-400">·</span>{" "}
+                    <span className="text-ink-400">via</span>{" "}
+                    <Link
+                      href={`/clients/${referrer.id}`}
+                      className="text-plum-700 hover:underline"
+                    >
+                      {referrer.fullName}
+                    </Link>
+                  </span>
+                )}
+                {client.metOn && (
+                  <span>
+                    <span className="text-ink-400">·</span>{" "}
+                    <span className="text-ink-400">met</span>{" "}
+                    <span className="font-mono">{client.metOn}</span>
+                  </span>
+                )}
               </div>
             )}
 
@@ -181,6 +258,26 @@ export function ClientHeader({
                   ✉
                 </Link>
               )}
+              <div className="flex-1" />
+              {/* Manual lead/active override. Most of the time auto-promotion
+                  (scheduling a first session) handles this — but if she wants
+                  to demote a client back to the network, or promote a lead
+                  before scheduling them in, this is the door. */}
+              <button
+                type="button"
+                onClick={toggleLead}
+                disabled={promotingLead}
+                className="text-xs text-ink-500 hover:text-ink-900 px-2 py-2 disabled:opacity-50"
+                title={
+                  client.isLead
+                    ? "Promote to active client"
+                    : "Move back to your network"
+                }
+              >
+                {client.isLead
+                  ? "Promote to client →"
+                  : "Move to network ←"}
+              </button>
             </div>
           </div>
         </div>

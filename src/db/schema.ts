@@ -130,6 +130,20 @@ export const clients = pgTable(
 
     status: clientStatusEnum("status").default("active").notNull(),
 
+    // Network — light contact-book layer on top of the client folder.
+    // `isLead` is true while she's noted them but they haven't had a first
+    // session yet. Auto-flips to false the moment a session is scheduled
+    // for them (see scheduleSession action). She can also flip it back
+    // manually if she wants to demote someone from client back to network.
+    // `metOn` is the date she first met them (often earlier than the first
+    // session; optional). `metViaClientId` is an optional FK to another
+    // client — for tracking "Sarah referred them" as a structured link.
+    // The pre-existing `howTheyFoundMe` free-text field is reused as the
+    // source description ("Olga's birthday party", "Insight Timer DM").
+    isLead: boolean("is_lead").default(false).notNull(),
+    metOn: date("met_on"),
+    metViaClientId: uuid("met_via_client_id"),
+
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
@@ -137,6 +151,7 @@ export const clients = pgTable(
     accountIdx: index("clients_account_idx").on(t.accountId),
     nameIdx: index("clients_name_idx").on(t.fullName),
     statusIdx: index("clients_status_idx").on(t.status),
+    leadIdx: index("clients_lead_idx").on(t.accountId, t.isLead),
   })
 );
 
