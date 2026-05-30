@@ -20,6 +20,7 @@ import { MarkPaidDialog } from "./MarkPaidDialog";
 import { NotesEditor } from "./NotesEditor";
 import { GenerateInvoiceButton } from "./GenerateInvoiceButton";
 import { GenerateNotesDialog } from "./GenerateNotesDialog";
+import { GenerateNotesFromAudioDialog } from "./GenerateNotesFromAudioDialog";
 import { RescheduleDialog } from "./RescheduleDialog";
 import { rethrowIfRedirect } from "@/lib/redirect-error";
 import { notify } from "./FlashNotifier";
@@ -257,16 +258,31 @@ export function SessionCard({
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center justify-between mb-1 flex-wrap gap-y-1">
                 <label className="block text-xs font-medium text-ink-700">
                   Session notes
                 </label>
-                <GenerateNotesDialog
-                  sessionId={session.id}
-                  noteTemplates={noteTemplates}
-                  hasExistingNotes={!!session.notes && session.notes.trim().length > 0}
-                  autoClose={autoUploadAiNotes}
-                />
+                <div className="flex items-center gap-3">
+                  <GenerateNotesFromAudioDialog
+                    sessionId={session.id}
+                    noteTemplates={noteTemplates}
+                    hasExistingNotes={
+                      !!session.notes && session.notes.trim().length > 0
+                    }
+                    autoClose={autoUploadAiNotes}
+                  />
+                  <span className="text-ink-200 text-xs" aria-hidden="true">
+                    ·
+                  </span>
+                  <GenerateNotesDialog
+                    sessionId={session.id}
+                    noteTemplates={noteTemplates}
+                    hasExistingNotes={
+                      !!session.notes && session.notes.trim().length > 0
+                    }
+                    autoClose={autoUploadAiNotes}
+                  />
+                </div>
               </div>
               <NotesEditor
                 name="notes"

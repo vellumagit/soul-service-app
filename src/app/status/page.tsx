@@ -64,6 +64,13 @@ export default async function StatusPage() {
         : "Set ANTHROPIC_API_KEY in your Vercel env vars to enable AI note generation.",
     },
     {
+      label: "Voice memos → notes (Whisper + AI)",
+      state: process.env.OPENAI_API_KEY ? "ok" : "warn",
+      detail: process.env.OPENAI_API_KEY
+        ? "OpenAI Whisper key set. Use the 'From audio' button on any session to record / upload a voice memo and structure it into notes."
+        : "Set OPENAI_API_KEY in your Vercel env vars to enable the voice-memo → notes pipeline. Whisper handles the transcription; Claude (already configured above) structures it.",
+    },
+    {
       label: "Email sending (to clients · session reminders)",
       state: process.env.RESEND_API_KEY ? "ok" : "warn",
       detail: process.env.RESEND_API_KEY

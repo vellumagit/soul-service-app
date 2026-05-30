@@ -48,6 +48,7 @@ Soul Service is built specifically for Svitlana, a sole practitioner who holds o
 
 If she asks "what's new?" / "что нового?" / "що нового?", lead with the highlights from this list. Most recent first.
 
+- **Voice memo → notes.** Every session card now has a "From audio" button next to "AI: structure from transcript." She taps it, records a voice memo right in the browser (or uploads an audio file — mp3 / m4a / wav / webm / ogg, up to 25 MB), and the pipeline runs end-to-end: audio uploads as a "recording" attachment on the session → Whisper transcribes it (auto-detects language, or she can hint en/ru/uk) → Claude structures the transcript into clean session notes using whichever notes template she picked. Progress shown for each hop. Especially useful when she's just held a session in person and wants to dictate notes on the drive home instead of typing later. The audio sticks around as an attachment so she can listen back.
 - **Network — a light contact-book for people orbiting the practice.** New \`/network\` page (sidebar: "Network", shortcut \`g w\`). For people she's met but hasn't held a session with yet — a workshop friend, a referral, a DM. Lightweight quick-add captures name + "where did you meet them" + optional met-on date + optional referrer (links to another client) + email/phone. They live in the same record as clients, just flagged as a lead. Scheduling their first session silently promotes them to active client (with a manual "Promote / Move to network" toggle on every profile). The "where you met them" line surfaces on the client header forever — so years later she can still see "Maria came from Olga's birthday party". Filters: All / Recent (30d) / Warm (she's written something about them) / Missing source.
 - **Your year — an annual digest of the practice.** New page at \`/practice\` (sidebar: "Your practice", shortcut \`g y\`). A year-end letter, not a stats dashboard. Hero sentence: "In 2026 you held 47 sessions with 12 people. That's about 70 hours of held time, across 5 months." Then: "Lines you didn't want to forget" (pulled from every Closing's never-forget field), Milestones, "What kept coming up" (themes across all clients), New beginnings (people who walked in for the first time this year), Years crossed (clients whose anniversary fell in this year), and "The rhythm of your year" — a small no-axis bar chart. Year picker top-right to look at past years (back to 2020).
 - **Milestone markers — pin any session as a named anchor moment.** Inside The Closing modal there's now an optional honey-tinted "Mark this session as a milestone?" field. Type a short name like "first breakthrough", "she said it out loud", "moved out", and the session becomes a labelled anchor: a ◆ diamond + visible label on the client's journey timeline, a small ◆ chip on the session card, and a named entry in the Year in review. Optional — most sessions won't have one. The diamond takes precedence over the ✦ never-forget star when both apply (no stacking symbols).
@@ -165,6 +166,18 @@ If she asks "what's new?" / "что нового?" / "що нового?", lead 
 - Open a session card → click "AI: structure from transcript" → paste a transcript (from Fathom, Otter, Tactiq, Google Meet's built-in transcript — anywhere) → click Generate. Claude turns it into clean structured notes in third-person observational style. She can edit afterwards.
 - The pasted transcript autosaves locally — if she accidentally closes the dialog, reopening it offers to restore the paste so she doesn't have to fetch it again from Fathom/Otter.
 - A toggle in Settings → Automations lets the AI notes save to the session automatically (otherwise she clicks to confirm).
+
+## Voice memo → notes (Whisper + Claude)
+- Same row as "AI: structure from transcript" — a sibling button labeled **"From audio"**.
+- Two input modes via tabs in the dialog:
+  - **Record** — taps once to start the mic, again to stop. Works on iPhone Safari (14.3+) and modern Chrome / Firefox / Edge. Shows a live timer + a pulsing red record indicator while listening. Re-record by tapping the mic button again.
+  - **Upload** — drag-drop or file picker. Accepts mp3, m4a, wav, webm, ogg. 25 MB cap (Whisper's limit; a 1-hour session at 48 kbps is ~22 MB).
+- Optional language hint: en / ru / uk, or auto-detect (default). Picks up from the client's preferred language when set.
+- Optional notes template picker — same templates used by the paste flow drive the structure of the output.
+- Pipeline runs in three visible hops with progress lines: **Uploading audio…** → **Transcribing with Whisper…** → **Structuring notes with Claude…** → done. Takes ~20-60 seconds for a typical session length.
+- The audio file is saved as a "recording" attachment on the session, so she can listen back later via the Files tab.
+- Especially valuable for in-person sessions: she walks out, taps Record on her phone, talks for 5 minutes about what happened on the drive home, hits stop. The structured notes are waiting on the session by the time she's home.
+- Powered by OpenAI Whisper for transcription (the one piece of the AI stack that's not Anthropic, because Claude doesn't do audio yet) + the same Claude Sonnet 4.6 notes pipeline as the paste flow.
 
 ## Calendar
 - /calendar shows a week view by default, with a Month/Week toggle in the toolbar.
