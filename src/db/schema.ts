@@ -226,6 +226,19 @@ export const sessions = pgTable(
     clientReminderSentAt: timestamp("client_reminder_sent_at"),
     practitionerReminderSentAt: timestamp("practitioner_reminder_sent_at"),
 
+    // Recall.ai auto-notes pipeline — a meeting bot we spawned joins the
+    // Meet, records, transcribes, and webhooks the transcript back. We then
+    // structure it via Claude and write into `notes`. recall_bot_id is the
+    // Recall UUID for the bot tied to this session (null = no bot).
+    // recall_bot_status mirrors the bot.status_change.code we receive
+    // (joining_call, in_call_recording, done, fatal, etc.).
+    // recall_transcript_received_at is set the moment the transcript.done
+    // webhook fires AND we successfully wrote notes — drives the "✓
+    // Auto-notes" chip and prevents re-running the pipeline twice.
+    recallBotId: text("recall_bot_id"),
+    recallBotStatus: text("recall_bot_status"),
+    recallTranscriptReceivedAt: timestamp("recall_transcript_received_at"),
+
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
@@ -235,6 +248,7 @@ export const sessions = pgTable(
     scheduledIdx: index("sessions_scheduled_idx").on(t.scheduledAt),
     statusIdx: index("sessions_status_idx").on(t.status),
     paidIdx: index("sessions_paid_idx").on(t.paid),
+    recallBotIdx: index("sessions_recall_bot_idx").on(t.recallBotId),
   })
 );
 
@@ -580,6 +594,16 @@ export const practitionerSettings = pgTable("practitioner_settings", {
     .array()
     .notNull()
     .default(sql`'{}'::text[]`),
+
+  // Recall.ai meeting-bot auto-notes pipeline. Off by default until she's
+  // read the consent copy and turned it on; bot name kept neutral so the
+  // client sees something like "Notetaker" rather than a tool name.
+  // `recallAutoAdd` controls whether every new session with a Meet URL gets
+  // a bot automatically vs requiring her to use the per-session manual
+  // "Add bot now" button.
+  recallEnabled: boolean("recall_enabled").default(false).notNull(),
+  recallBotName: text("recall_bot_name").default("Notetaker"),
+  recallAutoAdd: boolean("recall_auto_add").default(true).notNull(),
 
   // Google Calendar OAuth (one practitioner per app — single connected account).
   // Refresh tokens are long-lived; access tokens auto-refresh in google-calendar.ts.

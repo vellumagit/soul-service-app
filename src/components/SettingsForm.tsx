@@ -193,6 +193,53 @@ export function SettingsForm({ settings }: { settings: PractitionerSettings }) {
             description="When you generate notes from a transcript, save them straight to the session instead of waiting for you to click Insert. You can still edit afterwards."
           />
 
+          {/* Recall.ai notetaker — the "magic" auto-notes pipeline. Off by
+              default; she opts in once she's comfortable with a bot in the
+              call. */}
+          <div className="border-t border-ink-100 pt-4">
+            <div className="text-sm font-medium text-ink-900 mb-1">
+              Auto-notes (meeting notetaker bot)
+            </div>
+            <p className="text-xs text-ink-500 mb-3 leading-relaxed">
+              When this is on, a notetaker bot joins your Google Meet sessions
+              automatically, records, transcribes, and structures the notes
+              into the session — no paste, no upload, nothing to remember.
+              The bot appears as a participant in the call with the name you
+              choose below. Most clients will see it; some won&apos;t mind,
+              some will. <strong>Make sure to mention it during intake.</strong>
+            </p>
+            <div className="space-y-3">
+              <Toggle
+                name="recallEnabled"
+                defaultChecked={settings.recallEnabled}
+                label="Use the Recall.ai notetaker"
+                description="Master switch. Off = no bots are ever spawned for any reason."
+              />
+              <Toggle
+                name="recallAutoAdd"
+                defaultChecked={settings.recallAutoAdd}
+                label="Auto-add the bot to every scheduled session"
+                description="When off, you have to use the 'Add notetaker' button on individual sessions. When on, every new Soul Service-scheduled session with a Meet URL gets a bot automatically."
+              />
+              <Field
+                label="Bot name (shown in the call)"
+                hint="Keep it neutral; this is what clients see in the participant list."
+              >
+                <input
+                  name="recallBotName"
+                  defaultValue={settings.recallBotName ?? "Notetaker"}
+                  maxLength={64}
+                  className={`${inputCls} md:w-72`}
+                  placeholder="Notetaker"
+                />
+              </Field>
+            </div>
+            <p className="text-[11px] text-ink-400 mt-2 leading-relaxed">
+              Powered by Recall.ai. Costs ~$0.30-0.50 per session-hour
+              depending on configuration. See /status for credentials health.
+            </p>
+          </div>
+
           <div className="border-t border-ink-100 pt-4">
             <div className="text-sm font-medium text-ink-900 mb-1">
               Session reminders

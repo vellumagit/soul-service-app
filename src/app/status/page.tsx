@@ -71,6 +71,21 @@ export default async function StatusPage() {
         : "Set OPENAI_API_KEY in your Vercel env vars to enable the voice-memo → notes pipeline. Whisper handles the transcription; Claude (already configured above) structures it.",
     },
     {
+      label: "Auto-notes — meeting notetaker bot (Recall.ai)",
+      state:
+        process.env.RECALL_API_KEY &&
+        process.env.RECALL_REGION &&
+        process.env.RECALL_WEBHOOK_SECRET
+          ? "ok"
+          : "warn",
+      detail:
+        process.env.RECALL_API_KEY &&
+        process.env.RECALL_REGION &&
+        process.env.RECALL_WEBHOOK_SECRET
+          ? `Recall.ai connected (${process.env.RECALL_REGION}). Turn on the bot in Settings → Auto-notes; it will join scheduled Meet calls, transcribe, and write the notes for you.`
+          : "Set RECALL_API_KEY + RECALL_REGION (e.g. us-east-1) + RECALL_WEBHOOK_SECRET in your Vercel env vars. Point Recall's webhooks at <your-domain>/api/webhooks/recall. Then enable in Settings → Auto-notes.",
+    },
+    {
       label: "Email sending (to clients · session reminders)",
       state: process.env.RESEND_API_KEY ? "ok" : "warn",
       detail: process.env.RESEND_API_KEY

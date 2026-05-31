@@ -578,12 +578,227 @@ export async function scheduleSession(
   const sync = await syncSessionToGoogle(created.id);
   const googleWarning = sync.ok === false ? sync.error : null;
 
+  // Best-effort: auto-schedule the Recall.ai notetaker bot.
+  // Runs AFTER syncSessionToGoogle so the Meet URL is on the row.
+  await maybeAutoAddRecallBot(accountId, created.id);
+
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/calendar");
   revalidatePath("/");
   revalidatePath("/network");
 
   return { ok: true, sessionId: created.id, googleWarning };
+}
+
+/** Best-effort: if Recall is configured + enabled + auto-add is on +
+ *  the session has a Meet URL + the scheduled time is far enough in the
+ *  future (>10min, Recall's minimum), schedule a bot. Failures here are
+ *  logged but never block session creation. */
+async function maybeAutoAddRecallBot(
+  accountId: string,
+  sessionId: string
+): Promise<void> {
+  try {
+    const { recallConfigured, createBot } = await import("./recall");
+    if (!recallConfigured()) return;
+
+    const [settings] = await db
+      .select({
+        enabled: practitionerSettings.recallEnabled,
+        autoAdd: practitionerSettings.recallAutoAdd,
+        botName: practitionerSettings.recallBotName,
+      })
+      .from(practitionerSettings)
+      .where(eq(practitionerSettings.accountId, accountId))
+      .limit(1);
+    if (!settings?.enabled || !settings.autoAdd) return;
+
+    const [sess] = await db
+      .select({
+        scheduledAt: sessions.scheduledAt,
+        meetUrl: sessions.meetUrl,
+        existingBotId: sessions.recallBotId,
+      })
+      .from(sessions)
+      .where(
+        and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId))
+      )
+      .limit(1);
+    if (!sess || !sess.meetUrl || sess.existingBotId) return;
+
+    const scheduledAt = new Date(sess.scheduledAt);
+    const minutesFromNow =
+      (scheduledAt.getTime() - Date.now()) / (60 * 1000);
+    // Recall requires join_at to be >10 min in the future. We give ourselves
+    // a small margin so a session scheduled "right now" still works through
+    // the manual "Add bot now" path without hitting their validator.
+    if (minutesFromNow <= 11) return;
+
+    const bot = await createBot({
+      meetingUrl: sess.meetUrl,
+      botName: settings.botName ?? "Notetaker",
+      joinAt: scheduledAt.toISOString(),
+      metadata: { sessionId, accountId },
+    });
+    await db
+      .update(sessions)
+      .set({
+        recallBotId: bot.id,
+        recallBotStatus: bot.rawStatus ?? "scheduled",
+        updatedAt: new Date(),
+      })
+      .where(
+        and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId))
+      );
+  } catch (err) {
+    console.warn("[recall auto-add] failed:", err);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RECALL — manual + emergency operations
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Emergency "Add bot now" — used when auto-add didn't fire (Recall was
+ *  disabled at schedule time, the Meet URL came in late, the meeting was
+ *  scheduled outside Soul Service, the bot crashed, etc.). Spawns a bot
+ *  to join the Meet immediately (no join_at). */
+export type AddBotNowResult =
+  | { ok: true; botId: string }
+  | { ok: false; error: string };
+
+export async function addBotToSessionNow(
+  sessionId: string
+): Promise<AddBotNowResult> {
+  try {
+    const { accountId } = await requireSession();
+    const { recallConfigured, createBot } = await import("./recall");
+    if (!recallConfigured()) {
+      return {
+        ok: false,
+        error:
+          "Recall.ai isn't configured. Set RECALL_API_KEY + RECALL_REGION in your environment.",
+      };
+    }
+
+    const [sess] = await db
+      .select({
+        scheduledAt: sessions.scheduledAt,
+        meetUrl: sessions.meetUrl,
+        existingBotId: sessions.recallBotId,
+      })
+      .from(sessions)
+      .where(
+        and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId))
+      )
+      .limit(1);
+    if (!sess) return { ok: false, error: "Session not found" };
+    if (!sess.meetUrl) {
+      return {
+        ok: false,
+        error:
+          "This session doesn't have a Meet URL yet. Schedule it through Google Calendar first.",
+      };
+    }
+    if (sess.existingBotId) {
+      return {
+        ok: false,
+        error:
+          "A bot is already attached to this session. Cancel it from the dashboard if you want to spawn a fresh one.",
+      };
+    }
+
+    const [settings] = await db
+      .select({ botName: practitionerSettings.recallBotName })
+      .from(practitionerSettings)
+      .where(eq(practitionerSettings.accountId, accountId))
+      .limit(1);
+
+    const bot = await createBot({
+      meetingUrl: sess.meetUrl,
+      botName: settings?.botName ?? "Notetaker",
+      // No joinAt → bot joins immediately.
+      metadata: { sessionId, accountId, source: "manual" },
+    });
+    await db
+      .update(sessions)
+      .set({
+        recallBotId: bot.id,
+        recallBotStatus: bot.rawStatus ?? "joining_call",
+        updatedAt: new Date(),
+      })
+      .where(
+        and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId))
+      );
+
+    const [s] = await db
+      .select({ clientId: sessions.clientId })
+      .from(sessions)
+      .where(
+        and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId))
+      )
+      .limit(1);
+    if (s) revalidatePath(`/clients/${s.clientId}`);
+
+    return { ok: true, botId: bot.id };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to add bot",
+    };
+  }
+}
+
+/** Cancel the Recall bot attached to a session. Used internally when a
+ *  session is cancelled or rescheduled, and exposed as a manual action so
+ *  she can call off a bot that's about to join unwantedly. */
+export type CancelBotResult = { ok: true } | { ok: false; error: string };
+
+export async function cancelBotForSession(
+  sessionId: string
+): Promise<CancelBotResult> {
+  try {
+    const { accountId } = await requireSession();
+    const [sess] = await db
+      .select({ botId: sessions.recallBotId })
+      .from(sessions)
+      .where(
+        and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId))
+      )
+      .limit(1);
+    if (!sess) return { ok: false, error: "Session not found" };
+    if (!sess.botId) return { ok: true }; // nothing to cancel
+
+    const { cancelBot } = await import("./recall");
+    await cancelBot(sess.botId);
+
+    await db
+      .update(sessions)
+      .set({
+        recallBotId: null,
+        recallBotStatus: null,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId))
+      );
+
+    const [s] = await db
+      .select({ clientId: sessions.clientId })
+      .from(sessions)
+      .where(
+        and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId))
+      )
+      .limit(1);
+    if (s) revalidatePath(`/clients/${s.clientId}`);
+
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to cancel bot",
+    };
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -934,6 +1149,23 @@ export async function rescheduleSession(formData: FormData) {
   );
   const durationMinutes = num(formData, "durationMinutes");
 
+  // Cancel the existing Recall bot (if any) before changing the time —
+  // it's scheduled for the OLD time and Recall doesn't let us mutate
+  // join_at once a bot exists. We re-schedule a fresh one below.
+  const [pre] = await db
+    .select({ botId: sessions.recallBotId })
+    .from(sessions)
+    .where(and(eq(sessions.accountId, accountId), eq(sessions.id, id)))
+    .limit(1);
+  if (pre?.botId) {
+    try {
+      const { cancelBot } = await import("./recall");
+      await cancelBot(pre.botId);
+    } catch (err) {
+      console.warn("[rescheduleSession] cancel old bot failed:", err);
+    }
+  }
+
   const updates: Record<string, unknown> = {
     scheduledAt: new Date(scheduledAtRaw),
     updatedAt: new Date(),
@@ -941,6 +1173,10 @@ export async function rescheduleSession(formData: FormData) {
     // for the new time.
     clientReminderSentAt: null,
     practitionerReminderSentAt: null,
+    // Clear Recall bookkeeping so maybeAutoAddRecallBot below treats this
+    // as a fresh schedule.
+    recallBotId: null,
+    recallBotStatus: null,
   };
   if (durationMinutes !== null) updates.durationMinutes = durationMinutes;
 
@@ -953,6 +1189,9 @@ export async function rescheduleSession(formData: FormData) {
   // notification to the client). If it doesn't exist yet, this creates one.
   await syncSessionToGoogle(id);
 
+  // Schedule a fresh bot for the new time (Meet URL stays the same).
+  await maybeAutoAddRecallBot(accountId, id);
+
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/calendar");
   revalidatePath("/");
@@ -960,16 +1199,34 @@ export async function rescheduleSession(formData: FormData) {
 
 export async function cancelSession(sessionId: string, clientId: string) {
   const { accountId } = await requireSession();
-  // Look up before update to grab the Google event id
+  // Look up before update to grab the Google event id + Recall bot id
   const existingRows = await db
-    .select({ googleEventId: sessions.googleEventId })
+    .select({
+      googleEventId: sessions.googleEventId,
+      recallBotId: sessions.recallBotId,
+    })
     .from(sessions)
     .where(and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId)))
     .limit(1);
 
+  // Cancel the Recall bot so it doesn't pointlessly join a cancelled meeting.
+  if (existingRows[0]?.recallBotId) {
+    try {
+      const { cancelBot } = await import("./recall");
+      await cancelBot(existingRows[0].recallBotId);
+    } catch (err) {
+      console.warn("[cancelSession] recall cancel failed:", err);
+    }
+  }
+
   await db
     .update(sessions)
-    .set({ status: "cancelled", updatedAt: new Date() })
+    .set({
+      status: "cancelled",
+      recallBotId: null,
+      recallBotStatus: null,
+      updatedAt: new Date(),
+    })
     .where(and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId)));
 
   // Pull from Google Calendar so the client gets a "cancelled" notification
@@ -1379,6 +1636,9 @@ export async function updateSettings(formData: FormData) {
       invoicePrefix: str(formData, "invoicePrefix") ?? "INV",
       autoInvoiceOnComplete: bool(formData, "autoInvoiceOnComplete"),
       autoUploadAiNotes: bool(formData, "autoUploadAiNotes"),
+      recallEnabled: bool(formData, "recallEnabled"),
+      recallAutoAdd: bool(formData, "recallAutoAdd"),
+      recallBotName: str(formData, "recallBotName") ?? "Notetaker",
       clientReminderHours: clampHours(
         num(formData, "clientReminderHours") ?? 24
       ),

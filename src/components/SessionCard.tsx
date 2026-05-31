@@ -21,6 +21,7 @@ import { NotesEditor } from "./NotesEditor";
 import { GenerateInvoiceButton } from "./GenerateInvoiceButton";
 import { GenerateNotesDialog } from "./GenerateNotesDialog";
 import { GenerateNotesFromAudioDialog } from "./GenerateNotesFromAudioDialog";
+import { RecallBotChip } from "./RecallBotChip";
 import { RescheduleDialog } from "./RescheduleDialog";
 import { rethrowIfRedirect } from "@/lib/redirect-error";
 import { notify } from "./FlashNotifier";
@@ -433,6 +434,18 @@ export function SessionCard({
             <PushToGoogleButton
               sessionId={session.id}
               hasGoogleEvent={!!session.googleEventId}
+            />
+            <RecallBotChip
+              sessionId={session.id}
+              status={session.recallBotStatus}
+              hasMeetUrl={!!session.meetUrl}
+              scheduledAt={new Date(session.scheduledAt)}
+              transcriptReceivedAt={
+                session.recallTranscriptReceivedAt
+                  ? new Date(session.recallTranscriptReceivedAt)
+                  : null
+              }
+              sessionStatus={session.status}
             />
             <div className="flex-1" />
             <ConfirmButton
