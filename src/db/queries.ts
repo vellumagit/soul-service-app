@@ -16,8 +16,12 @@ import {
   importantPeople,
   themes,
   observations,
+  leadForms,
+  leadSubmissions,
   type Client,
   type PractitionerSettings,
+  type LeadForm,
+  type LeadSubmission,
 } from "./schema";
 import {
   eq,
@@ -298,6 +302,102 @@ export async function listNetwork(
         return true;
     }
   });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Lead capture — forms management + submission triage queries
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type LeadFormRow = LeadForm & {
+  pendingCount: number;
+};
+
+export async function listLeadForms(
+  accountId: string,
+  includeArchived = false
+): Promise<LeadFormRow[]> {
+  const forms = await db
+    .select()
+    .from(leadForms)
+    .where(eq(leadForms.accountId, accountId))
+    .orderBy(desc(leadForms.createdAt));
+  const filtered = includeArchived
+    ? forms
+    : forms.filter((f) => !f.archivedAt);
+
+  // Cheap follow-up: pending counts per form. Small N, one round-trip.
+  const pendingMap = new Map<string, number>();
+  if (filtered.length > 0) {
+    const rows = await db
+      .select({
+        formId: leadSubmissions.formId,
+        count: sql<number>`COUNT(*)::int`,
+      })
+      .from(leadSubmissions)
+      .where(
+        and(
+          eq(leadSubmissions.accountId, accountId),
+          eq(leadSubmissions.status, "pending")
+        )
+      )
+      .groupBy(leadSubmissions.formId);
+    for (const r of rows) pendingMap.set(r.formId, r.count);
+  }
+
+  return filtered.map((f) => ({
+    ...f,
+    pendingCount: pendingMap.get(f.id) ?? 0,
+  }));
+}
+
+export async function getLeadInboxCount(accountId: string): Promise<number> {
+  const [row] = await db
+    .select({ count: sql<number>`COUNT(*)::int` })
+    .from(leadSubmissions)
+    .where(
+      and(
+        eq(leadSubmissions.accountId, accountId),
+        eq(leadSubmissions.status, "pending")
+      )
+    );
+  return row?.count ?? 0;
+}
+
+export type LeadSubmissionRow = LeadSubmission & {
+  formName: string;
+  formSlug: string;
+  formDefaultIntent: string | null;
+};
+
+export async function listLeadInbox(
+  accountId: string,
+  status: "pending" | "accepted" | "rejected" | "duplicate" | "all" = "pending"
+): Promise<LeadSubmissionRow[]> {
+  const baseWhere =
+    status === "all"
+      ? eq(leadSubmissions.accountId, accountId)
+      : and(
+          eq(leadSubmissions.accountId, accountId),
+          eq(leadSubmissions.status, status)
+        );
+  const rows = await db
+    .select({
+      sub: leadSubmissions,
+      formName: leadForms.name,
+      formSlug: leadForms.slug,
+      formDefaultIntent: leadForms.defaultIntent,
+    })
+    .from(leadSubmissions)
+    .innerJoin(leadForms, eq(leadSubmissions.formId, leadForms.id))
+    .where(baseWhere)
+    .orderBy(desc(leadSubmissions.createdAt))
+    .limit(200);
+  return rows.map((r) => ({
+    ...r.sub,
+    formName: r.formName,
+    formSlug: r.formSlug,
+    formDefaultIntent: r.formDefaultIntent,
+  }));
 }
 
 export async function listClientsForPicker(accountId: string) {

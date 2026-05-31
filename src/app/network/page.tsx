@@ -17,7 +17,12 @@ import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { AddLeadDialog } from "@/components/AddLeadDialog";
 import { QuickActions } from "@/components/QuickActions";
-import { listNetwork, listClientsForPicker, getSettings } from "@/db/queries";
+import {
+  listNetwork,
+  listClientsForPicker,
+  getSettings,
+  getLeadInboxCount,
+} from "@/db/queries";
 import type { NetworkFilter } from "@/db/queries";
 import { initials, relativeTime, shortDate } from "@/lib/format";
 import { requireSession } from "@/lib/session-cookies";
@@ -63,10 +68,11 @@ export default async function NetworkPage({
     FILTERS.some((f) => f.value === filterRaw) ? filterRaw : "all"
   ) as NetworkFilter;
 
-  const [network, picker, settings] = await Promise.all([
+  const [network, picker, settings, inboxCount] = await Promise.all([
     listNetwork(accountId, filter),
     listClientsForPicker(accountId),
     getSettings(accountId),
+    getLeadInboxCount(accountId),
   ]);
   const locale = asLocale(settings.uiLanguage);
 
@@ -96,12 +102,30 @@ export default async function NetworkPage({
               People you&apos;ve met. Where they came from, what you noticed.
             </p>
           </div>
-          <AddLeadDialog
-            referrerOptions={picker.map((p) => ({
-              id: p.id,
-              fullName: p.fullName,
-            }))}
-          />
+          <div className="flex items-center gap-3 flex-wrap">
+            {inboxCount > 0 && (
+              <Link
+                href="/network/inbox"
+                className="chip bg-honey-50 text-honey-700 hover:bg-honey-100"
+                title="Pending submissions from your lead capture forms"
+              >
+                ✦ {inboxCount} in inbox
+              </Link>
+            )}
+            <Link
+              href="/network/forms"
+              className="text-xs text-ink-500 hover:text-ink-900"
+              title="Manage lead capture forms"
+            >
+              Forms →
+            </Link>
+            <AddLeadDialog
+              referrerOptions={picker.map((p) => ({
+                id: p.id,
+                fullName: p.fullName,
+              }))}
+            />
+          </div>
         </div>
       </header>
 

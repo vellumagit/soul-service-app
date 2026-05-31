@@ -9,6 +9,7 @@ import {
   pgEnum,
   boolean,
   index,
+  jsonb,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 
@@ -658,6 +659,85 @@ export const attachmentsRelations = relations(attachments, ({ one }) => ({
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────────────
+// LEAD CAPTURE — external forms (lead magnets, embed widgets, Make.com
+// scenarios) POST to /api/leads/intake with a per-form Bearer token. Each
+// submission lands in lead_submissions; she triages on /network/inbox.
+// Forms can optionally forward to an outbound webhook_url so Brian can wire
+// nurture downstream via Make.com — Soul Service is the source of truth +
+// triage UI, not the email sender.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const leadForms = pgTable(
+  "lead_forms",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    slug: text("slug").notNull(),
+    // SHA-256 hex of the cleartext token. Cleartext is shown once at create
+    // (or rotate) and never persisted. token_prefix is the first 8 chars of
+    // the cleartext so the UI can render "lf_AbCd1234…" without needing it.
+    tokenHash: text("token_hash").notNull(),
+    tokenPrefix: text("token_prefix").notNull(),
+    autoAccept: boolean("auto_accept").default(false).notNull(),
+    defaultIntent: text("default_intent"),
+    webhookUrl: text("webhook_url"),
+    submissionCount: integer("submission_count").default(0).notNull(),
+    lastSubmissionAt: timestamp("last_submission_at"),
+    archivedAt: timestamp("archived_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    accountIdx: index("lead_forms_account_idx").on(t.accountId),
+    tokenIdx: index("lead_forms_token_hash_idx").on(t.tokenHash),
+  })
+);
+
+export const leadSubmissions = pgTable(
+  "lead_submissions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    formId: uuid("form_id")
+      .notNull()
+      .references(() => leadForms.id, { onDelete: "cascade" }),
+    name: text("name"),
+    email: text("email"),
+    phone: text("phone"),
+    /** Free-shape JSON for whatever else the form sent. */
+    fields: jsonb("fields").default({}).notNull(),
+    sourceIp: text("source_ip"),
+    userAgent: text("user_agent"),
+    referer: text("referer"),
+    /** pending | accepted | rejected | duplicate */
+    status: text("status").default("pending").notNull(),
+    promotedClientId: uuid("promoted_client_id").references(() => clients.id, {
+      onDelete: "set null",
+    }),
+    reviewedAt: timestamp("reviewed_at"),
+    reviewedAction: text("reviewed_action"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    accountIdx: index("lead_submissions_account_idx").on(t.accountId),
+    formIdx: index("lead_submissions_form_idx").on(t.formId),
+    statusIdx: index("lead_submissions_status_idx").on(
+      t.accountId,
+      t.status
+    ),
+    emailDedupIdx: index("lead_submissions_email_dedup_idx").on(
+      t.formId,
+      t.email
+    ),
+  })
+);
+
 export type Client = typeof clients.$inferSelect;
 export type NewClient = typeof clients.$inferInsert;
 export type Session = typeof sessions.$inferSelect;
@@ -676,3 +756,7 @@ export type SessionSeries = typeof sessionSeries.$inferSelect;
 export type NewSessionSeries = typeof sessionSeries.$inferInsert;
 export type Account = typeof accounts.$inferSelect;
 export type NewAccount = typeof accounts.$inferInsert;
+export type LeadForm = typeof leadForms.$inferSelect;
+export type NewLeadForm = typeof leadForms.$inferInsert;
+export type LeadSubmission = typeof leadSubmissions.$inferSelect;
+export type NewLeadSubmission = typeof leadSubmissions.$inferInsert;

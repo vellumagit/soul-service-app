@@ -17,6 +17,8 @@ import {
   importantPeople,
   themes,
   observations,
+  leadForms,
+  leadSubmissions,
 } from "@/db/schema";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { getSettings } from "@/db/queries";
@@ -298,6 +300,393 @@ export async function setClientLeadStatus(
       ok: false,
       error: err instanceof Error ? err.message : "Couldn't update",
     };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LEAD CAPTURE — forms management + submission triage
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Create a new lead-magnet form. Returns the cleartext token EXACTLY ONCE
+ *  — the practitioner must copy it before navigating away; we store only
+ *  the hash. */
+export type CreateLeadFormResult =
+  | { ok: true; formId: string; token: string; tokenPrefix: string }
+  | { ok: false; error: string };
+
+export async function createLeadForm(
+  formData: FormData
+): Promise<CreateLeadFormResult> {
+  try {
+    const { accountId } = await requireSession();
+    const {
+      generateLeadFormToken,
+      hashLeadFormToken,
+      leadFormTokenPrefix,
+      slugifyFormName,
+    } = await import("./lead-tokens");
+
+    const name = required(str(formData, "name"), "Form name");
+    const defaultIntent = str(formData, "defaultIntent");
+    const webhookUrl = str(formData, "webhookUrl");
+    const autoAccept = bool(formData, "autoAccept");
+
+    if (webhookUrl && !/^https?:\/\//i.test(webhookUrl)) {
+      return {
+        ok: false,
+        error: "Webhook URL must start with http:// or https://",
+      };
+    }
+
+    const token = generateLeadFormToken();
+    const tokenHash = hashLeadFormToken(token);
+    const tokenPrefix = leadFormTokenPrefix(token);
+    const slug = slugifyFormName(name);
+
+    const [row] = await db
+      .insert(leadForms)
+      .values({
+        accountId,
+        name,
+        slug,
+        tokenHash,
+        tokenPrefix,
+        autoAccept,
+        defaultIntent,
+        webhookUrl,
+      })
+      .returning({ id: leadForms.id });
+
+    revalidatePath("/network/forms");
+    return {
+      ok: true,
+      formId: row.id,
+      token, // cleartext — shown to her, never again
+      tokenPrefix,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Couldn't create form",
+    };
+  }
+}
+
+/** Rotate a form's token. The old token stops working immediately. New
+ *  cleartext returned for one-time display. */
+export type RotateLeadFormTokenResult =
+  | { ok: true; token: string; tokenPrefix: string }
+  | { ok: false; error: string };
+
+export async function rotateLeadFormToken(
+  formId: string
+): Promise<RotateLeadFormTokenResult> {
+  try {
+    const { accountId } = await requireSession();
+    const {
+      generateLeadFormToken,
+      hashLeadFormToken,
+      leadFormTokenPrefix,
+    } = await import("./lead-tokens");
+
+    const token = generateLeadFormToken();
+    const updated = await db
+      .update(leadForms)
+      .set({
+        tokenHash: hashLeadFormToken(token),
+        tokenPrefix: leadFormTokenPrefix(token),
+        updatedAt: new Date(),
+      })
+      .where(and(eq(leadForms.accountId, accountId), eq(leadForms.id, formId)))
+      .returning({ id: leadForms.id });
+
+    if (updated.length === 0) {
+      return { ok: false, error: "Form not found" };
+    }
+    revalidatePath("/network/forms");
+    return {
+      ok: true,
+      token,
+      tokenPrefix: leadFormTokenPrefix(token),
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Rotate failed",
+    };
+  }
+}
+
+export type LeadFormPatch = {
+  name?: string;
+  defaultIntent?: string | null;
+  webhookUrl?: string | null;
+  autoAccept?: boolean;
+};
+
+export async function updateLeadForm(
+  formId: string,
+  patch: LeadFormPatch
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const { accountId } = await requireSession();
+    if (
+      patch.webhookUrl &&
+      !/^https?:\/\//i.test(patch.webhookUrl)
+    ) {
+      return {
+        ok: false,
+        error: "Webhook URL must start with http:// or https://",
+      };
+    }
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    if (typeof patch.name === "string") updates.name = patch.name;
+    if (patch.defaultIntent !== undefined)
+      updates.defaultIntent = patch.defaultIntent;
+    if (patch.webhookUrl !== undefined) updates.webhookUrl = patch.webhookUrl;
+    if (patch.autoAccept !== undefined) updates.autoAccept = patch.autoAccept;
+    const updated = await db
+      .update(leadForms)
+      .set(updates)
+      .where(and(eq(leadForms.accountId, accountId), eq(leadForms.id, formId)))
+      .returning({ id: leadForms.id });
+    if (updated.length === 0) return { ok: false, error: "Form not found" };
+    revalidatePath("/network/forms");
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Update failed",
+    };
+  }
+}
+
+export async function archiveLeadForm(
+  formId: string,
+  archived: boolean
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const { accountId } = await requireSession();
+    const updated = await db
+      .update(leadForms)
+      .set({
+        archivedAt: archived ? new Date() : null,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(leadForms.accountId, accountId), eq(leadForms.id, formId)))
+      .returning({ id: leadForms.id });
+    if (updated.length === 0) return { ok: false, error: "Form not found" };
+    revalidatePath("/network/forms");
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Archive failed",
+    };
+  }
+}
+
+/** Accept a pending submission → create a Network entry (clients row with
+ *  is_lead=true) using the canonical fields + the form's defaultIntent as
+ *  howTheyFoundMe (or a custom intent the practitioner passed). */
+export type AcceptSubmissionResult =
+  | { ok: true; clientId: string }
+  | { ok: false; error: string };
+
+export async function acceptLeadSubmission(
+  submissionId: string,
+  options?: { sourceOverride?: string }
+): Promise<AcceptSubmissionResult> {
+  try {
+    const { accountId } = await requireSession();
+    const [row] = await db
+      .select({
+        sub: leadSubmissions,
+        form: leadForms,
+      })
+      .from(leadSubmissions)
+      .leftJoin(leadForms, eq(leadSubmissions.formId, leadForms.id))
+      .where(
+        and(
+          eq(leadSubmissions.accountId, accountId),
+          eq(leadSubmissions.id, submissionId)
+        )
+      )
+      .limit(1);
+    if (!row) return { ok: false, error: "Submission not found" };
+    if (row.sub.status !== "pending") {
+      return { ok: false, error: `Already ${row.sub.status}` };
+    }
+
+    const sub = row.sub;
+    const form = row.form;
+    const name = (sub.name ?? sub.email ?? "Unnamed lead").trim();
+    const source =
+      options?.sourceOverride ??
+      form?.defaultIntent ??
+      (form ? `Form: ${form.name}` : null);
+
+    // Try to fish "workingOn" / intent out of the JSON fields if she didn't
+    // already promote with a specific source. Common form field names.
+    const fields = (sub.fields ?? {}) as Record<string, unknown>;
+    const workingOn =
+      pickStringField(fields, [
+        "intent",
+        "working_on",
+        "workingOn",
+        "what_brings_you",
+        "whatBringsYou",
+        "message",
+      ]) ?? null;
+
+    // Compose a private-notes preamble from any unmatched form fields, so
+    // we don't lose context. Keeps the raw JSON discoverable from the
+    // client's overview.
+    const matched = new Set([
+      "name",
+      "email",
+      "phone",
+      "intent",
+      "working_on",
+      "workingOn",
+      "what_brings_you",
+      "whatBringsYou",
+      "message",
+    ]);
+    const otherFields = Object.entries(fields).filter(
+      ([k]) => !matched.has(k)
+    );
+    const privateNotes =
+      otherFields.length > 0
+        ? `Submitted via ${form?.name ?? "form"} on ${sub.createdAt.toISOString().slice(0, 10)}:\n\n` +
+          otherFields
+            .map(([k, v]) => `- ${k}: ${formatFieldValue(v)}`)
+            .join("\n")
+        : null;
+
+    const [client] = await db
+      .insert(clients)
+      .values({
+        accountId,
+        fullName: name,
+        email: sub.email,
+        phone: sub.phone,
+        isLead: true,
+        howTheyFoundMe: source,
+        workingOn,
+        privateNotes,
+        status: "new",
+      })
+      .returning({ id: clients.id });
+
+    await db
+      .update(leadSubmissions)
+      .set({
+        status: "accepted",
+        promotedClientId: client.id,
+        reviewedAt: new Date(),
+        reviewedAction: "accepted",
+      })
+      .where(
+        and(
+          eq(leadSubmissions.accountId, accountId),
+          eq(leadSubmissions.id, submissionId)
+        )
+      );
+
+    revalidatePath("/network");
+    revalidatePath("/network/inbox");
+    revalidatePath("/network/forms");
+    return { ok: true, clientId: client.id };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Accept failed",
+    };
+  }
+}
+
+export async function rejectLeadSubmission(
+  submissionId: string,
+  reason: "rejected" | "duplicate" | "spam" = "rejected"
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const { accountId } = await requireSession();
+    const status =
+      reason === "duplicate"
+        ? "duplicate"
+        : reason === "spam"
+          ? "rejected"
+          : "rejected";
+    const updated = await db
+      .update(leadSubmissions)
+      .set({
+        status,
+        reviewedAt: new Date(),
+        reviewedAction: reason,
+      })
+      .where(
+        and(
+          eq(leadSubmissions.accountId, accountId),
+          eq(leadSubmissions.id, submissionId)
+        )
+      )
+      .returning({ id: leadSubmissions.id });
+    if (updated.length === 0) return { ok: false, error: "Submission not found" };
+    revalidatePath("/network/inbox");
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Reject failed",
+    };
+  }
+}
+
+/** Permanently delete a submission. Used to clear out reviewed/rejected
+ *  entries from history. Cascades naturally — no related rows. */
+export async function deleteLeadSubmission(
+  submissionId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const { accountId } = await requireSession();
+    await db
+      .delete(leadSubmissions)
+      .where(
+        and(
+          eq(leadSubmissions.accountId, accountId),
+          eq(leadSubmissions.id, submissionId)
+        )
+      );
+    revalidatePath("/network/inbox");
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Delete failed",
+    };
+  }
+}
+
+function pickStringField(
+  obj: Record<string, unknown>,
+  keys: string[]
+): string | null {
+  for (const k of keys) {
+    const v = obj[k];
+    if (typeof v === "string" && v.trim().length > 0) return v.trim();
+  }
+  return null;
+}
+
+function formatFieldValue(v: unknown): string {
+  if (v === null || v === undefined) return "(empty)";
+  if (typeof v === "string") return v;
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  try {
+    return JSON.stringify(v);
+  } catch {
+    return String(v);
   }
 }
 
