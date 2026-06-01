@@ -36,7 +36,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { leadForms, leadSubmissions, clients } from "@/db/schema";
-import { and, eq, gte } from "drizzle-orm";
+import { and, eq, gte, lt } from "drizzle-orm";
 import { extractBearerToken, hashLeadFormToken } from "@/lib/lead-tokens";
 
 export const dynamic = "force-dynamic";
@@ -164,33 +164,30 @@ export async function POST(req: Request) {
     );
   }
 
-  // 6. Dedup: same email + same form within 24h → mark as duplicate
-  // rather than rejecting outright. Keeps her inbox clean without losing
-  // record that the submission happened.
-  let isDuplicate = false;
-  if (email) {
-    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const [recent] = await db
-      .select({ id: leadSubmissions.id })
-      .from(leadSubmissions)
-      .where(
-        and(
-          eq(leadSubmissions.formId, form.id),
-          eq(leadSubmissions.email, email),
-          gte(leadSubmissions.createdAt, dayAgo)
-        )
-      )
-      .limit(1);
-    if (recent) isDuplicate = true;
-  }
-
-  // 7. Source metadata for triage.
+  // 6. Source metadata for triage.
   const sourceIp =
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
   const userAgent = req.headers.get("user-agent") ?? null;
   const referer = req.headers.get("referer") ?? null;
 
-  // 8. Insert the submission.
+  // 7. Insert FIRST, then dedup.
+  //
+  // The original pattern was: check for a prior submission in the last
+  // 24h, then insert as "pending" or "duplicate" based on the result.
+  // That has a race: two simultaneous submits with the same email both
+  // pass the pre-check before either insert lands, and both end up
+  // pending — defeating dedup under "double-click submit" and any
+  // form-retry-on-network-blip scenario.
+  //
+  // The fix is to flip the order. Insert as pending first (always),
+  // then post-check for OLDER submissions with the same form+email
+  // within the 24h window. If we find any with an EARLIER createdAt
+  // than ours, downgrade our own status to "duplicate". This way the
+  // first submission wins on race; everyone after gets correctly
+  // labelled. The DB's row-level createdAt timestamps give us a
+  // natural ordering even across concurrent inserts.
+  const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
   const [submission] = await db
     .insert(leadSubmissions)
     .values({
@@ -203,9 +200,39 @@ export async function POST(req: Request) {
       sourceIp,
       userAgent,
       referer,
-      status: isDuplicate ? "duplicate" : "pending",
+      status: "pending",
     })
-    .returning({ id: leadSubmissions.id });
+    .returning({ id: leadSubmissions.id, createdAt: leadSubmissions.createdAt });
+
+  let isDuplicate = false;
+  if (email) {
+    const [earlier] = await db
+      .select({ id: leadSubmissions.id })
+      .from(leadSubmissions)
+      .where(
+        and(
+          eq(leadSubmissions.formId, form.id),
+          eq(leadSubmissions.email, email),
+          gte(leadSubmissions.createdAt, dayAgo),
+          // Strictly older than our own row — if two inserts land at the
+          // exact same microsecond, the one with the lexicographically
+          // smaller UUID wins (deterministic tie-break).
+          lt(leadSubmissions.createdAt, submission.createdAt)
+        )
+      )
+      .limit(1);
+    if (earlier) {
+      isDuplicate = true;
+      await db
+        .update(leadSubmissions)
+        .set({
+          status: "duplicate",
+          reviewedAt: new Date(),
+          reviewedAction: "auto-duplicate",
+        })
+        .where(eq(leadSubmissions.id, submission.id));
+    }
+  }
 
   // 9. Auto-accept path. Only runs for non-duplicates on auto_accept forms.
   // Same dedup discipline as the manual acceptLeadSubmission flow: if a

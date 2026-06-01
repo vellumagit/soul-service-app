@@ -170,36 +170,56 @@ export async function createBot(
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function cancelBot(botId: string): Promise<void> {
-  // Try the schedule-delete path first. If Recall rejects it (probably
-  // because we're <10min from join_at), fall back to leave_call.
+  // Two Recall endpoints handle bot cancellation:
+  //   DELETE /bot/{id}/         — kills a scheduled bot before it joins
+  //   POST   /bot/{id}/leave_call — pulls a bot OUT of an in-progress call
+  // The docs say DELETE only works >10 min before join_at; after that,
+  // you have to use leave_call instead.
+  //
+  // Mapping HTTP responses to outcomes:
+  //   2xx          — success
+  //   400 / 409    — "too late to delete" / "bot already started" → use
+  //                  leave_call instead (this is the documented fallback)
+  //   404          — bot already gone (cancelled earlier, never created
+  //                  on Recall's side, etc.) → success, no leave_call needed
+  //   other 4xx    — unexpected (auth issue, rate limit, etc.) → throw so
+  //                  the caller can surface it
+  //   5xx          — Recall is down → throw
+  //
+  // Same shape for leave_call, except 4xx is treated as success there
+  // (bot was probably already gone for one reason or another, and there's
+  // nothing left to do).
   const deleteRes = await fetch(`${getApiBase()}/bot/${botId}/`, {
     method: "DELETE",
     headers: { Authorization: getAuthHeader() },
   });
   if (deleteRes.ok) return;
-  // 400 = "too late to delete" per docs; 404 = already gone. Either way
-  // we try leave_call as the backup.
-  if (deleteRes.status !== 400 && deleteRes.status !== 409) {
+  if (deleteRes.status === 404) return; // bot already gone — done
+
+  const isLeaveFallback =
+    deleteRes.status === 400 || deleteRes.status === 409;
+  if (!isLeaveFallback) {
     const text = await deleteRes.text().catch(() => "");
-    // Anything other than the "too late" / "conflict" responses is genuinely
-    // unexpected — propagate.
-    if (deleteRes.status >= 500) {
-      throw new Error(
-        `Recall cancel bot failed (${deleteRes.status}): ${text.slice(0, 300)}`
-      );
-    }
+    throw new Error(
+      `Recall cancel bot failed (${deleteRes.status}): ${text.slice(0, 300)}`
+    );
   }
+
+  // Documented fallback: too late to delete a scheduled bot, pull it out
+  // of the call instead.
   const leaveRes = await fetch(`${getApiBase()}/bot/${botId}/leave_call`, {
     method: "POST",
     headers: { Authorization: getAuthHeader() },
   });
-  // leave_call may 4xx if the bot already left — treat that as success.
-  if (!leaveRes.ok && leaveRes.status >= 500) {
-    const text = await leaveRes.text().catch(() => "");
-    throw new Error(
-      `Recall leave_call failed (${leaveRes.status}): ${text.slice(0, 300)}`
-    );
-  }
+  if (leaveRes.ok) return;
+  // 4xx on leave_call — bot already left, was never in the call, etc. Treat
+  // as success: there's nothing more we can do, and the outcome (bot is
+  // not in the call) matches what we wanted.
+  if (leaveRes.status < 500) return;
+  const text = await leaveRes.text().catch(() => "");
+  throw new Error(
+    `Recall leave_call failed (${leaveRes.status}): ${text.slice(0, 300)}`
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
