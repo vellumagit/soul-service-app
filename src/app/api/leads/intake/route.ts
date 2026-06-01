@@ -227,7 +227,13 @@ export async function POST(req: Request) {
       .where(
         and(
           eq(leadSubmissions.formId, form.id),
-          eq(leadSubmissions.email, email),
+          // Case-insensitive match against the stored email. `email` is
+          // already lowercased above; the LOWER() on the column protects
+          // against legacy rows submitted BEFORE the normalization fix
+          // (which would still be stored at whatever casing the form
+          // sent). Same backward-compat treatment that acceptLeadSubmission
+          // gives clients.email — keep them consistent.
+          sql`LOWER(${leadSubmissions.email}) = ${email}`,
           gte(leadSubmissions.createdAt, dayAgo),
           sql`(
             ${leadSubmissions.createdAt} < ${submission.createdAt}

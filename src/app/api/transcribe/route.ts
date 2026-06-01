@@ -5,10 +5,13 @@
 //          { error: string } on failure (with appropriate HTTP code)
 //
 // Account-scoped via requireSession — we don't transcribe for unauthenticated
-// callers. The audioUrl must be a Vercel Blob URL we wrote earlier; we don't
-// validate that explicitly because Whisper is happy to take any URL we can
-// fetch, but the practical reality is the dialog calls uploadAttachment
-// first and passes that URL.
+// callers. The audioUrl is expected to be a Vercel Blob URL we wrote in a
+// prior uploadVoiceMemo round-trip — but since the user controls the body,
+// we MUST validate it before fetching server-side. Otherwise an
+// authenticated user could POST audioUrl=http://169.254.169.254/... and
+// have the server fetch instance-metadata on their behalf (classic SSRF).
+// validatePublicWebhookUrl gives us literal-IP rejection (loopback,
+// private, link-local / cloud-metadata, IPv6 ULA, IPv4-mapped IPv6).
 //
 // Why a route rather than a server action: server actions don't stream and
 // the dialog wants to show "Transcribing…" progress while this runs. A
@@ -56,6 +59,17 @@ export async function POST(req: Request) {
   if (typeof body.audioUrl !== "string" || body.audioUrl.length === 0) {
     return NextResponse.json(
       { error: "audioUrl is required." },
+      { status: 400 }
+    );
+  }
+
+  // SSRF guard — see the file-level comment. Don't let an authenticated user
+  // weaponize the server's fetch credentials against internal targets.
+  const { validatePublicWebhookUrl } = await import("@/lib/url-safety");
+  const v = validatePublicWebhookUrl(body.audioUrl);
+  if (!v.ok) {
+    return NextResponse.json(
+      { error: `Invalid audio URL: ${v.error}` },
       { status: 400 }
     );
   }

@@ -91,31 +91,8 @@ export function validatePublicWebhookUrl(input: string): UrlValidationResult {
   }
 
   // IPv4 literal range checks.
-  const ipv4Match = host.match(
-    /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/
-  );
-  if (ipv4Match) {
-    const octets = ipv4Match.slice(1, 5).map((s) => parseInt(s, 10));
-    if (octets.some((n) => n < 0 || n > 255)) {
-      return { ok: false, error: "Malformed IPv4 address" };
-    }
-    const [a, b] = octets;
-    // RFC 1122 loopback
-    if (a === 127) return ssrfErr("loopback");
-    // RFC 1918 private
-    if (a === 10) return ssrfErr("private (10.0.0.0/8)");
-    if (a === 172 && b >= 16 && b <= 31)
-      return ssrfErr("private (172.16.0.0/12)");
-    if (a === 192 && b === 168) return ssrfErr("private (192.168.0.0/16)");
-    // Link-local — this is the AWS/GCP/Azure cloud metadata range. The
-    // single most important block on this list.
-    if (a === 169 && b === 254)
-      return ssrfErr("link-local / cloud metadata (169.254.0.0/16)");
-    // "All interfaces"
-    if (a === 0) return ssrfErr("unspecified (0.0.0.0/8)");
-    // Multicast / experimental — block these too while we're here.
-    if (a >= 224) return ssrfErr("multicast / reserved (224.0.0.0/4+)");
-  }
+  const ipv4Result = checkIpv4Literal(host);
+  if (ipv4Result) return ipv4Result;
 
   // IPv6 literal range checks. URL hostnames for IPv6 literals are
   // bracketed (e.g. [::1]); `parsed.hostname` strips the brackets.
@@ -124,6 +101,21 @@ export function validatePublicWebhookUrl(input: string): UrlValidationResult {
     // Loopback ::1
     if (lower === "::1" || lower === "0:0:0:0:0:0:0:1")
       return ssrfErr("IPv6 loopback");
+    // IPv4-mapped IPv6: ::ffff:a.b.c.d maps to the IPv4 address a.b.c.d.
+    // Without this branch, `::ffff:127.0.0.1` (= loopback in IPv6 form)
+    // slips through every other check on this list — it has colons so the
+    // IPv4 regex doesn't match, and its prefix doesn't match any of the
+    // IPv6 blocks below. Run the trailing dotted-quad through the same
+    // IPv4 range checker so it's blocked symmetrically.
+    if (lower.startsWith("::ffff:")) {
+      const mapped = lower.slice("::ffff:".length);
+      const mappedResult = checkIpv4Literal(mapped);
+      if (mappedResult) return mappedResult;
+      // Some clients also accept ::ffff:0:0/96 with no dotted-quad
+      // (raw 32-bit hex). Block any ::ffff:* form defensively — there's
+      // no legitimate reason to webhook to one of these.
+      return ssrfErr("IPv4-mapped IPv6 (::ffff:…)");
+    }
     // ULA fc00::/7 (first byte 0xFC or 0xFD)
     if (lower.startsWith("fc") || lower.startsWith("fd"))
       return ssrfErr("IPv6 ULA (fc00::/7)");
@@ -144,4 +136,31 @@ function ssrfErr(label: string): UrlValidationResult {
     ok: false,
     error: `Webhook URL points to a ${label} address — use a public URL instead`,
   };
+}
+
+/** Run the dotted-quad octet range checks on a candidate IPv4 string.
+ *  Returns a UrlValidationResult if the string is a blocked IPv4 literal,
+ *  or `null` if it's either a public IPv4 or not an IPv4 literal at all
+ *  (so the caller can keep checking other formats). Extracted so the IPv4
+ *  range logic can be reused both for top-level IPv4 hostnames AND for
+ *  IPv4-mapped IPv6 (::ffff:a.b.c.d) — those share the same address
+ *  space, so the same private-range rules apply. */
+function checkIpv4Literal(candidate: string): UrlValidationResult | null {
+  const m = candidate.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (!m) return null;
+  const octets = m.slice(1, 5).map((s) => parseInt(s, 10));
+  if (octets.some((n) => n < 0 || n > 255)) {
+    return { ok: false, error: "Malformed IPv4 address" };
+  }
+  const [a, b] = octets;
+  if (a === 127) return ssrfErr("loopback");
+  if (a === 10) return ssrfErr("private (10.0.0.0/8)");
+  if (a === 172 && b >= 16 && b <= 31)
+    return ssrfErr("private (172.16.0.0/12)");
+  if (a === 192 && b === 168) return ssrfErr("private (192.168.0.0/16)");
+  if (a === 169 && b === 254)
+    return ssrfErr("link-local / cloud metadata (169.254.0.0/16)");
+  if (a === 0) return ssrfErr("unspecified (0.0.0.0/8)");
+  if (a >= 224) return ssrfErr("multicast / reserved (224.0.0.0/4+)");
+  return null;
 }
