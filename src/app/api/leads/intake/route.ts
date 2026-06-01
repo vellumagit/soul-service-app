@@ -208,22 +208,59 @@ export async function POST(req: Request) {
     .returning({ id: leadSubmissions.id });
 
   // 9. Auto-accept path. Only runs for non-duplicates on auto_accept forms.
+  // Same dedup discipline as the manual acceptLeadSubmission flow: if a
+  // client with this email already exists, reuse it instead of creating
+  // a duplicate row. Especially important on auto-accept paths because
+  // the submission came in unattended — without dedup, a stuck form or
+  // a spam loop could fill /clients with duplicates while she sleeps.
   let promotedClientId: string | null = null;
   if (form.autoAccept && !isDuplicate) {
     try {
-      const [client] = await db
-        .insert(clients)
-        .values({
-          accountId: form.accountId,
-          fullName: (name ?? email ?? "Unnamed lead").trim(),
-          email,
-          phone,
-          isLead: true,
-          howTheyFoundMe: form.defaultIntent ?? `Form: ${form.name}`,
-          status: "new",
-        })
-        .returning({ id: clients.id });
-      promotedClientId = client.id;
+      let clientId: string;
+      if (email) {
+        const [existing] = await db
+          .select({ id: clients.id })
+          .from(clients)
+          .where(
+            and(
+              eq(clients.accountId, form.accountId),
+              eq(clients.email, email)
+            )
+          )
+          .limit(1);
+        if (existing) {
+          clientId = existing.id;
+        } else {
+          const [client] = await db
+            .insert(clients)
+            .values({
+              accountId: form.accountId,
+              fullName: (name ?? email ?? "Unnamed lead").trim(),
+              email,
+              phone,
+              isLead: true,
+              howTheyFoundMe: form.defaultIntent ?? `Form: ${form.name}`,
+              status: "new",
+            })
+            .returning({ id: clients.id });
+          clientId = client.id;
+        }
+      } else {
+        const [client] = await db
+          .insert(clients)
+          .values({
+            accountId: form.accountId,
+            fullName: (name ?? "Unnamed lead").trim(),
+            email,
+            phone,
+            isLead: true,
+            howTheyFoundMe: form.defaultIntent ?? `Form: ${form.name}`,
+            status: "new",
+          })
+          .returning({ id: clients.id });
+        clientId = client.id;
+      }
+      promotedClientId = clientId;
       await db
         .update(leadSubmissions)
         .set({

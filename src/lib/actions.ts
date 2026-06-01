@@ -331,11 +331,10 @@ export async function createLeadForm(
     const webhookUrl = str(formData, "webhookUrl");
     const autoAccept = bool(formData, "autoAccept");
 
-    if (webhookUrl && !/^https?:\/\//i.test(webhookUrl)) {
-      return {
-        ok: false,
-        error: "Webhook URL must start with http:// or https://",
-      };
+    if (webhookUrl) {
+      const { validatePublicWebhookUrl } = await import("./url-safety");
+      const v = validatePublicWebhookUrl(webhookUrl);
+      if (!v.ok) return { ok: false, error: v.error };
     }
 
     const token = generateLeadFormToken();
@@ -430,14 +429,10 @@ export async function updateLeadForm(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
     const { accountId } = await requireSession();
-    if (
-      patch.webhookUrl &&
-      !/^https?:\/\//i.test(patch.webhookUrl)
-    ) {
-      return {
-        ok: false,
-        error: "Webhook URL must start with http:// or https://",
-      };
+    if (patch.webhookUrl) {
+      const { validatePublicWebhookUrl } = await import("./url-safety");
+      const v = validatePublicWebhookUrl(patch.webhookUrl);
+      if (!v.ok) return { ok: false, error: v.error };
     }
     const updates: Record<string, unknown> = { updatedAt: new Date() };
     if (typeof patch.name === "string") updates.name = patch.name;
@@ -564,28 +559,77 @@ export async function acceptLeadSubmission(
             .join("\n")
         : null;
 
-    const [client] = await db
-      .insert(clients)
-      .values({
-        accountId,
-        fullName: name,
-        email: sub.email,
-        phone: sub.phone,
-        isLead: true,
-        howTheyFoundMe: source,
-        workingOn,
-        privateNotes,
-        status: "new",
-      })
-      .returning({ id: clients.id });
+    // Dedup against existing clients with the same email. Otherwise the
+    // same person submitting via two different forms (or the same form on
+    // two different days) becomes two duplicate client rows, breaking
+    // every "find by email" pattern elsewhere in the app. When we find a
+    // match we still link the submission to that client (so the audit
+    // trail "this person came from form X" is preserved), and we APPEND
+    // the new submission context to private notes instead of clobbering.
+    let existingClientId: string | null = null;
+    if (sub.email && sub.email.trim().length > 0) {
+      const [existing] = await db
+        .select({ id: clients.id, privateNotes: clients.privateNotes })
+        .from(clients)
+        .where(
+          and(
+            eq(clients.accountId, accountId),
+            eq(clients.email, sub.email.trim())
+          )
+        )
+        .limit(1);
+      if (existing) {
+        existingClientId = existing.id;
+        // Append the new submission's context to whatever's already in
+        // private notes — we don't want to lose context but also don't
+        // want to overwrite hand-written notes.
+        if (privateNotes) {
+          const appended = existing.privateNotes
+            ? `${existing.privateNotes}\n\n---\n\n${privateNotes}`
+            : privateNotes;
+          await db
+            .update(clients)
+            .set({ privateNotes: appended, updatedAt: new Date() })
+            .where(
+              and(
+                eq(clients.accountId, accountId),
+                eq(clients.id, existingClientId)
+              )
+            );
+        }
+      }
+    }
+
+    let clientId: string;
+    if (existingClientId) {
+      clientId = existingClientId;
+    } else {
+      const [client] = await db
+        .insert(clients)
+        .values({
+          accountId,
+          fullName: name,
+          email: sub.email,
+          phone: sub.phone,
+          isLead: true,
+          howTheyFoundMe: source,
+          workingOn,
+          privateNotes,
+          status: "new",
+        })
+        .returning({ id: clients.id });
+      clientId = client.id;
+    }
 
     await db
       .update(leadSubmissions)
       .set({
         status: "accepted",
-        promotedClientId: client.id,
+        promotedClientId: clientId,
         reviewedAt: new Date(),
-        reviewedAction: "accepted",
+        reviewedAction: existingClientId
+          ? "accepted (merged into existing client)"
+          : "accepted",
       })
       .where(
         and(
@@ -597,7 +641,10 @@ export async function acceptLeadSubmission(
     revalidatePath("/network");
     revalidatePath("/network/inbox");
     revalidatePath("/network/forms");
-    return { ok: true, clientId: client.id };
+    if (existingClientId) {
+      revalidatePath(`/clients/${existingClientId}`);
+    }
+    return { ok: true, clientId };
   } catch (err) {
     return {
       ok: false,
@@ -1547,12 +1594,15 @@ export async function rescheduleSession(formData: FormData) {
     .where(and(eq(sessions.accountId, accountId), eq(sessions.id, id)))
     .limit(1);
   if (pre?.botId) {
-    try {
-      const { cancelBot } = await import("./recall");
-      await cancelBot(pre.botId);
-    } catch (err) {
-      console.warn("[rescheduleSession] cancel old bot failed:", err);
-    }
+    // Don't swallow — if cancel fails (Recall returns 5xx), the bot is
+    // still scheduled for the OLD time. If we proceeded silently we'd
+    // also schedule a NEW bot below for the new time, leaving TWO bots
+    // in play. Better to fail the reschedule loudly so the user retries
+    // once Recall is back up. cancelBot internally treats 404 / "already
+    // gone" responses as success and only throws on 5xx; so this only
+    // fails when Recall is genuinely unreachable.
+    const { cancelBot } = await import("./recall");
+    await cancelBot(pre.botId);
   }
 
   const updates: Record<string, unknown> = {
@@ -1599,13 +1649,14 @@ export async function cancelSession(sessionId: string, clientId: string) {
     .limit(1);
 
   // Cancel the Recall bot so it doesn't pointlessly join a cancelled meeting.
+  // Same discipline as rescheduleSession: cancelBot treats "bot already
+  // gone" as success and only throws on Recall 5xx. If Recall is truly
+  // down we'd rather surface that to the user than silently leave a
+  // Notetaker bot to dial into a cancelled session (and confuse the
+  // client when it appears in their otherwise-empty Meet).
   if (existingRows[0]?.recallBotId) {
-    try {
-      const { cancelBot } = await import("./recall");
-      await cancelBot(existingRows[0].recallBotId);
-    } catch (err) {
-      console.warn("[cancelSession] recall cancel failed:", err);
-    }
+    const { cancelBot } = await import("./recall");
+    await cancelBot(existingRows[0].recallBotId);
   }
 
   await db

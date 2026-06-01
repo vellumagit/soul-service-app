@@ -68,6 +68,19 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   }
+  // Validate the secret format up front. If someone copies the key without
+  // the `whsec_` prefix (easy mistake), the silent base64-decode-then-fail
+  // path below masks the real problem — every webhook gets rejected with
+  // 401 and we have no clear signal that the secret is wrong vs an attack.
+  if (!secret.startsWith("whsec_")) {
+    console.error(
+      "[recall webhook] RECALL_WEBHOOK_SECRET does not start with whsec_ — copy the full value from Recall's dashboard, including the prefix."
+    );
+    return NextResponse.json(
+      { error: "Webhook secret malformed" },
+      { status: 500 }
+    );
+  }
 
   const headers = Object.fromEntries(
     Array.from(req.headers.entries()).map(([k, v]) => [k.toLowerCase(), v])
@@ -79,6 +92,30 @@ export async function POST(req: Request) {
     return NextResponse.json(
       { error: "Missing webhook headers" },
       { status: 400 }
+    );
+  }
+
+  // Replay protection: reject anything older than 5 minutes. The timestamp
+  // is part of the signed payload, so an attacker who captures a valid
+  // webhook can't bump it without breaking the signature — but without
+  // this check, a captured payload could be replayed forever. 5 minutes
+  // is the standard window for Svix-style webhook auth (which is what
+  // Recall's verification scheme matches).
+  const tsSeconds = parseInt(msgTimestamp, 10);
+  if (!Number.isFinite(tsSeconds)) {
+    return NextResponse.json(
+      { error: "Invalid webhook timestamp" },
+      { status: 400 }
+    );
+  }
+  const ageMs = Math.abs(Date.now() - tsSeconds * 1000);
+  if (ageMs > 5 * 60 * 1000) {
+    console.warn(
+      `[recall webhook] timestamp too old/skewed: ${(ageMs / 1000).toFixed(0)}s drift`
+    );
+    return NextResponse.json(
+      { error: "Webhook timestamp outside 5-minute window" },
+      { status: 401 }
     );
   }
 
