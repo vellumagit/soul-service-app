@@ -566,15 +566,24 @@ export async function acceptLeadSubmission(
     // match we still link the submission to that client (so the audit
     // trail "this person came from form X" is preserved), and we APPEND
     // the new submission context to private notes instead of clobbering.
+    //
+    // Case-insensitive match: emails are normalized to lowercase at intake
+    // time, so any new submission's email is already lowered. Existing
+    // client rows from before the normalization fix may still have mixed
+    // case stored, so we compare both sides lowercased here for backward
+    // compatibility. (TODO: a one-shot script could re-lowercase existing
+    // clients.email + leadSubmissions.email; doing it lazily here is
+    // good enough for now.)
     let existingClientId: string | null = null;
     if (sub.email && sub.email.trim().length > 0) {
+      const normalizedEmail = sub.email.trim().toLowerCase();
       const [existing] = await db
         .select({ id: clients.id, privateNotes: clients.privateNotes })
         .from(clients)
         .where(
           and(
             eq(clients.accountId, accountId),
-            eq(clients.email, sub.email.trim())
+            sql`LOWER(${clients.email}) = ${normalizedEmail}`
           )
         )
         .limit(1);

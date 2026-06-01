@@ -36,7 +36,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { leadForms, leadSubmissions, clients } from "@/db/schema";
-import { and, eq, gte, lt } from "drizzle-orm";
+import { and, eq, gte, sql } from "drizzle-orm";
 import { extractBearerToken, hashLeadFormToken } from "@/lib/lead-tokens";
 
 export const dynamic = "force-dynamic";
@@ -128,9 +128,16 @@ export async function POST(req: Request) {
   }
 
   // 5. Normalize canonical fields. Accept several common alias spellings
-  // so the endpoint is friendly to whatever the form sends.
+  // so the endpoint is friendly to whatever the form sends. Email gets
+  // lowercased (in addition to the trim already done by pickString) so
+  // dedup logic — both here and in the manual accept path — treats
+  // `Brian@x.com` and `brian@x.com` as the same person. Email addresses
+  // are case-insensitive per RFC 5321 §2.3.11; without the .toLowerCase()
+  // a single person submitting from two different devices/autofills would
+  // silently become two duplicate clients.
   const name = pickString(body, ["name", "full_name", "fullName"]);
-  const email = pickString(body, ["email", "email_address", "emailAddress"]);
+  const emailRaw = pickString(body, ["email", "email_address", "emailAddress"]);
+  const email = emailRaw ? emailRaw.toLowerCase() : null;
   const phone = pickString(body, ["phone", "phone_number", "phoneNumber"]);
 
   // `fields` is the freeform sidecar. Accept it nested OR (if absent)
@@ -206,6 +213,14 @@ export async function POST(req: Request) {
 
   let isDuplicate = false;
   if (email) {
+    // Tie-break on UUID when createdAt is identical (Postgres timestamps
+    // have microsecond resolution — under heavy concurrent load two
+    // inserts CAN land at the exact same microsecond). Without the
+    // tie-break, both rows would see `lt(createdAt, mine)` as false and
+    // both would be marked pending, defeating dedup. With it, the row
+    // with the lexicographically smaller UUID wins consistently across
+    // both handlers: this row is "earlier" iff its UUID sorts before
+    // mine, OR its createdAt is strictly older.
     const [earlier] = await db
       .select({ id: leadSubmissions.id })
       .from(leadSubmissions)
@@ -214,10 +229,13 @@ export async function POST(req: Request) {
           eq(leadSubmissions.formId, form.id),
           eq(leadSubmissions.email, email),
           gte(leadSubmissions.createdAt, dayAgo),
-          // Strictly older than our own row — if two inserts land at the
-          // exact same microsecond, the one with the lexicographically
-          // smaller UUID wins (deterministic tie-break).
-          lt(leadSubmissions.createdAt, submission.createdAt)
+          sql`(
+            ${leadSubmissions.createdAt} < ${submission.createdAt}
+            OR (
+              ${leadSubmissions.createdAt} = ${submission.createdAt}
+              AND ${leadSubmissions.id} < ${submission.id}
+            )
+          )`
         )
       )
       .limit(1);
@@ -245,13 +263,16 @@ export async function POST(req: Request) {
     try {
       let clientId: string;
       if (email) {
+        // Match case-insensitively against existing clients.email so a
+        // legacy mixed-case email in `clients` table doesn't slip through
+        // dedup. New rows are stored lowercased; older rows may not be.
         const [existing] = await db
           .select({ id: clients.id })
           .from(clients)
           .where(
             and(
               eq(clients.accountId, form.accountId),
-              eq(clients.email, email)
+              sql`LOWER(${clients.email}) = ${email}`
             )
           )
           .limit(1);
@@ -360,6 +381,27 @@ async function fireWebhook(
   url: string,
   payload: Record<string, unknown>
 ): Promise<void> {
+  // Re-validate the URL immediately before fetch, not just at form-save
+  // time. The validator at save time catches obvious misconfiguration,
+  // but a DNS rebind between save and fire could swap the resolved IP
+  // to a private address (the classic SSRF defense bypass). Re-checking
+  // the hostname here closes that window for IPv4/IPv6 literals AND
+  // catches any legacy webhook URLs that were saved before the validator
+  // existed.
+  //
+  // Note: this doesn't defeat true DNS rebinding where the attacker
+  // controls a public-hostname → private-IP DNS record. Full defense
+  // would require resolving the hostname here and connecting by IP.
+  // For Soul Service's threat model (practitioner misconfiguring her
+  // own webhook URL), the literal-form checks are the meaningful gate.
+  const { validatePublicWebhookUrl } = await import("@/lib/url-safety");
+  const v = validatePublicWebhookUrl(url);
+  if (!v.ok) {
+    console.warn(
+      `[lead intake] refusing to fire webhook — URL failed validation: ${v.error}`
+    );
+    return;
+  }
   try {
     const res = await fetch(url, {
       method: "POST",

@@ -61,6 +61,35 @@ export function validatePublicWebhookUrl(input: string): UrlValidationResult {
     };
   }
 
+  // SSRF-bypass-aware: reject "compressed" IPv4 forms that browsers and
+  // common HTTP clients still resolve to a private IP.
+  //   2130706433        — 127.0.0.1 as a 32-bit decimal integer
+  //   0x7f.0.0.1        — hex octet
+  //   0177.0.0.1        — octal octet
+  //   017700000001      — full octal
+  //
+  // A pure numeric hostname (no dots) is always one of these; legitimate
+  // public hosts always have at least one dot (a TLD).
+  if (/^\d+$/.test(host)) {
+    return ssrfErr("numeric IPv4 (decimal integer form)");
+  }
+  // Any octet starting with `0x` is hex; any octet that's `0` followed by
+  // more digits is octal. Both are valid per inet_aton but only used for
+  // bypass tricks.
+  if (host.includes(".")) {
+    const parts = host.split(".");
+    for (const part of parts) {
+      if (/^0x[0-9a-f]+$/i.test(part)) {
+        return ssrfErr("hex-encoded IPv4 octet");
+      }
+      // 0-prefixed numeric (e.g. "0177" = 127 in octal). Single "0" is
+      // fine — that's just the literal zero octet.
+      if (/^0\d+$/.test(part)) {
+        return ssrfErr("octal IPv4 octet");
+      }
+    }
+  }
+
   // IPv4 literal range checks.
   const ipv4Match = host.match(
     /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/

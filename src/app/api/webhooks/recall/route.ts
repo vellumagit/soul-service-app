@@ -19,7 +19,7 @@ import { NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { db } from "@/db";
 import { sessions, clients } from "@/db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { fetchTranscriptText } from "@/lib/recall";
 import { generateNotesFromTranscript } from "@/lib/ai-notes";
 
@@ -257,7 +257,19 @@ export async function POST(req: Request) {
             ? generated.notes
             : `${existing}\n\n---\n\n_Auto-generated from the meeting transcript:_\n\n${generated.notes}`;
 
-        await db
+        // Atomic write — gate on transcriptReceivedAt STILL being null at
+        // the moment of UPDATE. The earlier `if (row.transcriptReceivedAt)`
+        // check (line ~208) catches the common case, but the SELECT and
+        // UPDATE are two separate round-trips. If a Recall retry lands
+        // between them, both handlers run the (expensive) Claude work
+        // and both attempt to UPDATE. Without this WHERE clause the
+        // second handler would overwrite the first's notes (and the
+        // append-not-replace logic above would NOT save us, because
+        // `existing` was read at the start of this handler, before the
+        // first writer wrote). Adding `IS NULL` here makes the row-write
+        // serializable at the Postgres level — the second writer sees 0
+        // rows affected and we log + bail.
+        const updated = await db
           .update(sessions)
           .set({
             notes: finalNotes,
@@ -267,9 +279,16 @@ export async function POST(req: Request) {
           .where(
             and(
               eq(sessions.accountId, accountId),
-              eq(sessions.id, sessionId)
+              eq(sessions.id, sessionId),
+              isNull(sessions.recallTranscriptReceivedAt)
             )
+          )
+          .returning({ id: sessions.id });
+        if (updated.length === 0) {
+          console.warn(
+            `[recall webhook] transcript.done sessionId="${sessionId}" — concurrent write already attached notes; skipping this handler's output`
           );
+        }
         break;
       }
       case "recording.done":
