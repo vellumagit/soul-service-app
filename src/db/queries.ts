@@ -1427,6 +1427,148 @@ export async function getTodaysAnniversaries(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Loose ends — the "mop the floor" view
+//
+// Surfaces sessions that have something quietly unfinished about them:
+//   - bot-failed     the Recall notetaker hit a fatal status; she may want
+//                    to try again or write notes by hand
+//   - needReflection completed but she never did The Closing
+//   - needNotes      completed but the notes field is empty
+//   - needPayment    completed but not marked paid
+//   - needIntention  upcoming + no intention written yet
+//
+// Order in the page mirrors urgency: time-sensitive first, ambient last.
+// We pull every "interesting" session in one round-trip and partition in
+// JS — the SQL WHERE is tight enough that a busy practitioner has at most
+// dozens of rows here.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type LooseEndRow = {
+  sessionId: string;
+  clientId: string;
+  clientName: string;
+  scheduledAt: Date;
+  type: string;
+  recallBotId: string | null;
+  recallBotStatus: string | null;
+};
+
+export type LooseEnds = {
+  botFailed: LooseEndRow[];
+  needReflection: LooseEndRow[];
+  needNotes: LooseEndRow[];
+  needPayment: LooseEndRow[];
+  needIntention: LooseEndRow[];
+  /** Sum across all categories — drives the empty state + the inbox badge. */
+  totalCount: number;
+};
+
+export async function getLooseEnds(accountId: string): Promise<LooseEnds> {
+  const now = new Date();
+  const rows = await db
+    .select({
+      id: sessions.id,
+      clientId: sessions.clientId,
+      clientName: clients.fullName,
+      scheduledAt: sessions.scheduledAt,
+      type: sessions.type,
+      status: sessions.status,
+      intention: sessions.intention,
+      notes: sessions.notes,
+      closingCompletedAt: sessions.closingCompletedAt,
+      paid: sessions.paid,
+      recallBotId: sessions.recallBotId,
+      recallBotStatus: sessions.recallBotStatus,
+    })
+    .from(sessions)
+    .innerJoin(clients, eq(sessions.clientId, clients.id))
+    .where(
+      and(
+        eq(sessions.accountId, accountId),
+        // Only sessions that COULD be a loose end. Tightens the row set
+        // so we're not pulling her entire history just to filter in JS.
+        // The five categories' triggers, OR'd together:
+        sql`(
+          (${sessions.status} = 'completed' AND (
+            ${sessions.closingCompletedAt} IS NULL
+            OR ${sessions.notes} IS NULL
+            OR ${sessions.notes} = ''
+            OR ${sessions.paid} = false
+          ))
+          OR (
+            ${sessions.status} = 'scheduled'
+            AND ${sessions.scheduledAt} > ${now}
+            AND (${sessions.intention} IS NULL OR ${sessions.intention} = '')
+          )
+          OR ${sessions.recallBotStatus} = 'fatal'
+        )`
+      )
+    )
+    .orderBy(desc(sessions.scheduledAt));
+
+  const toRow = (r: (typeof rows)[number]): LooseEndRow => ({
+    sessionId: r.id,
+    clientId: r.clientId,
+    clientName: r.clientName,
+    scheduledAt: new Date(r.scheduledAt),
+    type: r.type,
+    recallBotId: r.recallBotId,
+    recallBotStatus: r.recallBotStatus,
+  });
+
+  const botFailed = rows.filter((r) => r.recallBotStatus === "fatal").map(toRow);
+  const needReflection = rows
+    .filter((r) => r.status === "completed" && r.closingCompletedAt === null)
+    .map(toRow);
+  const needNotes = rows
+    .filter(
+      (r) =>
+        r.status === "completed" &&
+        (!r.notes || r.notes.trim().length === 0)
+    )
+    .map(toRow);
+  const needPayment = rows
+    .filter((r) => r.status === "completed" && r.paid === false)
+    .map(toRow);
+  const needIntention = rows
+    .filter(
+      (r) =>
+        r.status === "scheduled" &&
+        new Date(r.scheduledAt) > now &&
+        (!r.intention || r.intention.trim().length === 0)
+    )
+    .map(toRow);
+
+  // For `needIntention` we want the soonest sessions first (most urgent
+  // upcoming) rather than reverse-chronological. The other categories all
+  // want most-recent-completed first, which the orderBy above already gives.
+  needIntention.sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime());
+
+  // The total counts UNIQUE sessions across categories (a single session
+  // could be in three of them at once). The badge should reflect how many
+  // distinct things need her attention, not how many TOTAL tasks.
+  const allIds = new Set<string>();
+  for (const list of [
+    botFailed,
+    needReflection,
+    needNotes,
+    needPayment,
+    needIntention,
+  ]) {
+    for (const r of list) allIds.add(r.sessionId);
+  }
+
+  return {
+    botFailed,
+    needReflection,
+    needNotes,
+    needPayment,
+    needIntention,
+    totalCount: allIds.size,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Year in review — "Your practice this year"
 // ─────────────────────────────────────────────────────────────────────────────
 

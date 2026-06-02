@@ -24,6 +24,7 @@ const NAV: NavItem[] = [
   { href: "/network", labelKey: "nav.network", icon: "network" },
   { href: "/calendar", labelKey: "nav.calendar", icon: "calendar" },
   { href: "/payments", labelKey: "nav.payments", icon: "payments" },
+  { href: "/loose-ends", labelKey: "nav.looseEnds", icon: "looseEnds" },
   { href: "/practice", labelKey: "nav.practice", icon: "practice" },
   { href: "/settings", labelKey: "nav.settings", icon: "settings" },
 ];
@@ -44,6 +45,11 @@ const ICON: Record<string, string> = {
   // A small bound book — Year in Review feels like opening her journal
   practice:
     "M4 6a2 2 0 012-2h11a1 1 0 011 1v14a1 1 0 01-1 1H6a2 2 0 01-2-2V6zm0 0c0-1.105.895-2 2-2h11M9 8h6M9 12h4",
+  // An untied thread / loose knot — "loose ends" as a tactile metaphor.
+  // Two short lines meeting at a small open circle so the glyph reads as
+  // "almost finished, not yet tied off."
+  looseEnds:
+    "M5 12h6m0 0a2 2 0 104 0 2 2 0 00-4 0zm4 0h6m-12 5l3 -3m6 -6l3 -3",
   settings:
     "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z",
 };

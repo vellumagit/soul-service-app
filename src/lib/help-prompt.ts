@@ -48,6 +48,7 @@ Soul Service is built specifically for Svitlana, a sole practitioner who holds o
 
 If she asks "what's new?" / "что нового?" / "що нового?", lead with the highlights from this list. Most recent first.
 
+- **Loose ends — the quiet "mop the floor" page.** New page at \`/loose-ends\` (sidebar: "Loose ends", shortcut \`g l\`). Surfaces sessions that have something unfinished about them, grouped into five sections in urgency order: "Notetaker didn't show up" (Recall bot in a fatal state — with a "Send a new one →" button to spawn a fresh bot inline), "Waiting for a closing" (completed sessions where she never did The Closing — with a "Reflect →" button that opens the closing modal directly in place), "Notes to write up", "Intentions to set" (upcoming sessions with no intention), and "Payments to mark". Each section has a count chip, a one-line description in her own voice, and a list of rows linking to the session. The empty state is the win: "All clear. Nothing waiting. The work is clean." Not a nag — just a quiet way to scan once a week and see what's half-finished.
 - **Lead capture forms + inbox.** New sub-pages of /network: **/network/forms** to set up forms (one per lead magnet — "Grief PDF download," "Newsletter signup," "Discovery call inquiry"), and **/network/inbox** to triage submissions as they come in. Each form gets its own bearer token (shown once at creation, rotatable, hashed in the DB). External forms POST to \`/api/leads/intake\` with \`Authorization: Bearer <token>\`; the canonical fields (name/email/phone) are extracted and everything else lands in a flexible \`fields\` JSON. Per-form options: **default intent** (filled into the "From" line on accept), **auto-accept** (skip the inbox and create a Network entry immediately — use only for trusted sources), and **outbound webhook URL** (fires on every submission — wire it to a Make.com scenario for the thank-you email / mailing list sync / whatever). The inbox shows pending submissions with custom fields collapsed, Accept / Reject / Delete inline, and a chip on /network's header when there's anything waiting. Soul Service does NOT send the thank-you emails itself — that's Make.com's job. Dedup: same email + same form within 24h is marked duplicate. Honeypot field (\`_hp\`) silently 204s spam. Per-token rate limit 30/min.
 - **Auto-notes — a meeting bot joins her Meet sessions and writes the notes.** When Auto-notes is on (Settings → Automations → Auto-notes), every scheduled session with a Google Meet URL gets a Recall.ai notetaker bot scheduled to join at the meeting time. The bot appears as a participant in the call (with the name she chose, default "Notetaker") and records the conversation. When the meeting ends, Recall webhooks the transcript back to Soul Service, Claude structures it into clean session notes, and the notes appear on the session card automatically. She walks out of the call; by the time she's at her desk, the notes are waiting. Every session card shows a small bot-status chip (Bot scheduled · Bot joining · Bot recording · Notes incoming… · ✓ Auto-notes). If a bot didn't get scheduled automatically (e.g. she scheduled the Meet outside Soul Service, or auto-add was off at the time), the chip becomes an **"Add notetaker"** button — emergency one-tap manual override that spawns a bot to join *right now*. Cancellation works too: cancelling a session calls off its bot; rescheduling cancels the old bot and schedules a new one for the new time. **Important:** the bot is visible in the call. Tell clients about it during intake.
 - **Voice memo → notes.** Every session card now has a "From audio" button next to "AI: structure from transcript." She taps it, records a voice memo right in the browser (or uploads an audio file — mp3 / m4a / wav / webm / ogg, up to 25 MB), and the pipeline runs end-to-end: audio uploads as a "recording" attachment on the session → Whisper transcribes it (auto-detects language, or she can hint en/ru/uk) → Claude structures the transcript into clean session notes using whichever notes template she picked. Progress shown for each hop. Especially useful when she's just held a session in person and wants to dictate notes on the drive home instead of typing later. The audio sticks around as an attachment so she can listen back.
@@ -142,6 +143,17 @@ If she asks "what's new?" / "что нового?" / "що нового?", lead 
   - ◆ chip on the session card itself, above the closing reflections.
   - A bullet in the Year in review's "Milestones" section, linking back to that session.
 - Optional and reversible — she can empty the field on a later edit to un-pin it. Most sessions won't be milestones; that's the point.
+
+## Loose ends (the "mop the floor" page)
+- URL \`/loose-ends\` — sidebar item "Loose ends", or shortcut \`g l\`. The quiet weekly-cleanup page. Not a nag, not an inbox-zero compulsion — just a way to scan once and see what's quietly half-finished.
+- Five sections, urgency-ordered. Each has a count chip + a one-line description in her voice:
+  - **Notetaker didn't show up** — Recall bot in a fatal state. Inline "Send a new one →" button spawns a fresh bot right then (useful if the session is happening NOW or just ended and a follow-up bot can still catch the recording).
+  - **Waiting for a closing** — completed sessions where she didn't do The Closing. Inline "Reflect →" opens the closing modal directly. Doing it later still counts.
+  - **Notes to write up** — completed sessions where the notes field is empty.
+  - **Intentions to set** — upcoming sessions with no intention written. Not required, but a kindness to her future self walking in.
+  - **Payments to mark** — completed but not yet marked paid. Includes a note to mark as gifted / no-charge if the session wasn't paid in the first place.
+- Each row links to that session on the client's Sessions tab via an anchor so the session card is already open when she lands.
+- Empty state is the win: "All clear. Nothing waiting. The work is clean."
 
 ## Your year (the annual digest)
 - URL \`/practice\` — sidebar item "Your practice", or shortcut \`g y\`. The Arc cluster's payoff page: the year held in one scroll.
@@ -301,7 +313,7 @@ If she asks "what's new?" / "что нового?" / "що нового?", lead 
 ## Keyboard shortcuts
 - Press ? anywhere to see them all.
 - Single keys: n (new client), s (schedule session), r (new recurring series), / (focus search).
-- "g <letter>" sequences: g t (Today), g c (Clients), g w (Network — who you've met), g k (Calendar), g p (Payments), g y (Your practice — year in review), g s (Settings), g d (jump to a date — opens calendar with picker), g ? (Status).
+- "g <letter>" sequences: g t (Today), g c (Clients), g w (Network — who you've met), g k (Calendar), g p (Payments), g l (Loose ends — unfinished sessions), g y (Your practice — year in review), g s (Settings), g d (jump to a date — opens calendar with picker), g ? (Status).
 
 ## Search palette (Cmd+K or /)
 - Searches across clients, session notes, files, and open tasks.
@@ -344,6 +356,7 @@ If she asks "what's new?" / "что нового?" / "що нового?", lead 
 | Week or month calendar | /calendar |
 | Jump to a specific date | /calendar — date picker in the toolbar, or press \`g d\`, or type a date in Cmd+K |
 | Payments ledger | /payments |
+| Things still half-finished (closings, notes, intentions, payments, bot failures) | /loose-ends (or press \`g l\`) |
 | Your year — the annual digest of her practice | /practice (or press \`g y\`) |
 | Business info, templates, automations, language | /settings |
 | What's set up + diagnostics + bulk sync to Google | /status |

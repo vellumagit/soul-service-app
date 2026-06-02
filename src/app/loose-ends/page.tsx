@@ -1,0 +1,209 @@
+// "Loose ends" — the quiet mop page.
+//
+// Surfaces sessions that have something unfinished about them. The point
+// isn't to nag her into an inbox-zero compulsion; the point is so she can
+// scan once at the end of a week and say "ah, that one needs a Closing"
+// instead of remembering on her own. Order is by urgency: the failed
+// notetaker bot first (might still be recoverable for a recent session),
+// then reflections + notes for completed work, then ambient stuff
+// (intentions for the week ahead, unpaid sessions).
+//
+// URL: /loose-ends — sidebar nav item, shortcut `g l`.
+//
+// Empty state is the win, not a thing to apologize for:
+//   "Nothing waiting. The work is clean."
+
+import Link from "next/link";
+import { AppShell } from "@/components/AppShell";
+import { QuickActions } from "@/components/QuickActions";
+import { requireSession } from "@/lib/session-cookies";
+import {
+  getLooseEnds,
+  getSettings,
+  listClientsForPicker,
+  type LooseEndRow,
+} from "@/db/queries";
+import { fullDate, shortTime } from "@/lib/format";
+import { asLocale } from "@/lib/i18n";
+import { LooseEndRowActions } from "@/components/LooseEndRowActions";
+
+export const dynamic = "force-dynamic";
+
+export default async function LooseEndsPage() {
+  const { email, accountId } = await requireSession();
+
+  const [ends, settings, clients] = await Promise.all([
+    getLooseEnds(accountId),
+    getSettings(accountId),
+    listClientsForPicker(accountId),
+  ]);
+  const locale = asLocale(settings.uiLanguage);
+
+  return (
+    <AppShell
+      breadcrumb={[{ label: "Loose ends" }]}
+      rightAction={<QuickActions clients={clients} />}
+      userEmail={email}
+      locale={locale}
+    >
+      <header className="mb-8 max-w-3xl">
+        <h1
+          className="text-3xl md:text-4xl text-ink-900 serif mb-2"
+          style={{ fontWeight: 500, letterSpacing: "-0.015em" }}
+        >
+          Loose ends
+        </h1>
+        <p className="text-sm text-ink-500 italic serif-italic">
+          {ends.totalCount === 0
+            ? "Nothing waiting. The work is clean."
+            : `${ends.totalCount} ${ends.totalCount === 1 ? "thread" : "threads"} waiting for you.`}
+        </p>
+      </header>
+
+      {ends.totalCount === 0 ? (
+        <div className="paper-card p-12 text-center max-w-2xl">
+          <div className="serif-italic text-lg text-plum-700 mb-2" style={{ fontWeight: 400 }}>
+            All clear.
+          </div>
+          <p className="text-sm text-ink-500">
+            Every completed session has notes, a closing, and a payment marked.
+            Every upcoming session has an intention. Come back the next time
+            something feels half-finished — this page will surface it for you.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-8 max-w-3xl">
+          {/* Most time-sensitive first: a failed notetaker bot might still
+              be recoverable if the meeting was recent. */}
+          {ends.botFailed.length > 0 && (
+            <Section
+              title="Notetaker didn't show up"
+              hint="The Recall bot hit a fatal status. You can try sending a new one (if the session is happening now), or write notes by hand."
+              count={ends.botFailed.length}
+              tone="warning"
+              rows={ends.botFailed}
+              actionLabel="Open session →"
+              showRetryBot
+            />
+          )}
+
+          {ends.needReflection.length > 0 && (
+            <Section
+              title="Waiting for a closing"
+              hint="Completed sessions where you didn't pause for the three quiet questions. Doing it now still counts — the work is fresh until you say it isn't."
+              count={ends.needReflection.length}
+              rows={ends.needReflection}
+              actionLabel="Reflect →"
+              showReflectInline
+            />
+          )}
+
+          {ends.needNotes.length > 0 && (
+            <Section
+              title="Notes to write up"
+              hint="Sessions you marked complete but never typed into. Even a few lines is enough — the texture of the thing is what matters."
+              count={ends.needNotes.length}
+              rows={ends.needNotes}
+              actionLabel="Open session →"
+            />
+          )}
+
+          {ends.needIntention.length > 0 && (
+            <Section
+              title="Intentions to set"
+              hint="Upcoming sessions without anything in the intention field. Not required — just a kindness to your future self walking in."
+              count={ends.needIntention.length}
+              rows={ends.needIntention}
+              actionLabel="Open session →"
+            />
+          )}
+
+          {ends.needPayment.length > 0 && (
+            <Section
+              title="Payments to mark"
+              hint="Completed but not yet marked paid. Mark as gifted / no charge if it wasn't a paying session."
+              count={ends.needPayment.length}
+              rows={ends.needPayment}
+              actionLabel="Open session →"
+            />
+          )}
+        </div>
+      )}
+    </AppShell>
+  );
+}
+
+function Section({
+  title,
+  hint,
+  count,
+  tone,
+  rows,
+  actionLabel,
+  showReflectInline,
+  showRetryBot,
+}: {
+  title: string;
+  hint: string;
+  count: number;
+  tone?: "warning";
+  rows: LooseEndRow[];
+  actionLabel: string;
+  showReflectInline?: boolean;
+  showRetryBot?: boolean;
+}) {
+  const isWarning = tone === "warning";
+  return (
+    <section className="paper-card p-6">
+      <div className="flex items-baseline justify-between mb-1 flex-wrap gap-2">
+        <h2
+          className="serif-italic text-xl text-plum-700"
+          style={{ fontWeight: 400 }}
+        >
+          {title}
+        </h2>
+        <span
+          className="text-[10px] uppercase tracking-wider font-mono px-2 py-0.5 rounded"
+          style={{
+            background: isWarning
+              ? "var(--color-honey-50)"
+              : "var(--color-plum-50)",
+            color: isWarning ? "var(--color-honey-700)" : "var(--color-plum-700)",
+          }}
+        >
+          {count}
+        </span>
+      </div>
+      <p className="text-[13px] text-ink-500 italic mb-4 leading-relaxed">
+        {hint}
+      </p>
+      <ul className="space-y-2">
+        {rows.map((r) => (
+          <li
+            key={r.sessionId}
+            className="flex items-center justify-between gap-3 py-2 px-3 rounded-md hover:bg-ink-50 group"
+          >
+            <div className="min-w-0 flex-1">
+              <Link
+                href={`/clients/${r.clientId}?tab=sessions#${r.sessionId}`}
+                className="text-sm text-ink-900 font-medium hover:text-plum-700 truncate block"
+              >
+                {r.clientName}
+              </Link>
+              <div className="text-[11px] text-ink-500 mt-0.5">
+                {r.type} · {fullDate(r.scheduledAt)} · {shortTime(r.scheduledAt)}
+              </div>
+            </div>
+            <LooseEndRowActions
+              row={r}
+              fallbackHref={`/clients/${r.clientId}?tab=sessions#${r.sessionId}`}
+              fallbackLabel={actionLabel}
+              showReflectInline={!!showReflectInline}
+              showRetryBot={!!showRetryBot}
+            />
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
