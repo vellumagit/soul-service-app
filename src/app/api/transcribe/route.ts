@@ -40,10 +40,29 @@ function asLocaleHint(v: unknown): "en" | "ru" | "uk" | null {
 }
 
 export async function POST(req: Request) {
+  let accountId: string;
   try {
-    await requireSession();
+    ({ accountId } = await requireSession());
   } catch {
     return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+  }
+
+  // Per-account rate limit. Whisper is paid per audio-minute; a runaway
+  // script could rack up real cost. 10/min gives her ~one upload every
+  // 6s (plenty for legit dictation flow) while bounding cost.
+  const { checkRateLimit } = await import("@/lib/rate-limit");
+  const rl = checkRateLimit("transcribe", accountId, {
+    limit: 10,
+    windowMs: 60_000,
+  });
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "Too many transcription requests this minute." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(rl.retryAfterSeconds) },
+      }
+    );
   }
 
   let body: Body;

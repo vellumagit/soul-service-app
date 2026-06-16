@@ -8,6 +8,7 @@
 // This module avoids importing `next/headers` so it can be called from
 // `proxy.ts` (Next 16's renamed middleware), which only has access to
 // NextRequest cookies, not the global cookies() API.
+import { timingSafeEqual } from "node:crypto";
 import { SignJWT, jwtVerify } from "jose";
 
 export const SESSION_COOKIE_NAME = "ss_session";
@@ -27,7 +28,12 @@ function encodedSecret(): Uint8Array {
   return new TextEncoder().encode(secret);
 }
 
-/** Allowlist check — comma-separated emails in ALLOWED_EMAILS env var. Lower-cased. */
+/** Allowlist check — comma-separated emails in ALLOWED_EMAILS env var.
+ *  Uses constant-time comparison so an attacker can't infer which emails
+ *  are on the list by measuring response times. (Naive Array.includes
+ *  exits early on the first match, leaking the position of an allowlist
+ *  member via timing.) Always scans the full list and ORs results into
+ *  a single boolean. */
 export function isAllowed(email: string): boolean {
   const raw = process.env.ALLOWED_EMAILS ?? "";
   const list = raw
@@ -35,7 +41,17 @@ export function isAllowed(email: string): boolean {
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
   if (list.length === 0) return false;
-  return list.includes(email.trim().toLowerCase());
+  const needle = Buffer.from(email.trim().toLowerCase());
+  let matched = 0;
+  for (const allowed of list) {
+    const candidate = Buffer.from(allowed);
+    if (candidate.length !== needle.length) continue;
+    // timingSafeEqual throws if lengths differ — we gate above. The
+    // comparison itself is constant-time. We OR into `matched` so the
+    // entire list is scanned regardless of where the match lives.
+    if (timingSafeEqual(candidate, needle)) matched = 1;
+  }
+  return matched === 1;
 }
 
 /** Sign a JWT carrying the user's email. */

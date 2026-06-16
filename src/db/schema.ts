@@ -753,6 +753,30 @@ export const leadSubmissions = pgTable(
 // for the full rationale.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────────────
+// user_magic_links — practitioner sign-in via email magic link.
+// Mirrors clientPortalTokens but keyed by email rather than client_id.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const userMagicLinks = pgTable(
+  "user_magic_links",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    email: text("email").notNull(),
+    /** SHA-256 hex of the cleartext URL token. Single-use, 30-min expiry. */
+    tokenHash: text("token_hash").notNull().unique(),
+    expiresAt: timestamp("expires_at").notNull(),
+    consumedAt: timestamp("consumed_at"),
+    requestedIp: text("requested_ip"),
+    requestedUserAgent: text("requested_user_agent"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    hashIdx: index("user_magic_links_hash_idx").on(t.tokenHash),
+    emailIdx: index("user_magic_links_email_idx").on(t.email),
+  })
+);
+
 export const clientPortalTokens = pgTable(
   "client_portal_tokens",
   {

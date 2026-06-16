@@ -73,6 +73,16 @@ export default async function SignInPage({
               <code className="font-mono">ALLOWED_EMAILS</code> in your environment.
             </div>
           )}
+          {(error === "expired" || error === "invalid") && (
+            <div className="mb-4 text-xs rounded-md border border-amber-100 bg-amber-50 text-amber-800 p-3">
+              That sign-in link expired or had already been used. Request a fresh one below.
+            </div>
+          )}
+          {error === "not-allowed" && (
+            <div className="mb-4 text-xs rounded-md border border-amber-100 bg-amber-50 text-amber-800 p-3">
+              This email is no longer on the access list. Reach out to the admin if that&apos;s a mistake.
+            </div>
+          )}
 
           <SignInForm locale={locale} />
         </div>

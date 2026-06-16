@@ -13,6 +13,7 @@ import { db } from "@/db";
 import { clients, practitionerSettings } from "@/db/schema";
 import { createMagicLink } from "@/lib/portal-auth";
 import { sendPortalMagicLinkEmail } from "@/lib/resend";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,25 @@ async function requestMagicLink(formData: FormData): Promise<void> {
   if (typeof emailRaw !== "string") return;
   const email = emailRaw.trim().toLowerCase();
   if (!email || !email.includes("@")) return;
+
+  // Rate-limit BEFORE any DB work or email side-effects. Two buckets:
+  //   - per-IP (8/min): caps spray-the-allowlist enumeration
+  //   - per-email (3/min): caps Resend-quota-drain on a known address
+  // Silently skip on rate-limit hit so the timing of "request was throttled"
+  // is indistinguishable from "no such enabled client" — both yield the
+  // same "Check your email" card the user sees.
+  const h = await headers();
+  const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const ipLimit = checkRateLimit("portal-signin:ip", ip, {
+    limit: 8,
+    windowMs: 60_000,
+  });
+  if (!ipLimit.ok) return;
+  const emailLimit = checkRateLimit("portal-signin:email", email, {
+    limit: 3,
+    windowMs: 60_000,
+  });
+  if (!emailLimit.ok) return;
 
   // Find a portal-enabled client whose email matches case-insensitively.
   // No accountId filter — portal is global across all practitioner accounts
@@ -47,12 +67,10 @@ async function requestMagicLink(formData: FormData): Promise<void> {
   // the same success card. Only DO the side effects when there's a match.
   if (!match) return;
 
-  const h = await headers();
-  const ip =
-    h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+  // `h` + `ip` already grabbed above for the rate-limit check; reuse them.
   const userAgent = h.get("user-agent");
   const cleartext = await createMagicLink(match.accountId, match.id, {
-    ip,
+    ip: ip === "unknown" ? null : ip,
     userAgent,
   });
 

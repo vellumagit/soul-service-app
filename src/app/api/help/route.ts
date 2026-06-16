@@ -59,7 +59,26 @@ function isValidMessages(value: unknown): value is IncomingMessage[] {
 
 export async function POST(request: Request) {
   // Gate to authenticated users — this is hers, not a public endpoint.
-  await requireSession();
+  const { accountId } = await requireSession();
+
+  // Per-account rate limit. Each Help Buddy turn is an Opus call; an
+  // authenticated user looping a script here could rack up real money
+  // before anyone noticed. 30/min is generous for honest use (one chat
+  // every 2 seconds) but caps a runaway script.
+  const { checkRateLimit } = await import("@/lib/rate-limit");
+  const rl = checkRateLimit("help", accountId, {
+    limit: 30,
+    windowMs: 60_000,
+  });
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "Slow down — too many Help Buddy turns this minute." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(rl.retryAfterSeconds) },
+      }
+    );
+  }
 
   let body: unknown;
   try {
