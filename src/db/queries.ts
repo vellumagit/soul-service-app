@@ -18,6 +18,7 @@ import {
   observations,
   leadForms,
   leadSubmissions,
+  rescheduleRequests,
   type Client,
   type PractitionerSettings,
   type LeadForm,
@@ -1453,12 +1454,25 @@ export type LooseEndRow = {
   recallBotStatus: string | null;
 };
 
+export type RescheduleRequestRow = {
+  requestId: string;
+  sessionId: string;
+  clientId: string;
+  clientName: string;
+  scheduledAt: Date;
+  type: string;
+  reason: string | null;
+  requestedAt: Date;
+};
+
 export type LooseEnds = {
   botFailed: LooseEndRow[];
   needReflection: LooseEndRow[];
   needNotes: LooseEndRow[];
   needPayment: LooseEndRow[];
   needIntention: LooseEndRow[];
+  /** Pending reschedule requests from clients via the portal. */
+  rescheduleRequests: RescheduleRequestRow[];
   /** Sum across all categories — drives the empty state + the inbox badge. */
   totalCount: number;
 };
@@ -1544,6 +1558,44 @@ export async function getLooseEnds(accountId: string): Promise<LooseEnds> {
   // want most-recent-completed first, which the orderBy above already gives.
   needIntention.sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime());
 
+  // Reschedule requests from the client portal — pending only. Joined to
+  // clients for the name + sessions for the original scheduled time. These
+  // are time-sensitive (the requested session might be tomorrow) so we
+  // surface them at the top of Loose Ends.
+  const rescheduleRequestRows = await db
+    .select({
+      requestId: rescheduleRequests.id,
+      sessionId: rescheduleRequests.sessionId,
+      clientId: rescheduleRequests.clientId,
+      clientName: clients.fullName,
+      scheduledAt: sessions.scheduledAt,
+      type: sessions.type,
+      reason: rescheduleRequests.reason,
+      requestedAt: rescheduleRequests.createdAt,
+    })
+    .from(rescheduleRequests)
+    .innerJoin(clients, eq(clients.id, rescheduleRequests.clientId))
+    .innerJoin(sessions, eq(sessions.id, rescheduleRequests.sessionId))
+    .where(
+      and(
+        eq(rescheduleRequests.accountId, accountId),
+        eq(rescheduleRequests.status, "pending")
+      )
+    )
+    .orderBy(desc(rescheduleRequests.createdAt));
+  const rescheduleRequestList: RescheduleRequestRow[] = rescheduleRequestRows.map(
+    (r) => ({
+      requestId: r.requestId,
+      sessionId: r.sessionId,
+      clientId: r.clientId,
+      clientName: r.clientName,
+      scheduledAt: new Date(r.scheduledAt),
+      type: r.type,
+      reason: r.reason,
+      requestedAt: new Date(r.requestedAt),
+    })
+  );
+
   // The total counts UNIQUE sessions across categories (a single session
   // could be in three of them at once). The badge should reflect how many
   // distinct things need her attention, not how many TOTAL tasks.
@@ -1557,6 +1609,7 @@ export async function getLooseEnds(accountId: string): Promise<LooseEnds> {
   ]) {
     for (const r of list) allIds.add(r.sessionId);
   }
+  for (const r of rescheduleRequestList) allIds.add(r.sessionId);
 
   return {
     botFailed,
@@ -1564,6 +1617,7 @@ export async function getLooseEnds(accountId: string): Promise<LooseEnds> {
     needNotes,
     needPayment,
     needIntention,
+    rescheduleRequests: rescheduleRequestList,
     totalCount: allIds.size,
   };
 }

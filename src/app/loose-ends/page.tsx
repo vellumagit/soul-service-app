@@ -22,10 +22,12 @@ import {
   getSettings,
   listClientsForPicker,
   type LooseEndRow,
+  type RescheduleRequestRow,
 } from "@/db/queries";
 import { fullDate, shortTime } from "@/lib/format";
 import { asLocale } from "@/lib/i18n";
 import { LooseEndRowActions } from "@/components/LooseEndRowActions";
+import { RescheduleRequestRowActions } from "@/components/RescheduleRequestRowActions";
 
 export const dynamic = "force-dynamic";
 
@@ -73,6 +75,12 @@ export default async function LooseEndsPage() {
         </div>
       ) : (
         <div className="space-y-8 max-w-3xl">
+          {/* Reschedule requests from the portal — most time-sensitive of all,
+              because the client is actively asking for an answer. */}
+          {ends.rescheduleRequests.length > 0 && (
+            <RescheduleRequestsSection rows={ends.rescheduleRequests} />
+          )}
+
           {/* Most time-sensitive first: a failed notetaker bot might still
               be recoverable if the meeting was recent. */}
           {ends.botFailed.length > 0 && (
@@ -130,6 +138,68 @@ export default async function LooseEndsPage() {
         </div>
       )}
     </AppShell>
+  );
+}
+
+function RescheduleRequestsSection({ rows }: { rows: RescheduleRequestRow[] }) {
+  return (
+    <section className="paper-card p-6">
+      <div className="flex items-baseline justify-between mb-1 flex-wrap gap-2">
+        <h2
+          className="serif-italic text-xl text-plum-700"
+          style={{ fontWeight: 400 }}
+        >
+          Reschedule requests
+        </h2>
+        <span
+          className="text-[10px] uppercase tracking-wider font-mono px-2 py-0.5 rounded"
+          style={{
+            background: "var(--color-honey-50)",
+            color: "var(--color-honey-700)",
+          }}
+        >
+          {rows.length}
+        </span>
+      </div>
+      <p className="text-[13px] text-ink-500 italic mb-4 leading-relaxed">
+        Notes from clients asking to move a session. Reach out to find a
+        new time — when the session is rescheduled (or you've decided to
+        leave it), resolve the request here to clear it.
+      </p>
+      <ul className="space-y-3">
+        {rows.map((r) => (
+          <li
+            key={r.requestId}
+            className="border-l-2 border-honey-300 pl-4 py-2"
+          >
+            <div className="flex items-baseline justify-between gap-3 flex-wrap mb-1">
+              <Link
+                href={`/clients/${r.clientId}?tab=sessions#${r.sessionId}`}
+                className="text-sm font-medium text-ink-900 hover:text-plum-700"
+              >
+                {r.clientName}
+              </Link>
+              <span className="text-[11px] text-ink-400 font-mono">
+                {r.type} · {fullDate(r.scheduledAt)} ·{" "}
+                {shortTime(r.scheduledAt)}
+              </span>
+            </div>
+            {r.reason && (
+              <p className="serif-italic text-sm text-ink-700 leading-relaxed mt-1.5">
+                &ldquo;{r.reason}&rdquo;
+              </p>
+            )}
+            <div className="mt-2">
+              <RescheduleRequestRowActions
+                requestId={r.requestId}
+                clientId={r.clientId}
+                sessionId={r.sessionId}
+              />
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

@@ -27,6 +27,7 @@ import { PrivateNotesBlock } from "@/components/PrivateNotesBlock";
 import { PeopleInLifeBlock } from "@/components/PeopleInLifeBlock";
 import { PatternsTab } from "@/components/PatternsTab";
 import { ClientHeader } from "@/components/ClientHeader";
+import { PortalAccessRow } from "@/components/PortalAccessRow";
 import { ClientStatStrip } from "@/components/ClientStatStrip";
 import { RecentActivityMini } from "@/components/RecentActivityMini";
 import { requireSession } from "@/lib/session-cookies";
@@ -124,6 +125,16 @@ export default async function ClientProfilePage({
             .map((s) => s.scheduledAt)
             .sort((a, b) => a.getTime() - b.getTime())[0] ?? null
         }
+      />
+
+      {/* Portal access row — surfaces "Last signed in X ago" + a Send Portal
+          Invite button when this client has portal access enabled. Renders
+          nothing if portalEnabled is false (no clutter). */}
+      <PortalAccessRow
+        clientId={client.id}
+        clientFirstName={client.fullName.split(" ")[0] ?? client.fullName}
+        enabled={client.portalEnabled}
+        lastVisitAt={client.lastPortalVisitAt}
       />
 
       {/* Tabs — folder-divider style, visually sit on the content below */}

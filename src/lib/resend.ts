@@ -114,3 +114,63 @@ function escapeHtml(s: string): string {
 export function isResendConfigured(): boolean {
   return Boolean(process.env.RESEND_API_KEY);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Client portal magic-link email
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Sends the client portal magic-link email. Separate from the practitioner
+ *  sign-in flow above — different subject, different framing, different
+ *  audience. Practitioner-name is the personal sign-off so the link doesn't
+ *  feel transactional. */
+export async function sendPortalMagicLinkEmail(input: {
+  to: string;
+  url: string;
+  clientFirstName: string | null;
+  practitionerName: string | null;
+}): Promise<void> {
+  const greeting = input.clientFirstName ? `Hi ${input.clientFirstName},` : "Hi,";
+  const signoff = input.practitionerName ?? "Your practitioner";
+  const subject = "Your space — sign in link";
+  const text = `${greeting}\n\nHere's a link to sign in to your space:\n\n${input.url}\n\nIt'll expire in 30 minutes. If you didn't expect this email, you can ignore it.\n\n— ${signoff}`;
+  const html = portalMagicLinkHtml(input.url, greeting, signoff);
+  await sendEmail({ to: input.to, subject, html, text });
+}
+
+function portalMagicLinkHtml(
+  url: string,
+  greeting: string,
+  signoff: string
+): string {
+  return `
+<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#faf6f0;font-family:Georgia,'Times New Roman',serif;color:#3d342e;">
+    <div style="max-width:480px;margin:48px auto;padding:36px 32px;background:#fdf9f1;border-radius:12px;border:1px solid #ead9c1;">
+      <p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;color:#564a42;">
+        ${escapeHtml(greeting)}
+      </p>
+      <p style="margin:0 0 24px 0;font-size:15px;line-height:1.6;color:#564a42;">
+        Here's a link to sign in to your space. It'll expire in 30 minutes.
+      </p>
+      <a href="${escapeHtml(url)}"
+         style="display:inline-block;background:#5a3f4f;color:#fdf9f1;text-decoration:none;font-size:14px;font-weight:500;padding:12px 22px;border-radius:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;letter-spacing:0.01em;">
+        Open your space
+      </a>
+      <p style="margin:28px 0 8px 0;font-size:13px;color:#786b60;line-height:1.55;">
+        Or paste this URL:
+      </p>
+      <p style="margin:0 0 32px 0;font-size:12px;color:#786b60;line-height:1.5;word-break:break-all;font-family:ui-monospace,Menlo,monospace;">
+        ${escapeHtml(url)}
+      </p>
+      <p style="margin:0;font-size:14px;color:#564a42;font-style:italic;line-height:1.55;">
+        — ${escapeHtml(signoff)}
+      </p>
+      <hr style="border:none;border-top:1px solid #ead9c1;margin:32px 0 16px 0;">
+      <p style="margin:0;font-size:11px;color:#a39689;line-height:1.55;">
+        If you didn't expect this, you can ignore the email.
+      </p>
+    </div>
+  </body>
+</html>`.trim();
+}

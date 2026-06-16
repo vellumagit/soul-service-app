@@ -213,6 +213,9 @@ export async function updateClient(formData: FormData) {
           | "dormant"
           | "archived"
           | null) ?? "active",
+      // Client portal opt-in. When she flips this on, the "Send portal
+      // invite" button appears on the client overview. Off by default.
+      portalEnabled: bool(formData, "portalEnabled"),
       updatedAt: new Date(),
     })
     .where(and(eq(clients.accountId, accountId), eq(clients.id, id)));
@@ -220,6 +223,123 @@ export async function updateClient(formData: FormData) {
   revalidatePath(`/clients/${id}`);
   revalidatePath("/clients");
   revalidatePath("/network");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CLIENT PORTAL — send a magic-link invite for a specific client. Reads
+// the client row, generates a fresh magic-link, emails it via Resend. The
+// client clicks → /portal/sign-in/[token] sets the cookie. We DON'T require
+// portalEnabled here; the practitioner may want to send the very first
+// invite RIGHT after flipping the toggle on, and from the action's POV
+// that's already happened (the toggle is in updateClient above).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Mark a reschedule request as resolved (regardless of whether she
+ *  actually rescheduled the session — she might also just dismiss). Drops
+ *  the row out of Loose Ends. */
+export async function resolveRescheduleRequest(
+  requestId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const { accountId } = await requireSession();
+    const { rescheduleRequests } = await import("@/db/schema");
+    const updated = await db
+      .update(rescheduleRequests)
+      .set({
+        status: "resolved",
+        reviewedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(rescheduleRequests.accountId, accountId),
+          eq(rescheduleRequests.id, requestId)
+        )
+      )
+      .returning({ clientId: rescheduleRequests.clientId });
+    if (updated.length === 0) {
+      return { ok: false, error: "Request not found" };
+    }
+    revalidatePath("/loose-ends");
+    revalidatePath(`/clients/${updated[0].clientId}`);
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Couldn't resolve request",
+    };
+  }
+}
+
+export type SendPortalInviteResult =
+  | { ok: true; sentTo: string }
+  | { ok: false; error: string };
+
+export async function sendPortalInvite(
+  clientId: string
+): Promise<SendPortalInviteResult> {
+  try {
+    const { accountId } = await requireSession();
+    const rows = await db
+      .select({
+        id: clients.id,
+        fullName: clients.fullName,
+        email: clients.email,
+        portalEnabled: clients.portalEnabled,
+      })
+      .from(clients)
+      .where(and(eq(clients.accountId, accountId), eq(clients.id, clientId)))
+      .limit(1);
+    const client = rows[0];
+    if (!client) return { ok: false, error: "Client not found" };
+    if (!client.email || !client.email.includes("@")) {
+      return {
+        ok: false,
+        error: "This client doesn't have an email on file — add one first.",
+      };
+    }
+    if (!client.portalEnabled) {
+      return {
+        ok: false,
+        error: "Turn on portal access for this client first.",
+      };
+    }
+
+    // Headers gives us the request host so the link works in dev + prod
+    // without an env var. Falls back to NEXT_PUBLIC_SITE_URL if set.
+    const { headers } = await import("next/headers");
+    const h = await headers();
+    const base =
+      process.env.NEXT_PUBLIC_SITE_URL ||
+      `${h.get("x-forwarded-proto") ?? "https"}://${h.get("host") ?? "localhost"}`;
+
+    const { createMagicLink } = await import("./portal-auth");
+    const cleartext = await createMagicLink(accountId, client.id);
+    const url = `${base}/portal/sign-in/${cleartext}`;
+
+    const settingsRows = await db
+      .select({
+        practitionerName: practitionerSettings.practitionerName,
+      })
+      .from(practitionerSettings)
+      .where(eq(practitionerSettings.accountId, accountId))
+      .limit(1);
+
+    const { sendPortalMagicLinkEmail } = await import("./resend");
+    await sendPortalMagicLinkEmail({
+      to: client.email,
+      url,
+      clientFirstName: client.fullName.split(" ")[0] ?? null,
+      practitionerName: settingsRows[0]?.practitionerName ?? null,
+    });
+
+    revalidatePath(`/clients/${clientId}`);
+    return { ok: true, sentTo: client.email };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Couldn't send invite",
+    };
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -421,6 +421,35 @@ export function EditClientDialog({
               <option value="archived">Archived</option>
             </select>
           </Field>
+
+          {/* Client portal access — off by default. When she flips this on,
+              "Send portal invite" appears on the client overview. */}
+          <Field label="Client portal">
+            <label className="inline-flex items-center gap-2 text-sm text-ink-700">
+              <input
+                type="checkbox"
+                name="portalEnabled"
+                value="true"
+                defaultChecked={client.portalEnabled}
+                className="rounded border-ink-300"
+              />
+              <span>
+                Allow this client to sign in to{" "}
+                <span className="font-mono text-xs">/portal</span> and see
+                their upcoming sessions
+              </span>
+            </label>
+            <p className="text-[11px] text-ink-500 italic mt-1.5 leading-snug">
+              They&apos;ll log in with a magic-link emailed to{" "}
+              {client.email ? (
+                <span className="font-mono">{client.email}</span>
+              ) : (
+                "their email"
+              )}
+              . Use the &ldquo;Send portal invite&rdquo; button on the
+              overview to email the first link.
+            </p>
+          </Field>
         </form>
       </Modal>
     </>

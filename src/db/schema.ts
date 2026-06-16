@@ -145,6 +145,13 @@ export const clients = pgTable(
     metOn: date("met_on"),
     metViaClientId: uuid("met_via_client_id"),
 
+    // Client portal — per-client opt-in. Practitioner flips it ON in
+    // EditClientDialog and clicks "Send portal invite" to email the magic
+    // link. Default OFF so existing clients don't accidentally get access
+    // until the practitioner consciously enables it for each one.
+    portalEnabled: boolean("portal_enabled").default(false).notNull(),
+    lastPortalVisitAt: timestamp("last_portal_visit_at"),
+
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
@@ -738,11 +745,103 @@ export const leadSubmissions = pgTable(
   })
 );
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Client portal — magic-link-authenticated surface where her clients see
+// their upcoming sessions, request a reschedule, and view what they owe.
+// Auth tables mirror lead-token hashing: cleartext only in the emailed URL
+// or browser cookie; SHA-256 hex stored. See drizzle/0017_client_portal.sql
+// for the full rationale.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const clientPortalTokens = pgTable(
+  "client_portal_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    /** SHA-256 hex of the cleartext URL token. Single-use, 30-min expiry. */
+    tokenHash: text("token_hash").notNull().unique(),
+    expiresAt: timestamp("expires_at").notNull(),
+    consumedAt: timestamp("consumed_at"),
+    requestedIp: text("requested_ip"),
+    requestedUserAgent: text("requested_user_agent"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    hashIdx: index("client_portal_tokens_hash_idx").on(t.tokenHash),
+    clientIdx: index("client_portal_tokens_client_idx").on(t.clientId),
+  })
+);
+
+export const clientPortalSessions = pgTable(
+  "client_portal_sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    /** SHA-256 hex of the cleartext cookie value. */
+    cookieHash: text("cookie_hash").notNull().unique(),
+    expiresAt: timestamp("expires_at").notNull(),
+    lastSeenAt: timestamp("last_seen_at").defaultNow().notNull(),
+    createdIp: text("created_ip"),
+    createdUserAgent: text("created_user_agent"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    cookieIdx: index("client_portal_sessions_cookie_idx").on(t.cookieHash),
+    clientIdx: index("client_portal_sessions_client_idx").on(t.clientId),
+  })
+);
+
+export const rescheduleRequests = pgTable(
+  "reschedule_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => sessions.id, { onDelete: "cascade" }),
+    /** Free-text reason from the client. Length-capped at the app layer. */
+    reason: text("reason"),
+    /** Optional preferred alternative times, as ISO strings in JSON array. */
+    preferredTimes: jsonb("preferred_times"),
+    /** pending | acknowledged | resolved */
+    status: text("status").default("pending").notNull(),
+    reviewedAt: timestamp("reviewed_at"),
+    reviewedNote: text("reviewed_note"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    accountStatusIdx: index("reschedule_requests_account_status_idx").on(
+      t.accountId,
+      t.status
+    ),
+    clientIdx: index("reschedule_requests_client_idx").on(t.clientId),
+    sessionIdx: index("reschedule_requests_session_idx").on(t.sessionId),
+  })
+);
+
 export type Client = typeof clients.$inferSelect;
 export type NewClient = typeof clients.$inferInsert;
 export type Session = typeof sessions.$inferSelect;
 export type NewSession = typeof sessions.$inferInsert;
 export type Attachment = typeof attachments.$inferSelect;
+export type ClientPortalToken = typeof clientPortalTokens.$inferSelect;
+export type ClientPortalSession = typeof clientPortalSessions.$inferSelect;
+export type RescheduleRequest = typeof rescheduleRequests.$inferSelect;
 export type Goal = typeof goals.$inferSelect;
 export type ImportantPerson = typeof importantPeople.$inferSelect;
 export type Theme = typeof themes.$inferSelect;
