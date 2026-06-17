@@ -54,11 +54,11 @@ export function SignInForm({ locale = DEFAULT_LOCALE }: { locale?: Locale }) {
         disabled={pending}
         className="w-full bg-ink-900 hover:bg-ink-800 text-white text-sm font-medium px-4 py-2.5 rounded-md disabled:opacity-60 transition"
       >
-        {pending ? "Sending link…" : "Send sign-in link"}
+        {pending ? t(locale, "signin.submitting") : t(locale, "signin.submit")}
       </button>
 
       <p className="text-[11px] text-ink-400 text-center pt-1">
-        We&apos;ll email a single-use link. It expires in 30 minutes.
+        {t(locale, "signin.helpText")}
       </p>
     </form>
   );

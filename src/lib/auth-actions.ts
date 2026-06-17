@@ -1,28 +1,43 @@
 "use server";
 
-// Email-as-auth via MAGIC LINK.
+// Email-as-auth. Two modes, controlled by AUTH_REQUIRE_MAGIC_LINK env var:
 //
-// Old flow (replaced): type email → instant entry if allowlisted.
-// New flow: type email → if allowlisted, generate a magic link, email it
-// via Resend → click link → /signin/<token> consumes atomically, sets
-// the session cookie, redirects home.
+//   off (default) — type allowlisted email → instant cookie + redirect home.
+//                   The original flow. Use when Resend has no verified
+//                   custom domain yet (sandbox sender lands in spam, so
+//                   magic-link email would be unreliable).
 //
-// The allowlist (ALLOWED_EMAILS env var) is still the outer gate — only
-// allowlisted emails get a link generated. The magic link adds the
-// "proves control of the inbox" step that was previously missing.
+//   on            — type allowlisted email → email a one-time sign-in
+//                   link via Resend → click within 30 min → /signin/<token>
+//                   atomically consumes, sets the cookie, redirects home.
+//                   Adds the "prove you control the inbox" step. Flip
+//                   AUTH_REQUIRE_MAGIC_LINK=true once a real domain is
+//                   verified with Resend (~$10/year + a few DNS records).
 //
-// Anti-enumeration: the form response is identical regardless of whether
-// the email is allowlisted (same "check your email" card). A non-allowlist
-// email gets no email + no DB row, so a timing measurement could still
-// distinguish them in theory — but we gate the action with a rate limit
-// (3/min/email + 8/min/IP) which makes any enumeration probe slow + noisy.
+// The ALLOWED_EMAILS env var is the outer gate in BOTH modes — only
+// listed emails get past the allowlist check. The magic-link mode adds
+// a layer on top of that, not a replacement.
+//
+// Rate-limit (per-IP + per-email) and constant-time allowlist comparison
+// apply in BOTH modes — those are security improvements that don't depend
+// on which sign-in flow is active.
 
 import { headers } from "next/headers";
 import { isAllowed } from "./session";
-import { clearSessionCookie, createUserMagicLink } from "./session-cookies";
+import {
+  clearSessionCookie,
+  createUserMagicLink,
+  setSessionCookie,
+} from "./session-cookies";
 import { getOrCreateAccount } from "./account";
 import { sendMagicLinkEmail } from "./resend";
 import { checkRateLimit } from "./rate-limit";
+import { redirect } from "next/navigation";
+
+function magicLinkMode(): boolean {
+  const raw = (process.env.AUTH_REQUIRE_MAGIC_LINK ?? "").trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "on" || raw === "yes";
+}
 
 export type SignInResult = {
   ok: boolean;
@@ -71,9 +86,19 @@ export async function signInWithEmail(
 
   if (!isAllowed(rawEmail)) {
     console.log(`[auth] rejected sign-in for non-allowlisted: ${rawEmail}`);
-    // Anti-enumeration: same success card as the happy path. The user
-    // gets no email and no link is created.
-    return { ok: true, message: SUCCESS_MESSAGE };
+    if (magicLinkMode()) {
+      // Anti-enumeration: in magic-link mode we return the same success
+      // card as the happy path. No email is sent and no DB row is created.
+      return { ok: true, message: SUCCESS_MESSAGE };
+    }
+    // In instant-entry mode we tell the user plainly. This is the
+    // original behavior pre-magic-link; anti-enumeration only matters
+    // when the side-effect is "we may have sent an email."
+    return {
+      ok: false,
+      message:
+        "This email isn't on the access list. If that's a mistake, ask the admin to add it.",
+    };
   }
 
   try {
@@ -87,6 +112,17 @@ export async function signInWithEmail(
     };
   }
 
+  // INSTANT-ENTRY mode (default — Resend domain not yet configured).
+  // Set the session cookie and redirect home. This is the pre-magic-link
+  // behavior, preserved so Brian can still sign in while he sorts out
+  // the Resend domain verification. Flip AUTH_REQUIRE_MAGIC_LINK=true
+  // to switch to the email-verification flow.
+  if (!magicLinkMode()) {
+    await setSessionCookie(rawEmail);
+    redirect("/");
+  }
+
+  // MAGIC-LINK mode — opt in via AUTH_REQUIRE_MAGIC_LINK env var.
   try {
     const userAgent = h.get("user-agent");
     const cleartext = await createUserMagicLink(rawEmail, {
@@ -100,8 +136,6 @@ export async function signInWithEmail(
     await sendMagicLinkEmail(rawEmail, url);
   } catch (err) {
     console.error("[auth] magic link send failed:", err);
-    // Don't leak whether the email is real via an error — the row is
-    // already created; user can try again. Keep the response success-shaped.
     return { ok: true, message: SUCCESS_MESSAGE };
   }
 
