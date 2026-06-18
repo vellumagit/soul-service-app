@@ -38,7 +38,41 @@ export type SendEmailInput = {
   from?: string;
 };
 
+/** Parse EMAIL_RECIPIENT_ALLOWLIST into a lowercased Set. Empty / unset
+ *  means "allow everything" (production behavior). When the env var is
+ *  set, ONLY listed recipients get real emails — everything else is
+ *  silently dropped with a clear log line. Used during staging so a
+ *  practice run on real client data can't accidentally email real
+ *  clients. Caller still sees a success-shaped return so upstream
+ *  flow logic isn't disrupted. */
+function recipientAllowlist(): Set<string> | null {
+  const raw = process.env.EMAIL_RECIPIENT_ALLOWLIST;
+  if (!raw || !raw.trim()) return null;
+  return new Set(
+    raw
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean)
+  );
+}
+
 export async function sendEmail(input: SendEmailInput): Promise<{ id: string }> {
+  const allowlist = recipientAllowlist();
+  if (allowlist) {
+    const to = input.to.trim().toLowerCase();
+    if (!allowlist.has(to)) {
+      // Loud log so Brian can see in Vercel what was suppressed + what
+      // it would have sent. Returns a fake id so upstream callers
+      // (magic-link flows, portal invites, reminder cron) keep
+      // their "ok" code path; we don't want a suppress to bubble up
+      // as an error.
+      console.log(
+        `[email] SUPPRESSED → ${input.to} (not in EMAIL_RECIPIENT_ALLOWLIST). Allowed: ${Array.from(allowlist).join(", ")}. Subject: ${input.subject}`
+      );
+      return { id: "suppressed" };
+    }
+  }
+
   const resend = getResend();
   const result = await resend.emails.send({
     from: input.from ?? defaultFrom(),
