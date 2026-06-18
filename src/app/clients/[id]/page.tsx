@@ -29,6 +29,7 @@ import { PatternsTab } from "@/components/PatternsTab";
 import { ClientHeader } from "@/components/ClientHeader";
 import { PortalAccessRow } from "@/components/PortalAccessRow";
 import { ClientReflectionsSection } from "@/components/ClientReflectionsSection";
+import { ClientReflectionsTab } from "@/components/ClientReflectionsTab";
 import { ClientStatStrip } from "@/components/ClientStatStrip";
 import { RecentActivityMini } from "@/components/RecentActivityMini";
 import { requireSession } from "@/lib/session-cookies";
@@ -38,6 +39,7 @@ const TABS = [
   { key: "overview", label: "Overview" },
   { key: "activity", label: "Activity" },
   { key: "sessions", label: "Sessions" },
+  { key: "reflections", label: "Reflections" },
   { key: "patterns", label: "Patterns" },
   { key: "tasks", label: "Tasks" },
   { key: "files", label: "Files" },
@@ -361,6 +363,14 @@ export default async function ClientProfilePage({
             />
           )}
         </div>
+      )}
+
+      {tab === "reflections" && (
+        <ClientReflectionsTab
+          accountId={accountId}
+          clientId={client.id}
+          clientFullName={client.fullName}
+        />
       )}
 
       {tab === "patterns" && (

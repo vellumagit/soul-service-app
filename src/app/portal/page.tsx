@@ -138,13 +138,38 @@ export default async function PortalHomePage() {
           <NextSessionCard session={nextUp} now={now} />
         ) : (
           <div className="paper-card p-6 text-center">
-            <p className="serif-italic text-base text-plum-700 mb-1" style={{ fontWeight: 400 }}>
+            <p
+              className="serif-italic text-base text-plum-700 mb-1"
+              style={{ fontWeight: 400 }}
+            >
               Nothing on the calendar yet.
             </p>
-            <p className="text-sm text-ink-500 italic">
-              Reach out below if you'd like to book another session.
+            <p className="text-sm text-ink-500 italic mb-4">
+              When you&apos;re ready, send a note and {practitionerName.split(" ")[0]} will reach out to find a time.
             </p>
+            <Link
+              href="/portal/book"
+              className="inline-block px-4 py-2 text-sm bg-plum-700 hover:bg-plum-600 text-white rounded-md font-medium transition-colors"
+            >
+              Book another session →
+            </Link>
           </div>
+        )}
+
+        {/* Quiet "book another" CTA — appears even when there IS a next
+            session, for clients who want to schedule a follow-up. */}
+        {nextUp && (
+          <section className="paper-card p-5 md:p-6 text-center">
+            <p className="serif-italic text-sm text-plum-700 mb-2" style={{ fontWeight: 400 }}>
+              Want to book another session?
+            </p>
+            <Link
+              href="/portal/book"
+              className="inline-block text-xs text-plum-700 hover:underline font-medium"
+            >
+              Send a note →
+            </Link>
+          </section>
         )}
 
         {/* Outstanding */}

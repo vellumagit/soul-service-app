@@ -17,6 +17,7 @@ const TABS = [
   { href: "/portal", label: "Today" },
   { href: "/portal/arc", label: "The arc" },
   { href: "/portal/reflections", label: "Reflections" },
+  { href: "/portal/billing", label: "Billing" },
 ];
 
 export function PortalNav() {

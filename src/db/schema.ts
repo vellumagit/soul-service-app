@@ -870,6 +870,42 @@ export const clientReflections = pgTable(
   })
 );
 
+// ─────────────────────────────────────────────────────────────────────────────
+// client_booking_requests — client-initiated request for a NEW session.
+// Distinct from reschedule_requests (which targets an existing session).
+// Surfaces in Loose Ends → "Session requests" so the practitioner can
+// reach out and confirm, then resolve.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const clientBookingRequests = pgTable(
+  "client_booking_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    /** Free-text preferred times from the client. Optional. */
+    preferredTimes: text("preferred_times"),
+    /** Optional message accompanying the request. */
+    reason: text("reason"),
+    /** pending | acknowledged | resolved */
+    status: text("status").default("pending").notNull(),
+    reviewedAt: timestamp("reviewed_at"),
+    reviewedNote: text("reviewed_note"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    accountStatusIdx: index("client_booking_requests_account_status_idx").on(
+      t.accountId,
+      t.status
+    ),
+    clientIdx: index("client_booking_requests_client_idx").on(t.clientId),
+  })
+);
+
 export const rescheduleRequests = pgTable(
   "reschedule_requests",
   {
@@ -912,6 +948,7 @@ export type ClientPortalToken = typeof clientPortalTokens.$inferSelect;
 export type ClientPortalSession = typeof clientPortalSessions.$inferSelect;
 export type RescheduleRequest = typeof rescheduleRequests.$inferSelect;
 export type ClientReflection = typeof clientReflections.$inferSelect;
+export type ClientBookingRequest = typeof clientBookingRequests.$inferSelect;
 export type Goal = typeof goals.$inferSelect;
 export type ImportantPerson = typeof importantPeople.$inferSelect;
 export type Theme = typeof themes.$inferSelect;

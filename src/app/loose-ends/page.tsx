@@ -23,11 +23,13 @@ import {
   listClientsForPicker,
   type LooseEndRow,
   type RescheduleRequestRow,
+  type BookingRequestRow,
 } from "@/db/queries";
 import { fullDate, shortTime } from "@/lib/format";
 import { asLocale } from "@/lib/i18n";
 import { LooseEndRowActions } from "@/components/LooseEndRowActions";
 import { RescheduleRequestRowActions } from "@/components/RescheduleRequestRowActions";
+import { BookingRequestRowActions } from "@/components/BookingRequestRowActions";
 
 export const dynamic = "force-dynamic";
 
@@ -79,6 +81,11 @@ export default async function LooseEndsPage() {
               because the client is actively asking for an answer. */}
           {ends.rescheduleRequests.length > 0 && (
             <RescheduleRequestsSection rows={ends.rescheduleRequests} />
+          )}
+
+          {/* New booking requests — "I'd like to book another session." */}
+          {ends.bookingRequests.length > 0 && (
+            <BookingRequestsSection rows={ends.bookingRequests} />
           )}
 
           {/* Most time-sensitive first: a failed notetaker bot might still
@@ -138,6 +145,71 @@ export default async function LooseEndsPage() {
         </div>
       )}
     </AppShell>
+  );
+}
+
+function BookingRequestsSection({ rows }: { rows: BookingRequestRow[] }) {
+  return (
+    <section className="paper-card p-6">
+      <div className="flex items-baseline justify-between mb-1 flex-wrap gap-2">
+        <h2
+          className="serif-italic text-xl text-plum-700"
+          style={{ fontWeight: 400 }}
+        >
+          Session requests
+        </h2>
+        <span
+          className="text-[10px] uppercase tracking-wider font-mono px-2 py-0.5 rounded"
+          style={{
+            background: "var(--color-honey-50)",
+            color: "var(--color-honey-700)",
+          }}
+        >
+          {rows.length}
+        </span>
+      </div>
+      <p className="text-[13px] text-ink-500 italic mb-4 leading-relaxed">
+        Clients asking to book a new session. Reach out to find a time, then
+        resolve the request here to clear it.
+      </p>
+      <ul className="space-y-3">
+        {rows.map((r) => (
+          <li
+            key={r.requestId}
+            className="border-l-2 border-honey-300 pl-4 py-2"
+          >
+            <div className="flex items-baseline justify-between gap-3 flex-wrap mb-1">
+              <Link
+                href={`/clients/${r.clientId}`}
+                className="text-sm font-medium text-ink-900 hover:text-plum-700"
+              >
+                {r.clientName}
+              </Link>
+              <span className="text-[11px] text-ink-400 font-mono">
+                {fullDate(r.requestedAt)}
+              </span>
+            </div>
+            {r.preferredTimes && (
+              <p className="text-[13px] text-ink-700 mt-1.5">
+                <span className="text-ink-500 italic">Times: </span>
+                {r.preferredTimes}
+              </p>
+            )}
+            {r.reason && (
+              <p className="serif-italic text-sm text-ink-700 leading-relaxed mt-1.5">
+                &ldquo;{r.reason}&rdquo;
+              </p>
+            )}
+            <div className="mt-2">
+              <BookingRequestRowActions
+                requestId={r.requestId}
+                clientId={r.clientId}
+              />
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

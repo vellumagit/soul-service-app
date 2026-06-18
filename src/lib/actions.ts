@@ -234,6 +234,37 @@ export async function updateClient(formData: FormData) {
 // that's already happened (the toggle is in updateClient above).
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** Mark a client booking request as resolved. Drops it out of Loose Ends. */
+export async function resolveBookingRequest(
+  requestId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const { accountId } = await requireSession();
+    const { clientBookingRequests } = await import("@/db/schema");
+    const updated = await db
+      .update(clientBookingRequests)
+      .set({ status: "resolved", reviewedAt: new Date() })
+      .where(
+        and(
+          eq(clientBookingRequests.accountId, accountId),
+          eq(clientBookingRequests.id, requestId)
+        )
+      )
+      .returning({ clientId: clientBookingRequests.clientId });
+    if (updated.length === 0) {
+      return { ok: false, error: "Request not found" };
+    }
+    revalidatePath("/loose-ends");
+    revalidatePath(`/clients/${updated[0].clientId}`);
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Couldn't resolve request",
+    };
+  }
+}
+
 /** Mark a reschedule request as resolved (regardless of whether she
  *  actually rescheduled the session — she might also just dismiss). Drops
  *  the row out of Loose Ends. */
