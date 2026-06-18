@@ -135,6 +135,31 @@ export default async function ThresholdPage({
             </section>
           )}
 
+          {/* What the client brought — typed into their own portal under
+              "What you're bringing." Separate from her own intention so
+              she can hold both. */}
+          {session.clientStatedIntention && (
+            <section className="py-2">
+              <div
+                className="rounded-md p-4 mx-auto max-w-md"
+                style={{
+                  background: "var(--color-plum-50)",
+                  border: "1px solid var(--color-plum-100)",
+                }}
+              >
+                <div className="text-[10px] uppercase tracking-widest text-plum-700 font-mono mb-2 text-center">
+                  What {firstName} is bringing
+                </div>
+                <blockquote
+                  className="serif-italic text-base text-ink-800 leading-relaxed text-center"
+                  style={{ fontWeight: 400 }}
+                >
+                  &ldquo;{session.clientStatedIntention}&rdquo;
+                </blockquote>
+              </div>
+            </section>
+          )}
+
           {/* Where you left off — last session's texture */}
           {lastSession && (
             <section className="space-y-3">

@@ -5,6 +5,7 @@
 
 import { TimeOfDayProvider } from "@/components/TimeOfDayProvider";
 import { FlashNotifier } from "@/components/FlashNotifier";
+import { PortalNav } from "@/components/PortalNav";
 
 export default function PortalLayout({
   children,
@@ -16,6 +17,7 @@ export default function PortalLayout({
       <TimeOfDayProvider />
       <FlashNotifier />
       <div className="min-h-screen" style={{ background: "var(--color-app-bg)" }}>
+        <PortalNav />
         {children}
       </div>
     </>

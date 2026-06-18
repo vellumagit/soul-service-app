@@ -46,6 +46,8 @@ export default async function PortalHomePage() {
         status: sessions.status,
         meetUrl: sessions.meetUrl,
         intention: sessions.intention,
+        clientStatedIntention: sessions.clientStatedIntention,
+        clientVisibleNote: sessions.clientVisibleNote,
         paid: sessions.paid,
         paymentAmountCents: sessions.paymentAmountCents,
       })
@@ -81,6 +83,10 @@ export default async function PortalHomePage() {
     .filter((s) => new Date(s.scheduledAt) < now || s.status === "completed")
     .slice(0, 6);
   const nextUp = upcoming[0] ?? null;
+  // Most recent past session — used for the "Since your last session…"
+  // note. Sorted desc by scheduledAt because sessionRows already is.
+  const mostRecentPast = past[0] ?? null;
+  const sinceLastNote = mostRecentPast?.clientVisibleNote?.trim() || null;
   const unpaid = sessionRows.filter(
     (s) => s.status === "completed" && !s.paid && (s.paymentAmountCents ?? 0) > 0
   );
@@ -118,6 +124,15 @@ export default async function PortalHomePage() {
       </header>
 
       <div className="space-y-6">
+        {/* Since your last session — short note from her, if she shared one */}
+        {sinceLastNote && (
+          <SinceLastSessionCard
+            note={sinceLastNote}
+            sessionAt={new Date(mostRecentPast!.scheduledAt)}
+            practitionerName={practitionerName}
+          />
+        )}
+
         {/* Next session */}
         {nextUp ? (
           <NextSessionCard session={nextUp} now={now} />
@@ -137,33 +152,6 @@ export default async function PortalHomePage() {
           <OutstandingCard count={unpaid.length} totalCents={unpaidTotalCents} />
         )}
 
-        {/* Past sessions */}
-        {past.length > 0 && (
-          <section className="paper-card p-6">
-            <h2
-              className="serif-italic text-base text-plum-700 mb-3"
-              style={{ fontWeight: 400 }}
-            >
-              Recent sessions
-            </h2>
-            <ul className="space-y-2 text-sm">
-              {past.map((s) => (
-                <li
-                  key={s.id}
-                  className="flex items-baseline justify-between gap-3 py-1.5 border-b border-ink-100 last:border-0"
-                >
-                  <span className="text-ink-700">
-                    {fullDate(new Date(s.scheduledAt))}
-                  </span>
-                  <span className="text-[11px] text-ink-400 font-mono">
-                    {s.type}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
         {/* Contact */}
         <ContactCard
           practitionerName={practitionerName}
@@ -171,8 +159,91 @@ export default async function PortalHomePage() {
           contactEmail={settings?.contactEmail ?? null}
           contactPhone={settings?.contactPhone ?? null}
         />
+
+        {/* Your details — read-only profile card */}
+        <YourDetailsCard
+          clientFullName={session.clientFullName}
+          clientEmail={session.clientEmail}
+          practitionerName={practitionerName}
+        />
       </div>
     </div>
+  );
+}
+
+function SinceLastSessionCard({
+  note,
+  sessionAt,
+  practitionerName,
+}: {
+  note: string;
+  sessionAt: Date;
+  practitionerName: string;
+}) {
+  const firstName = practitionerName.split(" ")[0] ?? practitionerName;
+  return (
+    <section
+      className="rounded-md p-5 md:p-6"
+      style={{
+        background: "var(--color-honey-50)",
+        border: "1px solid var(--color-honey-100)",
+      }}
+    >
+      <p className="text-[10px] uppercase tracking-widest text-honey-700 font-mono mb-2">
+        Since your last session
+      </p>
+      <p
+        className="serif-italic text-base text-ink-800 leading-relaxed"
+        style={{ fontWeight: 400 }}
+      >
+        &ldquo;{note}&rdquo;
+      </p>
+      <p className="text-[11px] text-ink-500 italic mt-3">
+        — {firstName}, after your session on {fullDate(sessionAt)}
+      </p>
+    </section>
+  );
+}
+
+function YourDetailsCard({
+  clientFullName,
+  clientEmail,
+  practitionerName,
+}: {
+  clientFullName: string;
+  clientEmail: string | null;
+  practitionerName: string;
+}) {
+  const firstName = practitionerName.split(" ")[0] ?? practitionerName;
+  return (
+    <section className="paper-card p-6">
+      <h2
+        className="serif-italic text-base text-plum-700 mb-3"
+        style={{ fontWeight: 400 }}
+      >
+        Your details
+      </h2>
+      <div className="space-y-1.5 text-sm">
+        <div>
+          <span className="text-ink-500 text-[11px] uppercase tracking-wider font-mono mr-2">
+            name
+          </span>
+          <span className="text-ink-700">{clientFullName}</span>
+        </div>
+        {clientEmail && (
+          <div>
+            <span className="text-ink-500 text-[11px] uppercase tracking-wider font-mono mr-2">
+              email
+            </span>
+            <span className="text-ink-700">{clientEmail}</span>
+          </div>
+        )}
+      </div>
+      <p className="text-[11px] text-ink-500 italic mt-3 leading-snug">
+        Let {firstName} know if any of this changes — she keeps your file
+        directly.
+      </p>
+    </section>
   );
 }
 

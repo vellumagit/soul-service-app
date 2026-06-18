@@ -1023,6 +1023,10 @@ export type SessionPrep = {
     scheduledAt: Date;
     durationMinutes: number;
     intention: string | null;
+    /** Client's own intention, typed via /portal/sessions/[id]. Separate
+     *  from `intention` (which is what the practitioner writes from her
+     *  POV). Both surface together in The Threshold. */
+    clientStatedIntention: string | null;
     meetUrl: string | null;
     status: string;
   };
@@ -1097,6 +1101,7 @@ export async function getSessionPrep(
       scheduledAt: s.scheduledAt,
       durationMinutes: s.durationMinutes,
       intention: s.intention,
+      clientStatedIntention: s.clientStatedIntention,
       meetUrl: s.meetUrl,
       status: s.status,
     },

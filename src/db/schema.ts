@@ -247,6 +247,17 @@ export const sessions = pgTable(
     recallBotStatus: text("recall_bot_status"),
     recallTranscriptReceivedAt: timestamp("recall_transcript_received_at"),
 
+    // Portal three-room expansion:
+    //   - clientStatedIntention: what the CLIENT writes (from the portal)
+    //     for themselves before a session. Separate from `intention`,
+    //     which the practitioner writes. Both surface together in The
+    //     Threshold so she walks in holding both.
+    //   - clientVisibleNote: a short note the practitioner can choose to
+    //     share with the client. Surfaces on the portal Today view
+    //     ("Since your last session…") and on every Arc-tab row.
+    clientStatedIntention: text("client_stated_intention"),
+    clientVisibleNote: text("client_visible_note"),
+
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
@@ -825,6 +836,40 @@ export const clientPortalSessions = pgTable(
   })
 );
 
+// ─────────────────────────────────────────────────────────────────────────────
+// client_reflections — the journal room of the client portal.
+// Free-form text entries the client writes between sessions, optionally
+// attached to a specific past session. Practitioner sees recent ones on
+// the client overview as pre-session context.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const clientReflections = pgTable(
+  "client_reflections",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    /** Optional — null means a standalone reflection ("just something
+     *  I noticed this week"). When set, the reflection ties to a specific
+     *  past session and surfaces on that session's Arc-tab row. */
+    sessionId: uuid("session_id").references(() => sessions.id, {
+      onDelete: "set null",
+    }),
+    body: text("body").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    accountIdx: index("client_reflections_account_idx").on(t.accountId),
+    clientIdx: index("client_reflections_client_idx").on(t.clientId),
+    sessionIdx: index("client_reflections_session_idx").on(t.sessionId),
+  })
+);
+
 export const rescheduleRequests = pgTable(
   "reschedule_requests",
   {
@@ -866,6 +911,7 @@ export type Attachment = typeof attachments.$inferSelect;
 export type ClientPortalToken = typeof clientPortalTokens.$inferSelect;
 export type ClientPortalSession = typeof clientPortalSessions.$inferSelect;
 export type RescheduleRequest = typeof rescheduleRequests.$inferSelect;
+export type ClientReflection = typeof clientReflections.$inferSelect;
 export type Goal = typeof goals.$inferSelect;
 export type ImportantPerson = typeof importantPeople.$inferSelect;
 export type Theme = typeof themes.$inferSelect;

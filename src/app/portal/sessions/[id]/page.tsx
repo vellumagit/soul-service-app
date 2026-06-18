@@ -14,6 +14,39 @@ import { revalidatePath } from "next/cache";
 
 export const dynamic = "force-dynamic";
 
+async function saveClientStatedIntention(formData: FormData): Promise<void> {
+  "use server";
+  const portal = await requirePortalSession();
+  const sessionIdRaw = formData.get("sessionId");
+  const intentionRaw = formData.get("clientStatedIntention");
+  if (typeof sessionIdRaw !== "string") return;
+  const intention =
+    typeof intentionRaw === "string" ? intentionRaw.trim() : "";
+  const valueToSave =
+    intention.length === 0 ? null : intention.slice(0, 1000);
+
+  await db
+    .update(sessions)
+    .set({
+      clientStatedIntention: valueToSave,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(sessions.id, sessionIdRaw),
+        eq(sessions.accountId, portal.accountId),
+        eq(sessions.clientId, portal.clientId)
+      )
+    );
+
+  revalidatePath(`/portal/sessions/${sessionIdRaw}`);
+  revalidatePath("/portal/arc");
+  // Also surfaces in /sessions/[id]/prep on the practitioner side, so
+  // she walks in already holding what the client brought.
+  revalidatePath(`/sessions/${sessionIdRaw}/prep`);
+  revalidatePath(`/clients/${portal.clientId}`);
+}
+
 async function submitRescheduleRequest(formData: FormData): Promise<void> {
   "use server";
   const sessionIdRaw = formData.get("sessionId");
@@ -73,6 +106,7 @@ export default async function PortalSessionDetailPage({
       status: sessions.status,
       meetUrl: sessions.meetUrl,
       intention: sessions.intention,
+      clientStatedIntention: sessions.clientStatedIntention,
     })
     .from(sessions)
     .where(
@@ -149,6 +183,42 @@ export default async function PortalSessionDetailPage({
           </a>
         )}
       </section>
+
+      {/* What you're bringing — client sets their own intention for the
+          session. Only on upcoming sessions; past sessions are no longer
+          a place to set intentions. */}
+      {session.status !== "completed" && (
+        <section className="paper-card p-6 md:p-8 mb-6">
+          <h2
+            className="serif-italic text-xl text-plum-700 mb-1"
+            style={{ fontWeight: 400 }}
+          >
+            What you&apos;re bringing
+          </h2>
+          <p className="text-sm text-ink-600 italic mb-4 leading-relaxed">
+            Anything you&apos;d like to name for yourself before the session.
+            Your practitioner sees this in her prep view so she can walk in
+            holding it with you. Optional.
+          </p>
+          <form action={saveClientStatedIntention} className="space-y-3">
+            <input type="hidden" name="sessionId" value={session.id} />
+            <textarea
+              name="clientStatedIntention"
+              defaultValue={session.clientStatedIntention ?? ""}
+              rows={4}
+              maxLength={1000}
+              placeholder="A question, a feeling, a fragment, something you&apos;re sitting with…"
+              className="w-full px-3 py-2 text-sm leading-relaxed border border-ink-200 rounded-md bg-white outline-none focus:border-plum-500 focus:ring-1 focus:ring-plum-100 resize-y"
+            />
+            <button
+              type="submit"
+              className="px-4 py-2 text-sm bg-plum-700 hover:bg-plum-600 text-white rounded-md font-medium transition-colors"
+            >
+              Save
+            </button>
+          </form>
+        </section>
+      )}
 
       {/* Reschedule request form — only for upcoming sessions */}
       {session.status !== "completed" && (
