@@ -475,6 +475,37 @@
   background: transparent;
   border-style: dashed;
 }
+
+/* "Coming soon" state — the card stays visible so visitors know what's
+ * on the horizon, but every hover / lift / accent is muted so it
+ * doesn't compete with the offerings that are actually available. The
+ * CTA becomes a non-interactive pill labeled "Coming soon". */
+.landing-root .card.coming-soon {
+  opacity: 0.55;
+  filter: saturate(0.6);
+}
+.landing-root .card.coming-soon:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: var(--land-line);
+}
+.landing-root .card.coming-soon h3,
+.landing-root .card.coming-soon .price {
+  color: var(--land-ink-soft);
+}
+.landing-root .card .cta-soon {
+  background: transparent;
+  color: var(--land-ink-soft);
+  border-color: var(--land-line);
+  border-style: dashed;
+  cursor: default;
+  text-align: center;
+  font-style: italic;
+}
+.landing-root .card .cta-soon:hover {
+  background: transparent;
+  color: var(--land-ink-soft);
+}
 .landing-root .ladder-note {
   font-size: 14px;
   color: var(--land-ink-soft);

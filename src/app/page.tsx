@@ -212,7 +212,7 @@ export default async function LandingPage({
           <div className="wrap ladder">
             {/* entry lane */}
             <div className="lane">
-              <div className="card free rv">
+              <div className="card free coming-soon rv">
                 <span className="step">Start free</span>
                 <h3>The Quiz &amp; Workbook</h3>
                 <div className="price">Free</div>
@@ -221,9 +221,9 @@ export default async function LandingPage({
                   pointing — with a guided workbook to begin coming home to
                   yourself.
                 </p>
-                <a href="#contact" className="cta">
-                  Reach out for the workbook →
-                </a>
+                <span className="cta cta-soon" aria-disabled="true">
+                  Coming soon
+                </span>
               </div>
               <div className="card rv">
                 <span className="step">Weekly · in a circle of women</span>
