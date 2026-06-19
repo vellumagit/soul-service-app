@@ -15,7 +15,7 @@ export default async function SignInPage({
   // If already signed in, bounce to wherever they were headed (or home).
   const existing = await getSessionEmail();
   if (existing) {
-    redirect(from && from.startsWith("/") ? from : "/");
+    redirect(from && from.startsWith("/") ? from : "/today");
   }
 
   // No account context yet, so the sign-in page is always in the default

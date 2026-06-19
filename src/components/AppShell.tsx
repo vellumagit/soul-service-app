@@ -19,7 +19,7 @@ type NavItem = {
 };
 
 const NAV: NavItem[] = [
-  { href: "/", labelKey: "nav.today", icon: "today" },
+  { href: "/today", labelKey: "nav.today", icon: "today" },
   { href: "/clients", labelKey: "nav.clients", icon: "clients" },
   { href: "/network", labelKey: "nav.network", icon: "network" },
   { href: "/calendar", labelKey: "nav.calendar", icon: "calendar" },
@@ -97,7 +97,9 @@ function AppShellInner({
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const isActive = (href: string) =>
-    href === "/" ? pathname === "/" : pathname.startsWith(href);
+    href === "/today"
+      ? pathname === "/today" || pathname === "/"
+      : pathname.startsWith(href);
 
   return (
     <>

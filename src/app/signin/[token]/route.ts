@@ -56,7 +56,7 @@ export async function GET(
   const sessionToken = await signSessionToken(result.email);
   const expires = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
 
-  const response = NextResponse.redirect(new URL("/", req.url));
+  const response = NextResponse.redirect(new URL("/today", req.url));
   response.cookies.set(SESSION_COOKIE_NAME, sessionToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",

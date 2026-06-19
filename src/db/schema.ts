@@ -570,6 +570,15 @@ export const practitionerSettings = pgTable("practitioner_settings", {
   businessAddress: text("business_address"),
   websiteUrl: text("website_url"),
 
+  // Landing page copy — public-facing content the practitioner edits from
+  // /settings. All optional; the landing page falls back to sensible
+  // defaults if any are NULL so it stays presentable on day one before
+  // she's written anything.
+  landingTagline: text("landing_tagline"),
+  landingAbout: text("landing_about"),
+  landingHowItWorks: text("landing_how_it_works"),
+  landingWhatToExpect: text("landing_what_to_expect"),
+
   // Default rate (used when generating invoices if no amount is set)
   defaultRateCents: integer("default_rate_cents").default(13500).notNull(),
   defaultCurrency: varchar("default_currency", { length: 8 })

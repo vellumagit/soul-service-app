@@ -119,7 +119,7 @@ export async function signInWithEmail(
   // to switch to the email-verification flow.
   if (!magicLinkMode()) {
     await setSessionCookie(rawEmail);
-    redirect("/");
+    redirect("/today");
   }
 
   // MAGIC-LINK mode — opt in via AUTH_REQUIRE_MAGIC_LINK env var.

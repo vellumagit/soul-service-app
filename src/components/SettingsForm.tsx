@@ -115,6 +115,77 @@ export function SettingsForm({ settings }: { settings: PractitionerSettings }) {
         </div>
       </Section>
 
+      {/* Landing page copy */}
+      <Section
+        title="Landing page"
+        subtitle="What visitors see at your public URL. Leave blank to use the soft default copy — replace with your own words whenever you're ready."
+      >
+        <Field
+          label="Tagline"
+          hint="One sentence under your name. Sets the tone."
+        >
+          <input
+            name="landingTagline"
+            defaultValue={settings.landingTagline ?? ""}
+            maxLength={200}
+            className={inputCls}
+            placeholder="One-on-one soul work, held with care…"
+          />
+        </Field>
+        <Field
+          label="About"
+          hint="A short paragraph — who you work with, what you bring."
+        >
+          <textarea
+            name="landingAbout"
+            defaultValue={settings.landingAbout ?? ""}
+            rows={4}
+            maxLength={2000}
+            className={`${inputCls} resize-y leading-relaxed`}
+            placeholder="I work with people moving through tender stretches…"
+          />
+        </Field>
+        <Field
+          label="How I work"
+          hint="The shape of a session — what the rhythm looks like."
+        >
+          <textarea
+            name="landingHowItWorks"
+            defaultValue={settings.landingHowItWorks ?? ""}
+            rows={4}
+            maxLength={2000}
+            className={`${inputCls} resize-y leading-relaxed`}
+            placeholder="We meet for an hour at a time…"
+          />
+        </Field>
+        <Field
+          label="What to expect"
+          hint="The longer arc — what working together looks like over time."
+        >
+          <textarea
+            name="landingWhatToExpect"
+            defaultValue={settings.landingWhatToExpect ?? ""}
+            rows={4}
+            maxLength={2000}
+            className={`${inputCls} resize-y leading-relaxed`}
+            placeholder="Not a quick fix. A steady relationship over time…"
+          />
+        </Field>
+        <p className="text-[11px] text-ink-400 italic mt-2">
+          Preview your landing page at{" "}
+          <a
+            href="/?preview=1"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-plum-700 hover:underline font-mono"
+          >
+            /?preview=1
+          </a>{" "}
+          — the &ldquo;preview&rdquo; query param escapes the auto-redirect
+          to /today so you can see what visitors see.
+        </p>
+      </Section>
+
       {/* Invoicing */}
       <Section
         title="Invoicing"

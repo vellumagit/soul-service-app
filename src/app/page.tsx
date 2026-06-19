@@ -1,326 +1,222 @@
+// Public landing page. The svit.live root URL.
+//
+// Routing:
+//   - signed-in practitioner → redirect to /today (the workspace)
+//   - signed-in portal client → redirect to /portal (their space)
+//   - everyone else → render the landing page itself
+//
+// `?preview=1` escapes the practitioner redirect so Svit/Brian can
+// preview their own landing without signing out.
+//
+// No AppShell, no Help Buddy, no sidebar — this is its own surface.
+// Same Vesper palette + time-of-day atmosphere so it feels like the
+// same world the app inhabits.
+
 import Link from "next/link";
-import { AppShell } from "@/components/AppShell";
-import { requireSession } from "@/lib/session-cookies";
-import { QuickActions } from "@/components/QuickActions";
-import { NewClientDialog } from "@/components/NewClientDialog";
-import { MarkPaidDialog } from "@/components/MarkPaidDialog";
-import { TasksBlock } from "@/components/TasksBlock";
-import { CapacityStrip } from "@/components/CapacityStrip";
-import { SetupChecklist } from "@/components/SetupChecklist";
-import { JoinMeetButton } from "@/components/JoinMeetButton";
-import { WalkInButton } from "@/components/WalkInButton";
-import {
-  getDashboardData,
-  getCapacity,
-  getSettings,
-  getSetupStatus,
-  getTodaysAnniversaries,
-  listClientsForPicker,
-} from "@/db/queries";
-import { OnThisDayCard } from "@/components/OnThisDayCard";
-import { shortTime, fullDate, relativeTime } from "@/lib/format";
-import { asLocale, t } from "@/lib/i18n";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { TimeOfDayProvider } from "@/components/TimeOfDayProvider";
+import { LandingLeadForm } from "@/components/LandingLeadForm";
+import { getSessionEmail } from "@/lib/session-cookies";
+import { db } from "@/db";
+import { practitionerSettings } from "@/db/schema";
 
 export const dynamic = "force-dynamic";
 
-export default async function HomePage() {
-  const { email, accountId } = await requireSession();
-  const [data, clientsList, capacity, settings, setupStatus, anniversaries] =
-    await Promise.all([
-      getDashboardData(accountId),
-      listClientsForPicker(accountId),
-      getCapacity(accountId),
-      getSettings(accountId),
-      getSetupStatus(accountId),
-      getTodaysAnniversaries(accountId),
-    ]);
+// Fallback copy when the practitioner hasn't filled in their landing
+// fields yet. Soft, generic, soul-work-shaped — presentable on day one,
+// replaceable as soon as she writes her own.
+const DEFAULTS = {
+  tagline:
+    "One-on-one soul work, held with care. Sessions over video or in person.",
+  about:
+    "I work with people moving through tender stretches — grief, transitions, the kind of questions that don't have quick answers. Sessions are slow, attentive, and built around what you bring.",
+  howItWorks:
+    "We meet for an hour at a time. You bring whatever is alive for you. I hold the shape of the conversation and make space for what wants to surface. Between sessions you have a small private space to write — your reflections come with you into the next hour.",
+  whatToExpect:
+    "Not a quick fix. Not a prescription. A steady relationship over time — sometimes weekly, sometimes less often. We figure out together what your rhythm is.",
+};
 
-  const locale = asLocale(settings.uiLanguage);
-  const upcomingToday = data.todaySessions.filter(
-    (s) => s.status === "scheduled"
-  );
+export default async function LandingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ preview?: string }>;
+}) {
+  const { preview } = await searchParams;
+
+  // If signed in as practitioner (and not previewing), send to workspace.
+  const sessionEmail = await getSessionEmail();
+  if (sessionEmail && preview !== "1") {
+    redirect("/today");
+  }
+  // If signed in as a portal client, send to their space.
+  const cookieStore = await cookies();
+  if (cookieStore.get("sps_client")?.value && preview !== "1") {
+    redirect("/portal");
+  }
+
+  // Pull the practitioner's settings — there's only one per deployment
+  // in practice. Falls back to DEFAULTS for any unset field so the page
+  // is presentable from day one.
+  const settingsRows = await db
+    .select({
+      businessName: practitionerSettings.businessName,
+      practitionerName: practitionerSettings.practitionerName,
+      businessEmail: practitionerSettings.businessEmail,
+      businessPhone: practitionerSettings.businessPhone,
+      websiteUrl: practitionerSettings.websiteUrl,
+      tagline: practitionerSettings.landingTagline,
+      about: practitionerSettings.landingAbout,
+      howItWorks: practitionerSettings.landingHowItWorks,
+      whatToExpect: practitionerSettings.landingWhatToExpect,
+    })
+    .from(practitionerSettings)
+    .limit(1);
+  const s = settingsRows[0] ?? {
+    businessName: null,
+    practitionerName: null,
+    businessEmail: null,
+    businessPhone: null,
+    websiteUrl: null,
+    tagline: null,
+    about: null,
+    howItWorks: null,
+    whatToExpect: null,
+  };
+
+  const heading = s.practitionerName ?? s.businessName ?? "Soul Service";
+  const tagline = s.tagline?.trim() || DEFAULTS.tagline;
+  const about = s.about?.trim() || DEFAULTS.about;
+  const howItWorks = s.howItWorks?.trim() || DEFAULTS.howItWorks;
+  const whatToExpect = s.whatToExpect?.trim() || DEFAULTS.whatToExpect;
 
   return (
-    <AppShell
-      breadcrumb={[{ label: t(locale, "nav.today") }]}
-      rightAction={<QuickActions clients={clientsList} />}
-      userEmail={email}
-      locale={locale}
-    >
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-ink-900 tracking-tight">
-          {t(locale, "home.title")}
-        </h1>
-        <p className="text-sm text-ink-500 mt-1">{fullDate(new Date())}</p>
-      </div>
-
-      {/* Setup checklist auto-hides when all 4 steps are done */}
-      <SetupChecklist status={setupStatus} clients={clientsList} />
-
-      {/* "On this day" — birthdays + work anniversaries that fall today.
-          Auto-hides when empty so it doesn't clutter on most days. */}
-      <OnThisDayCard events={anniversaries} />
-
-      {data.totalClients === 0 ? (
-        <div className="border-2 border-dashed border-ink-200 rounded-lg p-12 text-center bg-white">
-          <div className="text-base text-ink-900 font-medium mb-2">
-            {t(locale, "home.firstRun.title")}
-          </div>
-          <div className="text-sm text-ink-500 mb-6 max-w-md mx-auto leading-relaxed">
-            {t(locale, "home.firstRun.body")}
-          </div>
-          <NewClientDialog />
-        </div>
-      ) : (
-        <>
-          <div className="mb-6">
-            <CapacityStrip capacity={capacity} />
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          <div className="lg:col-span-2 space-y-6">
-            {/* Today's sessions */}
-            <Section
-              title={t(locale, "home.sectionTodaySessions")}
-              count={upcomingToday.length}
-              empty={t(locale, "home.emptyToday")}
+    <>
+      <TimeOfDayProvider />
+      <div
+        className="min-h-screen"
+        style={{ background: "var(--color-app-bg)" }}
+      >
+        <main className="max-w-2xl mx-auto px-4 md:px-6 py-12 md:py-20">
+          {/* Hero */}
+          <header className="mb-12 md:mb-16">
+            <h1
+              className="text-4xl md:text-5xl text-ink-900 serif mb-3"
+              style={{ fontWeight: 500, letterSpacing: "-0.02em" }}
             >
-              {upcomingToday.length > 0 && (
-                <div className="border border-ink-200 rounded-md overflow-hidden bg-white divide-y divide-ink-100">
-                  {upcomingToday.map((s) => (
-                    <Link
-                      key={s.id}
-                      href={`/clients/${s.clientId}`}
-                      className="flex items-center gap-3 px-4 py-3 hover:bg-ink-50"
-                    >
-                      <div className="font-mono text-sm text-plum-700 font-medium w-20 shrink-0">
-                        {shortTime(s.scheduledAt)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-ink-900">
-                          {s.clientName}
-                        </div>
-                        <div className="text-xs text-ink-500">
-                          {s.type} · {s.durationMinutes}m
-                        </div>
-                      </div>
-                      <WalkInButton sessionId={s.id} />
-                      {s.meetUrl && <JoinMeetButton href={s.meetUrl} />}
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </Section>
+              {heading}
+            </h1>
+            <p
+              className="serif-italic text-lg md:text-xl text-ink-700 leading-relaxed"
+              style={{ fontWeight: 400 }}
+            >
+              {tagline}
+            </p>
+          </header>
 
-            {/* Needs attention */}
-            {(data.unpaidSessions.length > 0 ||
-              data.missingNotes.length > 0 ||
-              data.dormantClients.length > 0) && (
-              <Section title={t(locale, "home.sectionNeedsAttention")}>
-                <div className="space-y-2">
-                  {data.unpaidSessions.map((s) => (
-                    <NeedsRow
-                      key={`unpaid-${s.id}`}
-                      chip="UNPAID"
-                      chipCls="bg-amber-50 text-amber-700"
-                      text={
-                        <>
-                          <Link
-                            href={`/clients/${s.clientId}`}
-                            className="font-medium text-ink-900 hover:underline"
-                          >
-                            {s.clientName}
-                          </Link>{" "}
-                          <span className="text-ink-500">·</span>{" "}
-                          <span className="text-ink-600">{s.type}</span>{" "}
-                          <span className="text-ink-500">·</span>{" "}
-                          <span className="text-ink-500 text-xs">
-                            {fullDate(s.scheduledAt)}
-                          </span>
-                        </>
-                      }
-                      action={
-                        <MarkPaidDialog
-                          sessionId={s.id}
-                          clientId={s.clientId}
-                        />
-                      }
-                    />
-                  ))}
-                  {data.missingNotes.slice(0, 5).map((s) => (
-                    <NeedsRow
-                      key={`note-${s.id}`}
-                      chip="NO NOTES"
-                      chipCls="bg-ink-100 text-ink-600"
-                      text={
-                        <>
-                          Notes pending for{" "}
-                          <Link
-                            href={`/clients/${s.clientId}`}
-                            className="font-medium text-ink-900 hover:underline"
-                          >
-                            {s.clientName}
-                          </Link>{" "}
-                          <span className="text-ink-500">·</span>{" "}
-                          <span className="text-ink-500 text-xs">
-                            {fullDate(s.scheduledAt)}
-                          </span>
-                        </>
-                      }
-                      action={
-                        <Link
-                          href={`/clients/${s.clientId}?tab=sessions`}
-                          className="text-xs text-plum-700 hover:underline font-medium"
-                        >
-                          Write notes →
-                        </Link>
-                      }
-                    />
-                  ))}
-                  {data.dormantClients.map((c) => (
-                    <NeedsRow
-                      key={`dormant-${c.id}`}
-                      chip="QUIET"
-                      chipCls="bg-ink-100 text-ink-500"
-                      text={
-                        <>
-                          <Link
-                            href={`/clients/${c.id}`}
-                            className="font-medium text-ink-900 hover:underline"
-                          >
-                            {c.fullName}
-                          </Link>{" "}
-                          <span className="text-ink-500">
-                            hasn&apos;t been in since{" "}
-                            {relativeTime(c.lastSessionAt)}
-                          </span>
-                        </>
-                      }
-                      action={
-                        <Link
-                          href={`/clients/${c.id}`}
-                          className="text-xs text-plum-700 hover:underline font-medium"
-                        >
-                          Reach out →
-                        </Link>
-                      }
-                    />
-                  ))}
+          <div className="space-y-10 md:space-y-14">
+            {/* About */}
+            <section>
+              <h2 className="text-[11px] uppercase tracking-widest text-plum-700 font-mono mb-3">
+                About
+              </h2>
+              <p
+                className="text-base text-ink-800 leading-relaxed whitespace-pre-wrap"
+              >
+                {about}
+              </p>
+            </section>
+
+            {/* How it works */}
+            <section>
+              <h2 className="text-[11px] uppercase tracking-widest text-plum-700 font-mono mb-3">
+                How I work
+              </h2>
+              <p className="text-base text-ink-800 leading-relaxed whitespace-pre-wrap">
+                {howItWorks}
+              </p>
+            </section>
+
+            {/* What to expect */}
+            <section>
+              <h2 className="text-[11px] uppercase tracking-widest text-plum-700 font-mono mb-3">
+                What to expect
+              </h2>
+              <p className="text-base text-ink-800 leading-relaxed whitespace-pre-wrap">
+                {whatToExpect}
+              </p>
+            </section>
+
+            {/* Reach out */}
+            <section className="paper-card paper-card--feature p-6 md:p-8">
+              <h2
+                className="serif-italic text-2xl text-plum-700 mb-2"
+                style={{ fontWeight: 400 }}
+              >
+                Reach out
+              </h2>
+              <p className="text-sm text-ink-600 mb-6 leading-relaxed">
+                Send a few sentences — what&apos;s on your mind, what
+                you&apos;re curious about, or just say hello.
+              </p>
+              <LandingLeadForm />
+            </section>
+
+            {/* Quiet contact card under the lead form */}
+            {(s.businessEmail || s.businessPhone) && (
+              <section>
+                <h2 className="text-[11px] uppercase tracking-widest text-plum-700 font-mono mb-3">
+                  Or get in touch directly
+                </h2>
+                <div className="space-y-1.5 text-sm">
+                  {s.businessEmail && (
+                    <div>
+                      <span className="text-ink-500 text-[11px] uppercase tracking-wider font-mono mr-2">
+                        email
+                      </span>
+                      <a
+                        href={`mailto:${s.businessEmail}`}
+                        className="text-plum-700 hover:underline"
+                      >
+                        {s.businessEmail}
+                      </a>
+                    </div>
+                  )}
+                  {s.businessPhone && (
+                    <div>
+                      <span className="text-ink-500 text-[11px] uppercase tracking-wider font-mono mr-2">
+                        phone
+                      </span>
+                      <a
+                        href={`tel:${s.businessPhone}`}
+                        className="text-plum-700 hover:underline"
+                      >
+                        {s.businessPhone}
+                      </a>
+                    </div>
+                  )}
                 </div>
-              </Section>
+              </section>
             )}
-
-            {/* This week stats */}
-            <Section title="This week">
-              <div className="grid grid-cols-3 gap-3">
-                <StatCard
-                  label="Sessions this week"
-                  value={data.thisWeekCount.toString()}
-                  href="/calendar"
-                />
-                <StatCard
-                  label="All clients"
-                  value={data.totalClients.toString()}
-                  href="/clients"
-                />
-                <StatCard
-                  label="Unpaid"
-                  value={data.unpaidSessions.length.toString()}
-                  tone={data.unpaidSessions.length > 0 ? "amber" : "default"}
-                  href="/payments?filter=unpaid"
-                />
-              </div>
-            </Section>
           </div>
 
-          {/* Right rail: tasks */}
-          <aside>
-            <Section title="My tasks" count={data.openTasks.length}>
-              <TasksBlock
-                tasks={data.openTasks}
-                emptyText="No open tasks. You're caught up."
-              />
-            </Section>
-          </aside>
-          </div>
-        </>
-      )}
-    </AppShell>
-  );
-}
-
-function Section({
-  title,
-  count,
-  empty,
-  children,
-}: {
-  title: string;
-  count?: number;
-  empty?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section>
-      <div className="flex items-center gap-2 mb-3">
-        <h2 className="text-xs font-semibold text-ink-700 uppercase tracking-wider">
-          {title}
-        </h2>
-        {count !== undefined && count > 0 && (
-          <span className="font-mono text-xs text-ink-400">· {count}</span>
-        )}
+          {/* Footer — quiet links for existing clients + practitioner */}
+          <footer className="mt-16 md:mt-20 pt-6 border-t border-ink-100 flex items-center justify-between gap-3 flex-wrap text-[11px]">
+            <Link
+              href="/portal/sign-in"
+              className="text-ink-500 hover:text-plum-700 hover:underline"
+            >
+              Already a client? Open your space →
+            </Link>
+            <Link
+              href="/signin"
+              className="text-ink-400 hover:text-ink-700 hover:underline"
+            >
+              Practitioner sign in
+            </Link>
+          </footer>
+        </main>
       </div>
-      {count === 0 && empty ? (
-        <div className="text-sm text-ink-400 italic">{empty}</div>
-      ) : (
-        children
-      )}
-    </section>
+    </>
   );
-}
-
-function NeedsRow({
-  chip,
-  chipCls,
-  text,
-  action,
-}: {
-  chip: string;
-  chipCls: string;
-  text: React.ReactNode;
-  action: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-center gap-3 px-4 py-2.5 border border-ink-200 rounded-md bg-white">
-      <span className={`chip ${chipCls} shrink-0`}>{chip}</span>
-      <div className="flex-1 min-w-0 text-sm">{text}</div>
-      <div className="shrink-0">{action}</div>
-    </div>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  tone = "default",
-  href,
-}: {
-  label: string;
-  value: string;
-  tone?: "default" | "amber" | "red";
-  href?: string;
-}) {
-  const valueCls = {
-    default: "text-ink-900",
-    amber: "text-amber-700",
-    red: "text-red-700",
-  }[tone];
-  const inner = (
-    <div className="border border-ink-200 rounded-md p-4 bg-white hover:border-ink-300 transition">
-      <div className="text-[10px] uppercase tracking-wider text-ink-500">
-        {label}
-      </div>
-      <div className={`mt-1 text-2xl font-semibold ${valueCls}`}>{value}</div>
-    </div>
-  );
-  return href ? <Link href={href}>{inner}</Link> : inner;
 }

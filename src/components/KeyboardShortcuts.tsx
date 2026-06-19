@@ -103,7 +103,7 @@ export function KeyboardShortcuts() {
       // Two-key sequence: g <letter>
       if (sequenceRef.current === "g") {
         const dest: Record<string, string> = {
-          t: "/",
+          t: "/today",
           c: "/clients",
           // `g n` would collide with the single-key `n` (new client) since the
           // sequence resets if `g` is missed. `g w` for "network" because it

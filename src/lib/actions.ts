@@ -963,7 +963,7 @@ export async function saveSessionClosing(
     // can show as a small "you reflected on Vlado · 4pm" later).
     revalidatePath(`/clients/${updated[0].clientId}`);
     revalidatePath("/calendar");
-    revalidatePath("/");
+    revalidatePath("/today");
     revalidatePath("/practice");
 
     return { ok: true };
@@ -1180,7 +1180,7 @@ export async function scheduleSession(
 
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/calendar");
-  revalidatePath("/");
+  revalidatePath("/today");
   revalidatePath("/network");
 
   return { ok: true, sessionId: created.id, googleWarning };
@@ -1524,7 +1524,7 @@ export async function scheduleSessionSeries(
 
     revalidatePath(`/clients/${clientId}`);
     revalidatePath("/calendar");
-    revalidatePath("/");
+    revalidatePath("/today");
     revalidatePath("/network");
 
     return { ok: true, seriesId: seriesRow.id, created: sessionRows.length };
@@ -1606,7 +1606,7 @@ export async function cancelSessionSeries(
 
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/calendar");
-  revalidatePath("/");
+  revalidatePath("/today");
 }
 
 /** Pure date math — compute the timestamps for a series. */
@@ -1679,7 +1679,7 @@ export async function logPastSession(formData: FormData) {
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/calendar");
   revalidatePath("/payments");
-  revalidatePath("/");
+  revalidatePath("/today");
 }
 
 export async function updateSession(formData: FormData) {
@@ -1731,7 +1731,7 @@ export async function updateSession(formData: FormData) {
 
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/calendar");
-  revalidatePath("/");
+  revalidatePath("/today");
 }
 
 // Reschedule = change scheduledAt (and optionally durationMinutes). Pushes to Google.
@@ -1793,7 +1793,7 @@ export async function rescheduleSession(formData: FormData) {
 
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/calendar");
-  revalidatePath("/");
+  revalidatePath("/today");
 }
 
 export async function cancelSession(sessionId: string, clientId: string) {
@@ -1842,7 +1842,7 @@ export async function cancelSession(sessionId: string, clientId: string) {
 
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/calendar");
-  revalidatePath("/");
+  revalidatePath("/today");
 }
 
 export async function deleteSession(sessionId: string, clientId: string) {
@@ -1893,7 +1893,7 @@ export async function deleteSession(sessionId: string, clientId: string) {
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/calendar");
   revalidatePath("/payments");
-  revalidatePath("/");
+  revalidatePath("/today");
 }
 
 export async function markSessionPaid(formData: FormData) {
@@ -1925,7 +1925,7 @@ export async function markSessionPaid(formData: FormData) {
 
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/payments");
-  revalidatePath("/");
+  revalidatePath("/today");
 }
 
 export async function markSessionUnpaid(sessionId: string, clientId: string) {
@@ -2005,7 +2005,7 @@ export async function addTask(formData: FormData) {
     dueAt: dueAtRaw ? new Date(dueAtRaw) : null,
   });
 
-  revalidatePath("/");
+  revalidatePath("/today");
   if (clientId) revalidatePath(`/clients/${clientId}`);
 }
 
@@ -2027,7 +2027,7 @@ export async function toggleTaskComplete(
       updatedAt: new Date(),
     })
     .where(and(eq(tasks.accountId, accountId), eq(tasks.id, taskId)));
-  revalidatePath("/");
+  revalidatePath("/today");
   if (clientId) revalidatePath(`/clients/${clientId}`);
 }
 
@@ -2036,7 +2036,7 @@ export async function deleteTask(taskId: string, clientId: string | null) {
   await db
     .delete(tasks)
     .where(and(eq(tasks.accountId, accountId), eq(tasks.id, taskId)));
-  revalidatePath("/");
+  revalidatePath("/today");
   if (clientId) revalidatePath(`/clients/${clientId}`);
 }
 
@@ -2227,6 +2227,11 @@ export async function updateSettings(formData: FormData) {
       businessPhone: str(formData, "businessPhone"),
       businessAddress: str(formData, "businessAddress"),
       websiteUrl: str(formData, "websiteUrl"),
+      // Landing page copy — public-facing, edited from /settings.
+      landingTagline: str(formData, "landingTagline"),
+      landingAbout: str(formData, "landingAbout"),
+      landingHowItWorks: str(formData, "landingHowItWorks"),
+      landingWhatToExpect: str(formData, "landingWhatToExpect"),
       uiLanguage,
       defaultRateCents:
         defaultRate !== null ? Math.round(defaultRate * 100) : 13500,
@@ -2254,8 +2259,9 @@ export async function updateSettings(formData: FormData) {
     .where(eq(practitionerSettings.accountId, accountId));
 
   revalidatePath("/settings");
-  revalidatePath("/");
+  revalidatePath("/today");
   revalidatePath("/calendar");
+  revalidatePath("/"); // landing page reads from settings — keep it fresh
 }
 
 const VALID_WEEKDAYS = new Set([
@@ -2628,7 +2634,7 @@ export async function syncSessionToGoogleAction(
   }
   const result = await syncSessionToGoogle(sessionId);
   if (!result.ok) return result;
-  revalidatePath("/");
+  revalidatePath("/today");
   revalidatePath("/calendar");
   return { ok: true, meetUrl: result.meetUrl ?? null };
 }
@@ -2695,7 +2701,7 @@ export async function syncAllUnsyncedToGoogleAction(): Promise<SyncAllResult> {
   }
 
   if (synced > 0) {
-    revalidatePath("/");
+    revalidatePath("/today");
     revalidatePath("/calendar");
     revalidatePath("/status");
   }
