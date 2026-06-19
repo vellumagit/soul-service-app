@@ -6,6 +6,60 @@ Whenever this doc says `<your-vercel-domain>`, substitute your actual Vercel dep
 
 ---
 
+## Step S — Subdomain split (one-time, ~15 min)
+
+For the "all in one business" feel: `svit.live` is the public storefront (landing + inquiries only), `app.svit.live` is everywhere Svit + her clients actually work (workspace + portal + sign-ins). The code is already wired; you just need to register the second hostname and flip two env vars.
+
+### S.1 — Add `app.svit.live` to Vercel
+
+1. Vercel → your `soul-service-app` project → **Settings** → **Domains** → **Add Domain**
+2. Type `app.svit.live` → **Add**
+3. Vercel shows a CNAME target like `cname.vercel-dns.com`. Copy it.
+
+### S.2 — DNS
+
+In whatever registrar holds `svit.live` (Cloudflare / Porkbun / Namecheap / etc.):
+
+| Type | Name | Value | Notes |
+|---|---|---|---|
+| CNAME | `app` | `cname.vercel-dns.com` | The value Vercel gave you in S.1 |
+
+Save. Wait ~2-10 min for propagation. Vercel's Domains panel will show a green check once `app.svit.live` is verified.
+
+### S.3 — Env vars
+
+Vercel → Settings → Environment Variables → add for **all environments**:
+
+```
+MARKETING_HOSTNAME=svit.live
+APP_HOSTNAME=app.svit.live
+```
+
+When both are set, the proxy enforces the split. When either is unset (preview deploys, dev), the proxy is a no-op and everything works on whichever single host the request came in on.
+
+### S.4 — Redeploy
+
+Vercel auto-redeploys on env-var save; if not, push any trivial commit or use the Vercel UI to redeploy.
+
+### S.5 — Verify
+
+| Visit | Should show |
+|---|---|
+| `https://svit.live/` | Landing page (storefront + inquiry form) |
+| `https://svit.live/today` | 308 redirect → `https://app.svit.live/today` |
+| `https://svit.live/portal` | 308 redirect → `https://app.svit.live/portal` |
+| `https://app.svit.live/` | Auto-redirect to `/today` (signed in as practitioner) or `/signin` (signed out) |
+| `https://app.svit.live/today` | Svit's workspace (after sign-in) |
+| `https://app.svit.live/portal/sign-in` | Client portal sign-in |
+
+Svit's daily move: bookmark `https://app.svit.live/today`. Clients: bookmark `https://app.svit.live/portal`. Visitors stumbling on the practice from a Google search land at `https://svit.live/`.
+
+### Roll back
+
+Delete `MARKETING_HOSTNAME` and `APP_HOSTNAME` from Vercel env vars and redeploy. The proxy becomes a no-op; everything runs on whichever hostname the request hits. You can also keep both domains registered on Vercel without the split enforced — both will serve the full app like before.
+
+---
+
 ## Step 0 — Sanity check (1 min)
 
 Open `https://<your-vercel-domain>/status`. Anything green is already configured. Skip those sections. Focus on the amber rows.
