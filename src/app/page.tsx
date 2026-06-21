@@ -14,7 +14,7 @@
 // same world the app inhabits.
 
 import Link from "next/link";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { TimeOfDayProvider } from "@/components/TimeOfDayProvider";
 import { LandingLeadForm } from "@/components/LandingLeadForm";
@@ -31,15 +31,31 @@ export default async function LandingPage({
 }) {
   const { preview } = await searchParams;
 
-  // If signed in as practitioner (and not previewing), send to workspace.
-  const sessionEmail = await getSessionEmail();
-  if (sessionEmail && preview !== "1") {
-    redirect("/today");
-  }
-  // If signed in as a portal client, send to their space.
-  const cookieStore = await cookies();
-  if (cookieStore.get("sps_client")?.value && preview !== "1") {
-    redirect("/portal");
+  // Auto-redirect rules. On the MARKETING host (svit.live), we NEVER
+  // auto-redirect — the storefront is the whole purpose of that domain,
+  // and signed-in visitors should be able to see it like anyone else.
+  // The proxy on the APP host already handles `/` → /today (or /signin),
+  // so we only need to handle the single-hostname / dev / preview-deploy
+  // case where the proxy is a no-op.
+  const h = await headers();
+  const hostNoPort = (h.get("host") ?? "").split(":")[0].toLowerCase();
+  const marketingHost = (process.env.MARKETING_HOSTNAME ?? "")
+    .toLowerCase()
+    .trim();
+  const onMarketingHost = !!marketingHost && hostNoPort === marketingHost;
+
+  if (!onMarketingHost && preview !== "1") {
+    // Single-host mode (no env-split, or app subdomain hitting the page
+    // directly because the proxy was bypassed). Practitioner cookie →
+    // workspace; client portal cookie → portal.
+    const sessionEmail = await getSessionEmail();
+    if (sessionEmail) {
+      redirect("/today");
+    }
+    const cookieStore = await cookies();
+    if (cookieStore.get("sps_client")?.value) {
+      redirect("/portal");
+    }
   }
 
   return (
@@ -54,9 +70,14 @@ export default async function LandingPage({
               Svitlana
               <small>Soul Services</small>
             </div>
-            <a href="#ways" className="navcta">
-              Work with me
-            </a>
+            <div className="nav-actions">
+              <Link href="/portal/sign-in" className="nav-signin">
+                Sign in
+              </Link>
+              <a href="#ways" className="navcta">
+                Work with me
+              </a>
+            </div>
           </div>
         </nav>
 

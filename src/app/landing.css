@@ -112,6 +112,29 @@
   margin-top: -2px;
   font-weight: 600;
 }
+/* Right-side cluster: quiet "Sign in" text link + primary "Work with me"
+ * pill. Both stay visible on mobile because the storefront needs to be
+ * usable on phones. */
+.landing-root .nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.landing-root .nav-signin {
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  color: var(--land-ink-soft);
+  padding: 8px 4px;
+  border-bottom: 1px solid transparent;
+  transition:
+    color 0.2s,
+    border-color 0.2s;
+}
+.landing-root .nav-signin:hover {
+  color: var(--land-clay);
+  border-bottom-color: var(--land-clay);
+}
 .landing-root .navcta {
   font-size: 14px;
   font-weight: 600;
@@ -126,8 +149,14 @@
   background: var(--land-clay-deep);
 }
 @media (max-width: 560px) {
+  .landing-root .nav-actions {
+    gap: 12px;
+  }
   .landing-root .navcta {
-    display: none;
+    /* Slightly tighter button on small screens, but keep visible — the
+     * Sign in link stays primary clarity for phone visitors. */
+    padding: 8px 14px;
+    font-size: 13px;
   }
 }
 
