@@ -4,12 +4,19 @@
 // submitLandingLead server action (no auth needed). On success, replaces
 // itself with a quiet thank-you card. On error, shows the error inline.
 //
+// Optionally accepts `availableWindows` — pre-computed next-N open slots
+// from Svit's calendar. When present, the form shows them as clickable
+// chips above the "what brings you here" textarea. Clicking a chip
+// attaches the picked window to the submission. NOT an auto-book — the
+// inquiry still goes to her inbox; the chip just gives the client a
+// concrete suggestion to anchor their inquiry.
+//
 // Honeypot field `_hp` is rendered hidden via aria-hidden + CSS to
 // catch naive bots without depending on JS — the form action runs
 // server-side regardless of JS, so the honeypot needs to be a real
 // rendered field, just visually + semantically hidden from humans.
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import {
   submitLandingLead,
   type LandingLeadResult,
@@ -17,11 +24,24 @@ import {
 
 const initialState: LandingLeadResult | undefined = undefined;
 
-export function LandingLeadForm() {
+export type LandingWindow = {
+  /** ISO string, since this is serialized across the server/client boundary. */
+  startAt: string;
+  endAt: string;
+  /** Pre-formatted display label so we don't ship date-fns just for this. */
+  label: string;
+};
+
+export function LandingLeadForm({
+  availableWindows = [],
+}: {
+  availableWindows?: LandingWindow[];
+}) {
   const [state, action, pending] = useActionState(
     submitLandingLead,
     initialState
   );
+  const [pickedWindow, setPickedWindow] = useState<string | null>(null);
 
   if (state?.ok) {
     return (
@@ -91,6 +111,51 @@ export function LandingLeadForm() {
           className="mt-1.5 w-full px-3 py-2.5 text-sm border border-ink-200 rounded-md bg-white outline-none focus:border-plum-500 focus:ring-1 focus:ring-plum-100"
         />
       </label>
+
+      {availableWindows.length > 0 && (
+        <div>
+          <span className="text-xs uppercase tracking-wider text-ink-500 font-mono">
+            Times she has open soon (optional)
+          </span>
+          <p className="text-[11px] text-ink-500 italic mt-1 mb-2 leading-snug">
+            Tap one to attach it to your note — she&apos;ll confirm with you
+            either way.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {availableWindows.map((w) => {
+              const isPicked = pickedWindow === w.startAt;
+              return (
+                <button
+                  key={w.startAt}
+                  type="button"
+                  onClick={() =>
+                    setPickedWindow(isPicked ? null : w.startAt)
+                  }
+                  className="text-xs px-3 py-1.5 rounded-full border transition-colors"
+                  style={{
+                    background: isPicked
+                      ? "var(--color-plum-700)"
+                      : "var(--color-parchment)",
+                    color: isPicked ? "white" : "var(--color-ink-700)",
+                    borderColor: isPicked
+                      ? "var(--color-plum-700)"
+                      : "var(--color-ink-200)",
+                  }}
+                >
+                  {w.label}
+                </button>
+              );
+            })}
+          </div>
+          {pickedWindow && (
+            <input
+              type="hidden"
+              name="preferredWindowIso"
+              value={pickedWindow}
+            />
+          )}
+        </div>
+      )}
 
       <label className="block">
         <span className="text-xs uppercase tracking-wider text-ink-500 font-mono">

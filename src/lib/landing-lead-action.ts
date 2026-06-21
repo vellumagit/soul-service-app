@@ -52,6 +52,12 @@ export async function submitLandingLead(
   const message = String(formData.get("message") ?? "")
     .trim()
     .slice(0, 2000);
+  // Optional ISO timestamp from the "available windows" chip picker.
+  // Stored as a free-shape field so it appears alongside the inquiry
+  // when Svit triages from /network/inbox.
+  const preferredWindowIso = String(
+    formData.get("preferredWindowIso") ?? ""
+  ).trim();
 
   if (!name) {
     return { ok: false, error: "Please share your name." };
@@ -130,12 +136,15 @@ export async function submitLandingLead(
     formId = inserted[0].id;
   }
 
+  const fields: Record<string, unknown> = {};
+  if (message) fields.message = message;
+  if (preferredWindowIso) fields.preferredWindow = preferredWindowIso;
   await db.insert(leadSubmissions).values({
     accountId,
     formId,
     name,
     email,
-    fields: message ? { message } : {},
+    fields,
     sourceIp: ip === "unknown" ? null : ip,
     userAgent: h.get("user-agent") ?? null,
     referer: h.get("referer") ?? null,

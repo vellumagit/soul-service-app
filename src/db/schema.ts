@@ -579,6 +579,21 @@ export const practitionerSettings = pgTable("practitioner_settings", {
   landingHowItWorks: text("landing_how_it_works"),
   landingWhatToExpect: text("landing_what_to_expect"),
 
+  // Availability config — drives smart scheduling in ScheduleSessionDialog
+  // (conflict warnings against her Google Calendar) and the public
+  // "available windows" hint on the storefront inquiry form. workingHours
+  // is a free-shape JSON keyed by 3-letter weekday → {from, to} HH:MM.
+  // Missing/null day = not working that day. sabbathDays is the legacy
+  // toggle and still works as an override.
+  workingHours: jsonb("working_hours"),
+  bufferMinutes: integer("buffer_minutes").default(15).notNull(),
+  defaultSessionMinutes: integer("default_session_minutes")
+    .default(60)
+    .notNull(),
+  showAvailabilityPublicly: boolean("show_availability_publicly")
+    .default(false)
+    .notNull(),
+
   // Default rate (used when generating invoices if no amount is set)
   defaultRateCents: integer("default_rate_cents").default(13500).notNull(),
   defaultCurrency: varchar("default_currency", { length: 8 })

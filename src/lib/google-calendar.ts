@@ -285,6 +285,69 @@ async function getAuthedClient(accountId: string) {
   return client;
 }
 
+// Public — FreeBusy query across one or more of the practitioner's
+// calendars. Used by the availability module to compute when she's
+// genuinely free. Returns the union of all busy intervals (merged +
+// sorted). Empty array means "no Google connection OR no busy events" —
+// the caller handles that gracefully.
+export type BusyInterval = { start: Date; end: Date };
+
+export async function getFreeBusy(
+  accountId: string,
+  fromAt: Date,
+  toAt: Date,
+  calendarIds: string[] = ["primary"]
+): Promise<BusyInterval[]> {
+  const auth = await getAuthedClient(accountId);
+  if (!auth) return [];
+  const calendar = google.calendar({ version: "v3", auth });
+  try {
+    const res = await calendar.freebusy.query({
+      requestBody: {
+        timeMin: fromAt.toISOString(),
+        timeMax: toAt.toISOString(),
+        items: calendarIds.map((id) => ({ id })),
+      },
+    });
+    const intervals: BusyInterval[] = [];
+    const cals = res.data.calendars ?? {};
+    for (const calId of Object.keys(cals)) {
+      const busy = cals[calId].busy ?? [];
+      for (const iv of busy) {
+        if (iv.start && iv.end) {
+          intervals.push({
+            start: new Date(iv.start),
+            end: new Date(iv.end),
+          });
+        }
+      }
+    }
+    return mergeIntervals(intervals);
+  } catch (err) {
+    console.warn("[gcal] FreeBusy query failed:", err);
+    return [];
+  }
+}
+
+function mergeIntervals(intervals: BusyInterval[]): BusyInterval[] {
+  if (intervals.length === 0) return [];
+  const sorted = [...intervals].sort(
+    (a, b) => a.start.getTime() - b.start.getTime()
+  );
+  const merged: BusyInterval[] = [{ ...sorted[0] }];
+  for (let i = 1; i < sorted.length; i++) {
+    const last = merged[merged.length - 1];
+    if (sorted[i].start.getTime() <= last.end.getTime()) {
+      if (sorted[i].end.getTime() > last.end.getTime()) {
+        last.end = sorted[i].end;
+      }
+    } else {
+      merged.push({ ...sorted[i] });
+    }
+  }
+  return merged;
+}
+
 // Public — check connected status (used by Settings UI). Scoped per account.
 // Returns a "not connected" placeholder if no settings row exists yet.
 export async function getGoogleConnectionStatus(accountId: string): Promise<{

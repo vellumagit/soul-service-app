@@ -16,11 +16,28 @@
 import Link from "next/link";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { eq } from "drizzle-orm";
 import { TimeOfDayProvider } from "@/components/TimeOfDayProvider";
-import { LandingLeadForm } from "@/components/LandingLeadForm";
+import {
+  LandingLeadForm,
+  type LandingWindow,
+} from "@/components/LandingLeadForm";
 import { LandingReveal } from "@/components/LandingReveal";
 import { getSessionEmail } from "@/lib/session-cookies";
+import { db } from "@/db";
+import { practitionerSettings } from "@/db/schema";
+import { getAvailableWindows } from "@/lib/availability";
 import "./landing.css";
+
+function formatLandingWindowLabel(d: Date): string {
+  return d.toLocaleString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +73,37 @@ export default async function LandingPage({
     if (cookieStore.get("sps_client")?.value) {
       redirect("/portal");
     }
+  }
+
+  // Pull next available windows for the inquiry form — but ONLY when the
+  // practitioner has opted in. Off by default; she flips
+  // `showAvailabilityPublicly` in /settings → Availability. Without the
+  // toggle on, the form behaves exactly like before (free-text only,
+  // no windows shown).
+  let availableWindows: LandingWindow[] = [];
+  try {
+    const settingsRow = await db
+      .select({
+        accountId: practitionerSettings.accountId,
+        showAvailability: practitionerSettings.showAvailabilityPublicly,
+      })
+      .from(practitionerSettings)
+      .limit(1);
+    const cfg = settingsRow[0];
+    if (cfg?.showAvailability) {
+      const windows = await getAvailableWindows(cfg.accountId, { limit: 6 });
+      availableWindows = windows.map((w) => ({
+        startAt: w.startAt.toISOString(),
+        endAt: w.endAt.toISOString(),
+        label: formatLandingWindowLabel(w.startAt),
+      }));
+    }
+  } catch (err) {
+    // Availability is a "nice-to-have" enhancement to the inquiry form;
+    // if Google FreeBusy or anything else blows up, just fall back to
+    // the free-text form. NEVER let availability failures break the
+    // public storefront.
+    console.warn("[landing] availability fetch failed:", err);
   }
 
   return (
@@ -387,7 +435,7 @@ export default async function LandingPage({
             </p>
           </div>
           <div className="form-shell rv">
-            <LandingLeadForm />
+            <LandingLeadForm availableWindows={availableWindows} />
           </div>
         </section>
 

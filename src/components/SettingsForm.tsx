@@ -6,6 +6,7 @@ import { updateSettings } from "@/lib/actions";
 import { rethrowIfRedirect } from "@/lib/redirect-error";
 import type { PractitionerSettings } from "@/db/schema";
 import { SabbathDayPicker } from "./SabbathDayPicker";
+import { AvailabilityPanel } from "./AvailabilityPanel";
 import {
   LOCALE_LABELS,
   LOCALES,
@@ -378,6 +379,21 @@ export function SettingsForm({ settings }: { settings: PractitionerSettings }) {
           {/* Sabbath days — her opt-in weekly off days */}
           <SabbathDayPicker
             initial={(settings.sabbathDays ?? []) as string[]}
+          />
+
+          {/* Availability — drives smart conflict warnings in the schedule
+              dialog + the public "available windows" hint on the storefront
+              inquiry form. */}
+          <AvailabilityPanel
+            initialWorkingHours={
+              (settings.workingHours as Record<string, { from: string; to: string } | null> | null) ??
+              null
+            }
+            initialBufferMinutes={settings.bufferMinutes ?? 15}
+            initialDefaultSessionMinutes={settings.defaultSessionMinutes ?? 60}
+            initialShowAvailabilityPublicly={
+              settings.showAvailabilityPublicly ?? false
+            }
           />
         </div>
       </Section>

@@ -2254,6 +2254,22 @@ export async function updateSettings(formData: FormData) {
       // form's hidden field (the day-toggle picker UI maintains it).
       // Filter to known values so a junk submission can't poison the array.
       sabbathDays: parseSabbathDays(str(formData, "sabbathDays")),
+      // Availability config — drives smart scheduling + the public
+      // "available windows" hint on the storefront inquiry form. Parse
+      // the form's hidden workingHours JSON; rejects junk silently
+      // (falling back to existing value).
+      workingHours: parseWorkingHours(
+        str(formData, "workingHours"),
+        settings.workingHours as Record<string, unknown> | null
+      ),
+      bufferMinutes: clampInt(num(formData, "bufferMinutes"), 0, 240, 15),
+      defaultSessionMinutes: clampInt(
+        num(formData, "defaultSessionMinutes"),
+        15,
+        480,
+        60
+      ),
+      showAvailabilityPublicly: bool(formData, "showAvailabilityPublicly"),
       updatedAt: new Date(),
     })
     .where(eq(practitionerSettings.accountId, accountId));
@@ -2284,6 +2300,53 @@ function parseSabbathDays(raw: string | null): string[] {
         .filter((d) => VALID_WEEKDAYS.has(d))
     )
   );
+}
+
+/** Parse a JSON working-hours blob from the Availability settings form.
+ *  Returns a sanitized {day: {from, to}} object, or the previous value
+ *  if parsing fails (defensive against form tampering). */
+function parseWorkingHours(
+  raw: string | null,
+  fallback: Record<string, unknown> | null
+): Record<string, { from: string; to: string } | null> | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const validDays = new Set(["sun", "mon", "tue", "wed", "thu", "fri", "sat"]);
+    const out: Record<string, { from: string; to: string } | null> = {};
+    for (const day of Object.keys(parsed)) {
+      if (!validDays.has(day)) continue;
+      const v = parsed[day] as { from?: string; to?: string } | null;
+      if (!v || typeof v !== "object") {
+        out[day] = null;
+        continue;
+      }
+      const from = typeof v.from === "string" ? v.from : null;
+      const to = typeof v.to === "string" ? v.to : null;
+      if (from && to && /^\d{2}:\d{2}$/.test(from) && /^\d{2}:\d{2}$/.test(to)) {
+        out[day] = { from, to };
+      } else {
+        out[day] = null;
+      }
+    }
+    return out;
+  } catch {
+    return (fallback ?? null) as Record<
+      string,
+      { from: string; to: string } | null
+    > | null;
+  }
+}
+
+/** Clamp a nullable number to a range with a sensible default. */
+function clampInt(
+  v: number | null,
+  min: number,
+  max: number,
+  def: number
+): number {
+  if (v === null || !Number.isFinite(v)) return def;
+  return Math.max(min, Math.min(max, Math.round(v)));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
