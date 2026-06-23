@@ -27,6 +27,7 @@ import { getSessionEmail } from "@/lib/session-cookies";
 import { db } from "@/db";
 import { practitionerSettings } from "@/db/schema";
 import { getAvailableWindows } from "@/lib/availability";
+import { listUpcomingPublicGroupSessions } from "@/lib/group-actions";
 import "./landing.css";
 
 function formatLandingWindowLabel(d: Date): string {
@@ -104,6 +105,18 @@ export default async function LandingPage({
     // the free-text form. NEVER let availability failures break the
     // public storefront.
     console.warn("[landing] availability fetch failed:", err);
+  }
+
+  // Upcoming public group sessions (Circles). Empty array if none — the
+  // section simply doesn't render. Wrapped in try/catch for the same
+  // reason as availability above.
+  let upcomingCircles: Awaited<
+    ReturnType<typeof listUpcomingPublicGroupSessions>
+  > = [];
+  try {
+    upcomingCircles = await listUpcomingPublicGroupSessions(4);
+  } catch (err) {
+    console.warn("[landing] upcoming circles fetch failed:", err);
   }
 
   return (
@@ -419,6 +432,85 @@ export default async function LandingPage({
             </div>
           </div>
         </section>
+
+        {/* UPCOMING CIRCLES — public group sessions, only renders if there are any */}
+        {upcomingCircles.length > 0 && (
+          <section className="circles" id="circles">
+            <div
+              className="wrap narrow rv"
+              style={{ textAlign: "center" }}
+            >
+              <span className="tag" style={{ display: "block" }}>
+                Coming up
+              </span>
+              <h2>
+                Upcoming <em>Circles</em>.
+              </h2>
+              <p className="p-lg">
+                Small group gatherings, by warm invitation. Hold a seat and
+                I&apos;ll be in touch with everything you need.
+              </p>
+            </div>
+            <div className="wrap circles-grid">
+              {upcomingCircles.map((c) => {
+                const spotsLeft = Math.max(0, c.capacity - c.spotsTaken);
+                const when = c.scheduledAt.toLocaleString(undefined, {
+                  weekday: "long",
+                  month: "short",
+                  day: "numeric",
+                  hour: "numeric",
+                  minute: "2-digit",
+                });
+                return (
+                  <div className="circle-card rv" key={c.sessionId}>
+                    <h3>{c.groupName}</h3>
+                    <div className="when">{when}</div>
+                    <div className="meta">
+                      {c.durationMinutes}min
+                      <span className="dot" aria-hidden>
+                        ·
+                      </span>
+                      {spotsLeft > 0
+                        ? `${spotsLeft} seat${spotsLeft === 1 ? "" : "s"} left`
+                        : "full"}
+                      {c.topic && (
+                        <>
+                          <span className="dot" aria-hidden>
+                            ·
+                          </span>
+                          <em>{c.topic}</em>
+                        </>
+                      )}
+                    </div>
+                    {c.groupDescription && (
+                      <p className="desc">{c.groupDescription}</p>
+                    )}
+                    <div className="price">
+                      {new Intl.NumberFormat("en-US", {
+                        style: "currency",
+                        currency: c.currency,
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 2,
+                      }).format(c.priceCents / 100)}
+                    </div>
+                    {spotsLeft > 0 ? (
+                      <Link
+                        href={`/circles/${c.sessionId}`}
+                        className="cta"
+                      >
+                        Hold a seat →
+                      </Link>
+                    ) : (
+                      <span className="cta cta-full">
+                        Full · next one soon
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
         {/* CONTACT — the actual inquiry form */}
         <section className="contact" id="contact">

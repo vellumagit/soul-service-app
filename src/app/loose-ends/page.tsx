@@ -24,12 +24,14 @@ import {
   type LooseEndRow,
   type RescheduleRequestRow,
   type BookingRequestRow,
+  type GroupSignupRow,
 } from "@/db/queries";
 import { fullDate, shortTime } from "@/lib/format";
 import { asLocale } from "@/lib/i18n";
 import { LooseEndRowActions } from "@/components/LooseEndRowActions";
 import { RescheduleRequestRowActions } from "@/components/RescheduleRequestRowActions";
 import { BookingRequestRowActions } from "@/components/BookingRequestRowActions";
+import { GroupSignupRowActions } from "@/components/GroupSignupRowActions";
 
 export const dynamic = "force-dynamic";
 
@@ -86,6 +88,12 @@ export default async function LooseEndsPage() {
           {/* New booking requests — "I'd like to book another session." */}
           {ends.bookingRequests.length > 0 && (
             <BookingRequestsSection rows={ends.bookingRequests} />
+          )}
+
+          {/* Group sign-ups awaiting confirmation or payment. Time-sensitive
+              because the session is upcoming. */}
+          {ends.groupSignups.length > 0 && (
+            <GroupSignupsSection rows={ends.groupSignups} />
           )}
 
           {/* Most time-sensitive first: a failed notetaker bot might still
@@ -145,6 +153,83 @@ export default async function LooseEndsPage() {
         </div>
       )}
     </AppShell>
+  );
+}
+
+function GroupSignupsSection({ rows }: { rows: GroupSignupRow[] }) {
+  return (
+    <section className="paper-card p-6">
+      <div className="flex items-baseline justify-between mb-1 flex-wrap gap-2">
+        <h2
+          className="serif-italic text-xl text-plum-700"
+          style={{ fontWeight: 400 }}
+        >
+          Group sign-ups
+        </h2>
+        <span
+          className="text-[10px] uppercase tracking-wider font-mono px-2 py-0.5 rounded"
+          style={{
+            background: "var(--color-honey-50)",
+            color: "var(--color-honey-700)",
+          }}
+        >
+          {rows.length}
+        </span>
+      </div>
+      <p className="text-[13px] text-ink-500 italic mb-4 leading-relaxed">
+        People who held a seat on an upcoming circle and are waiting on you
+        to confirm or mark paid. Once you&apos;ve received payment, mark
+        them paid + confirmed here.
+      </p>
+      <ul className="space-y-3">
+        {rows.map((r) => (
+          <li
+            key={r.attendeeId}
+            className="border-l-2 border-honey-300 pl-4 py-2"
+          >
+            <div className="flex items-baseline justify-between gap-3 flex-wrap mb-1">
+              <div>
+                <span className="text-sm font-medium text-ink-900">
+                  {r.attendeeName}
+                </span>
+                <span className="text-[12px] text-ink-500 ml-2 break-all">
+                  {r.attendeeEmail}
+                </span>
+              </div>
+              <span className="text-[11px] text-ink-400 font-mono">
+                {fullDate(r.signedUpAt)}
+              </span>
+            </div>
+            <div className="text-[12px] text-ink-600 mt-0.5">
+              <Link
+                href={`/groups/${r.groupId}`}
+                className="text-plum-700 hover:underline"
+              >
+                {r.groupName}
+              </Link>{" "}
+              · {fullDate(r.scheduledAt)} · {shortTime(r.scheduledAt)}
+              {!r.paid && r.status === "confirmed" && (
+                <span className="ml-2 text-[10px] uppercase tracking-wider font-mono px-1.5 py-0.5 rounded bg-honey-100 text-honey-700">
+                  confirmed · unpaid
+                </span>
+              )}
+              {r.status === "pending" && (
+                <span className="ml-2 text-[10px] uppercase tracking-wider font-mono px-1.5 py-0.5 rounded bg-plum-100 text-plum-700">
+                  pending
+                </span>
+              )}
+            </div>
+            <div className="mt-2">
+              <GroupSignupRowActions
+                attendeeId={r.attendeeId}
+                isPending={r.status === "pending"}
+                isPaid={r.paid}
+              />
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

@@ -25,6 +25,7 @@ import { SESSION_COOKIE_NAME, getEmailFromToken } from "@/lib/session";
 // Public routes — anything starting with these prefixes is unprotected.
 const PUBLIC_PREFIXES = [
   "/signin",
+  "/circles/", // Public group-session sign-up pages — anyone with the link
   "/api/auth/", // /api/auth/google/callback (Google Calendar OAuth)
   "/api/cron/", // Vercel Cron endpoints — verified by CRON_SECRET, not session
 ];
@@ -55,6 +56,9 @@ function isMarketingPath(pathname: string): boolean {
     pathname === "/favicon.ico" ||
     pathname === "/robots.txt" ||
     pathname === "/sitemap.xml" ||
+    // Public group-session sign-up pages — shareable from emails, render
+    // on the storefront host so the URL stays inside the marketing domain.
+    pathname.startsWith("/circles/") ||
     // Server-action POSTs back to / for the landing lead form go through
     // Next's invisible /_actions/* routing — already allowed by the
     // _next exclusion in matcher.

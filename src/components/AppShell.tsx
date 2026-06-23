@@ -21,6 +21,7 @@ type NavItem = {
 const NAV: NavItem[] = [
   { href: "/today", labelKey: "nav.today", icon: "today" },
   { href: "/clients", labelKey: "nav.clients", icon: "clients" },
+  { href: "/groups", labelKey: "nav.groups", icon: "groups" },
   { href: "/network", labelKey: "nav.network", icon: "network" },
   { href: "/calendar", labelKey: "nav.calendar", icon: "calendar" },
   { href: "/payments", labelKey: "nav.payments", icon: "payments" },
@@ -34,6 +35,8 @@ const ICON: Record<string, string> = {
     "M3 7l9 6 9-6M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z",
   clients:
     "M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z",
+  groups:
+    "M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6 5.87v-2a4 4 0 00-4-4H9a4 4 0 00-4 4v2M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z",
   calendar:
     "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z",
   payments:

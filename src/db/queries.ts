@@ -20,6 +20,9 @@ import {
   leadSubmissions,
   rescheduleRequests,
   clientBookingRequests,
+  groups,
+  groupSessions,
+  groupAttendees,
   type Client,
   type PractitionerSettings,
   type LeadForm,
@@ -1480,6 +1483,19 @@ export type BookingRequestRow = {
   requestedAt: Date;
 };
 
+export type GroupSignupRow = {
+  attendeeId: string;
+  groupSessionId: string;
+  groupId: string;
+  groupName: string;
+  attendeeName: string;
+  attendeeEmail: string;
+  scheduledAt: Date;
+  status: string;
+  paid: boolean;
+  signedUpAt: Date;
+};
+
 export type LooseEnds = {
   botFailed: LooseEndRow[];
   needReflection: LooseEndRow[];
@@ -1490,6 +1506,8 @@ export type LooseEnds = {
   rescheduleRequests: RescheduleRequestRow[];
   /** Pending new-session booking requests from clients via the portal. */
   bookingRequests: BookingRequestRow[];
+  /** Pending / unpaid attendees on upcoming public group sessions. */
+  groupSignups: GroupSignupRow[];
   /** Sum across all categories — drives the empty state + the inbox badge. */
   totalCount: number;
 };
@@ -1645,6 +1663,52 @@ export async function getLooseEnds(accountId: string): Promise<LooseEnds> {
     })
   );
 
+  // Group sign-ups that haven't been confirmed or paid yet on upcoming
+  // public group sessions. These are the practitioner's "warm cart" —
+  // people who held a seat and are waiting on her to confirm.
+  const groupSignupRows = await db
+    .select({
+      attendeeId: groupAttendees.id,
+      groupSessionId: groupAttendees.groupSessionId,
+      groupId: groupSessions.groupId,
+      groupName: groups.name,
+      attendeeName: groupAttendees.name,
+      attendeeEmail: groupAttendees.email,
+      scheduledAt: groupSessions.scheduledAt,
+      status: groupAttendees.status,
+      paid: groupAttendees.paid,
+      signedUpAt: groupAttendees.createdAt,
+    })
+    .from(groupAttendees)
+    .innerJoin(
+      groupSessions,
+      eq(groupSessions.id, groupAttendees.groupSessionId)
+    )
+    .innerJoin(groups, eq(groups.id, groupSessions.groupId))
+    .where(
+      and(
+        eq(groupAttendees.accountId, accountId),
+        sql`${groupAttendees.status} <> 'cancelled'`,
+        // Either pending OR confirmed-but-unpaid — both are loose ends.
+        sql`(${groupAttendees.status} = 'pending' OR ${groupAttendees.paid} = FALSE)`,
+        eq(groupSessions.status, "scheduled"),
+        gte(groupSessions.scheduledAt, now)
+      )
+    )
+    .orderBy(asc(groupSessions.scheduledAt));
+  const groupSignupList: GroupSignupRow[] = groupSignupRows.map((r) => ({
+    attendeeId: r.attendeeId,
+    groupSessionId: r.groupSessionId,
+    groupId: r.groupId,
+    groupName: r.groupName,
+    attendeeName: r.attendeeName,
+    attendeeEmail: r.attendeeEmail,
+    scheduledAt: new Date(r.scheduledAt),
+    status: r.status,
+    paid: r.paid,
+    signedUpAt: new Date(r.signedUpAt),
+  }));
+
   // The total counts UNIQUE sessions across categories (a single session
   // could be in three of them at once). The badge should reflect how many
   // distinct things need her attention, not how many TOTAL tasks.
@@ -1660,8 +1724,10 @@ export async function getLooseEnds(accountId: string): Promise<LooseEnds> {
   }
   for (const r of rescheduleRequestList) allIds.add(r.sessionId);
   // Booking requests don't have a session yet, so each one counts on its
-  // own — they're inherently unique attention points.
-  let totalCount = allIds.size + bookingRequestList.length;
+  // own — they're inherently unique attention points. Same for group
+  // sign-ups: each attendee waiting on confirmation is a separate task.
+  const totalCount =
+    allIds.size + bookingRequestList.length + groupSignupList.length;
 
   return {
     botFailed,
@@ -1671,6 +1737,7 @@ export async function getLooseEnds(accountId: string): Promise<LooseEnds> {
     needIntention,
     rescheduleRequests: rescheduleRequestList,
     bookingRequests: bookingRequestList,
+    groupSignups: groupSignupList,
     totalCount,
   };
 }

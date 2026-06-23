@@ -659,3 +659,100 @@
   color: var(--land-clay);
   text-decoration: underline;
 }
+
+/* UPCOMING CIRCLES */
+.landing-root .circles {
+  padding: 90px 24px 70px;
+  background:
+    linear-gradient(180deg,
+      transparent 0%,
+      rgba(176, 92, 54, 0.04) 30%,
+      transparent 100%);
+}
+.landing-root .circles-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 18px;
+  margin-top: 36px;
+}
+.landing-root .circle-card {
+  padding: 22px;
+  background: rgba(255, 251, 245, 0.7);
+  border: 1px solid rgba(176, 92, 54, 0.18);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+}
+.landing-root .circle-card h3 {
+  font-family: var(--font-serif, serif);
+  font-size: 22px;
+  font-weight: 500;
+  margin: 0 0 6px;
+  color: var(--land-clay-deep);
+  letter-spacing: -0.01em;
+}
+.landing-root .circle-card .when {
+  font-size: 13px;
+  color: var(--color-ink-700, #3a3530);
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+.landing-root .circle-card .meta {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--land-ink-soft);
+  font-family: var(--font-mono, monospace);
+  margin-bottom: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.landing-root .circle-card .meta .dot {
+  opacity: 0.5;
+}
+.landing-root .circle-card .meta em {
+  color: var(--land-clay);
+  font-style: italic;
+  font-family: var(--font-serif, serif);
+  letter-spacing: 0;
+}
+.landing-root .circle-card .desc {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--color-ink-700, #3a3530);
+  margin: 0 0 14px;
+  flex: 1;
+}
+.landing-root .circle-card .price {
+  font-family: var(--font-serif, serif);
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--land-clay-deep);
+  margin-bottom: 12px;
+}
+.landing-root .circle-card .cta {
+  align-self: flex-start;
+  display: inline-block;
+  padding: 9px 18px;
+  font-size: 13px;
+  font-weight: 500;
+  background: var(--land-clay);
+  color: #fff;
+  text-decoration: none;
+  border-radius: 4px;
+  letter-spacing: 0.02em;
+  transition: background 0.15s;
+}
+.landing-root .circle-card .cta:hover {
+  background: var(--land-clay-deep);
+}
+.landing-root .circle-card .cta-full {
+  background: transparent;
+  color: var(--land-ink-soft);
+  font-style: italic;
+  font-family: var(--font-serif, serif);
+  letter-spacing: 0;
+  cursor: default;
+  border: 1px dashed rgba(0, 0, 0, 0.18);
+}

@@ -973,6 +973,122 @@ export type ClientPortalSession = typeof clientPortalSessions.$inferSelect;
 export type RescheduleRequest = typeof rescheduleRequests.$inferSelect;
 export type ClientReflection = typeof clientReflections.$inferSelect;
 export type ClientBookingRequest = typeof clientBookingRequests.$inferSelect;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Groups — group/class infrastructure. The Circle is the original use case
+// ($20 weekly women's group); the same shape works for workshops, classes,
+// retreats. See drizzle/0023_groups.sql for the full rationale.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const groups = pgTable(
+  "groups",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    description: text("description"),
+    defaultCapacity: integer("default_capacity").default(20).notNull(),
+    defaultDurationMinutes: integer("default_duration_minutes")
+      .default(120)
+      .notNull(),
+    defaultPriceCents: integer("default_price_cents").default(2000).notNull(),
+    defaultCurrency: varchar("default_currency", { length: 8 })
+      .default("USD")
+      .notNull(),
+    paymentInstructions: text("payment_instructions"),
+    published: boolean("published").default(true).notNull(),
+    archivedAt: timestamp("archived_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    accountIdx: index("groups_account_idx").on(t.accountId),
+  })
+);
+
+export const groupSessions = pgTable(
+  "group_sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    groupId: uuid("group_id")
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
+    durationMinutes: integer("duration_minutes").default(120).notNull(),
+    capacity: integer("capacity").default(20).notNull(),
+    priceCents: integer("price_cents").default(2000).notNull(),
+    /** Per-session theme — "grief", "boundaries", etc. */
+    topic: text("topic"),
+    /** scheduled | completed | cancelled */
+    status: text("status").default("scheduled").notNull(),
+    meetUrl: text("meet_url"),
+    googleEventId: text("google_event_id"),
+    notes: text("notes"),
+    recallBotId: text("recall_bot_id"),
+    recallBotStatus: text("recall_bot_status"),
+    recallTranscriptReceivedAt: timestamp("recall_transcript_received_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    groupIdx: index("group_sessions_group_idx").on(t.groupId),
+    accountScheduledIdx: index("group_sessions_account_scheduled_idx").on(
+      t.accountId,
+      t.scheduledAt
+    ),
+  })
+);
+
+export const groupAttendees = pgTable(
+  "group_attendees",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    groupSessionId: uuid("group_session_id")
+      .notNull()
+      .references(() => groupSessions.id, { onDelete: "cascade" }),
+    /** Optional — links to an existing client row when one exists. */
+    clientId: uuid("client_id").references(() => clients.id, {
+      onDelete: "set null",
+    }),
+    name: text("name").notNull(),
+    email: text("email").notNull(),
+    phone: text("phone"),
+    /** pending | confirmed | cancelled */
+    status: text("status").default("pending").notNull(),
+    paid: boolean("paid").default(false).notNull(),
+    paidAt: timestamp("paid_at"),
+    paymentMethod: text("payment_method"),
+    attended: boolean("attended"),
+    practitionerNotes: text("practitioner_notes"),
+    sourceIp: text("source_ip"),
+    userAgent: text("user_agent"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    sessionIdx: index("group_attendees_session_idx").on(t.groupSessionId),
+    accountStatusIdx: index("group_attendees_account_status_idx").on(
+      t.accountId,
+      t.status
+    ),
+    emailPerSessionIdx: index("group_attendees_email_per_session_idx").on(
+      t.groupSessionId,
+      t.email
+    ),
+  })
+);
+
+export type Group = typeof groups.$inferSelect;
+export type GroupSession = typeof groupSessions.$inferSelect;
+export type GroupAttendee = typeof groupAttendees.$inferSelect;
 export type Goal = typeof goals.$inferSelect;
 export type ImportantPerson = typeof importantPeople.$inferSelect;
 export type Theme = typeof themes.$inferSelect;
