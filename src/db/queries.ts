@@ -23,6 +23,8 @@ import {
   groups,
   groupSessions,
   groupAttendees,
+  products,
+  productPurchases,
   type Client,
   type PractitionerSettings,
   type LeadForm,
@@ -1496,6 +1498,17 @@ export type GroupSignupRow = {
   signedUpAt: Date;
 };
 
+export type PendingProductPurchaseRow = {
+  purchaseId: string;
+  productId: string;
+  productName: string;
+  purchaserName: string;
+  purchaserEmail: string;
+  priceCents: number;
+  currency: string;
+  requestedAt: Date;
+};
+
 export type LooseEnds = {
   botFailed: LooseEndRow[];
   needReflection: LooseEndRow[];
@@ -1508,6 +1521,8 @@ export type LooseEnds = {
   bookingRequests: BookingRequestRow[];
   /** Pending / unpaid attendees on upcoming public group sessions. */
   groupSignups: GroupSignupRow[];
+  /** Pending product purchase requests awaiting confirm + mark paid. */
+  productPurchases: PendingProductPurchaseRow[];
   /** Sum across all categories — drives the empty state + the inbox badge. */
   totalCount: number;
 };
@@ -1709,6 +1724,41 @@ export async function getLooseEnds(accountId: string): Promise<LooseEnds> {
     signedUpAt: new Date(r.signedUpAt),
   }));
 
+  // Pending product purchase requests — buyers waiting on her to confirm +
+  // mark paid before the watch link goes out.
+  const productPurchaseRows = await db
+    .select({
+      purchaseId: productPurchases.id,
+      productId: productPurchases.productId,
+      productName: products.name,
+      purchaserName: productPurchases.purchaserName,
+      purchaserEmail: productPurchases.purchaserEmail,
+      priceCents: products.priceCents,
+      currency: products.currency,
+      requestedAt: productPurchases.createdAt,
+    })
+    .from(productPurchases)
+    .innerJoin(products, eq(products.id, productPurchases.productId))
+    .where(
+      and(
+        eq(productPurchases.accountId, accountId),
+        eq(productPurchases.status, "pending")
+      )
+    )
+    .orderBy(desc(productPurchases.createdAt));
+  const productPurchaseList: PendingProductPurchaseRow[] = productPurchaseRows.map(
+    (r) => ({
+      purchaseId: r.purchaseId,
+      productId: r.productId,
+      productName: r.productName,
+      purchaserName: r.purchaserName,
+      purchaserEmail: r.purchaserEmail,
+      priceCents: r.priceCents,
+      currency: r.currency,
+      requestedAt: new Date(r.requestedAt),
+    })
+  );
+
   // The total counts UNIQUE sessions across categories (a single session
   // could be in three of them at once). The badge should reflect how many
   // distinct things need her attention, not how many TOTAL tasks.
@@ -1725,9 +1775,13 @@ export async function getLooseEnds(accountId: string): Promise<LooseEnds> {
   for (const r of rescheduleRequestList) allIds.add(r.sessionId);
   // Booking requests don't have a session yet, so each one counts on its
   // own — they're inherently unique attention points. Same for group
-  // sign-ups: each attendee waiting on confirmation is a separate task.
+  // sign-ups and product purchases: each attendee/buyer waiting on
+  // confirmation is a separate task.
   const totalCount =
-    allIds.size + bookingRequestList.length + groupSignupList.length;
+    allIds.size +
+    bookingRequestList.length +
+    groupSignupList.length +
+    productPurchaseList.length;
 
   return {
     botFailed,
@@ -1738,6 +1792,7 @@ export async function getLooseEnds(accountId: string): Promise<LooseEnds> {
     rescheduleRequests: rescheduleRequestList,
     bookingRequests: bookingRequestList,
     groupSignups: groupSignupList,
+    productPurchases: productPurchaseList,
     totalCount,
   };
 }

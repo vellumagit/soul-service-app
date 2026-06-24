@@ -28,6 +28,7 @@ import { db } from "@/db";
 import { practitionerSettings } from "@/db/schema";
 import { getAvailableWindows } from "@/lib/availability";
 import { listUpcomingPublicGroupSessions } from "@/lib/group-actions";
+import { listPublishedProducts } from "@/lib/product-actions";
 import "./landing.css";
 
 function formatLandingWindowLabel(d: Date): string {
@@ -117,6 +118,16 @@ export default async function LandingPage({
     upcomingCircles = await listUpcomingPublicGroupSessions(4);
   } catch (err) {
     console.warn("[landing] upcoming circles fetch failed:", err);
+  }
+
+  // Library — published video offerings. Same try/catch pattern.
+  let libraryProducts: Awaited<
+    ReturnType<typeof listPublishedProducts>
+  > = [];
+  try {
+    libraryProducts = await listPublishedProducts(6);
+  } catch (err) {
+    console.warn("[landing] library fetch failed:", err);
   }
 
   return (
@@ -505,6 +516,58 @@ export default async function LandingPage({
                         Full · next one soon
                       </span>
                     )}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* LIBRARY — recorded video offerings, only renders if there are any */}
+        {libraryProducts.length > 0 && (
+          <section className="circles" id="library">
+            <div
+              className="wrap narrow rv"
+              style={{ textAlign: "center" }}
+            >
+              <span className="tag" style={{ display: "block" }}>
+                On demand
+              </span>
+              <h2>
+                The <em>Library</em>.
+              </h2>
+              <p className="p-lg">
+                Recorded workshops and replays to revisit on your own time.
+                Request access, settle up, and your private link arrives by
+                email.
+              </p>
+            </div>
+            <div className="wrap circles-grid">
+              {libraryProducts.map((p) => {
+                const price = new Intl.NumberFormat("en-US", {
+                  style: "currency",
+                  currency: p.currency,
+                  minimumFractionDigits: 0,
+                  maximumFractionDigits: 2,
+                }).format(p.priceCents / 100);
+                const minutes = p.videoDurationSeconds
+                  ? Math.round(p.videoDurationSeconds / 60)
+                  : null;
+                return (
+                  <div className="circle-card rv" key={p.id}>
+                    <h3>{p.name}</h3>
+                    <div className="meta">
+                      {minutes !== null ? `${minutes}min` : "video"}
+                      <span className="dot" aria-hidden>
+                        ·
+                      </span>
+                      on demand
+                    </div>
+                    {p.description && <p className="desc">{p.description}</p>}
+                    <div className="price">{price}</div>
+                    <Link href={`/offerings/${p.id}`} className="cta">
+                      Request access →
+                    </Link>
                   </div>
                 );
               })}

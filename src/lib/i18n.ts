@@ -44,6 +44,7 @@ export type TranslationKey =
   | "nav.today"
   | "nav.clients"
   | "nav.groups"
+  | "nav.library"
   | "nav.calendar"
   | "nav.payments"
   | "nav.network"
@@ -122,6 +123,7 @@ const en: Record<TranslationKey, string> = {
   "nav.today": "Today",
   "nav.clients": "Clients",
   "nav.groups": "Groups",
+  "nav.library": "Library",
   "nav.calendar": "Calendar",
   "nav.payments": "Payments",
   "nav.network": "Network",
@@ -203,6 +205,7 @@ const ru: Record<TranslationKey, string> = {
   "nav.today": "Сегодня",
   "nav.clients": "Клиенты",
   "nav.groups": "Группы",
+  "nav.library": "Библиотека",
   "nav.calendar": "Календарь",
   "nav.payments": "Платежи",
   "nav.network": "Сеть",
@@ -284,6 +287,7 @@ const uk: Record<TranslationKey, string> = {
   "nav.today": "Сьогодні",
   "nav.clients": "Клієнти",
   "nav.groups": "Групи",
+  "nav.library": "Бібліотека",
   "nav.calendar": "Календар",
   "nav.payments": "Платежі",
   "nav.network": "Мережа",

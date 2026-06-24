@@ -258,6 +258,14 @@ export const sessions = pgTable(
     clientStatedIntention: text("client_stated_intention"),
     clientVisibleNote: text("client_visible_note"),
 
+    // Recap video hosted on Cloudflare Stream. video_id is the Cloudflare
+    // UID; we generate signed playback URLs server-side per page render so
+    // the iframe src expires every 24h even if the underlying URL is
+    // captured.
+    recapVideoId: text("recap_video_id"),
+    recapVideoUploadedAt: timestamp("recap_video_uploaded_at"),
+    recapVideoDurationSeconds: integer("recap_video_duration_seconds"),
+
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
@@ -1085,6 +1093,71 @@ export const groupAttendees = pgTable(
     ),
   })
 );
+
+// ─── Products (storefront video offerings) ──────────────────────────────
+export const products = pgTable(
+  "products",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    description: text("description"),
+    priceCents: integer("price_cents").default(0).notNull(),
+    currency: varchar("currency", { length: 8 }).default("USD").notNull(),
+    videoId: text("video_id"),
+    videoUploadedAt: timestamp("video_uploaded_at"),
+    videoDurationSeconds: integer("video_duration_seconds"),
+    paymentInstructions: text("payment_instructions"),
+    published: boolean("published").default(false).notNull(),
+    archivedAt: timestamp("archived_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    accountIdx: index("products_account_idx").on(t.accountId),
+  })
+);
+
+export const productPurchases = pgTable(
+  "product_purchases",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    purchaserName: text("purchaser_name").notNull(),
+    purchaserEmail: text("purchaser_email").notNull(),
+    purchaserPhone: text("purchaser_phone"),
+    /** pending | confirmed | refunded */
+    status: text("status").default("pending").notNull(),
+    paid: boolean("paid").default(false).notNull(),
+    paidAt: timestamp("paid_at"),
+    paymentMethod: text("payment_method"),
+    accessToken: text("access_token").notNull(),
+    confirmedAt: timestamp("confirmed_at"),
+    practitionerNotes: text("practitioner_notes"),
+    sourceIp: text("source_ip"),
+    userAgent: text("user_agent"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    productIdx: index("product_purchases_product_idx").on(t.productId),
+    accountStatusIdx: index("product_purchases_account_status_idx").on(
+      t.accountId,
+      t.status
+    ),
+    emailIdx: index("product_purchases_email_idx").on(t.purchaserEmail),
+  })
+);
+
+export type Product = typeof products.$inferSelect;
+export type ProductPurchase = typeof productPurchases.$inferSelect;
 
 export type Group = typeof groups.$inferSelect;
 export type GroupSession = typeof groupSessions.$inferSelect;

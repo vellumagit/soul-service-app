@@ -29,6 +29,7 @@ import { describeSaveError } from "@/lib/save-error";
 import { PushToGoogleButton } from "./PushToGoogleButton";
 import { ClosingRitualDialog } from "./ClosingRitualDialog";
 import { WalkInButton } from "./WalkInButton";
+import { RecapUploadButton } from "./RecapUploadButton";
 
 const STATUS_CHIP: Record<string, string> = {
   scheduled: "bg-plum-100 text-plum-700",
@@ -337,6 +338,10 @@ export function SessionCard({
               writes. */}
           {isCompleted && <ClosingSection session={session} onOpen={() => setClosingOpen(true)} />}
 
+          {/* Recap video — appears for completed sessions only. Upload UI
+              for Svit; the playback URL lives on /portal/sessions/[id]. */}
+          {isCompleted && <RecapSection session={session} />}
+
           {/* Payment row */}
           <div className="border-t border-ink-100 pt-3 flex items-center gap-3 text-sm flex-wrap">
             <div className="text-ink-500 text-xs">Payment</div>
@@ -578,6 +583,40 @@ function ClosingSection({
           <ClosingLine label="Never want to forget" body={neverForget} />
         )}
       </div>
+    </div>
+  );
+}
+
+// Recap video section. Only renders the upload UI here — actual playback
+// is on /portal/sessions/[id] (for the client) and on the practitioner's
+// own session-prep view (TODO). She doesn't usually need to re-watch
+// while looking at the card; she needs to know it's uploaded and reachable.
+function RecapSection({ session }: { session: Session }) {
+  const hasVideo = !!session.recapVideoId && !!session.recapVideoUploadedAt;
+  const pending = !!session.recapVideoId && !session.recapVideoUploadedAt;
+  return (
+    <div className="border-t border-ink-100 pt-3 flex items-center gap-3 text-sm flex-wrap">
+      <div className="text-ink-500 text-xs">Recap video</div>
+      {hasVideo && (
+        <span className="chip bg-green-50 text-green-700">UPLOADED</span>
+      )}
+      {pending && (
+        <span className="chip bg-honey-50 text-honey-700">PROCESSING</span>
+      )}
+      {!hasVideo && !pending && (
+        <span className="text-xs text-ink-400 italic">none yet</span>
+      )}
+      <div className="flex-1" />
+      <RecapUploadButton
+        sessionId={session.id}
+        hasExisting={hasVideo}
+        onChange={() => {
+          // Soft refresh — the closing/payment data is already in props,
+          // we just need the page to re-fetch to pick up the new video
+          // state on the client overview.
+          if (typeof window !== "undefined") window.location.reload();
+        }}
+      />
     </div>
   );
 }
