@@ -182,8 +182,10 @@ function SubmissionRow({
                     notify({
                       kind: "success",
                       title: "Added to your network",
-                      body: "Open the entry to fill in more.",
-                      ttlMs: 3000,
+                      body: r.portalInvited
+                        ? "Portal access turned on and a sign-in link emailed to them."
+                        : "Open the entry to fill in more.",
+                      ttlMs: 3500,
                     });
                   })
                 }

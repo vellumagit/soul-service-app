@@ -627,6 +627,15 @@ export const practitionerSettings = pgTable("practitioner_settings", {
   // run a transcript and walk away.
   autoUploadAiNotes: boolean("auto_upload_ai_notes").default(false).notNull(),
 
+  // When true, accepting a lead/inquiry as a client (from /network/inbox)
+  // automatically turns on their portal access AND emails them a sign-in
+  // link — collapsing the two manual steps (toggle + invite) into the
+  // accept action. Off → she enables + invites by hand as before. Only
+  // fires when the accepted client has a valid email on file.
+  autoPortalInviteOnAccept: boolean("auto_portal_invite_on_accept")
+    .default(true)
+    .notNull(),
+
   // Session reminder windows. The hourly cron at /api/cron/reminders looks
   // for sessions ~N hours out where the relevant `*_reminder_sent_at` is
   // still null, sends an email via Resend, then marks the timestamp.

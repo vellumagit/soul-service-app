@@ -636,7 +636,7 @@ export async function archiveLeadForm(
  *  is_lead=true) using the canonical fields + the form's defaultIntent as
  *  howTheyFoundMe (or a custom intent the practitioner passed). */
 export type AcceptSubmissionResult =
-  | { ok: true; clientId: string }
+  | { ok: true; clientId: string; portalInvited?: boolean }
   | { ok: false; error: string };
 
 export async function acceptLeadSubmission(
@@ -798,13 +798,55 @@ export async function acceptLeadSubmission(
         )
       );
 
+    // Auto-onboard to the client portal. When the practitioner has the
+    // "invite on accept" automation on (default), accepting a lead turns on
+    // their portal access AND emails them a sign-in link in one move —
+    // collapsing the old two-step (toggle → invite) flow. Only fires when
+    // the client has a usable email. Non-fatal: a send failure never fails
+    // the accept itself; she can always invite by hand from the overview.
+    let portalInvited = false;
+    try {
+      const settings = await getSettings(accountId);
+      if (settings.autoPortalInviteOnAccept) {
+        const [c] = await db
+          .select({
+            email: clients.email,
+            portalEnabled: clients.portalEnabled,
+          })
+          .from(clients)
+          .where(and(eq(clients.accountId, accountId), eq(clients.id, clientId)))
+          .limit(1);
+        if (c?.email && c.email.includes("@")) {
+          if (!c.portalEnabled) {
+            await db
+              .update(clients)
+              .set({ portalEnabled: true, updatedAt: new Date() })
+              .where(
+                and(eq(clients.accountId, accountId), eq(clients.id, clientId))
+              );
+          }
+          const { headers } = await import("next/headers");
+          const h = await headers();
+          const base =
+            process.env.NEXT_PUBLIC_SITE_URL ||
+            `${h.get("x-forwarded-proto") ?? "https"}://${h.get("host") ?? "localhost"}`;
+          const { startPortalSignInByEmail } = await import("./portal-signin");
+          await startPortalSignInByEmail(c.email, base, {
+            ip: null,
+            userAgent: h.get("user-agent"),
+          });
+          portalInvited = true;
+        }
+      }
+    } catch (err) {
+      console.error("[accept] auto portal onboarding failed:", err);
+    }
+
     revalidatePath("/network");
     revalidatePath("/network/inbox");
     revalidatePath("/network/forms");
-    if (existingClientId) {
-      revalidatePath(`/clients/${existingClientId}`);
-    }
-    return { ok: true, clientId };
+    revalidatePath(`/clients/${clientId}`);
+    return { ok: true, clientId, portalInvited };
   } catch (err) {
     return {
       ok: false,
@@ -2241,6 +2283,7 @@ export async function updateSettings(formData: FormData) {
       invoicePrefix: str(formData, "invoicePrefix") ?? "INV",
       autoInvoiceOnComplete: bool(formData, "autoInvoiceOnComplete"),
       autoUploadAiNotes: bool(formData, "autoUploadAiNotes"),
+      autoPortalInviteOnAccept: bool(formData, "autoPortalInviteOnAccept"),
       recallEnabled: bool(formData, "recallEnabled"),
       recallAutoAdd: bool(formData, "recallAutoAdd"),
       recallBotName: str(formData, "recallBotName") ?? "Notetaker",

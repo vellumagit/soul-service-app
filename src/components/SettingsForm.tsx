@@ -265,6 +265,13 @@ export function SettingsForm({ settings }: { settings: PractitionerSettings }) {
             description="When you generate notes from a transcript, save them straight to the session instead of waiting for you to click Insert. You can still edit afterwards."
           />
 
+          <Toggle
+            name="autoPortalInviteOnAccept"
+            defaultChecked={settings.autoPortalInviteOnAccept}
+            label="Invite new clients to their portal when I accept them"
+            description="When you accept an inquiry from the inbox as a client, automatically turn on their portal access and email them a sign-in link. Only happens when they have an email on file. Off = enable + invite by hand."
+          />
+
           {/* Recall.ai notetaker — the "magic" auto-notes pipeline. Off by
               default; she opts in once she's comfortable with a bot in the
               call. */}
