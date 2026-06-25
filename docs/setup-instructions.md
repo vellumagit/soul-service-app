@@ -6,57 +6,26 @@ Whenever this doc says `<your-vercel-domain>`, substitute your actual Vercel dep
 
 ---
 
-## Step S — Subdomain split (one-time, ~15 min)
+## Step S — Single domain (no setup needed)
 
-For the "all in one business" feel: `svit.live` is the public storefront (landing + inquiries only), `app.svit.live` is everywhere Svit + her clients actually work (workspace + portal + sign-ins). The code is already wired; you just need to register the second hostname and flip two env vars.
+**There is no subdomain split anymore.** Everything runs on one domain — `svit.live`. No second hostname, no DNS changes, no env vars.
 
-### S.1 — Add `app.svit.live` to Vercel
+How it routes:
 
-1. Vercel → your `soul-service-app` project → **Settings** → **Domains** → **Add Domain**
-2. Type `app.svit.live` → **Add**
-3. Vercel shows a CNAME target like `cname.vercel-dns.com`. Copy it.
-
-### S.2 — DNS
-
-In whatever registrar holds `svit.live` (Cloudflare / Porkbun / Namecheap / etc.):
-
-| Type | Name | Value | Notes |
-|---|---|---|---|
-| CNAME | `app` | `cname.vercel-dns.com` | The value Vercel gave you in S.1 |
-
-Save. Wait ~2-10 min for propagation. Vercel's Domains panel will show a green check once `app.svit.live` is verified.
-
-### S.3 — Env vars
-
-Vercel → Settings → Environment Variables → add for **all environments**:
-
-```
-MARKETING_HOSTNAME=svit.live
-APP_HOSTNAME=app.svit.live
-```
-
-When both are set, the proxy enforces the split. When either is unset (preview deploys, dev), the proxy is a no-op and everything works on whichever single host the request came in on.
-
-### S.4 — Redeploy
-
-Vercel auto-redeploys on env-var save; if not, push any trivial commit or use the Vercel UI to redeploy.
-
-### S.5 — Verify
-
-| Visit | Should show |
+| Visit | Shows |
 |---|---|
-| `https://svit.live/` | Landing page (storefront + inquiry form) |
-| `https://svit.live/today` | 308 redirect → `https://app.svit.live/today` |
-| `https://svit.live/portal` | 308 redirect → `https://app.svit.live/portal` |
-| `https://app.svit.live/` | Auto-redirect to `/today` (signed in as practitioner) or `/signin` (signed out) |
-| `https://app.svit.live/today` | Svit's workspace (after sign-in) |
-| `https://app.svit.live/portal/sign-in` | Client portal sign-in |
+| `https://svit.live/` | Landing page (storefront) — **always**, for everyone, signed in or not |
+| `https://svit.live/signin` | Svit's workspace sign-in |
+| `https://svit.live/today` | Svit's workspace (redirects to /signin if not signed in) |
+| `https://svit.live/portal` | Client portal (redirects to its own sign-in if not signed in) |
+| `https://svit.live/circles/<id>` | Public Circle sign-up page |
+| `https://svit.live/offerings/<id>` | Public Library offering page |
 
-Svit's daily move: bookmark `https://app.svit.live/today`. Clients: bookmark `https://app.svit.live/portal`. Visitors stumbling on the practice from a Google search land at `https://svit.live/`.
+- **Svit's daily move:** bookmark `https://svit.live/signin` (or `https://svit.live/today`).
+- **Clients:** bookmark `https://svit.live/portal`, or click "Sign in" in the storefront nav.
+- **Visitors from a Google search:** land at `https://svit.live/` — the storefront.
 
-### Roll back
-
-Delete `MARKETING_HOSTNAME` and `APP_HOSTNAME` from Vercel env vars and redeploy. The proxy becomes a no-op; everything runs on whichever hostname the request hits. You can also keep both domains registered on Vercel without the split enforced — both will serve the full app like before.
+> **Historical note:** an earlier version tried a two-hostname split (`svit.live` storefront + `app.svit.live` workspace) driven by `MARKETING_HOSTNAME` / `APP_HOSTNAME` env vars. That was removed because it failed closed — if the env didn't match the live host exactly, the root URL bounced to the sign-in page. Those two env vars are now ignored and can be deleted from Vercel. If `app.svit.live` is still registered on the project it'll just serve the same full app as `svit.live`; you can remove that domain in Vercel → Settings → Domains if you want it gone.
 
 ---
 

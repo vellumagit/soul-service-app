@@ -14,8 +14,6 @@
 // same world the app inhabits.
 
 import Link from "next/link";
-import { cookies, headers } from "next/headers";
-import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { TimeOfDayProvider } from "@/components/TimeOfDayProvider";
 import {
@@ -23,7 +21,6 @@ import {
   type LandingWindow,
 } from "@/components/LandingLeadForm";
 import { LandingReveal } from "@/components/LandingReveal";
-import { getSessionEmail } from "@/lib/session-cookies";
 import { db } from "@/db";
 import { practitionerSettings } from "@/db/schema";
 import { getAvailableWindows } from "@/lib/availability";
@@ -43,39 +40,13 @@ function formatLandingWindowLabel(d: Date): string {
 
 export const dynamic = "force-dynamic";
 
-export default async function LandingPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ preview?: string }>;
-}) {
-  const { preview } = await searchParams;
-
-  // Auto-redirect rules. On the MARKETING host (svit.live), we NEVER
-  // auto-redirect — the storefront is the whole purpose of that domain,
-  // and signed-in visitors should be able to see it like anyone else.
-  // The proxy on the APP host already handles `/` → /today (or /signin),
-  // so we only need to handle the single-hostname / dev / preview-deploy
-  // case where the proxy is a no-op.
-  const h = await headers();
-  const hostNoPort = (h.get("host") ?? "").split(":")[0].toLowerCase();
-  const marketingHost = (process.env.MARKETING_HOSTNAME ?? "")
-    .toLowerCase()
-    .trim();
-  const onMarketingHost = !!marketingHost && hostNoPort === marketingHost;
-
-  if (!onMarketingHost && preview !== "1") {
-    // Single-host mode (no env-split, or app subdomain hitting the page
-    // directly because the proxy was bypassed). Practitioner cookie →
-    // workspace; client portal cookie → portal.
-    const sessionEmail = await getSessionEmail();
-    if (sessionEmail) {
-      redirect("/today");
-    }
-    const cookieStore = await cookies();
-    if (cookieStore.get("sps_client")?.value) {
-      redirect("/portal");
-    }
-  }
+export default async function LandingPage() {
+  // The marketing homepage is ALWAYS public and ALWAYS renders here — it
+  // never auto-redirects signed-in users. Svit reaches her workspace via
+  // the "Sign in" link in the nav (→ /signin → /today); clients reach
+  // theirs the same way (→ /portal). Keeping `/` unconditional is what
+  // makes svit.live land on the storefront every single time, with no
+  // dependence on hostname env vars.
 
   // Pull next available windows for the inquiry form — but ONLY when the
   // practitioner has opted in. Off by default; she flips
