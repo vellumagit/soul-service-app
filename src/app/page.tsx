@@ -21,6 +21,7 @@ import {
   type LandingWindow,
 } from "@/components/LandingLeadForm";
 import { LandingReveal } from "@/components/LandingReveal";
+import { SecretSignInWordmark } from "@/components/SecretSignInWordmark";
 import { db } from "@/db";
 import { practitionerSettings } from "@/db/schema";
 import { getAvailableWindows } from "@/lib/availability";
@@ -109,12 +110,11 @@ export default async function LandingPage() {
         {/* nav */}
         <nav className="lnav">
           <div className="inner">
-            <div className="brand">
-              Svitlana
-              <small>Soul Services</small>
-            </div>
+            {/* The wordmark is also a secret door: triple-tap → /signin
+                (practitioner workspace). Invisible to visitors. */}
+            <SecretSignInWordmark />
             <div className="nav-actions">
-              <Link href="/portal/sign-in" className="nav-signin">
+              <Link href="/signin" className="nav-signin">
                 Sign in
               </Link>
               <a href="#ways" className="navcta">
@@ -606,7 +606,7 @@ export default async function LandingPage() {
             Gentle guidance for parents and business owners coming home to
             themselves.
           </p>
-          <Link href="/portal/sign-in" className="signin-link">
+          <Link href="/signin" className="signin-link">
             Already working with me? Sign in →
           </Link>
         </footer>

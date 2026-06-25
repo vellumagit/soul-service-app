@@ -31,6 +31,7 @@ import {
 } from "./session-cookies";
 import { getOrCreateAccount } from "./account";
 import { sendMagicLinkEmail } from "./resend";
+import { startPortalSignInByEmail } from "./portal-signin";
 import { checkRateLimit } from "./rate-limit";
 import { redirect } from "next/navigation";
 
@@ -44,8 +45,10 @@ export type SignInResult = {
   message: string;
 };
 
+// Neutral, audience-agnostic copy — this door serves both the practitioner
+// and clients, so it must not imply "you're not on the admin list."
 const SUCCESS_MESSAGE =
-  "If your email is on the access list, a sign-in link is on its way. Check your inbox — it'll expire in 30 minutes.";
+  "If your email is on file, a sign-in link is on its way. Check your inbox — it'll expire in 30 minutes.";
 
 export async function signInWithEmail(
   _prev: SignInResult | undefined,
@@ -84,23 +87,29 @@ export async function signInWithEmail(
     return { ok: true, message: SUCCESS_MESSAGE };
   }
 
+  // ── CLIENT / STRANGER PATH ────────────────────────────────────────────
+  // Not on the practitioner allowlist → this is a client (or a stranger).
+  // This is what makes the door "smart": the same "Sign in" entrance serves
+  // both audiences. We try to start a client portal sign-in by email; the
+  // helper is anti-enumeration (does nothing if no enrolled client matches),
+  // and we ALWAYS return the same neutral success card so the response is
+  // identical whether the email belongs to a client, or nobody at all.
   if (!isAllowed(rawEmail)) {
-    console.log(`[auth] rejected sign-in for non-allowlisted: ${rawEmail}`);
-    if (magicLinkMode()) {
-      // Anti-enumeration: in magic-link mode we return the same success
-      // card as the happy path. No email is sent and no DB row is created.
-      return { ok: true, message: SUCCESS_MESSAGE };
+    const base =
+      process.env.NEXT_PUBLIC_SITE_URL ||
+      `${h.get("x-forwarded-proto") ?? "https"}://${h.get("host") ?? "localhost"}`;
+    try {
+      await startPortalSignInByEmail(rawEmail, base, {
+        ip: ip === "unknown" ? null : ip,
+        userAgent: h.get("user-agent"),
+      });
+    } catch (err) {
+      console.error("[auth] portal fallback send failed:", err);
     }
-    // In instant-entry mode we tell the user plainly. This is the
-    // original behavior pre-magic-link; anti-enumeration only matters
-    // when the side-effect is "we may have sent an email."
-    return {
-      ok: false,
-      message:
-        "This email isn't on the access list. If that's a mistake, ask the admin to add it.",
-    };
+    return { ok: true, message: SUCCESS_MESSAGE };
   }
 
+  // ── PRACTITIONER PATH ─────────────────────────────────────────────────
   try {
     await getOrCreateAccount(rawEmail);
   } catch (err) {

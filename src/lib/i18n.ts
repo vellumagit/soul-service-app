@@ -136,12 +136,12 @@ const en: Record<TranslationKey, string> = {
   "sidebar.signingOut": "Signing out…",
   // Sign-in page
   "signin.title": "Sign in",
-  "signin.subtitle": "Quiet space for your client work.",
+  "signin.subtitle": "Welcome back. Enter your email to continue.",
   "signin.emailLabel": "Email",
-  "signin.submit": "Enter",
-  "signin.submitting": "Signing in…",
+  "signin.submit": "Continue",
+  "signin.submitting": "One moment…",
   "signin.helpText":
-    "Type the email on your access list. You'll stay signed in for 30 days.",
+    "Practitioner or client — enter your email and we'll get you to the right place.",
   "signin.tagline": "Made for Svitlana, with care.",
   // Home / Today
   "home.title": "Today",
@@ -218,12 +218,12 @@ const ru: Record<TranslationKey, string> = {
   "sidebar.signingOut": "Выход…",
   // Sign-in page
   "signin.title": "Войти",
-  "signin.subtitle": "Тихое пространство для вашей работы с клиентами.",
+  "signin.subtitle": "С возвращением. Введите вашу почту, чтобы продолжить.",
   "signin.emailLabel": "Электронная почта",
-  "signin.submit": "Войти",
-  "signin.submitting": "Входим…",
+  "signin.submit": "Продолжить",
+  "signin.submitting": "Минуту…",
   "signin.helpText":
-    "Введите email из списка доступа. Вы останетесь в системе на 30 дней.",
+    "Практик или клиент — введите почту, и мы направим вас куда нужно.",
   "signin.tagline": "Сделано для Светланы, с заботой.",
   // Home / Today
   "home.title": "Сегодня",
@@ -300,12 +300,12 @@ const uk: Record<TranslationKey, string> = {
   "sidebar.signingOut": "Вихід…",
   // Sign-in page
   "signin.title": "Увійти",
-  "signin.subtitle": "Тихий простір для вашої роботи з клієнтами.",
+  "signin.subtitle": "З поверненням. Введіть вашу пошту, щоб продовжити.",
   "signin.emailLabel": "Електронна пошта",
-  "signin.submit": "Увійти",
-  "signin.submitting": "Входимо…",
+  "signin.submit": "Продовжити",
+  "signin.submitting": "Хвилинку…",
   "signin.helpText":
-    "Введіть email зі списку доступу. Ви залишитесь у системі на 30 днів.",
+    "Практик або клієнт — введіть пошту, і ми направимо вас куди треба.",
   "signin.tagline": "Зроблено для Світлани, з турботою.",
   // Home / Today
   "home.title": "Сьогодні",

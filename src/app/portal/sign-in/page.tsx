@@ -8,11 +8,7 @@
 // but nothing was sent.
 
 import { headers } from "next/headers";
-import { sql, and, eq } from "drizzle-orm";
-import { db } from "@/db";
-import { clients, practitionerSettings } from "@/db/schema";
-import { createMagicLink } from "@/lib/portal-auth";
-import { sendPortalMagicLinkEmail } from "@/lib/resend";
+import { startPortalSignInByEmail } from "@/lib/portal-signin";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -43,62 +39,13 @@ async function requestMagicLink(formData: FormData): Promise<void> {
   });
   if (!emailLimit.ok) return;
 
-  // Find a portal-enabled client whose email matches case-insensitively.
-  // No accountId filter — portal is global across all practitioner accounts
-  // on this deployment. The client_id-to-account binding lives on the row.
-  const matches = await db
-    .select({
-      accountId: clients.accountId,
-      id: clients.id,
-      fullName: clients.fullName,
-      email: clients.email,
-    })
-    .from(clients)
-    .where(
-      and(
-        eq(clients.portalEnabled, true),
-        sql`LOWER(${clients.email}) = ${email}`
-      )
-    )
-    .limit(1);
-  const match = matches[0];
-
-  // Anti-enumeration: don't reveal whether the email exists. We always show
-  // the same success card. Only DO the side effects when there's a match.
-  if (!match) return;
-
-  // `h` + `ip` already grabbed above for the rate-limit check; reuse them.
-  const userAgent = h.get("user-agent");
-  const cleartext = await createMagicLink(match.accountId, match.id, {
-    ip: ip === "unknown" ? null : ip,
-    userAgent,
-  });
-
-  // Build absolute URL. Prefer the public site URL if configured; fall back
-  // to the request's own host header.
   const base =
     process.env.NEXT_PUBLIC_SITE_URL ||
     `${h.get("x-forwarded-proto") ?? "https"}://${h.get("host") ?? "localhost"}`;
-  const url = `${base}/portal/sign-in/${cleartext}`;
-
-  const settingsRows = await db
-    .select({ practitionerName: practitionerSettings.practitionerName })
-    .from(practitionerSettings)
-    .where(eq(practitionerSettings.accountId, match.accountId))
-    .limit(1);
-
-  try {
-    await sendPortalMagicLinkEmail({
-      to: match.email!,
-      url,
-      clientFirstName: match.fullName.split(" ")[0] ?? null,
-      practitionerName: settingsRows[0]?.practitionerName ?? null,
-    });
-  } catch (err) {
-    console.error("[portal sign-in] sendPortalMagicLinkEmail failed:", err);
-    // Still show success — the link row exists; she can resend from her
-    // side. Don't leak "your email isn't on file" via an error message.
-  }
+  await startPortalSignInByEmail(email, base, {
+    ip: ip === "unknown" ? null : ip,
+    userAgent: h.get("user-agent"),
+  });
 }
 
 export default async function PortalSignInPage({
