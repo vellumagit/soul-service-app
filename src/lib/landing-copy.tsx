@@ -127,15 +127,14 @@ interface Offer {
 const EN: LandingCopy = {
   nav: { signIn: "Sign in", workWithMe: "Work with me" },
   hero: {
-    eyebrow:
-      "For the parents and business owners who carry everyone but themselves",
+    eyebrow: "For those who carry everyone but themselves",
     title: (
       <>
-        You point the way for everyone. Let&apos;s find <em>your</em> compass
-        again.
+        You point the way for everyone. Let&apos;s <em>recalibrate</em> your
+        compass again.
       </>
     ),
-    sub: "Gentle guidance for the ones who hold it all together — to hear what's true for you, your family, and your work. Empowered by empathy, guided home to your own knowing.",
+    sub: "Gentle guidance for the ones who hold it all together — to hear what's true for you. Empowered by empathy, guided home to your own knowing.",
     btnPrimary: "Find your way in",
     btnGhost: "Send a note first",
   },
@@ -144,7 +143,7 @@ const EN: LandingCopy = {
     title: (
       <>
         You make a hundred decisions a day — and somewhere in the giving, your{" "}
-        <em>own voice</em> got quiet.
+        <em>own voice</em> gets quiet.
       </>
     ),
     body: (
@@ -163,7 +162,8 @@ const EN: LandingCopy = {
     tag: "There's nothing wrong with you",
     pull: (
       <>
-        Your compass isn&apos;t broken. It&apos;s just been <em>drowned out.</em>
+        Your compass isn&apos;t broken. It&apos;s just been{" "}
+        <em>out of alignment.</em>
       </>
     ),
     body: "My work is simple. I help you get quiet enough to hear your own knowing again — and gentle enough with yourself to finally trust it. I don't hand you answers. You already have them. I help you remember what you already know.",
@@ -181,8 +181,8 @@ const EN: LandingCopy = {
     p1: "Fifteen years ago I came to Canada carrying anxiety I couldn't name and a knowing I didn't yet trust. I spent years searching outside myself for answers — until I learned the answers were already in me, waiting to be heard.",
     p2: (
       <>
-        Now I help parents and business owners do what I once had to: come home
-        to themselves. People have called me{" "}
+        Now others do what I once had to: come home to themselves. People have
+        called me{" "}
         <strong>a messenger of the truth</strong> — not because I have your
         answers, but because I help you hear your own. My work is gentle. I
         listen, I slow you down, I help you ground, and I guide you through your
@@ -198,8 +198,8 @@ const EN: LandingCopy = {
         Begin gently. Go as deep as you&apos;re <em>ready</em> for.
       </>
     ),
-    body: "Every step is a small, comfortable yes. Start with a free reflection or a single evening in the Circle — and walk further when it feels right.",
-    note: "A monthly Circle pass and payment plans for the journey can be arranged — just ask.",
+    body: "Every step is a small, comfortable “yes”. Start with a free reflection or a single evening in the Circle — and walk further when it feels right.",
+    note: "A monthly Circle pass, payment plans, and rates that meet your income can be arranged — just ask.",
     perSession: "/ session",
     perMonth: "/ month",
     per3Months: "/ 3 months",
@@ -215,28 +215,28 @@ const EN: LandingCopy = {
       step: "Weekly · in a circle of women",
       title: "The Circle",
       price: "$20",
-      desc: "A guided weekly group for women carrying a lot — one theme each week, gently held by Svitlana. Slow down, feel held, and remember you're not alone. 10–20 of you, ~2 hours, online.",
+      desc: "A guided weekly group for people carrying a lot — one theme each week, gently held by Svitlana. Slow down, feel held, and remember you're not alone. 10–20 of you, ~2 hours, online.",
       cta: "Join this week's Circle →",
     },
     single: {
       step: "One-to-one · your first yes",
       title: "A Single Session",
       price: "$150",
-      desc: "One conversation, just for you — in person, online, or distance. A space to be witnessed, find clarity, and hear what your compass has been trying to tell you.",
+      desc: "One conversation, just for you — in person, online, or distance. A space to be witnessed, find clarity, and hear where your compass has been leading you.",
       cta: "Book a session →",
     },
     retainer: {
       step: "Go deeper · the ongoing relationship",
       title: "Monthly Retainer",
       price: "$1,000",
-      desc: "A weekly private session, plus message support between sessions (voice or text — I reply within a day). You're no longer alone with your decisions. I become your compass-check.",
+      desc: "A weekly private session, plus message support between sessions (voice or text — I reply within a day). You're no longer alone with your decisions. I re-align your inner compass.",
       cta: "Begin together →",
     },
     journey: {
       step: "★ The real journey home",
       title: "The 3-Month Journey",
       price: "$2,700",
-      desc: "Everything in the retainer, committed for depth — because real change unfolds over months, not moments. The most-loved way to work with me, at the best rate.",
+      desc: "Everything in the retainer, committed for depth — because the real and deep change unfolds over months, not moments. The most-loved way to work with me, at the best rate.",
       cta: "Start the journey →",
     },
     talk: {
@@ -256,7 +256,7 @@ const EN: LandingCopy = {
     ),
     v1: "I knew it was it — and now you said it.",
     v1who: "— in her own words",
-    v2: "You said what was truth for me.",
+    v2: "You said what was the truth for me.",
     v2who: "— in her own words",
     v3: "I felt lighter, moved, touched — more connected to myself than I've been in years.",
     v3who: "— someone Svitlana worked with",
@@ -313,7 +313,7 @@ const EN: LandingCopy = {
   },
   footer: {
     subtitle: "Soul Services",
-    body: "Gentle guidance for parents and business owners coming home to themselves.",
+    body: "Gentle guidance coming home to you.",
     signin: "Already working with me? Sign in →",
   },
   form: {
@@ -338,14 +338,13 @@ const EN: LandingCopy = {
 const UK: LandingCopy = {
   nav: { signIn: "Увійти", workWithMe: "Попрацювати зі мною" },
   hero: {
-    eyebrow:
-      "Для батьків і власників бізнесу, які тримають усіх, окрім себе",
+    eyebrow: "Для тих, хто тримає всіх, окрім себе",
     title: (
       <>
-        Ви вказуєте шлях усім. Допоможу вам знову знайти <em>свій</em> компас.
+        Ви вказуєте шлях усім. Час знову <em>відкалібрувати</em> ваш компас.
       </>
     ),
-    sub: "М’яка підтримка для тих, хто тримає все на собі — щоб почути, що є правдою для вас, вашої родини й вашої справи. З опорою на емпатію, дорогою додому до власного знання.",
+    sub: "М’яка підтримка для тих, хто тримає все на собі — щоб почути, що є правдою для вас. З опорою на емпатію, дорогою додому до власного знання.",
     btnPrimary: "Знайти свій шлях",
     btnGhost: "Спершу написати",
   },
@@ -354,7 +353,7 @@ const UK: LandingCopy = {
     title: (
       <>
         Ви приймаєте сотні рішень щодня — і десь у цій віддачі ваш{" "}
-        <em>власний голос</em> затих.
+        <em>власний голос</em> затихає.
       </>
     ),
     body: (
@@ -372,7 +371,7 @@ const UK: LandingCopy = {
     tag: "З вами все гаразд",
     pull: (
       <>
-        Ваш компас не зламаний. Його просто <em>заглушили.</em>
+        Ваш компас не зламаний. Він просто <em>збився з налаштування.</em>
       </>
     ),
     body: "Моя робота проста. Я допомагаю вам стишитися настільки, щоб знову почути власне знання — і бути достатньо лагідними до себе, щоб нарешті йому довіритися. Я не даю вам відповідей. Вони вже у вас є. Я допомагаю згадати те, що ви вже знаєте.",
@@ -390,8 +389,8 @@ const UK: LandingCopy = {
     p1: "П’ятнадцять років тому я приїхала до Канади з тривогою, яку не могла назвати, і знанням, якому ще не довіряла. Роками я шукала відповіді ззовні — аж доки не зрозуміла, що відповіді вже були в мені й чекали, щоб їх почули.",
     p2: (
       <>
-        Тепер я допомагаю батькам і власникам бізнесу зробити те, що колись
-        мусила я: повернутися додому до себе. Мене називали{" "}
+        Тепер інші роблять те, що колись мусила я: повертаються додому до
+        себе. Мене називали{" "}
         <strong>посланницею правди</strong> — не тому, що я маю ваші відповіді,
         а тому, що допомагаю почути власні. Моя робота лагідна. Я слухаю,
         сповільнюю вас, допомагаю заземлитися й проводжу крізь ваші власні
@@ -407,7 +406,7 @@ const UK: LandingCopy = {
       </>
     ),
     body: "Кожен крок — маленьке, комфортне «так». Почніть із безкоштовної рефлексії чи одного вечора в Колі — і йдіть далі, коли відчуєте, що час.",
-    note: "Місячний абонемент на Коло та план оплати для тримісячної подорожі можна влаштувати — просто запитайте.",
+    note: "Місячний абонемент на Коло, плани оплати та ставки з огляду на ваш дохід можна влаштувати — просто запитайте.",
     perSession: "/ сеанс",
     perMonth: "/ місяць",
     per3Months: "/ 3 місяці",
@@ -423,28 +422,28 @@ const UK: LandingCopy = {
       step: "Щотижня · у колі жінок",
       title: "Коло",
       price: "$20",
-      desc: "Щотижнева група для жінок, які несуть багато — одна тема щотижня, лагідно тримана Світланою. Сповільнитися, відчути опору й згадати, що ви не самі. 10–20 учасниць, ~2 години, онлайн.",
+      desc: "Щотижнева група для людей, які несуть багато — одна тема щотижня, лагідно тримана Світланою. Сповільнитися, відчути опору й згадати, що ви не самі. 10–20 учасників, ~2 години, онлайн.",
       cta: "Долучитися до Кола цього тижня →",
     },
     single: {
       step: "Один на один · ваше перше «так»",
       title: "Окремий сеанс",
       price: "$150",
-      desc: "Одна розмова, лише для вас — особисто, онлайн або на відстані. Простір, де вас побачать, знайдете ясність і почуєте, що ваш компас намагався вам сказати.",
+      desc: "Одна розмова, лише для вас — особисто, онлайн або на відстані. Простір, де вас побачать, знайдете ясність і почуєте, куди вів вас ваш компас.",
       cta: "Записатися на сеанс →",
     },
     retainer: {
       step: "Глибше · тривалі стосунки",
       title: "Місячний супровід",
       price: "$1,000",
-      desc: "Щотижневий приватний сеанс плюс підтримка повідомленнями між сеансами (голос або текст — відповідаю протягом дня). Ви більше не сам-на-сам зі своїми рішеннями. Я стаю вашою звіркою компаса.",
+      desc: "Щотижневий приватний сеанс плюс підтримка повідомленнями між сеансами (голос або текст — відповідаю протягом дня). Ви більше не сам-на-сам зі своїми рішеннями. Я знову налаштовую ваш внутрішній компас.",
       cta: "Почати разом →",
     },
     journey: {
       step: "★ Справжня дорога додому",
       title: "Тримісячна подорож",
       price: "$2,700",
-      desc: "Усе, що в супроводі, але з відданістю глибині — бо справжні зміни розгортаються місяцями, а не митями. Найулюбленіший спосіб працювати зі мною, за найкращою ціною.",
+      desc: "Усе, що в супроводі, але з відданістю глибині — бо справжні й глибокі зміни розгортаються місяцями, а не митями. Найулюбленіший спосіб працювати зі мною, за найкращою ціною.",
       cta: "Почати подорож →",
     },
     talk: {
@@ -520,7 +519,7 @@ const UK: LandingCopy = {
   },
   footer: {
     subtitle: "Soul Services",
-    body: "Лагідна підтримка для батьків і власників бізнесу, що повертаються додому до себе.",
+    body: "Лагідна підтримка на шляху додому до себе.",
     signin: "Уже працюєте зі мною? Увійти →",
   },
   form: {
