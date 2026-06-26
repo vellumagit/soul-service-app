@@ -21,6 +21,9 @@ import {
   submitLandingLead,
   type LandingLeadResult,
 } from "@/lib/landing-lead-action";
+import type { LandingCopy } from "@/lib/landing-copy";
+
+type LandingFormCopy = LandingCopy["form"];
 
 const initialState: LandingLeadResult | undefined = undefined;
 
@@ -34,8 +37,10 @@ export type LandingWindow = {
 
 export function LandingLeadForm({
   availableWindows = [],
+  copy,
 }: {
   availableWindows?: LandingWindow[];
+  copy: LandingFormCopy;
 }) {
   const [state, action, pending] = useActionState(
     submitLandingLead,
@@ -56,11 +61,10 @@ export function LandingLeadForm({
           className="serif-italic text-lg text-plum-700 mb-2"
           style={{ fontWeight: 400 }}
         >
-          Thank you for reaching out.
+          {copy.successTitle}
         </p>
         <p className="text-sm text-ink-600 leading-relaxed">
-          Your note arrived. I&apos;ll reply within a few days — usually
-          sooner. Take a quiet breath.
+          {copy.successBody}
         </p>
       </div>
     );
@@ -86,7 +90,7 @@ export function LandingLeadForm({
 
       <label className="block">
         <span className="text-xs uppercase tracking-wider text-ink-500 font-mono">
-          Your name
+          {copy.nameLabel}
         </span>
         <input
           type="text"
@@ -100,7 +104,7 @@ export function LandingLeadForm({
 
       <label className="block">
         <span className="text-xs uppercase tracking-wider text-ink-500 font-mono">
-          Email
+          {copy.emailLabel}
         </span>
         <input
           type="email"
@@ -115,11 +119,10 @@ export function LandingLeadForm({
       {availableWindows.length > 0 && (
         <div>
           <span className="text-xs uppercase tracking-wider text-ink-500 font-mono">
-            Times she has open soon (optional)
+            {copy.windowsLabel}
           </span>
           <p className="text-[11px] text-ink-500 italic mt-1 mb-2 leading-snug">
-            Tap one to attach it to your note — she&apos;ll confirm with you
-            either way.
+            {copy.windowsHint}
           </p>
           <div className="flex flex-wrap gap-2">
             {availableWindows.map((w) => {
@@ -159,13 +162,13 @@ export function LandingLeadForm({
 
       <label className="block">
         <span className="text-xs uppercase tracking-wider text-ink-500 font-mono">
-          What brings you here? (optional)
+          {copy.messageLabel}
         </span>
         <textarea
           name="message"
           maxLength={2000}
           rows={4}
-          placeholder="A few sentences about what you&apos;re sitting with, or what drew you to reach out."
+          placeholder={copy.messagePlaceholder}
           className="mt-1.5 w-full px-3 py-2.5 text-sm leading-relaxed border border-ink-200 rounded-md bg-white outline-none focus:border-plum-500 focus:ring-1 focus:ring-plum-100 resize-y"
         />
       </label>
@@ -181,12 +184,10 @@ export function LandingLeadForm({
         disabled={pending}
         className="px-5 py-2.5 text-sm bg-plum-700 hover:bg-plum-600 text-white rounded-md font-medium transition-colors disabled:opacity-60"
       >
-        {pending ? "Sending…" : "Send a note"}
+        {pending ? copy.submitting : copy.submit}
       </button>
 
-      <p className="text-[11px] text-ink-400 italic">
-        Your note goes directly to the practitioner. Nothing is shared.
-      </p>
+      <p className="text-[11px] text-ink-400 italic">{copy.privacyNote}</p>
     </form>
   );
 }

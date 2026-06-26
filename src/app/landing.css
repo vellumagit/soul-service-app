@@ -120,6 +120,41 @@
   align-items: center;
   gap: 18px;
 }
+/* EN · УКР language toggle */
+.landing-root .lang-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.landing-root .lang-toggle button {
+  background: none;
+  border: none;
+  padding: 4px 2px;
+  cursor: pointer;
+  color: var(--land-ink-soft);
+  font: inherit;
+  letter-spacing: inherit;
+  opacity: 0.6;
+  transition:
+    color 0.2s,
+    opacity 0.2s;
+}
+.landing-root .lang-toggle button:hover {
+  color: var(--land-clay);
+  opacity: 1;
+}
+.landing-root .lang-toggle button.active {
+  color: var(--land-clay-deep);
+  opacity: 1;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.landing-root .lang-toggle .sep {
+  opacity: 0.4;
+}
 .landing-root .nav-signin {
   font-size: 14px;
   font-weight: 500;
