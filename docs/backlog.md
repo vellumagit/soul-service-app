@@ -95,3 +95,17 @@ Optional but elegant. Some clients won't mind; the explicit consent moment is mo
 Lean toward the ritual / quiet-utility end of this list when in doubt. The app's identity is "the practitioner's attention extended into software" — things like A (Sessions Inbox) and C (Ritual bundle) reinforce that. B (Constellation) is the most visually distinctive but also the most "feature-y." H (origin allowlist) and I (consent flow) are the more responsible-engineering items.
 
 The very next session is probably worth opening with "where do you want to point me today?" rather than auto-picking — different days call for different shapes of work.
+
+---
+
+## Svitlana's landing-copy notes — "maybe later" ideas
+
+From her copy-revision doc ("Sharing with Brian.docx", reviewed 2026-06). These were scattered notes at the top of the doc, NOT finished page copy — parked here so they aren't lost. The section-by-section copy edits from that doc were applied; only "Payment based on their income" was used (folded into the storefront payment-options line). The rest live here until she clarifies intent.
+
+- **Course "Who am I?"** — a future offering. Likely maps to the currently greyed-out "Quiz & Workbook" card on the storefront ("Coming soon"). If she wants it real, this could be its name/anchor. Needs scope (is it a self-guided workbook, a video course in the Library, a cohort?).
+- **"Blessing/Love sent to your family/home after the cleaning"** — references *the cleaning*, so this looks cross-pollinated from her cleaning business OR is a ritual concept (a closing blessing). Unclear if it belongs on Soul Service at all. Needs her clarification before doing anything.
+- **"What I want to make sure — the client understands my guidance and is okay before they leave"** — a value statement about how she works (a care/safety check at the end of a session). Could become a line of landing copy (e.g. in About or a "how I hold space" note), or could inform a session-closing checklist feature. Currently just a value, no home.
+- **"Payment based on their income"** — DONE: folded into the storefront payment line as "rates that meet your income." If she wants a real sliding-scale mechanism (not just "ask me"), that's a future feature: a per-offering "name your rate / income-based" option.
+- "Offer" / "Copy from my phone" — notes-to-self, no action.
+
+**When picking this up:** open with her, don't guess — especially the "Who am I?" course (could be a real Library product) and the after-cleaning blessing (may not be a Soul Service thing at all).
