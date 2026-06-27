@@ -636,6 +636,11 @@ export const practitionerSettings = pgTable("practitioner_settings", {
     .default(true)
     .notNull(),
 
+  // Standing meeting room link reused for every Circle (group session). Set
+  // once here; the welcome email + reminders use it for all circles unless a
+  // specific session has its own meet_url. e.g. a recurring Zoom/Meet room.
+  circleRoomUrl: text("circle_room_url"),
+
   // Session reminder windows. The hourly cron at /api/cron/reminders looks
   // for sessions ~N hours out where the relevant `*_reminder_sent_at` is
   // still null, sends an email via Resend, then marks the timestamp.
@@ -1087,6 +1092,15 @@ export const groupAttendees = pgTable(
     practitionerNotes: text("practitioner_notes"),
     sourceIp: text("source_ip"),
     userAgent: text("user_agent"),
+    // Stripe — set when the seat was reserved via card checkout. Null for
+    // manual (Venmo/cash) sign-ups.
+    stripeCheckoutSessionId: text("stripe_checkout_session_id"),
+    stripePaymentIntentId: text("stripe_payment_intent_id"),
+    // Fulfillment + reminder idempotency stamps. Each is set once, then the
+    // cron / webhook skips anyone already stamped.
+    welcomeSentAt: timestamp("welcome_sent_at"),
+    reminder24hSentAt: timestamp("reminder_24h_sent_at"),
+    reminder1hSentAt: timestamp("reminder_1h_sent_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },

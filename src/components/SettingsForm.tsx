@@ -272,6 +272,22 @@ export function SettingsForm({ settings }: { settings: PractitionerSettings }) {
             description="When you accept an inquiry from the inbox as a client, automatically turn on their portal access and email them a sign-in link. Only happens when they have an email on file. Off = enable + invite by hand."
           />
 
+          <div className="border-t border-ink-100 pt-4">
+            <Field
+              label="Circle room link"
+              hint="A standing Zoom/Meet room reused for every Circle. It's included in the welcome email + reminders whenever someone reserves a seat, so you never have to send a link by hand. (A specific session's own link overrides this.)"
+            >
+              <input
+                name="circleRoomUrl"
+                type="url"
+                defaultValue={settings.circleRoomUrl ?? ""}
+                maxLength={500}
+                className={inputCls}
+                placeholder="https://zoom.us/j/your-standing-room"
+              />
+            </Field>
+          </div>
+
           {/* Recall.ai notetaker — the "magic" auto-notes pipeline. Off by
               default; she opts in once she's comfortable with a bot in the
               call. */}

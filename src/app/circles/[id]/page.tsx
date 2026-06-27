@@ -14,6 +14,8 @@ import { db } from "@/db";
 import { groups, groupSessions, groupAttendees } from "@/db/schema";
 import { TimeOfDayProvider } from "@/components/TimeOfDayProvider";
 import { CircleSignupForm } from "@/components/CircleSignupForm";
+import { CirclePurchaseForm } from "@/components/CirclePurchaseForm";
+import { isStripeConfigured } from "@/lib/stripe";
 import "../../landing.css";
 
 export const dynamic = "force-dynamic";
@@ -39,10 +41,13 @@ function formatMoney(cents: number, currency: string): string {
 
 export default async function CircleSignupPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ paid?: string; canceled?: string }>;
 }) {
   const { id } = await params;
+  const { paid, canceled } = await searchParams;
 
   const rows = await db
     .select({
@@ -77,6 +82,9 @@ export default async function CircleSignupPage({
   const cancelled = session.status !== "scheduled";
   const spotsLeft = Math.max(0, session.capacity - session.takenCount);
   const open = !past && !cancelled && spotsLeft > 0;
+  const justPaid = paid === "1";
+  // Card payment available when Stripe is wired AND the circle has a price.
+  const stripeReady = isStripeConfigured() && session.priceCents > 0;
 
   return (
     <>
@@ -169,7 +177,34 @@ export default async function CircleSignupPage({
               margin: "40px auto 0",
             }}
           >
-            {past && (
+            {justPaid && (
+              <div
+                className="rounded-md"
+                style={{
+                  padding: 28,
+                  textAlign: "center",
+                  background: "var(--color-honey-50, #fbf3e4)",
+                  border: "1px solid rgba(176, 92, 54, 0.25)",
+                }}
+              >
+                <p
+                  className="serif-italic"
+                  style={{
+                    fontSize: 22,
+                    color: "var(--land-clay-deep)",
+                    marginBottom: 10,
+                  }}
+                >
+                  You&apos;re in. 🤍
+                </p>
+                <p style={{ fontSize: 14, lineHeight: 1.6 }}>
+                  Your seat is paid and held. Check your email for your welcome
+                  note and the meeting link — a gentle reminder will reach you
+                  before we gather.
+                </p>
+              </div>
+            )}
+            {!justPaid && past && (
               <div
                 className="rounded-md"
                 style={{
@@ -274,12 +309,37 @@ export default async function CircleSignupPage({
                 </p>
               </div>
             )}
-            {open && (
-              <CircleSignupForm
-                sessionId={session.sessionId}
-                paymentInstructions={session.paymentInstructions}
-              />
+            {open && !justPaid && canceled === "1" && (
+              <p
+                style={{
+                  fontSize: 12,
+                  textAlign: "center",
+                  color: "var(--land-ink-soft)",
+                  fontStyle: "italic",
+                  marginBottom: 14,
+                }}
+              >
+                Payment canceled — no charge. You can try again whenever
+                you&apos;re ready.
+              </p>
             )}
+            {open &&
+              !justPaid &&
+              (stripeReady ? (
+                <CirclePurchaseForm
+                  sessionId={session.sessionId}
+                  priceLabel={formatMoney(
+                    session.priceCents,
+                    session.currency
+                  )}
+                  paymentInstructions={session.paymentInstructions}
+                />
+              ) : (
+                <CircleSignupForm
+                  sessionId={session.sessionId}
+                  paymentInstructions={session.paymentInstructions}
+                />
+              ))}
           </div>
         </section>
       </main>

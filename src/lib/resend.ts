@@ -208,3 +208,122 @@ function portalMagicLinkHtml(
   </body>
 </html>`.trim();
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Circle (group session) emails — welcome on payment + before-session reminders
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type CircleEmailInput = {
+  to: string;
+  attendeeName: string | null;
+  circleName: string; // the group's name, e.g. "The Circle"
+  whenLabel: string; // pre-formatted date/time string
+  meetingUrl: string | null;
+  practitionerName: string | null;
+  /** Optional note shown under the details — e.g. what to bring / expect. */
+  note?: string | null;
+};
+
+/** Welcome / confirmation email sent once a seat is paid (card or manual). */
+export async function sendCircleWelcomeEmail(
+  input: CircleEmailInput
+): Promise<void> {
+  const first = input.attendeeName?.split(" ")[0] ?? null;
+  const greeting = first ? `Hi ${first},` : "Hi,";
+  const signoff = input.practitionerName ?? "Svitlana";
+  const subject = `You're in — ${input.circleName} on ${input.whenLabel}`;
+  const linkLine = input.meetingUrl
+    ? `\n\nJoin here when it's time:\n${input.meetingUrl}`
+    : "\n\nI'll send the meeting link before we gather.";
+  const noteLine = input.note ? `\n\n${input.note}` : "";
+  const text = `${greeting}
+
+Your seat in ${input.circleName} is held. 🤍
+
+· When: ${input.whenLabel}${linkLine}${noteLine}
+
+You'll get a gentle reminder before we begin. Come as you are.
+
+— ${signoff}`;
+  const html = circleEmailHtml({
+    greeting,
+    intro: `Your seat in <strong>${escapeHtml(input.circleName)}</strong> is held.`,
+    whenLabel: input.whenLabel,
+    meetingUrl: input.meetingUrl,
+    note: input.note ?? null,
+    closing: "You'll get a gentle reminder before we begin. Come as you are.",
+    signoff,
+  });
+  await sendEmail({ to: input.to, subject, html, text });
+}
+
+/** Reminder email sent 24h and 1h before a Circle. */
+export async function sendCircleReminderEmail(
+  input: CircleEmailInput & { lead: "24h" | "1h" }
+): Promise<void> {
+  const first = input.attendeeName?.split(" ")[0] ?? null;
+  const greeting = first ? `Hi ${first},` : "Hi,";
+  const signoff = input.practitionerName ?? "Svitlana";
+  const soon = input.lead === "1h" ? "in about an hour" : "tomorrow";
+  const subject =
+    input.lead === "1h"
+      ? `Starting soon — ${input.circleName}`
+      : `Tomorrow — ${input.circleName} on ${input.whenLabel}`;
+  const linkLine = input.meetingUrl
+    ? `\n\nJoin here:\n${input.meetingUrl}`
+    : "";
+  const text = `${greeting}
+
+A gentle reminder that ${input.circleName} gathers ${soon}.
+
+· When: ${input.whenLabel}${linkLine}
+
+Take a breath. I'll see you there.
+
+— ${signoff}`;
+  const html = circleEmailHtml({
+    greeting,
+    intro: `A gentle reminder that <strong>${escapeHtml(input.circleName)}</strong> gathers ${soon}.`,
+    whenLabel: input.whenLabel,
+    meetingUrl: input.meetingUrl,
+    note: null,
+    closing: "Take a breath. I'll see you there.",
+    signoff,
+  });
+  await sendEmail({ to: input.to, subject, html, text });
+}
+
+function circleEmailHtml(p: {
+  greeting: string;
+  intro: string;
+  whenLabel: string;
+  meetingUrl: string | null;
+  note: string | null;
+  closing: string;
+  signoff: string;
+}): string {
+  return `
+<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#faf6f0;font-family:Georgia,'Times New Roman',serif;color:#3d342e;">
+    <div style="max-width:480px;margin:48px auto;padding:36px 32px;background:#fdf9f1;border-radius:12px;border:1px solid #ead9c1;">
+      <p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;color:#564a42;">${escapeHtml(p.greeting)}</p>
+      <p style="margin:0 0 20px 0;font-size:15px;line-height:1.6;color:#564a42;">${p.intro}</p>
+      <p style="margin:0 0 8px 0;font-size:14px;color:#564a42;"><strong>When:</strong> ${escapeHtml(p.whenLabel)}</p>
+      ${
+        p.meetingUrl
+          ? `<a href="${escapeHtml(p.meetingUrl)}" style="display:inline-block;margin:16px 0 8px 0;background:#5a3f4f;color:#fdf9f1;text-decoration:none;font-size:14px;font-weight:500;padding:12px 22px;border-radius:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">Join the Circle</a>
+      <p style="margin:8px 0 0 0;font-size:12px;color:#786b60;line-height:1.5;word-break:break-all;font-family:ui-monospace,Menlo,monospace;">${escapeHtml(p.meetingUrl)}</p>`
+          : `<p style="margin:8px 0 0 0;font-size:13px;color:#786b60;font-style:italic;">The meeting link will follow before we gather.</p>`
+      }
+      ${
+        p.note
+          ? `<p style="margin:24px 0 0 0;font-size:14px;line-height:1.6;color:#564a42;">${escapeHtml(p.note)}</p>`
+          : ""
+      }
+      <p style="margin:24px 0 0 0;font-size:14px;line-height:1.6;color:#564a42;">${escapeHtml(p.closing)}</p>
+      <p style="margin:20px 0 0 0;font-size:14px;color:#564a42;font-style:italic;">— ${escapeHtml(p.signoff)}</p>
+    </div>
+  </body>
+</html>`.trim();
+}

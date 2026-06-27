@@ -71,6 +71,17 @@ export default async function StatusPage() {
         : "Set OPENAI_API_KEY in your Vercel env vars to enable the voice-memo → notes pipeline. Whisper handles the transcription; Claude (already configured above) structures it.",
     },
     {
+      label: "Card payments — Circles (Stripe)",
+      state:
+        process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET
+          ? "ok"
+          : "warn",
+      detail:
+        process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET
+          ? "Stripe connected. Visitors can pay for a Circle seat by card on the public sign-up page; the webhook marks them paid, sends the welcome email with the meeting link, and reminders go out 24h + 1h before. (The manual Venmo/cash lane still works alongside it.)"
+          : "Set STRIPE_SECRET_KEY + STRIPE_WEBHOOK_SECRET in your Vercel env vars and point a Stripe webhook at <your-domain>/api/webhooks/stripe (event: checkout.session.completed). Until then, Circles take seats via the manual hold-a-seat + mark-paid flow only. Also set the Circle room link in Settings so welcome emails carry the meeting link — and verify a Resend domain so those emails deliver.",
+    },
+    {
       label: "Video hosting (Cloudflare Stream)",
       state:
         process.env.CLOUDFLARE_ACCOUNT_ID &&

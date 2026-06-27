@@ -30,6 +30,8 @@ const PUBLIC_PREFIXES = [
   "/watch/", // token-validated playback pages for confirmed purchases
   "/api/auth/", // /api/auth/google/callback (Google Calendar OAuth)
   "/api/cron/", // Vercel Cron endpoints — verified by CRON_SECRET, not session
+  "/api/webhooks/", // Stripe + Recall webhooks — verified by their own signatures
+  "/api/leads/", // external lead intake — verified by per-form Bearer token
 ];
 
 // Exact public paths.

@@ -11,7 +11,7 @@
 // own reminder-hour settings + Resend config.
 import "server-only";
 
-import { and, eq, gte, isNull, lte } from "drizzle-orm";
+import { and, eq, gte, gt, isNull, lte, lt, sql } from "drizzle-orm";
 import {
   db,
   sessions,
@@ -19,11 +19,15 @@ import {
   accounts,
   practitionerSettings,
 } from "@/db";
+import { groupSessions, groupAttendees, groups } from "@/db/schema";
+import { resolveCircleMeetingUrl } from "./circle-fulfillment";
 
 // Anchor "now" once per run so all queries see the same moment
 type ReminderRunStats = {
   clientRemindersSent: number;
   practitionerRemindersSent: number;
+  circleRemindersSent: number;
+  staleHoldsCleared: number;
   errors: string[];
 };
 
@@ -32,8 +36,31 @@ export async function processReminders(): Promise<ReminderRunStats> {
   const stats: ReminderRunStats = {
     clientRemindersSent: 0,
     practitionerRemindersSent: 0,
+    circleRemindersSent: 0,
+    staleHoldsCleared: 0,
     errors: [],
   };
+
+  // Release abandoned Stripe checkout holds: pending, unpaid attendee rows
+  // with a checkout session id older than 60 min. Frees the seat back up.
+  try {
+    const cutoff = new Date(now.getTime() - 60 * 60 * 1000);
+    const cleared = await db
+      .update(groupAttendees)
+      .set({ status: "cancelled", updatedAt: now })
+      .where(
+        and(
+          eq(groupAttendees.status, "pending"),
+          eq(groupAttendees.paid, false),
+          sql`${groupAttendees.stripeCheckoutSessionId} IS NOT NULL`,
+          lt(groupAttendees.createdAt, cutoff)
+        )
+      )
+      .returning({ id: groupAttendees.id });
+    stats.staleHoldsCleared = cleared.length;
+  } catch (err) {
+    console.error("[reminders] stale-hold cleanup failed:", err);
+  }
 
   // Iterate per account so each tenant uses its own settings.
   const allAccounts = await db.select().from(accounts);
@@ -72,6 +99,14 @@ export async function processReminders(): Promise<ReminderRunStats> {
         );
         stats.practitionerRemindersSent += sent;
       }
+
+      // CIRCLE REMINDERS — fixed 24h + 1h before each group session, to
+      // every confirmed attendee. Independent of the 1-on-1 windows above.
+      stats.circleRemindersSent += await sendDueCircleReminders(
+        account.id,
+        settingsRow,
+        now
+      );
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
       stats.errors.push(`account ${account.id}: ${msg}`);
@@ -218,6 +253,95 @@ async function sendDuePractitionerReminders(
         `[reminders] failed to send practitioner reminder for session ${row.sessionId}:`,
         err
       );
+    }
+  }
+
+  return count;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Circle (group session) reminders — 24h + 1h before, to confirmed attendees
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function sendDueCircleReminders(
+  accountId: string,
+  settings: typeof practitionerSettings.$inferSelect,
+  now: Date
+): Promise<number> {
+  const in1h = new Date(now.getTime() + 60 * 60 * 1000);
+  const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+  // Two passes. The 24h pass deliberately excludes sessions <1h away so a
+  // late sign-up doesn't get a "tomorrow" + "in an hour" email back-to-back.
+  const passes: Array<{ lead: "24h" | "1h"; from: Date; to: Date }> = [
+    { lead: "24h", from: in1h, to: in24h },
+    { lead: "1h", from: now, to: in1h },
+  ];
+
+  let count = 0;
+  for (const pass of passes) {
+    const notYetSent =
+      pass.lead === "24h"
+        ? isNull(groupAttendees.reminder24hSentAt)
+        : isNull(groupAttendees.reminder1hSentAt);
+    const rows = await db
+      .select({
+        attendeeId: groupAttendees.id,
+        name: groupAttendees.name,
+        email: groupAttendees.email,
+        scheduledAt: groupSessions.scheduledAt,
+        sessionMeetUrl: groupSessions.meetUrl,
+        groupName: groups.name,
+      })
+      .from(groupAttendees)
+      .innerJoin(
+        groupSessions,
+        eq(groupSessions.id, groupAttendees.groupSessionId)
+      )
+      .innerJoin(groups, eq(groups.id, groupSessions.groupId))
+      .where(
+        and(
+          eq(groupAttendees.accountId, accountId),
+          eq(groupAttendees.status, "confirmed"),
+          notYetSent,
+          eq(groupSessions.status, "scheduled"),
+          gt(groupSessions.scheduledAt, pass.from),
+          lte(groupSessions.scheduledAt, pass.to)
+        )
+      );
+
+    for (const row of rows) {
+      if (!row.email || !row.email.includes("@")) continue;
+      const meetingUrl = resolveCircleMeetingUrl(
+        row.sessionMeetUrl,
+        settings.circleRoomUrl ?? null
+      );
+      try {
+        const { sendCircleReminderEmail } = await import("./resend");
+        await sendCircleReminderEmail({
+          to: row.email,
+          attendeeName: row.name,
+          circleName: row.groupName,
+          whenLabel: formatLongDateTime(new Date(row.scheduledAt)),
+          meetingUrl,
+          practitionerName: settings.practitionerName ?? null,
+          lead: pass.lead,
+        });
+        await db
+          .update(groupAttendees)
+          .set(
+            pass.lead === "24h"
+              ? { reminder24hSentAt: now }
+              : { reminder1hSentAt: now }
+          )
+          .where(eq(groupAttendees.id, row.attendeeId));
+        count++;
+      } catch (err) {
+        console.error(
+          `[reminders] circle ${pass.lead} reminder failed for attendee ${row.attendeeId}:`,
+          err
+        );
+      }
     }
   }
 

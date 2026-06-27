@@ -19,6 +19,8 @@ import {
 } from "@/db/schema";
 import { requireSession } from "./session-cookies";
 import { checkRateLimit } from "./rate-limit";
+import { getStripe, isStripeConfigured } from "./stripe";
+import { fulfillCircleSeat } from "./circle-fulfillment";
 
 // ─────────────────────────────────────────────────────────────────────
 // Practitioner — create / update groups
@@ -307,6 +309,203 @@ export async function signUpForGroupSession(
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// Public — pay for a seat via Stripe Checkout (no auth)
+// ─────────────────────────────────────────────────────────────────────
+
+export type CheckoutResult =
+  | { ok: true; url: string }
+  | { ok: false; error: string };
+
+export async function createCircleCheckout(input: {
+  groupSessionId: string;
+  name: string;
+  email: string;
+  phone?: string;
+  _hp?: string; // honeypot
+}): Promise<CheckoutResult> {
+  // Honeypot — pretend success-ish without doing anything.
+  if ((input._hp ?? "").trim().length > 0) {
+    return { ok: false, error: "Something went wrong. Please try again." };
+  }
+  if (!isStripeConfigured()) {
+    return {
+      ok: false,
+      error: "Card payment isn't set up yet. Use the other ways to pay below.",
+    };
+  }
+
+  const groupSessionId = String(input.groupSessionId ?? "");
+  const name = String(input.name ?? "").trim().slice(0, 200);
+  const emailRaw = String(input.email ?? "").trim().slice(0, 200);
+  const phone = String(input.phone ?? "").trim().slice(0, 50) || null;
+  if (!groupSessionId) return { ok: false, error: "Missing session." };
+  if (!name) return { ok: false, error: "Please share your name." };
+  if (!emailRaw || !emailRaw.includes("@")) {
+    return { ok: false, error: "Please share a valid email." };
+  }
+  const email = emailRaw.toLowerCase();
+
+  // Rate limit — generous; public form.
+  const h = await headers();
+  const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const limit = checkRateLimit("circle-checkout", ip, {
+    limit: 6,
+    windowMs: 60_000,
+  });
+  if (!limit.ok) {
+    return {
+      ok: false,
+      error: `Slow down a moment. Try again in ${limit.retryAfterSeconds}s.`,
+    };
+  }
+
+  // Load session + group (price, currency, capacity, name).
+  const [row] = await db
+    .select({
+      sessionId: groupSessions.id,
+      accountId: groupSessions.accountId,
+      scheduledAt: groupSessions.scheduledAt,
+      status: groupSessions.status,
+      capacity: groupSessions.capacity,
+      priceCents: groupSessions.priceCents,
+      groupName: groups.name,
+      currency: groups.defaultCurrency,
+      published: groups.published,
+    })
+    .from(groupSessions)
+    .innerJoin(groups, eq(groups.id, groupSessions.groupId))
+    .where(eq(groupSessions.id, groupSessionId))
+    .limit(1);
+  if (!row || !row.published) {
+    return { ok: false, error: "That session isn't available." };
+  }
+  if (row.status !== "scheduled") {
+    return { ok: false, error: "That session is no longer open." };
+  }
+  if (row.scheduledAt.getTime() < Date.now()) {
+    return { ok: false, error: "That session has already started." };
+  }
+  if (row.priceCents <= 0) {
+    return {
+      ok: false,
+      error: "This circle is free — use the regular sign-up below.",
+    };
+  }
+
+  // Capacity check (non-cancelled attendees count, incl. pending-payment holds).
+  const countRow = await db
+    .select({ n: sql<number>`COUNT(*)::int` })
+    .from(groupAttendees)
+    .where(
+      and(
+        eq(groupAttendees.groupSessionId, groupSessionId),
+        sql`${groupAttendees.status} <> 'cancelled'`
+      )
+    );
+  if ((countRow[0]?.n ?? 0) >= row.capacity) {
+    return {
+      ok: false,
+      error: "This session is full. Reach out and I'll tell you about the next one.",
+    };
+  }
+
+  // Already paid with this email? Don't double-charge.
+  const [existing] = await db
+    .select({ id: groupAttendees.id, paid: groupAttendees.paid })
+    .from(groupAttendees)
+    .where(
+      and(
+        eq(groupAttendees.groupSessionId, groupSessionId),
+        sql`LOWER(${groupAttendees.email}) = ${email}`,
+        eq(groupAttendees.paid, true)
+      )
+    )
+    .limit(1);
+  if (existing) {
+    return {
+      ok: false,
+      error: "You're already booked for this circle — check your email for the details.",
+    };
+  }
+
+  // Create a pending attendee row that holds the seat through checkout.
+  const [attendee] = await db
+    .insert(groupAttendees)
+    .values({
+      accountId: row.accountId,
+      groupSessionId,
+      name,
+      email,
+      phone,
+      status: "pending",
+      paid: false,
+      sourceIp: ip === "unknown" ? null : ip,
+      userAgent: h.get("user-agent") ?? null,
+    })
+    .returning({ id: groupAttendees.id });
+
+  const base =
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    `${h.get("x-forwarded-proto") ?? "https"}://${h.get("host") ?? "localhost"}`;
+
+  try {
+    const stripe = getStripe();
+    const whenLabel = row.scheduledAt.toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+    const checkout = await stripe.checkout.sessions.create({
+      mode: "payment",
+      customer_email: email,
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: (row.currency ?? "USD").toLowerCase(),
+            unit_amount: row.priceCents,
+            product_data: { name: `${row.groupName} — ${whenLabel}` },
+          },
+        },
+      ],
+      metadata: {
+        attendeeId: attendee.id,
+        groupSessionId,
+        accountId: row.accountId,
+        kind: "circle-seat",
+      },
+      payment_intent_data: {
+        metadata: { attendeeId: attendee.id, groupSessionId },
+      },
+      success_url: `${base}/circles/${groupSessionId}?paid=1`,
+      cancel_url: `${base}/circles/${groupSessionId}?canceled=1`,
+    });
+
+    await db
+      .update(groupAttendees)
+      .set({ stripeCheckoutSessionId: checkout.id, updatedAt: new Date() })
+      .where(eq(groupAttendees.id, attendee.id));
+
+    if (!checkout.url) {
+      return { ok: false, error: "Couldn't start checkout. Try again." };
+    }
+    return { ok: true, url: checkout.url };
+  } catch (err) {
+    // Roll back the held seat so a failed checkout doesn't leave a ghost.
+    await db
+      .update(groupAttendees)
+      .set({ status: "cancelled", updatedAt: new Date() })
+      .where(eq(groupAttendees.id, attendee.id));
+    console.error("[circle] checkout creation failed", err);
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Couldn't start checkout.",
+    };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Practitioner — triage attendees
 // ─────────────────────────────────────────────────────────────────────
 
@@ -335,6 +534,14 @@ export async function confirmAttendee(
       )
       .returning({ groupSessionId: groupAttendees.groupSessionId });
     if (!row) return { ok: false, error: "Attendee not found" };
+    // Fulfillment: send the welcome email (with the meeting link) now that
+    // they're confirmed. Idempotent + non-fatal — same path the Stripe
+    // webhook uses, so card and manual lanes behave identically.
+    try {
+      await fulfillCircleSeat(attendeeId);
+    } catch (err) {
+      console.error("[group] fulfillment after manual confirm failed", err);
+    }
     revalidatePath("/loose-ends");
     revalidatePath("/groups");
     return { ok: true };

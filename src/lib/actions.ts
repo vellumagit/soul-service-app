@@ -2313,6 +2313,7 @@ export async function updateSettings(formData: FormData) {
         60
       ),
       showAvailabilityPublicly: bool(formData, "showAvailabilityPublicly"),
+      circleRoomUrl: str(formData, "circleRoomUrl"),
       updatedAt: new Date(),
     })
     .where(eq(practitionerSettings.accountId, accountId));
