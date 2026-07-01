@@ -19,6 +19,7 @@ import { headers } from "next/headers";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  accounts,
   leadForms,
   leadSubmissions,
   practitionerSettings,
@@ -29,6 +30,11 @@ import {
   hashLeadFormToken,
   leadFormTokenPrefix,
 } from "./lead-tokens";
+import {
+  isResendConfigured,
+  sendLandingInquiryAckEmail,
+  sendLandingInquiryNotifyEmail,
+} from "./resend";
 
 const LANDING_FORM_SLUG = "landing-page";
 
@@ -150,6 +156,78 @@ export async function submitLandingLead(
     referer: h.get("referer") ?? null,
     status: "pending",
   });
+
+  // Notifications — best-effort. The inquiry is ALREADY saved above, so a
+  // mail failure must never fail the submission or hide it from her inbox.
+  // Two emails: a confirmation to the visitor, and a "new inquiry" alert to
+  // the practitioner (with the visitor's email as reply-to so she can just
+  // hit Reply). Requires RESEND_API_KEY; delivery reliability needs a
+  // verified Resend domain.
+  try {
+    if (isResendConfigured()) {
+      const [acct] = await db
+        .select({ email: accounts.email })
+        .from(accounts)
+        .where(eq(accounts.id, accountId))
+        .limit(1);
+      const [pset] = await db
+        .select({
+          practitionerName: practitionerSettings.practitionerName,
+          businessEmail: practitionerSettings.businessEmail,
+        })
+        .from(practitionerSettings)
+        .where(eq(practitionerSettings.accountId, accountId))
+        .limit(1);
+
+      const practitionerName = pset?.practitionerName ?? null;
+      const replyToHer = pset?.businessEmail || acct?.email || undefined;
+      const notifyTo = acct?.email || pset?.businessEmail || null;
+
+      let preferredWhenLabel: string | null = null;
+      if (preferredWindowIso) {
+        const d = new Date(preferredWindowIso);
+        if (Number.isFinite(d.getTime())) {
+          preferredWhenLabel = d.toLocaleString("en-US", {
+            weekday: "short",
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+          });
+        }
+      }
+
+      // Confirmation to the visitor.
+      try {
+        await sendLandingInquiryAckEmail({
+          to: email,
+          name,
+          practitionerName,
+          replyTo: replyToHer,
+        });
+      } catch (err) {
+        console.error("[landing] inquiry ack email failed:", err);
+      }
+
+      // Notification to the practitioner.
+      if (notifyTo) {
+        try {
+          await sendLandingInquiryNotifyEmail({
+            to: notifyTo,
+            practitionerName,
+            fromName: name,
+            fromEmail: email,
+            message: message || null,
+            preferredWhenLabel,
+          });
+        } catch (err) {
+          console.error("[landing] inquiry notify email failed:", err);
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[landing] notification block failed:", err);
+  }
 
   return { ok: true };
 }

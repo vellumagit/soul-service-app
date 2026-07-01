@@ -327,3 +327,111 @@ function circleEmailHtml(p: {
   </body>
 </html>`.trim();
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Landing-page inquiry emails — confirmation to the visitor + notify the
+// practitioner. Both are best-effort (the caller swallows failures so the
+// inquiry is never lost). replyTo is set so replies route the right way.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Confirmation to the person who submitted the "Send a note" form. */
+export async function sendLandingInquiryAckEmail(input: {
+  to: string;
+  name: string | null;
+  practitionerName: string | null;
+  replyTo?: string;
+}): Promise<void> {
+  const first = input.name?.split(" ")[0] ?? null;
+  const greeting = first ? `Hi ${first},` : "Hi,";
+  const signoff = input.practitionerName ?? "Svitlana";
+  const subject = "Thank you for reaching out";
+  const text = `${greeting}
+
+Your note arrived — thank you for reaching out. I read every message myself, and I'll reply within a few days, usually sooner.
+
+Take a quiet breath. I'm glad you did.
+
+— ${signoff}`;
+  const html = simpleNoteHtml({
+    greeting,
+    paragraphs: [
+      "Your note arrived — thank you for reaching out. I read every message myself, and I'll reply within a few days, usually sooner.",
+      "Take a quiet breath. I'm glad you did.",
+    ],
+    signoff,
+  });
+  await sendEmail({ to: input.to, subject, html, text, replyTo: input.replyTo });
+}
+
+/** Notify the practitioner that a new inquiry came in. replyTo is the
+ *  visitor's email so she can just hit Reply to answer them directly. */
+export async function sendLandingInquiryNotifyEmail(input: {
+  to: string;
+  practitionerName: string | null;
+  fromName: string;
+  fromEmail: string;
+  message: string | null;
+  preferredWhenLabel?: string | null;
+}): Promise<void> {
+  const subject = `New inquiry from ${input.fromName}`;
+  const detailLines = [
+    `From: ${input.fromName} <${input.fromEmail}>`,
+  ];
+  if (input.preferredWhenLabel) {
+    detailLines.push(`Preferred time: ${input.preferredWhenLabel}`);
+  }
+  const text = `${detailLines.join("\n")}
+
+${input.message ? `"${input.message}"\n\n` : "(No message — just their details.)\n\n"}Reply straight to this email to answer them, or open Network → Inbox.`;
+  const html = `
+<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#faf6f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1a1411;">
+    <div style="max-width:480px;margin:40px auto;padding:32px;background:#fdf9f1;border-radius:12px;border:1px solid #ead9c1;">
+      <p style="margin:0 0 16px 0;font-size:16px;font-weight:600;color:#1a1411;">A new note came in through your landing page.</p>
+      <p style="margin:0 0 4px 0;font-size:14px;color:#564a42;"><strong>From:</strong> ${escapeHtml(input.fromName)} &lt;${escapeHtml(input.fromEmail)}&gt;</p>
+      ${
+        input.preferredWhenLabel
+          ? `<p style="margin:0 0 4px 0;font-size:14px;color:#564a42;"><strong>Preferred time:</strong> ${escapeHtml(input.preferredWhenLabel)}</p>`
+          : ""
+      }
+      ${
+        input.message
+          ? `<div style="margin:16px 0;padding:14px 16px;background:#f6e6ce;border-radius:8px;font-family:Georgia,serif;font-style:italic;font-size:15px;line-height:1.55;color:#3d342e;">&ldquo;${escapeHtml(input.message)}&rdquo;</div>`
+          : `<p style="margin:16px 0;font-size:13px;color:#786b60;font-style:italic;">No message — just their details.</p>`
+      }
+      <p style="margin:20px 0 0 0;font-size:13px;color:#786b60;line-height:1.55;">Just hit <strong>Reply</strong> to answer them directly, or open Network → Inbox in your workspace.</p>
+    </div>
+  </body>
+</html>`.trim();
+  await sendEmail({
+    to: input.to,
+    subject,
+    html,
+    text,
+    replyTo: input.fromEmail,
+  });
+}
+
+function simpleNoteHtml(p: {
+  greeting: string;
+  paragraphs: string[];
+  signoff: string;
+}): string {
+  return `
+<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#faf6f0;font-family:Georgia,'Times New Roman',serif;color:#3d342e;">
+    <div style="max-width:480px;margin:48px auto;padding:36px 32px;background:#fdf9f1;border-radius:12px;border:1px solid #ead9c1;">
+      <p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;color:#564a42;">${escapeHtml(p.greeting)}</p>
+      ${p.paragraphs
+        .map(
+          (para) =>
+            `<p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;color:#564a42;">${escapeHtml(para)}</p>`
+        )
+        .join("\n      ")}
+      <p style="margin:20px 0 0 0;font-size:14px;color:#564a42;font-style:italic;">— ${escapeHtml(p.signoff)}</p>
+    </div>
+  </body>
+</html>`.trim();
+}
