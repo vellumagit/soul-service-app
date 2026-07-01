@@ -102,9 +102,12 @@ export default async function LandingPage() {
             <SecretSignInWordmark />
             <div className="nav-actions">
               <LandingLangToggle current={lang} />
-              <Link href="/signin" className="nav-signin">
+              <Link href="/signin" className="nav-signin nav-hide-narrow">
                 {c.nav.signIn}
               </Link>
+              <a href="#contact" className="nav-signin">
+                {c.nav.reachOut}
+              </a>
               <a href="#ways" className="navcta">
                 {c.nav.workWithMe}
               </a>

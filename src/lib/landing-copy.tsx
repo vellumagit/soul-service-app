@@ -14,7 +14,7 @@ import type { ReactNode } from "react";
 export type LandingLang = "en" | "uk";
 
 export interface LandingCopy {
-  nav: { signIn: string; workWithMe: string };
+  nav: { signIn: string; workWithMe: string; reachOut: string };
   hero: {
     eyebrow: string;
     title: ReactNode;
@@ -125,7 +125,7 @@ interface Offer {
 }
 
 const EN: LandingCopy = {
-  nav: { signIn: "Sign in", workWithMe: "Work with me" },
+  nav: { signIn: "Sign in", workWithMe: "Work with me", reachOut: "Reach out" },
   hero: {
     eyebrow: "For those who carry everyone but themselves",
     title: (
@@ -336,7 +336,11 @@ const EN: LandingCopy = {
 };
 
 const UK: LandingCopy = {
-  nav: { signIn: "Увійти", workWithMe: "Попрацювати зі мною" },
+  nav: {
+    signIn: "Увійти",
+    workWithMe: "Попрацювати зі мною",
+    reachOut: "Написати",
+  },
   hero: {
     eyebrow: "Для тих, хто тримає всіх, окрім себе",
     title: (

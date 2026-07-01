@@ -188,10 +188,15 @@
     gap: 12px;
   }
   .landing-root .navcta {
-    /* Slightly tighter button on small screens, but keep visible — the
-     * Sign in link stays primary clarity for phone visitors. */
+    /* Slightly tighter button on small screens, but keep visible. */
     padding: 8px 14px;
     font-size: 13px;
+  }
+  /* On phones the sticky nav gets crowded — drop the client "Sign in" link
+   * (still reachable from the footer) so "Reach out" + "Work with me" stay
+   * clear and uncramped. */
+  .landing-root .nav-hide-narrow {
+    display: none;
   }
 }
 
