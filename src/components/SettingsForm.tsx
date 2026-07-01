@@ -273,6 +273,12 @@ export function SettingsForm({ settings }: { settings: PractitionerSettings }) {
           />
 
           <div className="border-t border-ink-100 pt-4">
+            <Toggle
+              name="circleSignupsOpen"
+              defaultChecked={settings.circleSignupsOpen}
+              label="Open Circle sign-ups on the storefront"
+              description="On = visitors can reserve a seat on the public Circle pages, and upcoming Circles show on svit.live. Off (default) = the storefront shows pricing + contact only, and Circle links say 'reach out to join.' Turn on once card payment + emails are ready."
+            />
             <Field
               label="Circle room link"
               hint="A standing Zoom/Meet room reused for every Circle. It's included in the welcome email + reminders whenever someone reserves a seat, so you never have to send a link by hand. (A specific session's own link overrides this.)"

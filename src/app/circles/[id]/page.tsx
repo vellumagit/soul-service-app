@@ -11,7 +11,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { groups, groupSessions, groupAttendees } from "@/db/schema";
+import {
+  groups,
+  groupSessions,
+  groupAttendees,
+  practitionerSettings,
+} from "@/db/schema";
 import { TimeOfDayProvider } from "@/components/TimeOfDayProvider";
 import { CircleSignupForm } from "@/components/CircleSignupForm";
 import { CirclePurchaseForm } from "@/components/CirclePurchaseForm";
@@ -63,6 +68,7 @@ export default async function CircleSignupPage({
       currency: groups.defaultCurrency,
       topic: groupSessions.topic,
       status: groupSessions.status,
+      circleSignupsOpen: practitionerSettings.circleSignupsOpen,
       takenCount: sql<number>`(
         SELECT COUNT(*)::int FROM ${groupAttendees}
         WHERE ${groupAttendees.groupSessionId} = ${groupSessions.id}
@@ -71,6 +77,10 @@ export default async function CircleSignupPage({
     })
     .from(groupSessions)
     .innerJoin(groups, eq(groups.id, groupSessions.groupId))
+    .leftJoin(
+      practitionerSettings,
+      eq(practitionerSettings.accountId, groupSessions.accountId)
+    )
     .where(and(eq(groupSessions.id, id), eq(groups.published, true)))
     .limit(1);
 
@@ -83,6 +93,9 @@ export default async function CircleSignupPage({
   const spotsLeft = Math.max(0, session.capacity - session.takenCount);
   const open = !past && !cancelled && spotsLeft > 0;
   const justPaid = paid === "1";
+  // Master switch — when sign-ups are closed, no one can reserve here; the
+  // page shows a "reach out to join" message instead of the form.
+  const signupsOpen = session.circleSignupsOpen ?? false;
   // Card payment available when Stripe is wired AND the circle has a price.
   const stripeReady = isStripeConfigured() && session.priceCents > 0;
 
@@ -309,7 +322,42 @@ export default async function CircleSignupPage({
                 </p>
               </div>
             )}
-            {open && !justPaid && canceled === "1" && (
+            {open && !justPaid && !signupsOpen && (
+              <div
+                className="rounded-md"
+                style={{
+                  padding: 24,
+                  textAlign: "center",
+                  background: "rgba(255, 251, 245, 0.7)",
+                  border: "1px solid rgba(176, 92, 54, 0.18)",
+                }}
+              >
+                <p
+                  className="serif-italic"
+                  style={{
+                    fontSize: 18,
+                    color: "var(--land-clay-deep)",
+                    marginBottom: 8,
+                  }}
+                >
+                  Sign-ups aren&apos;t open online just yet.
+                </p>
+                <p style={{ fontSize: 13, lineHeight: 1.6 }}>
+                  These Circles gather by warm invitation. Send a note via{" "}
+                  <Link
+                    href="/#contact"
+                    style={{
+                      color: "var(--land-clay)",
+                      textDecoration: "underline",
+                    }}
+                  >
+                    the contact form
+                  </Link>{" "}
+                  and Svitlana will hold a place for you.
+                </p>
+              </div>
+            )}
+            {open && !justPaid && signupsOpen && canceled === "1" && (
               <p
                 style={{
                   fontSize: 12,
@@ -325,6 +373,7 @@ export default async function CircleSignupPage({
             )}
             {open &&
               !justPaid &&
+              signupsOpen &&
               (stripeReady ? (
                 <CirclePurchaseForm
                   sessionId={session.sessionId}

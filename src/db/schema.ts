@@ -641,6 +641,13 @@ export const practitionerSettings = pgTable("practitioner_settings", {
   // specific session has its own meet_url. e.g. a recurring Zoom/Meet room.
   circleRoomUrl: text("circle_room_url"),
 
+  // Master switch for public Circle sign-ups. OFF (default) → the storefront
+  // hides the "Upcoming Circles" section and the public /circles/[id] page
+  // shows a "reach out to join" message instead of the sign-up form, so the
+  // storefront is info + pricing + contact only. Flip ON when payment +
+  // emails are ready to take live sign-ups.
+  circleSignupsOpen: boolean("circle_signups_open").default(false).notNull(),
+
   // Session reminder windows. The hourly cron at /api/cron/reminders looks
   // for sessions ~N hours out where the relevant `*_reminder_sent_at` is
   // still null, sends an email via Resend, then marks the timestamp.

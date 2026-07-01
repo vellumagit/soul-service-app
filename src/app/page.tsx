@@ -47,15 +47,20 @@ export default async function LandingPage() {
   // practitioner has opted in (Settings → Availability). Off → free-text
   // form only.
   let availableWindows: LandingWindow[] = [];
+  // Master switch: when Circle sign-ups are closed, the storefront hides the
+  // "Upcoming Circles" section entirely (pricing + contact only).
+  let circleSignupsOpen = false;
   try {
     const settingsRow = await db
       .select({
         accountId: practitionerSettings.accountId,
         showAvailability: practitionerSettings.showAvailabilityPublicly,
+        circleSignupsOpen: practitionerSettings.circleSignupsOpen,
       })
       .from(practitionerSettings)
       .limit(1);
     const cfg = settingsRow[0];
+    circleSignupsOpen = cfg?.circleSignupsOpen ?? false;
     if (cfg?.showAvailability) {
       const windows = await getAvailableWindows(cfg.accountId, { limit: 6 });
       availableWindows = windows.map((w) => ({
@@ -321,8 +326,11 @@ export default async function LandingPage() {
           </div>
         </section>
 
-        {/* UPCOMING CIRCLES — only renders if there are any */}
-        {upcomingCircles.length > 0 && (
+        {/* UPCOMING CIRCLES — only when sign-ups are open AND there are any.
+            While closed, the storefront stays info + pricing + contact; the
+            "Ways to work together" ladder still shows Circle pricing and
+            routes to the contact form. */}
+        {circleSignupsOpen && upcomingCircles.length > 0 && (
           <section className="circles" id="circles">
             <div className="wrap narrow rv" style={{ textAlign: "center" }}>
               <span className="tag" style={{ display: "block" }}>
