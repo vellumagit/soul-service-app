@@ -50,17 +50,21 @@ export default async function LandingPage() {
   // Master switch: when Circle sign-ups are closed, the storefront hides the
   // "Upcoming Circles" section entirely (pricing + contact only).
   let circleSignupsOpen = false;
+  // Portrait photo for the About section. Blank → the gradient placeholder.
+  let portraitUrl: string | null = null;
   try {
     const settingsRow = await db
       .select({
         accountId: practitionerSettings.accountId,
         showAvailability: practitionerSettings.showAvailabilityPublicly,
         circleSignupsOpen: practitionerSettings.circleSignupsOpen,
+        landingPortraitUrl: practitionerSettings.landingPortraitUrl,
       })
       .from(practitionerSettings)
       .limit(1);
     const cfg = settingsRow[0];
     circleSignupsOpen = cfg?.circleSignupsOpen ?? false;
+    portraitUrl = cfg?.landingPortraitUrl?.trim() || null;
     if (cfg?.showAvailability) {
       const windows = await getAvailableWindows(cfg.accountId, { limit: 6 });
       availableWindows = windows.map((w) => ({
@@ -203,7 +207,12 @@ export default async function LandingPage() {
         <section className="about">
           <div className="wrap about-grid">
             <div className="portrait rv">
-              <span>{c.about.portraitPlaceholder}</span>
+              {portraitUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={portraitUrl} alt={c.about.tag} />
+              ) : (
+                <span>{c.about.portraitPlaceholder}</span>
+              )}
             </div>
             <div className="rv">
               <span className="tag">{c.about.tag}</span>

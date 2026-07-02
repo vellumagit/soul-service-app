@@ -172,6 +172,18 @@ export function SettingsForm({ settings }: { settings: PractitionerSettings }) {
             placeholder="Not a quick fix. A steady relationship over time…"
           />
         </Field>
+        <Field
+          label="Portrait photo"
+          hint="Paste an image link to fill the photo frame in the “Who I am” section. Leave blank for the soft placeholder. Tip: a file placed in the app’s public folder is reachable at /its-name.jpg — or paste any hosted image URL."
+        >
+          <input
+            name="landingPortraitUrl"
+            defaultValue={settings.landingPortraitUrl ?? ""}
+            maxLength={500}
+            className={inputCls}
+            placeholder="/svitlana.jpg  or  https://…/photo.jpg"
+          />
+        </Field>
         <p className="text-[11px] text-ink-400 italic mt-2">
           Preview your landing page at{" "}
           <a

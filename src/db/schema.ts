@@ -648,6 +648,12 @@ export const practitionerSettings = pgTable("practitioner_settings", {
   // emails are ready to take live sign-ups.
   circleSignupsOpen: boolean("circle_signups_open").default(false).notNull(),
 
+  // Portrait photo shown in the landing "About / Who I am" section. When
+  // set, the image renders in the portrait frame; blank → the soft gradient
+  // placeholder. Any image URL (a file in /public → "/svitlana.jpg", or any
+  // hosted URL). Editable from Settings → Landing page.
+  landingPortraitUrl: text("landing_portrait_url"),
+
   // Session reminder windows. The hourly cron at /api/cron/reminders looks
   // for sessions ~N hours out where the relevant `*_reminder_sent_at` is
   // still null, sends an email via Resend, then marks the timestamp.

@@ -2315,11 +2315,13 @@ export async function updateSettings(formData: FormData) {
       showAvailabilityPublicly: bool(formData, "showAvailabilityPublicly"),
       circleRoomUrl: str(formData, "circleRoomUrl"),
       circleSignupsOpen: bool(formData, "circleSignupsOpen"),
+      landingPortraitUrl: str(formData, "landingPortraitUrl"),
       updatedAt: new Date(),
     })
     .where(eq(practitionerSettings.accountId, accountId));
 
   revalidatePath("/settings");
+  revalidatePath("/");
   revalidatePath("/today");
   revalidatePath("/calendar");
   revalidatePath("/"); // landing page reads from settings — keep it fresh
