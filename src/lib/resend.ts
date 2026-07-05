@@ -413,6 +413,112 @@ ${input.message ? `"${input.message}"\n\n` : "(No message — just their details
   });
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Session booking confirmation — app-sent, independent of Google Calendar.
+// This is the reliable "you're booked" the client receives the moment a
+// 1-on-1 session is scheduled. It does NOT depend on the Google Calendar
+// invite succeeding (that's a best-effort layer on top). Sent as a
+// best-effort tail of scheduleSession — a mail failure never blocks the
+// booking.
+//
+// NOTE ON TIME ZONE: like the reminder emails, the when-label renders in the
+// server's zone (UTC on Vercel) with an explicit zone suffix. Localizing to
+// the client's own timezone is a separate, cross-cutting follow-up so all
+// session emails move together.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function sendSessionBookingConfirmationEmail(input: {
+  to: string;
+  clientName: string | null;
+  sessionType: string;
+  scheduledAt: Date;
+  durationMinutes: number;
+  meetingUrl: string | null;
+  practitionerName: string | null;
+  /** Practitioner's business email, so a client can just hit Reply. */
+  replyTo?: string;
+}): Promise<void> {
+  const first = input.clientName?.split(" ")[0] ?? null;
+  const greeting = first ? `Hi ${first},` : "Hi,";
+  const signoff = input.practitionerName ?? "Svitlana";
+  const typeLabel = input.sessionType?.trim() ? input.sessionType.trim() : "session";
+  const when = formatBookingLongDateTime(input.scheduledAt);
+  const shortDate = formatBookingShortDate(input.scheduledAt);
+  const subject = `You're booked — ${shortDate}`;
+  const linkLine = input.meetingUrl
+    ? `\n\nWhen it's time, join here:\n${input.meetingUrl}`
+    : "\n\nI'll share the meeting link with you before we meet.";
+  const text = `${greeting}
+
+You're booked in for our ${typeLabel.toLowerCase()} together. 🤍
+
+· When: ${when}
+· Length: ${input.durationMinutes} minutes${linkLine}
+
+If anything shifts on your end, just reply to this email and we'll find another time. A quiet, private spot works best when we meet.
+
+Warmly,
+${signoff}`;
+  const html = bookingConfirmationHtml({
+    greeting,
+    typeLabel,
+    when,
+    durationMinutes: input.durationMinutes,
+    meetingUrl: input.meetingUrl,
+    signoff,
+  });
+  await sendEmail({ to: input.to, subject, html, text, replyTo: input.replyTo });
+}
+
+function bookingConfirmationHtml(p: {
+  greeting: string;
+  typeLabel: string;
+  when: string;
+  durationMinutes: number;
+  meetingUrl: string | null;
+  signoff: string;
+}): string {
+  return `
+<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#faf6f0;font-family:Georgia,'Times New Roman',serif;color:#3d342e;">
+    <div style="max-width:480px;margin:48px auto;padding:36px 32px;background:#fdf9f1;border-radius:12px;border:1px solid #ead9c1;">
+      <p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;color:#564a42;">${escapeHtml(p.greeting)}</p>
+      <p style="margin:0 0 20px 0;font-size:15px;line-height:1.6;color:#564a42;">You're booked in for our <strong>${escapeHtml(p.typeLabel.toLowerCase())}</strong> together.</p>
+      <p style="margin:0 0 6px 0;font-size:14px;color:#564a42;"><strong>When:</strong> ${escapeHtml(p.when)}</p>
+      <p style="margin:0 0 8px 0;font-size:14px;color:#564a42;"><strong>Length:</strong> ${p.durationMinutes} minutes</p>
+      ${
+        p.meetingUrl
+          ? `<a href="${escapeHtml(p.meetingUrl)}" style="display:inline-block;margin:16px 0 8px 0;background:#5a3f4f;color:#fdf9f1;text-decoration:none;font-size:14px;font-weight:500;padding:12px 22px;border-radius:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">Join when it's time</a>
+      <p style="margin:8px 0 0 0;font-size:12px;color:#786b60;line-height:1.5;word-break:break-all;font-family:ui-monospace,Menlo,monospace;">${escapeHtml(p.meetingUrl)}</p>`
+          : `<p style="margin:12px 0 0 0;font-size:13px;color:#786b60;font-style:italic;">I'll share the meeting link with you before we meet.</p>`
+      }
+      <p style="margin:24px 0 0 0;font-size:14px;line-height:1.6;color:#564a42;">If anything shifts on your end, just reply to this email and we'll find another time. A quiet, private spot works best when we meet.</p>
+      <p style="margin:20px 0 0 0;font-size:14px;color:#564a42;font-style:italic;">— ${escapeHtml(p.signoff)}</p>
+    </div>
+  </body>
+</html>`.trim();
+}
+
+function formatBookingLongDateTime(d: Date): string {
+  return d.toLocaleString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  });
+}
+
+function formatBookingShortDate(d: Date): string {
+  return d.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+}
+
 function simpleNoteHtml(p: {
   greeting: string;
   paragraphs: string[];

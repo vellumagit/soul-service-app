@@ -1220,6 +1220,13 @@ export async function scheduleSession(
   // Runs AFTER syncSessionToGoogle so the Meet URL is on the row.
   await maybeAutoAddRecallBot(accountId, created.id);
 
+  // App-sent booking confirmation to the client. Runs LAST and reads the
+  // final Meet URL off the row (Google's link if sync succeeded, the manual
+  // fallback otherwise). Fully decoupled from Google — a Calendar failure
+  // never stops the client from being confirmed. Best-effort: a mail hiccup
+  // never fails the booking.
+  await maybeSendBookingConfirmation(accountId, created.id);
+
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/calendar");
   revalidatePath("/today");
@@ -1290,6 +1297,56 @@ async function maybeAutoAddRecallBot(
       );
   } catch (err) {
     console.warn("[recall auto-add] failed:", err);
+  }
+}
+
+/** Best-effort: email the client an app-sent "you're booked" confirmation.
+ *  Independent of Google Calendar — this is the reliable confirmation. Skips
+ *  silently when Resend isn't configured or the client has no email. Never
+ *  throws (a mail failure must not fail the booking). */
+async function maybeSendBookingConfirmation(
+  accountId: string,
+  sessionId: string
+): Promise<void> {
+  try {
+    const { isResendConfigured, sendSessionBookingConfirmationEmail } =
+      await import("./resend");
+    if (!isResendConfigured()) return;
+
+    const [row] = await db
+      .select({
+        clientName: clients.fullName,
+        clientEmail: clients.email,
+        scheduledAt: sessions.scheduledAt,
+        durationMinutes: sessions.durationMinutes,
+        sessionType: sessions.type,
+        meetUrl: sessions.meetUrl,
+        practitionerName: practitionerSettings.practitionerName,
+        businessEmail: practitionerSettings.businessEmail,
+      })
+      .from(sessions)
+      .innerJoin(clients, eq(clients.id, sessions.clientId))
+      .leftJoin(
+        practitionerSettings,
+        eq(practitionerSettings.accountId, sessions.accountId)
+      )
+      .where(and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId)))
+      .limit(1);
+
+    if (!row?.clientEmail) return; // can't confirm someone with no address
+
+    await sendSessionBookingConfirmationEmail({
+      to: row.clientEmail,
+      clientName: row.clientName,
+      sessionType: row.sessionType,
+      scheduledAt: new Date(row.scheduledAt),
+      durationMinutes: row.durationMinutes,
+      meetingUrl: row.meetUrl,
+      practitionerName: row.practitionerName ?? null,
+      replyTo: row.businessEmail ?? undefined,
+    });
+  } catch (err) {
+    console.warn("[booking confirmation] failed:", err);
   }
 }
 
