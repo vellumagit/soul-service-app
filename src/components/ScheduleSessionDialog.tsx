@@ -47,6 +47,7 @@ export function ScheduleSessionDialog({
   defaultType,
   trigger,
   sabbathDays = [],
+  respondToShortcut = true,
 }: {
   clients: ClientOption[];
   defaultClientId?: string;
@@ -55,6 +56,9 @@ export function ScheduleSessionDialog({
   /** Lowercase ISO weekday names she's marked as sacred-off. When the picked
    *  date falls on one, a quiet amber hint reminds her — never blocks. */
   sabbathDays?: string[];
+  /** When false, this instance ignores the global `s` shortcut event. Set on
+   *  the always-mounted QuickActions copy so it doesn't double-open. */
+  respondToShortcut?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -82,11 +86,12 @@ export function ScheduleSessionDialog({
 
   // Keyboard shortcut `s` opens this dialog from anywhere.
   useEffect(() => {
+    if (!respondToShortcut) return;
     const handler = () => setOpen(true);
     window.addEventListener("shortcuts:schedule-session", handler);
     return () =>
       window.removeEventListener("shortcuts:schedule-session", handler);
-  }, []);
+  }, [respondToShortcut]);
 
   return (
     <>

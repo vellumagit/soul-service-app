@@ -61,11 +61,15 @@ export function ScheduleSeriesDialog({
   defaultClientId,
   defaultType,
   trigger,
+  respondToShortcut = true,
 }: {
   clients: ClientOption[];
   defaultClientId?: string;
   defaultType?: string | null;
   trigger?: (open: () => void) => React.ReactNode;
+  /** When false, this instance ignores the global `r` shortcut event. Set on
+   *  the always-mounted QuickActions copy so it doesn't double-open. */
+  respondToShortcut?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -73,10 +77,11 @@ export function ScheduleSeriesDialog({
 
   // Keyboard shortcut `r` opens this dialog from anywhere.
   useEffect(() => {
+    if (!respondToShortcut) return;
     const handler = () => setOpen(true);
     window.addEventListener("shortcuts:new-series", handler);
     return () => window.removeEventListener("shortcuts:new-series", handler);
-  }, []);
+  }, [respondToShortcut]);
 
   // Controlled bits we need for the live preview
   const [firstAt, setFirstAt] = useState<string>(defaultFirstAt());

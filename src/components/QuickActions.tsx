@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { NewClientDialog } from "./NewClientDialog";
 import { ScheduleSessionDialog } from "./ScheduleSessionDialog";
 import { ScheduleSeriesDialog } from "./ScheduleSeriesDialog";
@@ -9,8 +9,34 @@ import { LogPastSessionDialog } from "./LogPastSessionDialog";
 type ClientOption = { id: string; fullName: string };
 
 // The "+ New" menu in the top bar. Lets her create whatever from anywhere.
+//
+// IMPORTANT: the four dialogs are mounted ALWAYS — never inside the
+// `{menuOpen && …}` block. An earlier version nested them in the dropdown, so
+// clicking a menu item ran `setMenuOpen(false)` (which unmounted the dialog)
+// in the same batched render as `open()` — the dialog never appeared. Now each
+// dialog is always mounted and registers its `open()` function via the render
+// trigger; the menu items call those openers directly, so closing the menu is
+// independent of opening the dialog.
+//
+// The always-mounted copies pass `respondToShortcut={false}` so they don't
+// also fire on the global n/s/r keyboard shortcuts (those are handled by the
+// page-level dialog instances). This copy is menu-driven only.
 export function QuickActions({ clients }: { clients: ClientOption[] }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const openers = useRef<{
+    client?: () => void;
+    session?: () => void;
+    series?: () => void;
+    past?: () => void;
+  }>({});
+
+  function run(key: keyof typeof openers.current) {
+    setMenuOpen(false);
+    openers.current[key]?.();
+  }
+
+  const itemCls =
+    "w-full text-left px-3 py-2 text-sm hover:bg-ink-50 flex items-center gap-2";
 
   return (
     <div className="relative">
@@ -46,68 +72,58 @@ export function QuickActions({ clients }: { clients: ClientOption[] }) {
             onClick={() => setMenuOpen(false)}
           />
           <div className="absolute right-0 mt-1 w-56 bg-white border border-ink-200 rounded-md shadow-lg z-50 py-1">
-            <NewClientDialog
-              trigger={(open) => (
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    open();
-                  }}
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-ink-50 flex items-center gap-2"
-                >
-                  <span className="text-ink-400">👤</span>
-                  <span className="flex-1">New client</span>
-                </button>
-              )}
-            />
-            <ScheduleSessionDialog
-              clients={clients}
-              trigger={(open) => (
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    open();
-                  }}
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-ink-50 flex items-center gap-2"
-                >
-                  <span className="text-ink-400">📅</span>
-                  <span className="flex-1">Schedule session</span>
-                </button>
-              )}
-            />
-            <ScheduleSeriesDialog
-              clients={clients}
-              trigger={(open) => (
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    open();
-                  }}
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-ink-50 flex items-center gap-2"
-                >
-                  <span className="text-ink-400">🔁</span>
-                  <span className="flex-1">New recurring series</span>
-                </button>
-              )}
-            />
-            <LogPastSessionDialog
-              clients={clients}
-              trigger={(open) => (
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    open();
-                  }}
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-ink-50 flex items-center gap-2"
-                >
-                  <span className="text-ink-400">✍️</span>
-                  <span className="flex-1">Log a past session</span>
-                </button>
-              )}
-            />
+            <button onClick={() => run("client")} className={itemCls}>
+              <span className="text-ink-400">👤</span>
+              <span className="flex-1">New client</span>
+            </button>
+            <button onClick={() => run("session")} className={itemCls}>
+              <span className="text-ink-400">📅</span>
+              <span className="flex-1">Schedule session</span>
+            </button>
+            <button onClick={() => run("series")} className={itemCls}>
+              <span className="text-ink-400">🔁</span>
+              <span className="flex-1">New recurring series</span>
+            </button>
+            <button onClick={() => run("past")} className={itemCls}>
+              <span className="text-ink-400">✍️</span>
+              <span className="flex-1">Log a past session</span>
+            </button>
           </div>
         </>
       )}
+
+      {/* Always-mounted dialogs. Each trigger registers its opener and renders
+          nothing visible; the Modal inside shows when its own open state flips. */}
+      <NewClientDialog
+        respondToShortcut={false}
+        trigger={(open) => {
+          openers.current.client = open;
+          return null;
+        }}
+      />
+      <ScheduleSessionDialog
+        clients={clients}
+        respondToShortcut={false}
+        trigger={(open) => {
+          openers.current.session = open;
+          return null;
+        }}
+      />
+      <ScheduleSeriesDialog
+        clients={clients}
+        respondToShortcut={false}
+        trigger={(open) => {
+          openers.current.series = open;
+          return null;
+        }}
+      />
+      <LogPastSessionDialog
+        clients={clients}
+        trigger={(open) => {
+          openers.current.past = open;
+          return null;
+        }}
+      />
     </div>
   );
 }

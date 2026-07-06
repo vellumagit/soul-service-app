@@ -14,8 +14,13 @@ import {
 
 export function NewClientDialog({
   trigger,
+  respondToShortcut = true,
 }: {
   trigger?: (open: () => void) => React.ReactNode;
+  /** When false, this instance ignores the global `n` shortcut event. Set on
+   *  the always-mounted QuickActions copy so it doesn't double-open alongside
+   *  a page-level instance. */
+  respondToShortcut?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -64,10 +69,11 @@ export function NewClientDialog({
 
   // Keyboard shortcut `n` dispatches this event globally — we open ourselves.
   useEffect(() => {
+    if (!respondToShortcut) return;
     const handler = () => setOpen(true);
     window.addEventListener("shortcuts:new-client", handler);
     return () => window.removeEventListener("shortcuts:new-client", handler);
-  }, []);
+  }, [respondToShortcut]);
 
   return (
     <>
