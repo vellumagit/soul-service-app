@@ -249,30 +249,23 @@ export async function POST(req: Request) {
           sessionType: row.type,
         });
 
-        // Append (don't replace) any notes she may have already typed
-        // by hand. Replacement here would be hostile.
-        const existing = (row.notes ?? "").trim();
-        const finalNotes =
-          existing.length === 0
-            ? generated.notes
-            : `${existing}\n\n---\n\n_Auto-generated from the meeting transcript:_\n\n${generated.notes}`;
-
+        // Write the three notetaker fields — kept SEPARATE from `notes`
+        // (her own writing), which we never touch here.
+        //
         // Atomic write — gate on transcriptReceivedAt STILL being null at
         // the moment of UPDATE. The earlier `if (row.transcriptReceivedAt)`
-        // check (line ~208) catches the common case, but the SELECT and
-        // UPDATE are two separate round-trips. If a Recall retry lands
-        // between them, both handlers run the (expensive) Claude work
-        // and both attempt to UPDATE. Without this WHERE clause the
-        // second handler would overwrite the first's notes (and the
-        // append-not-replace logic above would NOT save us, because
-        // `existing` was read at the start of this handler, before the
-        // first writer wrote). Adding `IS NULL` here makes the row-write
-        // serializable at the Postgres level — the second writer sees 0
-        // rows affected and we log + bail.
+        // check catches the common case, but the SELECT and UPDATE are two
+        // separate round-trips. If a Recall retry lands between them, both
+        // handlers run the (expensive) Claude work and both attempt to
+        // UPDATE. Adding `IS NULL` here makes the row-write serializable at
+        // the Postgres level — the second writer sees 0 rows affected and
+        // we log + bail.
         const updated = await db
           .update(sessions)
           .set({
-            notes: finalNotes,
+            transcript: fetched.text,
+            aiSummary: generated.notes,
+            aiSummaryTldr: generated.tldr || null,
             recallTranscriptReceivedAt: new Date(),
             updatedAt: new Date(),
           })

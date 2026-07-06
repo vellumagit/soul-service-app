@@ -17,7 +17,7 @@ import {
 import { Field, inputCls } from "./Form";
 import { ConfirmButton } from "./ConfirmButton";
 import { MarkPaidDialog } from "./MarkPaidDialog";
-import { NotesEditor } from "./NotesEditor";
+import { NotesEditor, MarkdownRender } from "./NotesEditor";
 import { GenerateInvoiceButton } from "./GenerateInvoiceButton";
 import { GenerateNotesDialog } from "./GenerateNotesDialog";
 import { GenerateNotesFromAudioDialog } from "./GenerateNotesFromAudioDialog";
@@ -258,6 +258,50 @@ export function SessionCard({
                 />
               </Field>
             </div>
+
+            {(session.aiSummaryTldr ||
+              session.aiSummary ||
+              session.transcript) && (
+              <div className="rounded-lg border border-ink-100 bg-ink-50/50 p-3 space-y-3">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-ink-500">
+                  ✨ From the meeting
+                </div>
+                {session.aiSummaryTldr && (
+                  <div className="rounded-md border border-plum-100 bg-plum-50/70 p-2.5">
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-plum-700 mb-1">
+                      At a glance
+                    </div>
+                    <p className="text-sm leading-relaxed text-ink-800">
+                      {session.aiSummaryTldr}
+                    </p>
+                  </div>
+                )}
+                {session.aiSummary && (
+                  <details open>
+                    <summary className="cursor-pointer text-xs font-medium text-ink-700 select-none">
+                      Session summary
+                    </summary>
+                    <div className="mt-2 text-sm text-ink-800">
+                      <MarkdownRender body={session.aiSummary} />
+                    </div>
+                  </details>
+                )}
+                {session.transcript && (
+                  <details>
+                    <summary className="cursor-pointer text-xs font-medium text-ink-700 select-none">
+                      📄 Full transcript{" "}
+                      <span className="text-ink-400 font-normal">
+                        ({session.transcript.split(/\s+/).filter(Boolean).length}{" "}
+                        words)
+                      </span>
+                    </summary>
+                    <pre className="mt-2 max-h-96 overflow-y-auto whitespace-pre-wrap rounded-md bg-white border border-ink-100 p-2.5 text-xs leading-relaxed text-ink-700 font-sans">
+                      {session.transcript}
+                    </pre>
+                  </details>
+                )}
+              </div>
+            )}
 
             <div>
               <div className="flex items-center justify-between mb-1 flex-wrap gap-y-1">

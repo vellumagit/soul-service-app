@@ -254,6 +254,15 @@ export const sessions = pgTable(
     recallBotStatus: text("recall_bot_status"),
     recallTranscriptReceivedAt: timestamp("recall_transcript_received_at"),
 
+    // Notetaker output, kept as three distinct fields separate from `notes`
+    // (which stays HER own writing):
+    //   - transcript: the full verbatim, speaker-attributed meeting transcript
+    //   - aiSummary: Claude's structured markdown summary ("the quick look-back")
+    //   - aiSummaryTldr: a 2–3 sentence "at a glance" for the fastest glance
+    transcript: text("transcript"),
+    aiSummary: text("ai_summary"),
+    aiSummaryTldr: text("ai_summary_tldr"),
+
     // Portal three-room expansion:
     //   - clientStatedIntention: what the CLIENT writes (from the portal)
     //     for themselves before a session. Separate from `intention`,

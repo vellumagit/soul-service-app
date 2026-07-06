@@ -112,11 +112,38 @@ export type GenerateNotesInput = {
 };
 
 export type GenerateNotesResult = {
+  /** The structured markdown summary (follows the template). */
   notes: string;
+  /** 2–3 sentence "at a glance" takeaway. Empty string if the model omitted it. */
+  tldr: string;
   inputTokens: number;
   outputTokens: number;
   cacheReadTokens: number;
   cacheCreationTokens: number;
+};
+
+// Forcing a tool call is the reliable way to get TWO clean fields (tldr +
+// notes) out of one request — no fragile delimiter-splitting of free text.
+const NOTES_TOOL: Anthropic.Tool = {
+  name: "deliver_session_notes",
+  description:
+    "Return the finished session notes as two parts: a short at-a-glance takeaway and the full structured notes.",
+  input_schema: {
+    type: "object",
+    properties: {
+      tldr: {
+        type: "string",
+        description:
+          "2–3 plain sentences: the single most important thing(s) from this session to remember before the next one. Prose only — no headings, no bullets, no markdown.",
+      },
+      notes: {
+        type: "string",
+        description:
+          "The full structured session notes as markdown, following the template/structure and all the writing rules from the system prompt.",
+      },
+    },
+    required: ["tldr", "notes"],
+  },
 };
 
 // One round-trip: transcript → markdown notes.
@@ -145,18 +172,22 @@ export async function generateNotesFromTranscript(
         cache_control: { type: "ephemeral" },
       },
     ],
+    tools: [NOTES_TOOL],
+    tool_choice: { type: "tool", name: NOTES_TOOL.name },
     messages: [{ role: "user", content: userMessage }],
   });
 
-  const textBlock = response.content.find(
-    (b): b is Anthropic.TextBlock => b.type === "text"
+  const toolUse = response.content.find(
+    (b): b is Anthropic.ToolUseBlock => b.type === "tool_use"
   );
-  if (!textBlock) {
-    throw new Error("Claude returned no text content");
+  if (!toolUse) {
+    throw new Error("Claude returned no tool call");
   }
+  const parsed = toolUse.input as { tldr?: string; notes?: string };
 
   return {
-    notes: stripCodeFence(textBlock.text.trim()),
+    notes: stripCodeFence((parsed.notes ?? "").trim()),
+    tldr: (parsed.tldr ?? "").trim(),
     inputTokens: response.usage.input_tokens,
     outputTokens: response.usage.output_tokens,
     cacheReadTokens: response.usage.cache_read_input_tokens ?? 0,
@@ -214,7 +245,7 @@ function buildUserMessage(input: GenerateNotesInput): string {
   parts.push(`# Transcript\n\n${input.transcript.trim()}`);
 
   parts.push(
-    `# Now produce the session notes\n\nReturn the markdown notes only — no preamble, no closing remarks. Start directly with the first heading.`
+    `# Now produce the session notes\n\nCall \`deliver_session_notes\` with:\n- \`tldr\`: 2–3 plain sentences capturing the most important takeaway(s) for a quick look-back.\n- \`notes\`: the full structured markdown notes, starting directly with the first heading — no preamble.`
   );
 
   return parts.join("\n\n---\n\n");
