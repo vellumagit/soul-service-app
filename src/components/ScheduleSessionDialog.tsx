@@ -93,6 +93,19 @@ export function ScheduleSessionDialog({
       window.removeEventListener("shortcuts:schedule-session", handler);
   }, [respondToShortcut]);
 
+  // Capture the browser's IANA timezone so the session remembers the zone she
+  // booked it in — this is what makes reminder/confirmation emails show the
+  // right local time even when she later travels. Read in an effect (not during
+  // render) to avoid an SSR mismatch: the server has no browser zone.
+  const [browserTz, setBrowserTz] = useState("");
+  useEffect(() => {
+    try {
+      setBrowserTz(Intl.DateTimeFormat().resolvedOptions().timeZone || "");
+    } catch {
+      // Intl unavailable — leave blank; the server falls back to the practice zone.
+    }
+  }, []);
+
   return (
     <>
       {trigger ? (
@@ -190,6 +203,7 @@ export function ScheduleSessionDialog({
             }}
             className="space-y-4"
           >
+            <input type="hidden" name="timezone" value={browserTz} readOnly />
             {error && (
               <div className="text-xs text-red-700 bg-red-50 border border-red-100 rounded p-2">
                 {error}

@@ -5,6 +5,10 @@
 import "server-only";
 
 import { Resend } from "resend";
+import {
+  formatSessionLong,
+  formatSessionShortDate,
+} from "./timezone";
 
 let _resend: Resend | null = null;
 
@@ -421,10 +425,9 @@ ${input.message ? `"${input.message}"\n\n` : "(No message — just their details
 // best-effort tail of scheduleSession — a mail failure never blocks the
 // booking.
 //
-// NOTE ON TIME ZONE: like the reminder emails, the when-label renders in the
-// server's zone (UTC on Vercel) with an explicit zone suffix. Localizing to
-// the client's own timezone is a separate, cross-cutting follow-up so all
-// session emails move together.
+// TIME ZONE: the when-label renders in the RECIPIENT's local zone (resolved by
+// the caller: client zone → session's booked zone → practice zone) with an
+// explicit zone suffix, via the shared formatters in ./timezone.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function sendSessionBookingConfirmationEmail(input: {
@@ -437,13 +440,16 @@ export async function sendSessionBookingConfirmationEmail(input: {
   practitionerName: string | null;
   /** Practitioner's business email, so a client can just hit Reply. */
   replyTo?: string;
+  /** IANA zone to render the time in — the RECIPIENT's local zone. Resolved by
+   *  the caller (client zone → session zone → practice zone). */
+  timeZone: string;
 }): Promise<void> {
   const first = input.clientName?.split(" ")[0] ?? null;
   const greeting = first ? `Hi ${first},` : "Hi,";
   const signoff = input.practitionerName ?? "Svitlana";
   const typeLabel = input.sessionType?.trim() ? input.sessionType.trim() : "session";
-  const when = formatBookingLongDateTime(input.scheduledAt);
-  const shortDate = formatBookingShortDate(input.scheduledAt);
+  const when = formatSessionLong(input.scheduledAt, input.timeZone);
+  const shortDate = formatSessionShortDate(input.scheduledAt, input.timeZone);
   const subject = `You're booked — ${shortDate}`;
   const linkLine = input.meetingUrl
     ? `\n\nWhen it's time, join here:\n${input.meetingUrl}`
@@ -498,25 +504,6 @@ function bookingConfirmationHtml(p: {
     </div>
   </body>
 </html>`.trim();
-}
-
-function formatBookingLongDateTime(d: Date): string {
-  return d.toLocaleString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZoneName: "short",
-  });
-}
-
-function formatBookingShortDate(d: Date): string {
-  return d.toLocaleDateString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
 }
 
 function simpleNoteHtml(p: {

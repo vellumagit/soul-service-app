@@ -21,6 +21,12 @@ import {
 } from "@/db";
 import { groupSessions, groupAttendees, groups } from "@/db/schema";
 import { resolveCircleMeetingUrl } from "./circle-fulfillment";
+import {
+  resolveTimeZone,
+  formatSessionLong,
+  formatSessionShortDate,
+  formatSessionShortTime,
+} from "./timezone";
 
 // Anchor "now" once per run so all queries see the same moment
 type ReminderRunStats = {
@@ -137,10 +143,12 @@ async function sendDueClientReminders(
       clientId: sessions.clientId,
       clientName: clients.fullName,
       clientEmail: clients.email,
+      clientTimezone: clients.timezone,
       scheduledAt: sessions.scheduledAt,
       durationMinutes: sessions.durationMinutes,
       sessionType: sessions.type,
       meetUrl: sessions.meetUrl,
+      sessionTimezone: sessions.timezone,
     })
     .from(sessions)
     .innerJoin(clients, eq(sessions.clientId, clients.id))
@@ -160,6 +168,13 @@ async function sendDueClientReminders(
 
     try {
       const { sendEmail } = await import("./resend");
+      // Client email → the CLIENT's local time: their zone if known, else the
+      // zone she booked in, else the practice zone.
+      const timeZone = resolveTimeZone(
+        row.clientTimezone,
+        row.sessionTimezone,
+        settings.timezone
+      );
       const { html, text, subject } = buildClientReminderEmail({
         clientName: row.clientName,
         sessionType: row.sessionType,
@@ -167,6 +182,7 @@ async function sendDueClientReminders(
         durationMinutes: row.durationMinutes,
         meetUrl: row.meetUrl,
         practitionerName: settings.practitionerName ?? "your practitioner",
+        timeZone,
       });
 
       await sendEmail({
@@ -213,6 +229,7 @@ async function sendDuePractitionerReminders(
       sessionType: sessions.type,
       meetUrl: sessions.meetUrl,
       intention: sessions.intention,
+      sessionTimezone: sessions.timezone,
     })
     .from(sessions)
     .innerJoin(clients, eq(sessions.clientId, clients.id))
@@ -230,6 +247,11 @@ async function sendDuePractitionerReminders(
   for (const row of rows) {
     try {
       const { sendEmail } = await import("./resend");
+      // Her own reminder → the zone she booked in, else the practice zone.
+      const timeZone = resolveTimeZone(
+        row.sessionTimezone,
+        settings.timezone
+      );
       const { html, text, subject } = buildPractitionerReminderEmail({
         clientName: row.clientName,
         sessionType: row.sessionType,
@@ -238,6 +260,7 @@ async function sendDuePractitionerReminders(
         meetUrl: row.meetUrl,
         intention: row.intention,
         practitionerName: settings.practitionerName ?? "you",
+        timeZone,
       });
 
       await sendEmail({ to: practitionerEmail, subject, html, text });
@@ -322,7 +345,10 @@ async function sendDueCircleReminders(
           to: row.email,
           attendeeName: row.name,
           circleName: row.groupName,
-          whenLabel: formatLongDateTime(new Date(row.scheduledAt)),
+          whenLabel: formatSessionLong(
+            new Date(row.scheduledAt),
+            resolveTimeZone(settings.timezone)
+          ),
           meetingUrl,
           practitionerName: settings.practitionerName ?? null,
           lead: pass.lead,
@@ -359,16 +385,18 @@ type ClientReminderInput = {
   durationMinutes: number;
   meetUrl: string | null;
   practitionerName: string;
+  /** IANA zone to render times in — resolved for this recipient by the caller. */
+  timeZone: string;
 };
 
 function buildClientReminderEmail(input: ClientReminderInput) {
   const firstName = input.clientName.split(" ")[0] ?? input.clientName;
-  const when = formatLongDateTime(input.scheduledAt);
+  const when = formatSessionLong(input.scheduledAt, input.timeZone);
   const meetSection = input.meetUrl
     ? `\n\nJoin via Google Meet: ${input.meetUrl}\n`
     : "";
 
-  const subject = `Reminder: our session on ${formatShortDate(input.scheduledAt)}`;
+  const subject = `Reminder: our session on ${formatSessionShortDate(input.scheduledAt, input.timeZone)}`;
   const text = `Hi ${firstName},
 
 A quick reminder of our ${input.sessionType.toLowerCase()} together:
@@ -407,12 +435,14 @@ type PractitionerReminderInput = {
   meetUrl: string | null;
   intention: string | null;
   practitionerName: string;
+  /** IANA zone to render times in — resolved by the caller. */
+  timeZone: string;
 };
 
 function buildPractitionerReminderEmail(input: PractitionerReminderInput) {
-  const when = formatLongDateTime(input.scheduledAt);
+  const when = formatSessionLong(input.scheduledAt, input.timeZone);
 
-  const subject = `Up next: ${input.clientName} at ${formatShortTime(input.scheduledAt)}`;
+  const subject = `Up next: ${input.clientName} at ${formatSessionShortTime(input.scheduledAt, input.timeZone)}`;
   const text = `Hi ${input.practitionerName},
 
 Your next session is coming up:
@@ -451,32 +481,6 @@ Take a breath. See you in there.`;
 // ─────────────────────────────────────────────────────────────────────────────
 // Formatting helpers
 // ─────────────────────────────────────────────────────────────────────────────
-
-function formatLongDateTime(d: Date): string {
-  return d.toLocaleString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZoneName: "short",
-  });
-}
-
-function formatShortDate(d: Date): string {
-  return d.toLocaleDateString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
-}
-
-function formatShortTime(d: Date): string {
-  return d.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
 
 function wrapHtml(inner: string): string {
   return `<!doctype html><html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1a1a1a;font-size:14px;line-height:1.55;max-width:560px;margin:24px auto;padding:0 16px;">${inner}</body></html>`;

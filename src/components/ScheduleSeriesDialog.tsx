@@ -83,6 +83,16 @@ export function ScheduleSeriesDialog({
     return () => window.removeEventListener("shortcuts:new-series", handler);
   }, [respondToShortcut]);
 
+  // Browser timezone captured for the whole series (see ScheduleSessionDialog).
+  const [browserTz, setBrowserTz] = useState("");
+  useEffect(() => {
+    try {
+      setBrowserTz(Intl.DateTimeFormat().resolvedOptions().timeZone || "");
+    } catch {
+      // Intl unavailable — server falls back to the practice zone.
+    }
+  }, []);
+
   // Controlled bits we need for the live preview
   const [firstAt, setFirstAt] = useState<string>(defaultFirstAt());
   const [frequency, setFrequency] = useState<Frequency>("weekly");
@@ -180,6 +190,7 @@ export function ScheduleSeriesDialog({
             }}
             className="space-y-4"
           >
+            <input type="hidden" name="timezone" value={browserTz} readOnly />
             {error && (
               <div className="text-xs text-red-700 bg-red-50 border border-red-100 rounded p-2">
                 {error}

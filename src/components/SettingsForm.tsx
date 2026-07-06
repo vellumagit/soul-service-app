@@ -7,6 +7,7 @@ import { rethrowIfRedirect } from "@/lib/redirect-error";
 import type { PractitionerSettings } from "@/db/schema";
 import { SabbathDayPicker } from "./SabbathDayPicker";
 import { AvailabilityPanel } from "./AvailabilityPanel";
+import { COMMON_TIME_ZONES } from "@/lib/timezone";
 import {
   LOCALE_LABELS,
   LOCALES,
@@ -112,6 +113,28 @@ export function SettingsForm({ settings }: { settings: PractitionerSettings }) {
               className={inputCls}
               placeholder="https://example.com"
             />
+          </Field>
+          <Field
+            label="Your timezone"
+            hint="Used to show the right local time in reminder + confirmation emails. New sessions also remember the zone you booked them in, so travelling is handled — this is the fallback."
+            className="md:col-span-2"
+          >
+            <select
+              name="timezone"
+              defaultValue={settings.timezone ?? ""}
+              className={inputCls}
+            >
+              <option value="">— choose your timezone —</option>
+              {settings.timezone &&
+                !COMMON_TIME_ZONES.some((z) => z.id === settings.timezone) && (
+                  <option value={settings.timezone}>{settings.timezone}</option>
+                )}
+              {COMMON_TIME_ZONES.map((z) => (
+                <option key={z.id} value={z.id}>
+                  {z.label}
+                </option>
+              ))}
+            </select>
           </Field>
         </div>
       </Section>

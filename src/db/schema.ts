@@ -185,6 +185,13 @@ export const sessions = pgTable(
     scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
     durationMinutes: integer("duration_minutes").notNull().default(60),
 
+    // IANA timezone captured from the practitioner's browser at schedule time
+    // (e.g. "America/Toronto"). scheduledAt is a true instant; this records the
+    // wall-clock zone she MEANT when booking, so reminder/confirmation emails
+    // (rendered server-side in UTC) can show the right local time even when she
+    // travels. Null on legacy rows → callers fall back to the practice zone.
+    timezone: text("timezone"),
+
     // Optional context
     intention: text("intention"), // client's stated intention, in their own words
     arrivedAs: text("arrived_as"), // how they showed up (free text)
@@ -698,6 +705,12 @@ export const practitionerSettings = pgTable("practitioner_settings", {
   // scope errors, etc.
   googleLastError: text("google_last_error"),
   googleLastErrorAt: timestamp("google_last_error_at"),
+
+  // The practice's home IANA timezone (e.g. "America/Toronto"). The anchor for
+  // formatting reminder/confirmation emails and the fallback when a session or
+  // client has no zone of its own. Auto-seeded from the first booking's browser
+  // zone if unset; editable in Settings.
+  timezone: text("timezone"),
 
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

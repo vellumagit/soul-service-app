@@ -23,6 +23,7 @@ import {
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { getSettings } from "@/db/queries";
 import { requireSession } from "./session-cookies";
+import { isValidTimeZone, resolveTimeZone } from "./timezone";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Form helpers
@@ -1182,6 +1183,9 @@ export async function scheduleSession(
   const scheduledAtRaw = required(str(formData, "scheduledAt"), "Date / time");
   const durationMinutes = num(formData, "durationMinutes") ?? 60;
   const manualMeetUrl = str(formData, "meetUrl");
+  // Zone she booked in, captured from her browser (see ScheduleSessionDialog).
+  const tzRaw = str(formData, "timezone");
+  const bookingTz = isValidTimeZone(tzRaw) ? tzRaw : null;
 
   const [created] = await db
     .insert(sessions)
@@ -1192,10 +1196,26 @@ export async function scheduleSession(
       status: "scheduled",
       scheduledAt: new Date(scheduledAtRaw),
       durationMinutes,
+      timezone: bookingTz,
       intention: str(formData, "intention"),
       meetUrl: manualMeetUrl, // fallback if Google isn't connected
     })
     .returning({ id: sessions.id });
+
+  // Seed the practice's home timezone from the first booking that carries one,
+  // so reminder/confirmation emails have an anchor even before she visits
+  // Settings. First-write-wins: only fills it when currently null.
+  if (bookingTz) {
+    await db
+      .update(practitionerSettings)
+      .set({ timezone: bookingTz, updatedAt: new Date() })
+      .where(
+        and(
+          eq(practitionerSettings.accountId, accountId),
+          isNull(practitionerSettings.timezone)
+        )
+      );
+  }
 
   // Auto-promote: if this client was in the network (is_lead = true),
   // scheduling their first session moves them into the active client list.
@@ -1317,12 +1337,15 @@ async function maybeSendBookingConfirmation(
       .select({
         clientName: clients.fullName,
         clientEmail: clients.email,
+        clientTimezone: clients.timezone,
         scheduledAt: sessions.scheduledAt,
         durationMinutes: sessions.durationMinutes,
         sessionType: sessions.type,
         meetUrl: sessions.meetUrl,
+        sessionTimezone: sessions.timezone,
         practitionerName: practitionerSettings.practitionerName,
         businessEmail: practitionerSettings.businessEmail,
+        practiceTimezone: practitionerSettings.timezone,
       })
       .from(sessions)
       .innerJoin(clients, eq(clients.id, sessions.clientId))
@@ -1335,6 +1358,14 @@ async function maybeSendBookingConfirmation(
 
     if (!row?.clientEmail) return; // can't confirm someone with no address
 
+    // This email goes to the CLIENT → show THEIR local time: their own zone
+    // if known, else the zone she booked in, else the practice zone.
+    const clientZone = resolveTimeZone(
+      row.clientTimezone,
+      row.sessionTimezone,
+      row.practiceTimezone
+    );
+
     await sendSessionBookingConfirmationEmail({
       to: row.clientEmail,
       clientName: row.clientName,
@@ -1344,6 +1375,7 @@ async function maybeSendBookingConfirmation(
       meetingUrl: row.meetUrl,
       practitionerName: row.practitionerName ?? null,
       replyTo: row.businessEmail ?? undefined,
+      timeZone: clientZone,
     });
   } catch (err) {
     console.warn("[booking confirmation] failed:", err);
@@ -2317,9 +2349,17 @@ export async function updateSettings(formData: FormData) {
       ? submittedLang
       : settings.uiLanguage ?? "en";
 
+  // Practice home timezone — validate as a real IANA zone; keep the existing
+  // value on anything unusable (never clobber a good zone with junk).
+  const submittedTz = str(formData, "timezone");
+  const timezone = isValidTimeZone(submittedTz)
+    ? submittedTz
+    : settings.timezone ?? null;
+
   await db
     .update(practitionerSettings)
     .set({
+      timezone,
       practitionerName: str(formData, "practitionerName"),
       businessName: str(formData, "businessName"),
       businessEmail: str(formData, "businessEmail"),
