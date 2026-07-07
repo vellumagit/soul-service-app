@@ -178,13 +178,16 @@ export async function cancelBot(botId: string): Promise<void> {
   //
   // Mapping HTTP responses to outcomes:
   //   2xx          — success
-  //   400 / 409    — "too late to delete" / "bot already started" → use
-  //                  leave_call instead (this is the documented fallback)
   //   404          — bot already gone (cancelled earlier, never created
   //                  on Recall's side, etc.) → success, no leave_call needed
-  //   other 4xx    — unexpected (auth issue, rate limit, etc.) → throw so
-  //                  the caller can surface it
-  //   5xx          — Recall is down → throw
+  //   any other 4xx — the bot is past the delete-able stage: it's already
+  //                  joining or in the call. Recall returns 400 ("too late"),
+  //                  405 (cannot_delete_bot: "Only scheduled bots which have
+  //                  not yet joined a call can be deleted"), or 409 depending
+  //                  on the exact state. In ALL of these the right move is to
+  //                  pull the bot OUT with leave_call — so we don't enumerate
+  //                  codes, we just fall through to leave_call for any 4xx.
+  //   5xx          — Recall is down → throw so the caller can retry.
   //
   // Same shape for leave_call, except 4xx is treated as success there
   // (bot was probably already gone for one reason or another, and there's
@@ -196,17 +199,17 @@ export async function cancelBot(botId: string): Promise<void> {
   if (deleteRes.ok) return;
   if (deleteRes.status === 404) return; // bot already gone — done
 
-  const isLeaveFallback =
-    deleteRes.status === 400 || deleteRes.status === 409;
-  if (!isLeaveFallback) {
+  // Only a server error should surface as a failure; every 4xx means "can't
+  // delete, it's live" → fall through to leave_call.
+  if (deleteRes.status >= 500) {
     const text = await deleteRes.text().catch(() => "");
     throw new Error(
       `Recall cancel bot failed (${deleteRes.status}): ${text.slice(0, 300)}`
     );
   }
 
-  // Documented fallback: too late to delete a scheduled bot, pull it out
-  // of the call instead.
+  // Fallback: too late to delete a scheduled bot, pull it out of the call
+  // instead (works whether it's joining, waiting, or recording).
   const leaveRes = await fetch(`${getApiBase()}/bot/${botId}/leave_call`, {
     method: "POST",
     headers: { Authorization: getAuthHeader() },
