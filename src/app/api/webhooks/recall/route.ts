@@ -20,7 +20,7 @@ import crypto from "node:crypto";
 import { db } from "@/db";
 import { sessions, clients } from "@/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
-import { fetchTranscriptText } from "@/lib/recall";
+import { createAsyncTranscript, fetchTranscriptText } from "@/lib/recall";
 import { generateNotesFromTranscript } from "@/lib/ai-notes";
 
 export const dynamic = "force-dynamic";
@@ -138,16 +138,32 @@ export async function POST(req: Request) {
     string,
     unknown
   >;
-  const sessionId =
+  let sessionId =
     typeof metadata.sessionId === "string" ? metadata.sessionId : null;
-  const accountId =
+  let accountId =
     typeof metadata.accountId === "string" ? metadata.accountId : null;
 
-  // For events that need session routing, both metadata fields are required.
-  // Without them we can't safely write to anyone's data.
+  // Robustness: if a payload ever arrives without our metadata (some event
+  // types carry a thinner `bot` object), recover the routing from the botId —
+  // it maps 1:1 to the session we set recall_bot_id on. The signature is
+  // already verified, and a Recall bot UUID is unguessable, so this is safe.
+  if ((!sessionId || !accountId) && botId) {
+    const [byBot] = await db
+      .select({ id: sessions.id, accountId: sessions.accountId })
+      .from(sessions)
+      .where(eq(sessions.recallBotId, botId))
+      .limit(1);
+    if (byBot) {
+      sessionId = byBot.id;
+      accountId = byBot.accountId;
+    }
+  }
+
+  // For events that need session routing, both are required. Without them we
+  // can't safely write to anyone's data.
   if (!sessionId || !accountId) {
     console.warn(
-      `[recall webhook] event="${event}" botId="${botId ?? "?"}" — no sessionId/accountId metadata; ignoring`
+      `[recall webhook] event="${event}" botId="${botId ?? "?"}" — no sessionId/accountId metadata and no bot match; ignoring`
     );
     return NextResponse.json({ ok: true, ignored: true });
   }
@@ -229,6 +245,22 @@ export async function POST(req: Request) {
           break;
         }
 
+        // Persist the verbatim transcript FIRST, before the (fallible) Claude
+        // step — so the full transcript is saved even if summarization errors
+        // out. Not idempotency-gated: overwriting with the same text on a
+        // retry is harmless. The summary + "done" marker are written only
+        // after Claude succeeds, below.
+        await db
+          .update(sessions)
+          .set({ transcript: fetched.text, updatedAt: new Date() })
+          .where(
+            and(
+              eq(sessions.accountId, accountId),
+              eq(sessions.id, sessionId),
+              isNull(sessions.recallTranscriptReceivedAt)
+            )
+          );
+
         // Look up client context for the Claude prompt.
         const [client] = await db
           .select()
@@ -284,11 +316,36 @@ export async function POST(req: Request) {
         }
         break;
       }
-      case "recording.done":
-        // We don't currently archive Recall's recordings; the bot's audio
-        // stays in Recall's storage if she ever needs it via their dashboard.
-        // Could fetch + save to Blob in the future if useful.
+      case "recording.done": {
+        // Recall does NOT auto-produce a downloadable transcript — we have to
+        // request one here. This kicks off the async transcription job; Recall
+        // then fires `transcript.done` (handled above) when it's ready. Without
+        // this step, no transcript.done ever arrives and no notes are written.
+        if (row.transcriptReceivedAt) break; // already processed — nothing to do
+        const recordingId = payload.data?.recording?.id;
+        if (!recordingId) {
+          console.warn(
+            `[recall webhook] recording.done with no recording.id for sessionId="${sessionId}"; ignoring`
+          );
+          break;
+        }
+        await createAsyncTranscript(recordingId);
+        // Reflect "processing" on the chip until transcript.done lands.
+        await db
+          .update(sessions)
+          .set({ recallBotStatus: "transcribing", updatedAt: new Date() })
+          .where(
+            and(
+              eq(sessions.accountId, accountId),
+              eq(sessions.id, sessionId),
+              isNull(sessions.recallTranscriptReceivedAt)
+            )
+          );
+        console.log(
+          `[recall webhook] async transcript requested (recording=${recordingId}) for sessionId="${sessionId}"`
+        );
         break;
+      }
       default:
         // Unknown event types are fine — Recall may add more over time.
         console.log(`[recall webhook] unhandled event: ${event}`);

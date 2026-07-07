@@ -178,6 +178,8 @@ function labelForStatus(code: string): string {
     case "call_ended":
     case "done":
       return "Notes incoming…";
+    case "transcribing":
+      return "Transcribing…";
     case "fatal":
       return "Bot failed";
     default:

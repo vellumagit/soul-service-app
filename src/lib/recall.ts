@@ -226,6 +226,40 @@ export async function cancelBot(botId: string): Promise<void> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// createAsyncTranscript — kick off a post-call transcription job for a
+// completed recording. THIS IS REQUIRED: Recall does not auto-produce a
+// downloadable transcript. The flow is:
+//   bot records → `recording.done` webhook → createAsyncTranscript(recordingId)
+//   → Recall transcribes → `transcript.done` webhook → we fetch + summarize.
+// `language_code: "auto"` lets Recall detect en/ru/uk (and code-switching).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function createAsyncTranscript(
+  recordingId: string
+): Promise<void> {
+  const res = await fetch(
+    `${getApiBase()}/recording/${recordingId}/create_transcript/`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: getAuthHeader(),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        provider: { recallai_async: { language_code: "auto" } },
+        diarization: { use_separate_streams_when_available: true },
+      }),
+    }
+  );
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(
+      `Recall create transcript failed (${res.status}): ${text.slice(0, 300)}`
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // fetchTranscriptText — given a transcript_id from the `transcript.done`
 // webhook, fetch the structured transcript and convert it to plain text
 // suitable for Claude's note-generation flow.
@@ -321,6 +355,17 @@ export async function fetchTranscriptText(
     lines.push(`${name}: ${text}`);
     if (b.language_code) langs.add(b.language_code);
     speakers.add(name);
+  }
+
+  // Diagnostic: if we parsed zero lines from a non-empty download, the JSON
+  // shape wasn't what we expected. Log a snippet of the raw payload so the
+  // exact shape is visible in the logs and the parser can be corrected in one
+  // pass (rather than a silent "no notes" mystery).
+  if (lines.length === 0 && blocks.length > 0) {
+    console.warn(
+      "[recall] transcript parsed to 0 lines — unexpected shape. Raw sample:",
+      JSON.stringify(blocks).slice(0, 800)
+    );
   }
 
   return {
