@@ -721,7 +721,43 @@ export const practitionerSettings = pgTable("practitioner_settings", {
   // zone if unset; editable in Settings.
   timezone: text("timezone"),
 
+  // ── Stripe Connect (Standard + OAuth) ──────────────────────────────────
+  // Her OWN connected Stripe account. Circle card payments are charged
+  // directly on it (she is merchant of record; funds are 100% hers). The
+  // platform key + STRIPE_CONNECT_CLIENT_ID live in env — here we store only
+  // her account id + capability flags, refreshed from Stripe on connect and
+  // via the account.updated webhook. See src/lib/stripe-connect.ts.
+  stripeAccountId: text("stripe_account_id"),
+  stripeAccountType: text("stripe_account_type"),
+  stripeChargesEnabled: boolean("stripe_charges_enabled")
+    .default(false)
+    .notNull(),
+  stripePayoutsEnabled: boolean("stripe_payouts_enabled")
+    .default(false)
+    .notNull(),
+  stripeDetailsSubmitted: boolean("stripe_details_submitted")
+    .default(false)
+    .notNull(),
+  stripeConnectedAt: timestamp("stripe_connected_at", { withTimezone: true }),
+  stripeDisconnectedAt: timestamp("stripe_disconnected_at", {
+    withTimezone: true,
+  }),
+
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// One-time CSRF state for the Stripe Connect OAuth handshake. Issued by
+// /api/integrations/stripe/connect, consumed (single-use, 10-min TTL) by the
+// /callback. Rows are deleted on consume; expired rows are ignored.
+export const stripeOauthStates = pgTable("stripe_oauth_states", {
+  state: text("state").primaryKey(),
+  accountId: uuid("account_id")
+    .notNull()
+    .references(() => accounts.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
 });
 
 export const clientsRelations = relations(clients, ({ many }) => ({

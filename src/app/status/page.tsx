@@ -14,6 +14,8 @@ import { isTokenEncryptionConfigured } from "@/lib/token-crypto";
 import { TestGoogleButton } from "@/components/TestGoogleButton";
 import { SyncAllSessionsButton } from "@/components/SyncAllSessionsButton";
 import { ReconnectGoogleButton } from "@/components/ReconnectGoogleButton";
+import { StripeConnectButton } from "@/components/StripeConnectButton";
+import { isStripeConnectEnabled } from "@/lib/stripe";
 import { asLocale, t } from "@/lib/i18n";
 
 export const dynamic = "force-dynamic";
@@ -27,8 +29,13 @@ type StatusRow = {
   extra?: React.ReactNode;
 };
 
-export default async function StatusPage() {
+export default async function StatusPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ stripe?: string }>;
+}) {
   const { email, accountId } = await requireSession();
+  const { stripe: stripeResult } = await searchParams;
   const [settings, clientsList, setup, googleStatus] = await Promise.all([
     getSettings(accountId),
     listClientsForPicker(accountId),
@@ -36,6 +43,16 @@ export default async function StatusPage() {
     getGoogleConnectionStatus(accountId),
   ]);
   const locale = asLocale(settings.uiLanguage);
+
+  // ── Stripe Connect state ─────────────────────────────────────────────────
+  // Platform-ready = the app can run the Connect handshake (platform key +
+  // client id) AND has a webhook secret to verify payments. Per-practitioner
+  // readiness is her stored connect flags.
+  const stripePlatformReady =
+    isStripeConnectEnabled() && !!process.env.STRIPE_WEBHOOK_SECRET;
+  const stripeConnected = !!settings.stripeAccountId;
+  const stripeChargesEnabled = !!settings.stripeChargesEnabled;
+  const stripeBanner = stripeResult ? stripeResultMessage(stripeResult) : null;
 
   // ── Build the status rows ────────────────────────────────────────────────
   const rows: StatusRow[] = [
@@ -72,14 +89,24 @@ export default async function StatusPage() {
     },
     {
       label: "Card payments — Circles (Stripe)",
-      state:
-        process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET
-          ? "ok"
-          : "warn",
-      detail:
-        process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET
-          ? "Stripe connected. Visitors can pay for a Circle seat by card on the public sign-up page; the webhook marks them paid, sends the welcome email with the meeting link, and reminders go out 24h + 1h before. (The manual Venmo/cash lane still works alongside it.)"
-          : "Set STRIPE_SECRET_KEY + STRIPE_WEBHOOK_SECRET in your Vercel env vars and point a Stripe webhook at <your-domain>/api/webhooks/stripe (event: checkout.session.completed). Until then, Circles take seats via the manual hold-a-seat + mark-paid flow only. Also set the Circle room link in Settings so welcome emails carry the meeting link — and verify a Resend domain so those emails deliver.",
+      state: !stripePlatformReady
+        ? "warn"
+        : stripeConnected && stripeChargesEnabled
+        ? "ok"
+        : "warn",
+      detail: !stripePlatformReady
+        ? "Card payments need the platform keys first. Ask Brian to set STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, and STRIPE_CONNECT_CLIENT_ID in Vercel, and register a Stripe Connect webhook at https://www.svit.live/api/webhooks/stripe (events: checkout.session.completed, checkout.session.expired, account.updated)."
+        : !stripeConnected
+        ? "Connect your Stripe account so clients can pay for a Circle seat by card. It's one click — Stripe walks you through adding your bank and verifying your identity, and the money goes straight to YOUR account. (The manual Venmo/cash lane keeps working alongside it.)"
+        : !stripeChargesEnabled
+        ? "Almost there — your Stripe account is linked, but Stripe still needs your bank details and identity before it will release payments. Click below to finish in Stripe; this page turns green automatically once you're done."
+        : "Connected. Visitors pay for a Circle seat by card on the public sign-up page; the money goes straight to your Stripe account, the welcome email with the meeting link goes out automatically, and reminders follow 24h + 1h before. (Manual Venmo/cash still works too.)",
+      extra: stripePlatformReady ? (
+        <StripeConnectButton
+          connected={stripeConnected}
+          chargesEnabled={stripeChargesEnabled}
+        />
+      ) : null,
     },
     {
       label: "Video hosting (Cloudflare Stream)",
@@ -197,12 +224,6 @@ export default async function StatusPage() {
       detail:
         "Coming next. For now, paste transcripts manually into the AI dialog on any session.",
     },
-    {
-      label: "Stripe payments",
-      state: "soon",
-      detail:
-        "Coming later. For now, mark sessions paid manually with the payment method she actually received.",
-    },
   ];
 
   // ── Setup progress ───────────────────────────────────────────────────────
@@ -229,6 +250,18 @@ export default async function StatusPage() {
           What&apos;s working, what&apos;s not, and what&apos;s coming.
         </p>
       </div>
+
+      {stripeBanner && (
+        <div
+          className={`mb-5 rounded-md border px-4 py-3 text-sm leading-relaxed ${
+            stripeBanner.tone === "ok"
+              ? "border-green-200 bg-green-50 text-green-800"
+              : "border-amber-200 bg-amber-50 text-amber-800"
+          }`}
+        >
+          {stripeBanner.text}
+        </div>
+      )}
 
       {/* Setup progress */}
       <section className="border border-ink-200 rounded-md bg-white p-5 mb-5">
@@ -304,6 +337,45 @@ export default async function StatusPage() {
       </p>
     </AppShell>
   );
+}
+
+// Maps the ?stripe=… flag the Connect callback redirects back with into a
+// friendly, non-technical confirmation banner.
+function stripeResultMessage(
+  result: string
+): { tone: "ok" | "warn"; text: string } | null {
+  switch (result) {
+    case "connected":
+      return {
+        tone: "ok",
+        text: "Stripe connected. If the card-payments row below still asks you to finish setup, open Stripe and add your bank details + verify your identity — this page updates on its own once that's done.",
+      };
+    case "disconnected":
+      return {
+        tone: "warn",
+        text: "Stripe disconnected. Card payments are paused until you reconnect. Your Stripe account and past payments are untouched.",
+      };
+    case "denied":
+      return {
+        tone: "warn",
+        text: "Stripe connection was cancelled — no changes made. You can try again whenever you're ready.",
+      };
+    case "disabled":
+      return {
+        tone: "warn",
+        text: "Stripe isn't fully configured on the platform side yet. Ask Brian to finish setup, then try connecting again.",
+      };
+    case "bad_state":
+    case "identity_mismatch":
+    case "missing_params":
+    case "exchange_failed":
+      return {
+        tone: "warn",
+        text: "Something went wrong connecting Stripe. Please try again.",
+      };
+    default:
+      return null;
+  }
 }
 
 function StatusBadge({ state }: { state: StatusRow["state"] }) {

@@ -69,6 +69,7 @@ export default async function CircleSignupPage({
       topic: groupSessions.topic,
       status: groupSessions.status,
       circleSignupsOpen: practitionerSettings.circleSignupsOpen,
+      stripeChargesEnabled: practitionerSettings.stripeChargesEnabled,
       takenCount: sql<number>`(
         SELECT COUNT(*)::int FROM ${groupAttendees}
         WHERE ${groupAttendees.groupSessionId} = ${groupSessions.id}
@@ -96,8 +97,13 @@ export default async function CircleSignupPage({
   // Master switch — when sign-ups are closed, no one can reserve here; the
   // page shows a "reach out to join" message instead of the form.
   const signupsOpen = session.circleSignupsOpen ?? false;
-  // Card payment available when Stripe is wired AND the circle has a price.
-  const stripeReady = isStripeConfigured() && session.priceCents > 0;
+  // Card payment available when the platform Stripe is wired, the practitioner
+  // has connected her account and finished activation (charges enabled), AND
+  // the circle has a price. Otherwise the manual (Venmo/cash) lane shows.
+  const stripeReady =
+    isStripeConfigured() &&
+    session.priceCents > 0 &&
+    !!session.stripeChargesEnabled;
 
   return (
     <>

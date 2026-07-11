@@ -5,9 +5,12 @@ import "server-only";
 // configured: isStripeConfigured() is false, the storefront shows only the
 // manual (Venmo/cash) lane, and nothing throws.
 //
-// Two env vars drive it:
-//   STRIPE_SECRET_KEY      — sk_live_… / sk_test_…
-//   STRIPE_WEBHOOK_SECRET  — whsec_… (verifies /api/webhooks/stripe payloads)
+// Env vars drive it:
+//   STRIPE_SECRET_KEY         — the PLATFORM account key (sk_live_… / sk_test_…)
+//   STRIPE_WEBHOOK_SECRET     — whsec_… (verifies /api/webhooks/stripe payloads)
+//   STRIPE_CONNECT_CLIENT_ID  — ca_… of the platform's Connect app; enables the
+//                               "Connect with Stripe" one-click onboarding so
+//                               the practitioner's own account receives the money.
 
 import Stripe from "stripe";
 
@@ -15,6 +18,16 @@ let _stripe: Stripe | null = null;
 
 export function isStripeConfigured(): boolean {
   return !!process.env.STRIPE_SECRET_KEY;
+}
+
+// True when the platform can run the Stripe Connect OAuth handshake — i.e. we
+// have both a platform secret key AND a Connect app client id. Per-practitioner
+// readiness ("can this account actually take a card") is a separate check on
+// her stored `stripeChargesEnabled` flag.
+export function isStripeConnectEnabled(): boolean {
+  return (
+    !!process.env.STRIPE_SECRET_KEY && !!process.env.STRIPE_CONNECT_CLIENT_ID
+  );
 }
 
 export function getStripe(): Stripe {

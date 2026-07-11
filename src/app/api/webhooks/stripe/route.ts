@@ -19,6 +19,10 @@ import { db } from "@/db";
 import { groupAttendees } from "@/db/schema";
 import { getStripe, getWebhookSecret, isStripeConfigured } from "@/lib/stripe";
 import { fulfillCircleSeat } from "@/lib/circle-fulfillment";
+import {
+  applyAccountUpdate,
+  clearConnectedAccountByStripeId,
+} from "@/lib/stripe-connect";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -104,6 +108,25 @@ export async function POST(req: Request): Promise<Response> {
           );
       }
       return NextResponse.json({ ok: true, released: true });
+    }
+
+    if (event.type === "account.updated") {
+      // Connect event: her account's capabilities changed (e.g. she finished
+      // bank/identity activation). Refresh the cached charges/payouts flags so
+      // the storefront flips to the card lane automatically.
+      const account = event.data.object as Stripe.Account;
+      await applyAccountUpdate(account);
+      return NextResponse.json({ ok: true, accountUpdated: account.id });
+    }
+
+    if (event.type === "account.application.deauthorized") {
+      // She revoked access from her OWN Stripe dashboard (not our Disconnect
+      // button). Clear her connect fields so the storefront falls back to the
+      // manual lane instead of failing at checkout. The connected account id
+      // rides on the event's top-level `account`, not in data.object.
+      const acct = event.account ?? null;
+      if (acct) await clearConnectedAccountByStripeId(acct);
+      return NextResponse.json({ ok: true, deauthorized: acct });
     }
 
     // Unhandled event types are fine — acknowledge so Stripe stops retrying.

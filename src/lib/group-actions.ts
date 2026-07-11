@@ -16,6 +16,7 @@ import {
   groups,
   groupSessions,
   groupAttendees,
+  practitionerSettings,
 } from "@/db/schema";
 import { requireSession } from "./session-cookies";
 import { checkRateLimit } from "./rate-limit";
@@ -371,9 +372,16 @@ export async function createCircleCheckout(input: {
       groupName: groups.name,
       currency: groups.defaultCurrency,
       published: groups.published,
+      // Her connected Stripe account — payments are charged directly on it.
+      stripeAccountId: practitionerSettings.stripeAccountId,
+      stripeChargesEnabled: practitionerSettings.stripeChargesEnabled,
     })
     .from(groupSessions)
     .innerJoin(groups, eq(groups.id, groupSessions.groupId))
+    .leftJoin(
+      practitionerSettings,
+      eq(practitionerSettings.accountId, groupSessions.accountId)
+    )
     .where(eq(groupSessions.id, groupSessionId))
     .limit(1);
   if (!row || !row.published) {
@@ -391,6 +399,17 @@ export async function createCircleCheckout(input: {
       error: "This circle is free — use the regular sign-up below.",
     };
   }
+
+  // The practitioner must have connected her Stripe account AND finished
+  // activation (charges enabled). Until then the storefront shows only the
+  // manual (Venmo/cash) lane, so this is a belt-and-suspenders guard.
+  if (!row.stripeAccountId || !row.stripeChargesEnabled) {
+    return {
+      ok: false,
+      error: "Card payment isn't set up yet. Use the other ways to pay below.",
+    };
+  }
+  const connectedAccountId = row.stripeAccountId;
 
   // Capacity check (non-cancelled attendees count, incl. pending-payment holds).
   const countRow = await db
@@ -480,7 +499,12 @@ export async function createCircleCheckout(input: {
       },
       success_url: `${base}/circles/${groupSessionId}?paid=1`,
       cancel_url: `${base}/circles/${groupSessionId}?canceled=1`,
-    });
+    },
+    // DIRECT charge: create the session ON her connected account, so she's the
+    // merchant of record and the money is 100% hers. The resulting
+    // checkout.session.completed event fires on her account and is delivered
+    // to our Connect webhook (verified with the platform signing secret).
+    { stripeAccount: connectedAccountId });
 
     await db
       .update(groupAttendees)
