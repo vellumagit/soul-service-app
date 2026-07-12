@@ -27,7 +27,7 @@ function siteUrl(): string {
 
 export async function GET() {
   if (!isStripeConnectEnabled()) {
-    return NextResponse.redirect(`${siteUrl()}/status?stripe=disabled`);
+    return NextResponse.redirect(`${siteUrl()}/settings?stripe=disabled`);
   }
 
   const { accountId } = await requireSession();
@@ -38,7 +38,7 @@ export async function GET() {
     redirectUri: `${siteUrl()}/api/integrations/stripe/callback`,
   });
   if (!url) {
-    return NextResponse.redirect(`${siteUrl()}/status?stripe=disabled`);
+    return NextResponse.redirect(`${siteUrl()}/settings?stripe=disabled`);
   }
   return NextResponse.redirect(url);
 }

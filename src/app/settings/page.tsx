@@ -10,6 +10,8 @@ import { QuickActions } from "@/components/QuickActions";
 import { SettingsForm } from "@/components/SettingsForm";
 import { TemplatesManager } from "@/components/TemplatesManager";
 import { GoogleCalendarSection } from "@/components/GoogleCalendarSection";
+import { PaymentsSection } from "@/components/PaymentsSection";
+import { isStripeConnectEnabled } from "@/lib/stripe";
 import { requireSession } from "@/lib/session-cookies";
 import { asLocale, t } from "@/lib/i18n";
 
@@ -22,10 +24,11 @@ export default async function SettingsPage({
     google?: string;
     email?: string;
     reason?: string;
+    stripe?: string;
   }>;
 }) {
   const { email: userEmail, accountId } = await requireSession();
-  const { google, email, reason } = await searchParams;
+  const { google, email, reason, stripe } = await searchParams;
 
   const [settings, clientsList, emailTpls, noteTpls, googleStatus] =
     await Promise.all([
@@ -64,6 +67,17 @@ export default async function SettingsPage({
           flashStatus={flashStatus}
           flashEmail={email ?? null}
           flashReason={reason ?? null}
+        />
+      </div>
+
+      <div className="mb-5">
+        <PaymentsSection
+          platformReady={
+            isStripeConnectEnabled() && !!process.env.STRIPE_WEBHOOK_SECRET
+          }
+          connected={!!settings.stripeAccountId}
+          chargesEnabled={!!settings.stripeChargesEnabled}
+          flash={stripe ?? null}
         />
       </div>
 

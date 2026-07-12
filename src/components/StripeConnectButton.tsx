@@ -41,7 +41,9 @@ export function StripeConnectButton({
           setBusy(false);
           return;
         }
-        window.location.href = "/status?stripe=disconnected";
+        // Reload whatever page the button is on (Settings or Status) so it
+        // re-renders with the now-disconnected state.
+        window.location.reload();
       } catch {
         alert("Could not disconnect. Please try again.");
         setBusy(false);

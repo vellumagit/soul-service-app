@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
   const base = siteUrl();
 
   if (!isStripeConnectEnabled()) {
-    return NextResponse.redirect(`${base}/status?stripe=disabled`);
+    return NextResponse.redirect(`${base}/settings?stripe=disabled`);
   }
 
   const url = new URL(req.url);
@@ -39,10 +39,10 @@ export async function GET(req: NextRequest) {
   const state = url.searchParams.get("state");
 
   if (error) {
-    return NextResponse.redirect(`${base}/status?stripe=denied`);
+    return NextResponse.redirect(`${base}/settings?stripe=denied`);
   }
   if (!code || !state) {
-    return NextResponse.redirect(`${base}/status?stripe=missing_params`);
+    return NextResponse.redirect(`${base}/settings?stripe=missing_params`);
   }
 
   // Re-verify the signed-in account matches the one that issued the state.
@@ -52,10 +52,10 @@ export async function GET(req: NextRequest) {
   try {
     consumed = await consumeOAuthState(state);
   } catch {
-    return NextResponse.redirect(`${base}/status?stripe=bad_state`);
+    return NextResponse.redirect(`${base}/settings?stripe=bad_state`);
   }
   if (consumed.accountId !== accountId) {
-    return NextResponse.redirect(`${base}/status?stripe=identity_mismatch`);
+    return NextResponse.redirect(`${base}/settings?stripe=identity_mismatch`);
   }
 
   try {
@@ -63,8 +63,8 @@ export async function GET(req: NextRequest) {
     await saveConnectedAccount({ accountId, stripeAccountId });
   } catch (err) {
     console.error("[stripe connect callback] exchange failed", err);
-    return NextResponse.redirect(`${base}/status?stripe=exchange_failed`);
+    return NextResponse.redirect(`${base}/settings?stripe=exchange_failed`);
   }
 
-  return NextResponse.redirect(`${base}/status?stripe=connected`);
+  return NextResponse.redirect(`${base}/settings?stripe=connected`);
 }
