@@ -10,9 +10,15 @@ import "server-only";
 // retries / double-confirms never double-send. On send failure the claim
 // is released so a later retry can try again.
 
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { groupAttendees, groupSessions, groups, practitionerSettings } from "@/db/schema";
+import {
+  groupAttendees,
+  groupSessions,
+  groups,
+  practitionerSettings,
+  clients,
+} from "@/db/schema";
 import { sendCircleWelcomeEmail } from "./resend";
 
 /** Resolve the meeting link for a circle: the session's own meet_url wins,
@@ -32,6 +38,75 @@ function formatWhen(d: Date): string {
     hour: "numeric",
     minute: "2-digit",
     timeZoneName: "short",
+  });
+}
+
+/**
+ * Circle → 1-on-1 pipeline: auto-add a confirmed Circle attendee to her Network
+ * as a lead, so the Circle actually feeds her practice instead of stranding
+ * names inside the group. Tagged with the Circle + date via `howTheyFoundMe`
+ * so she knows where they came from.
+ *
+ * Idempotent + deduped by email: if a client OR lead with that email already
+ * exists (an existing 1-on-1 client, or someone who came through a prior
+ * Circle), we skip entirely — never a duplicate, never downgrading an existing
+ * client back to a lead. Best-effort by design; the caller wraps it so a hiccup
+ * here can't block the welcome email.
+ */
+export async function convertAttendeeToLead(
+  attendeeId: string
+): Promise<void> {
+  const [row] = await db
+    .select({
+      accountId: groupAttendees.accountId,
+      name: groupAttendees.name,
+      email: groupAttendees.email,
+      phone: groupAttendees.phone,
+      groupName: groups.name,
+      scheduledAt: groupSessions.scheduledAt,
+    })
+    .from(groupAttendees)
+    .innerJoin(
+      groupSessions,
+      eq(groupSessions.id, groupAttendees.groupSessionId)
+    )
+    .innerJoin(groups, eq(groups.id, groupSessions.groupId))
+    .where(eq(groupAttendees.id, attendeeId))
+    .limit(1);
+  if (!row) return;
+
+  const email = (row.email ?? "").trim().toLowerCase();
+  if (!email || !email.includes("@")) return; // no email → can't dedupe / follow up
+
+  // Dedupe against ANY existing client or lead for this account, by email.
+  const [existing] = await db
+    .select({ id: clients.id })
+    .from(clients)
+    .where(
+      and(
+        eq(clients.accountId, row.accountId),
+        sql`LOWER(${clients.email}) = ${email}`
+      )
+    )
+    .limit(1);
+  if (existing) return; // already known — don't duplicate or downgrade
+
+  const when = new Date(row.scheduledAt);
+  const dateLabel = when.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+
+  await db.insert(clients).values({
+    accountId: row.accountId,
+    fullName: row.name?.trim() || email,
+    email,
+    phone: row.phone ?? null,
+    isLead: true,
+    status: "new",
+    howTheyFoundMe: `Circle · ${row.groupName} (${dateLabel})`,
+    metOn: when.toISOString().slice(0, 10), // YYYY-MM-DD
   });
 }
 
@@ -88,6 +163,15 @@ export async function fulfillCircleSeat(
     )
     .returning({ id: groupAttendees.id });
   if (claimed.length === 0) return { sent: false };
+
+  // Feed the Circle → 1-on-1 pipeline. Runs for the single winner of the
+  // welcome-claim above, so it can't race; best-effort so a lead-creation
+  // hiccup never blocks the welcome email. Idempotent + deduped inside.
+  try {
+    await convertAttendeeToLead(attendeeId);
+  } catch (err) {
+    console.error("[circle] lead conversion failed for", attendeeId, err);
+  }
 
   try {
     await sendCircleWelcomeEmail({
