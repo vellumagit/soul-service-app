@@ -22,6 +22,7 @@ import { requireSession } from "./session-cookies";
 import { checkRateLimit } from "./rate-limit";
 import { getStripe, isStripeConfigured } from "./stripe";
 import { fulfillCircleSeat } from "./circle-fulfillment";
+import { ensureRecurringCircleSessions } from "./recurring-circles";
 
 // ─────────────────────────────────────────────────────────────────────
 // Practitioner — create / update groups
@@ -122,6 +123,57 @@ export async function archiveGroup(id: string): Promise<{ ok: true }> {
     .where(and(eq(groups.accountId, accountId), eq(groups.id, id)));
   revalidatePath("/groups");
   return { ok: true };
+}
+
+// Turn a group's weekly auto-scheduling on/off + set its day & time. On save we
+// immediately populate the next weeks so she sees them right away; the reminders
+// cron tops the window up hourly thereafter. See src/lib/recurring-circles.ts.
+export async function setGroupRecurrence(formData: FormData): Promise<void> {
+  const { accountId } = await requireSession();
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+
+  // Verify ownership.
+  const [group] = await db
+    .select({ id: groups.id })
+    .from(groups)
+    .where(and(eq(groups.accountId, accountId), eq(groups.id, id)))
+    .limit(1);
+  if (!group) return;
+
+  const wantsOn = formData.get("recurrenceEnabled") === "true";
+  let weekday: number | null = null;
+  let time: string | null = null;
+  if (wantsOn) {
+    const w = parseInt(String(formData.get("recurrenceWeekday") ?? ""), 10);
+    weekday = Number.isInteger(w) && w >= 0 && w <= 6 ? w : null;
+    const t = String(formData.get("recurrenceTime") ?? "").trim();
+    time = /^\d{1,2}:\d{2}$/.test(t) ? t : null;
+  }
+  // Only truly "on" if we have a valid day AND time.
+  const enabled = wantsOn && weekday != null && time != null;
+
+  await db
+    .update(groups)
+    .set({
+      recurrenceEnabled: enabled,
+      recurrenceWeekday: weekday,
+      recurrenceTime: time,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(groups.accountId, accountId), eq(groups.id, id)));
+
+  if (enabled) {
+    try {
+      await ensureRecurringCircleSessions({ groupId: id, accountId });
+    } catch (err) {
+      console.error("[group] recurrence generation failed", err);
+    }
+  }
+
+  revalidatePath(`/groups/${id}`);
+  revalidatePath("/groups");
+  revalidatePath("/");
 }
 
 // ─────────────────────────────────────────────────────────────────────

@@ -1092,6 +1092,19 @@ export const groups = pgTable(
       .notNull(),
     paymentInstructions: text("payment_instructions"),
     published: boolean("published").default(true).notNull(),
+
+    // Recurring weekly Circle. When enabled, a job keeps the next
+    // `recurrence_weeks_ahead` weeks filled with a session on
+    // `recurrence_weekday` (0=Sun..6=Sat, JS getUTCDay) at `recurrence_time`
+    // ("HH:MM" 24h), interpreted in the practice timezone. See
+    // src/lib/recurring-circles.ts.
+    recurrenceEnabled: boolean("recurrence_enabled").default(false).notNull(),
+    recurrenceWeekday: integer("recurrence_weekday"),
+    recurrenceTime: text("recurrence_time"),
+    recurrenceWeeksAhead: integer("recurrence_weeks_ahead")
+      .default(4)
+      .notNull(),
+
     archivedAt: timestamp("archived_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),

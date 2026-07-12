@@ -85,3 +85,83 @@ export function formatSessionShortTime(date: Date, timeZone: string): string {
     timeZoneName: "short",
   });
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// Wall-clock ↔ instant conversion (for recurring schedules). "Every Tuesday
+// 7pm in America/Toronto" must map to the correct UTC instant year-round —
+// naively adding 7×24h drifts by an hour across DST. These helpers do it right.
+// ─────────────────────────────────────────────────────────────────────────
+
+/** Offset (ms) to ADD to a UTC instant to get the wall-clock time in `tz`
+ *  (wallMs = utcMs + offset). */
+function tzOffsetMs(utcDate: Date, tz: string): number {
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+  const map: Record<string, string> = {};
+  for (const p of dtf.formatToParts(utcDate)) {
+    if (p.type !== "literal") map[p.type] = p.value;
+  }
+  const asUtc = Date.UTC(
+    Number(map.year),
+    Number(map.month) - 1,
+    Number(map.day),
+    Number(map.hour),
+    Number(map.minute),
+    Number(map.second)
+  );
+  return asUtc - utcDate.getTime();
+}
+
+/**
+ * Convert a wall-clock time in `tz` to the true UTC instant. DST-correct via a
+ * two-step offset refinement (the standard date-fns-tz approach). `month0` is
+ * 0-based. e.g. zonedWallTimeToUtc(2026, 6, 14, 19, 0, "America/Toronto") → the
+ * Date for 7:00 PM Toronto on Jul 14, 2026.
+ */
+export function zonedWallTimeToUtc(
+  year: number,
+  month0: number,
+  day: number,
+  hour: number,
+  minute: number,
+  tz: string
+): Date {
+  const zone = resolveTimeZone(tz);
+  const guess = Date.UTC(year, month0, day, hour, minute);
+  const off1 = tzOffsetMs(new Date(guess), zone);
+  let ts = guess - off1;
+  const off2 = tzOffsetMs(new Date(ts), zone);
+  if (off2 !== off1) ts = guess - off2;
+  return new Date(ts);
+}
+
+/** Calendar year / month (0-based) / day of an instant, as seen in `tz`. */
+export function zonedYearMonthDay(
+  date: Date,
+  tz: string
+): { year: number; month0: number; day: number } {
+  const zone = resolveTimeZone(tz);
+  const dtf = new Intl.DateTimeFormat("en-CA", {
+    timeZone: zone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const map: Record<string, string> = {};
+  for (const p of dtf.formatToParts(date)) {
+    if (p.type !== "literal") map[p.type] = p.value;
+  }
+  return {
+    year: Number(map.year),
+    month0: Number(map.month) - 1,
+    day: Number(map.day),
+  };
+}

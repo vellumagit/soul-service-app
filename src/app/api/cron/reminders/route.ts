@@ -5,6 +5,7 @@
 // requests. Anyone else hitting this endpoint gets 401.
 import { NextResponse } from "next/server";
 import { processReminders } from "@/lib/reminders";
+import { ensureRecurringCircleSessions } from "@/lib/recurring-circles";
 
 export const dynamic = "force-dynamic";
 // Reminders can take a few seconds across many accounts — give it room.
@@ -25,5 +26,15 @@ export async function GET(request: Request) {
   }
 
   const stats = await processReminders();
-  return NextResponse.json({ ok: true, ...stats });
+
+  // Top up recurring weekly Circles so the storefront always has the next few
+  // weeks of open seats. Idempotent + deduped, so running hourly is safe.
+  let recurringCircles = { groups: 0, created: 0 };
+  try {
+    recurringCircles = await ensureRecurringCircleSessions();
+  } catch (err) {
+    console.error("[cron] recurring circles top-up failed", err);
+  }
+
+  return NextResponse.json({ ok: true, ...stats, recurringCircles });
 }

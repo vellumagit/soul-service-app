@@ -14,6 +14,7 @@ import { asLocale } from "@/lib/i18n";
 import { ScheduleGroupSessionDialog } from "@/components/ScheduleGroupSessionDialog";
 import { GroupAttendeeRow } from "@/components/GroupAttendeeRow";
 import { CancelGroupSessionButton } from "@/components/CancelGroupSessionButton";
+import { GroupRecurrencePanel } from "@/components/GroupRecurrencePanel";
 
 export const dynamic = "force-dynamic";
 
@@ -169,6 +170,15 @@ export default async function GroupDetailPage({
           defaultCapacity={group.defaultCapacity}
         />
       </header>
+
+      {group.published && (
+        <GroupRecurrencePanel
+          groupId={group.id}
+          enabled={group.recurrenceEnabled}
+          weekday={group.recurrenceWeekday}
+          time={group.recurrenceTime}
+        />
+      )}
 
       {group.paymentInstructions && (
         <div className="paper-card p-4 mb-7 max-w-2xl">
