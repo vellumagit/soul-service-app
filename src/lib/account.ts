@@ -217,3 +217,39 @@ export async function findAccountByEmail(
   if (!rows[0]) return null;
   return { accountId: rows[0].id };
 }
+
+/** Account id + stored password hash for an email (null hash = no password). */
+export async function getAccountAuthByEmail(
+  email: string
+): Promise<{ accountId: string; passwordHash: string | null } | null> {
+  const rows = await db
+    .select({ id: accounts.id, passwordHash: accounts.passwordHash })
+    .from(accounts)
+    .where(eq(accounts.email, email.trim().toLowerCase()))
+    .limit(1);
+  if (!rows[0]) return null;
+  return { accountId: rows[0].id, passwordHash: rows[0].passwordHash };
+}
+
+/** Current stored password hash for an account (null = none set). */
+export async function getAccountPasswordHash(
+  accountId: string
+): Promise<string | null> {
+  const rows = await db
+    .select({ passwordHash: accounts.passwordHash })
+    .from(accounts)
+    .where(eq(accounts.id, accountId))
+    .limit(1);
+  return rows[0]?.passwordHash ?? null;
+}
+
+/** Set (or change) an account's password hash. */
+export async function setAccountPasswordHash(
+  accountId: string,
+  hash: string
+): Promise<void> {
+  await db
+    .update(accounts)
+    .set({ passwordHash: hash })
+    .where(eq(accounts.id, accountId));
+}

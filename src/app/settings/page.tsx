@@ -11,8 +11,10 @@ import { SettingsForm } from "@/components/SettingsForm";
 import { TemplatesManager } from "@/components/TemplatesManager";
 import { GoogleCalendarSection } from "@/components/GoogleCalendarSection";
 import { PaymentsSection } from "@/components/PaymentsSection";
+import { PasswordSettings } from "@/components/PasswordSettings";
 import { isStripeConnectEnabled } from "@/lib/stripe";
 import { requireSession } from "@/lib/session-cookies";
+import { getAccountPasswordHash } from "@/lib/account";
 import { asLocale, t } from "@/lib/i18n";
 
 export const dynamic = "force-dynamic";
@@ -30,13 +32,14 @@ export default async function SettingsPage({
   const { email: userEmail, accountId } = await requireSession();
   const { google, email, reason, stripe } = await searchParams;
 
-  const [settings, clientsList, emailTpls, noteTpls, googleStatus] =
+  const [settings, clientsList, emailTpls, noteTpls, googleStatus, passwordHash] =
     await Promise.all([
       getSettings(accountId),
       listClientsForPicker(accountId),
       listEmailTemplates(accountId),
       listNoteTemplates(accountId),
       getGoogleConnectionStatus(accountId),
+      getAccountPasswordHash(accountId),
     ]);
 
   const flashStatus =
@@ -79,6 +82,10 @@ export default async function SettingsPage({
           chargesEnabled={!!settings.stripeChargesEnabled}
           flash={stripe ?? null}
         />
+      </div>
+
+      <div className="mb-5">
+        <PasswordSettings hasPassword={!!passwordHash} />
       </div>
 
       <SettingsForm settings={settings} />

@@ -43,18 +43,46 @@ export function SignInForm({ locale = DEFAULT_LOCALE }: { locale?: Locale }) {
         />
       </Field>
 
+      <Field label="Password">
+        <input
+          name="password"
+          type="password"
+          autoComplete="current-password"
+          placeholder="••••••••"
+          className={inputCls}
+        />
+        <p className="text-[11px] text-ink-400 mt-1 leading-relaxed">
+          Have a password? Enter it. Otherwise leave it blank and we&apos;ll
+          email you a one-time sign-in link.
+        </p>
+      </Field>
+
       {state && !state.ok && (
         <div className="text-xs rounded-md border p-3 bg-red-50 border-red-100 text-red-700">
           {state.message}
         </div>
       )}
 
+      {/* Primary: password sign-in (intent=password). */}
       <button
         type="submit"
+        name="intent"
+        value="password"
         disabled={pending}
         className="w-full bg-ink-900 hover:bg-ink-800 text-white text-sm font-medium px-4 py-2.5 rounded-md disabled:opacity-60 transition"
       >
         {pending ? t(locale, "signin.submitting") : t(locale, "signin.submit")}
+      </button>
+
+      {/* Fallback / reset: always emails a one-time link (intent=link). */}
+      <button
+        type="submit"
+        name="intent"
+        value="link"
+        disabled={pending}
+        className="w-full border border-ink-200 bg-white hover:bg-ink-50 text-ink-700 text-sm font-medium px-4 py-2.5 rounded-md disabled:opacity-60 transition"
+      >
+        Email me a sign-in link
       </button>
 
       <p className="text-[11px] text-ink-400 text-center pt-1">

@@ -27,9 +27,20 @@ import { isAllowed } from "./session";
 import {
   clearSessionCookie,
   createUserMagicLink,
+  requireSession,
   setSessionCookie,
 } from "./session-cookies";
-import { getOrCreateAccount } from "./account";
+import {
+  getOrCreateAccount,
+  getAccountAuthByEmail,
+  getAccountPasswordHash,
+  setAccountPasswordHash,
+} from "./account";
+import {
+  hashPassword,
+  verifyPassword,
+  MIN_PASSWORD_LENGTH,
+} from "./password";
 import { sendMagicLinkEmail } from "./resend";
 import { startPortalSignInByEmail } from "./portal-signin";
 import { checkRateLimit } from "./rate-limit";
@@ -121,34 +132,114 @@ export async function signInWithEmail(
     };
   }
 
-  // INSTANT-ENTRY mode (default — Resend domain not yet configured).
-  // Set the session cookie and redirect home. This is the pre-magic-link
-  // behavior, preserved so Brian can still sign in while he sorts out
-  // the Resend domain verification. Flip AUTH_REQUIRE_MAGIC_LINK=true
-  // to switch to the email-verification flow.
-  if (!magicLinkMode()) {
+  const base =
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    `${h.get("x-forwarded-proto") ?? "https"}://${h.get("host") ?? "localhost"}`;
+  const userAgent = h.get("user-agent");
+  const intent = String(formData.get("intent") ?? "password").trim();
+  const password = String(formData.get("password") ?? "");
+
+  const auth = await getAccountAuthByEmail(rawEmail);
+  const hasPassword = !!auth?.passwordHash;
+
+  // Explicit "email me a sign-in link" — bootstrap, fallback, or password
+  // reset. Always sends a link regardless of whether a password is set, so she
+  // can never be locked out.
+  if (intent === "link") {
+    await sendPractitionerLink(rawEmail, { base, ip, userAgent });
+    return { ok: true, message: SUCCESS_MESSAGE };
+  }
+
+  // Once a password exists, it (or an emailed link) is the ONLY way in — no
+  // more instant entry.
+  if (hasPassword) {
+    if (!password) {
+      return {
+        ok: false,
+        message:
+          "Enter your password, or choose “Email me a sign-in link” below.",
+      };
+    }
+    const good = await verifyPassword(password, auth!.passwordHash);
+    if (!good) {
+      return {
+        ok: false,
+        message:
+          "That email and password don’t match. Try again, or use “Email me a sign-in link.”",
+      };
+    }
     await setSessionCookie(rawEmail);
     redirect("/today");
   }
 
-  // MAGIC-LINK mode — opt in via AUTH_REQUIRE_MAGIC_LINK env var.
+  // No password set yet → bootstrap with the prior behavior so she's never
+  // locked out: instant entry (default) or an emailed link.
+  if (!magicLinkMode()) {
+    await setSessionCookie(rawEmail);
+    redirect("/today");
+  }
+  await sendPractitionerLink(rawEmail, { base, ip, userAgent });
+  return { ok: true, message: SUCCESS_MESSAGE };
+}
+
+/** Send a one-time practitioner sign-in link (bootstrap / fallback / reset).
+ *  Best-effort; swallows send errors so we return the neutral card either way. */
+async function sendPractitionerLink(
+  email: string,
+  opts: { base: string; ip: string; userAgent: string | null }
+): Promise<void> {
   try {
-    const userAgent = h.get("user-agent");
-    const cleartext = await createUserMagicLink(rawEmail, {
-      ip,
-      userAgent,
+    const cleartext = await createUserMagicLink(email, {
+      ip: opts.ip,
+      userAgent: opts.userAgent,
     });
-    const base =
-      process.env.NEXT_PUBLIC_SITE_URL ||
-      `${h.get("x-forwarded-proto") ?? "https"}://${h.get("host") ?? "localhost"}`;
-    const url = `${base}/signin/${cleartext}`;
-    await sendMagicLinkEmail(rawEmail, url);
+    await sendMagicLinkEmail(email, `${opts.base}/signin/${cleartext}`);
   } catch (err) {
     console.error("[auth] magic link send failed:", err);
-    return { ok: true, message: SUCCESS_MESSAGE };
+  }
+}
+
+export type PasswordUpdateResult = { ok: boolean; message: string };
+
+/** Set or change the signed-in practitioner's password. Requires the current
+ *  password when one is already set. Clients never reach this (requireSession
+ *  gates it to the practitioner). */
+export async function setPractitionerPassword(
+  _prev: PasswordUpdateResult | undefined,
+  formData: FormData
+): Promise<PasswordUpdateResult> {
+  const { accountId } = await requireSession();
+
+  const current = String(formData.get("currentPassword") ?? "");
+  const next = String(formData.get("newPassword") ?? "");
+  const confirm = String(formData.get("confirmPassword") ?? "");
+
+  const existing = await getAccountPasswordHash(accountId);
+  if (existing) {
+    const good = await verifyPassword(current, existing);
+    if (!good) {
+      return { ok: false, message: "Your current password isn’t right." };
+    }
+  }
+  if (next.length < MIN_PASSWORD_LENGTH) {
+    return {
+      ok: false,
+      message: `Please use at least ${MIN_PASSWORD_LENGTH} characters.`,
+    };
+  }
+  if (next !== confirm) {
+    return { ok: false, message: "The two new-password fields don’t match." };
   }
 
-  return { ok: true, message: SUCCESS_MESSAGE };
+  const hash = await hashPassword(next);
+  await setAccountPasswordHash(accountId, hash);
+
+  return {
+    ok: true,
+    message: existing
+      ? "Password updated."
+      : "Password set — you can now sign in with it from anywhere.",
+  };
 }
 
 /** Sign out — clear the cookie and bounce to /signin. */

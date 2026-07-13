@@ -79,6 +79,9 @@ export const accounts = pgTable("accounts", {
   id: uuid("id").primaryKey().defaultRandom(),
   email: text("email").notNull().unique(),
   name: text("name"), // display name — defaults to "Practitioner"
+  // Optional practitioner sign-in password (scrypt hash; null = not set yet,
+  // falls back to the email-link flow). See src/lib/password.ts.
+  passwordHash: text("password_hash"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
