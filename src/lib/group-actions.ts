@@ -28,6 +28,12 @@ import { ensureRecurringCircleSessions } from "./recurring-circles";
 // Practitioner — create / update groups
 // ─────────────────────────────────────────────────────────────────────
 
+const CIRCLE_CURRENCIES = ["USD", "CAD", "EUR", "GBP"];
+function normalizeCurrency(raw: FormDataEntryValue | null): string {
+  const c = String(raw ?? "USD").trim().toUpperCase();
+  return CIRCLE_CURRENCIES.includes(c) ? c : "USD";
+}
+
 export async function createGroup(formData: FormData): Promise<void> {
   const { accountId } = await requireSession();
   const name = String(formData.get("name") ?? "").trim().slice(0, 200);
@@ -51,6 +57,7 @@ export async function createGroup(formData: FormData): Promise<void> {
     String(formData.get("paymentInstructions") ?? "").trim().slice(0, 1000) ||
     null;
   const published = formData.get("published") === "true";
+  const currency = normalizeCurrency(formData.get("defaultCurrency"));
 
   const inserted = await db
     .insert(groups)
@@ -61,6 +68,7 @@ export async function createGroup(formData: FormData): Promise<void> {
       defaultCapacity: capacity,
       defaultDurationMinutes: duration,
       defaultPriceCents: priceCents,
+      defaultCurrency: currency,
       paymentInstructions,
       published,
     })
@@ -95,6 +103,7 @@ export async function updateGroup(formData: FormData): Promise<void> {
     String(formData.get("paymentInstructions") ?? "").trim().slice(0, 1000) ||
     null;
   const published = formData.get("published") === "true";
+  const currency = normalizeCurrency(formData.get("defaultCurrency"));
 
   await db
     .update(groups)
@@ -104,6 +113,7 @@ export async function updateGroup(formData: FormData): Promise<void> {
       defaultCapacity: capacity,
       defaultDurationMinutes: duration,
       defaultPriceCents: priceCents,
+      defaultCurrency: currency,
       paymentInstructions,
       published,
       updatedAt: new Date(),

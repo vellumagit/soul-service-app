@@ -15,6 +15,7 @@ import { ScheduleGroupSessionDialog } from "@/components/ScheduleGroupSessionDia
 import { GroupAttendeeRow } from "@/components/GroupAttendeeRow";
 import { CancelGroupSessionButton } from "@/components/CancelGroupSessionButton";
 import { GroupRecurrencePanel } from "@/components/GroupRecurrencePanel";
+import { EditGroupDialog } from "@/components/EditGroupDialog";
 
 export const dynamic = "force-dynamic";
 
@@ -150,25 +151,29 @@ export default async function GroupDetailPage({
             <span>
               {formatMoney(group.defaultPriceCents, group.defaultCurrency)}/seat
             </span>
-            {group.published && (
-              <>
-                <span>·</span>
-                <Link
-                  href="/settings/groups"
-                  className="text-plum-700 hover:underline"
-                >
-                  edit defaults
-                </Link>
-              </>
-            )}
           </div>
         </div>
-        <ScheduleGroupSessionDialog
-          groupId={group.id}
-          groupName={group.name}
-          defaultDurationMinutes={group.defaultDurationMinutes}
-          defaultCapacity={group.defaultCapacity}
-        />
+        <div className="flex items-center gap-2 shrink-0">
+          <EditGroupDialog
+            group={{
+              id: group.id,
+              name: group.name,
+              description: group.description,
+              defaultCapacity: group.defaultCapacity,
+              defaultDurationMinutes: group.defaultDurationMinutes,
+              defaultPriceCents: group.defaultPriceCents,
+              defaultCurrency: group.defaultCurrency,
+              paymentInstructions: group.paymentInstructions,
+              published: group.published,
+            }}
+          />
+          <ScheduleGroupSessionDialog
+            groupId={group.id}
+            groupName={group.name}
+            defaultDurationMinutes={group.defaultDurationMinutes}
+            defaultCapacity={group.defaultCapacity}
+          />
+        </div>
       </header>
 
       {group.published && (

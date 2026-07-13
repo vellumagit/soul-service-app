@@ -1,14 +1,37 @@
 "use client";
 
-// Small dialog for creating a group. Opens from the /groups page "New
-// group" button. Submits to createGroup which inserts and then redirects
-// to the group's detail page.
+// Edit an existing Circle's settings in one place — name, storefront
+// description, seats, length, price + currency, payment instructions, and
+// whether it's public. Opens from the "Edit" button on the group detail page,
+// pre-filled, and submits to updateGroup (which revalidates in place — no
+// redirect). Frequency lives in the separate "Weekly rhythm" panel.
 
 import { useState } from "react";
 import { Modal } from "./Modal";
-import { createGroup } from "@/lib/group-actions";
+import { updateGroup } from "@/lib/group-actions";
 
-export function NewGroupDialog() {
+const CURRENCIES = [
+  { v: "USD", label: "USD $" },
+  { v: "CAD", label: "CAD $" },
+  { v: "EUR", label: "EUR €" },
+  { v: "GBP", label: "GBP £" },
+];
+
+export function EditGroupDialog({
+  group,
+}: {
+  group: {
+    id: string;
+    name: string;
+    description: string | null;
+    defaultCapacity: number;
+    defaultDurationMinutes: number;
+    defaultPriceCents: number;
+    defaultCurrency: string;
+    paymentInstructions: string | null;
+    published: boolean;
+  };
+}) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -16,17 +39,19 @@ export function NewGroupDialog() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="px-3 py-2 text-sm bg-ink-900 hover:bg-ink-800 text-white rounded-md font-medium"
+        className="px-3 py-2 text-sm border border-ink-200 bg-white hover:bg-ink-50 text-ink-700 rounded-md font-medium"
       >
-        + New group
+        Edit Circle
       </button>
       <Modal
         open={open}
         onClose={() => setOpen(false)}
-        title="New group"
+        title="Circle settings"
         size="md"
       >
-        <form action={createGroup} className="space-y-4">
+        <form action={updateGroup} className="space-y-4">
+          <input type="hidden" name="id" value={group.id} />
+
           <label className="block">
             <span className="text-xs uppercase tracking-wider text-ink-500 font-mono">
               Name
@@ -36,24 +61,23 @@ export function NewGroupDialog() {
               name="name"
               required
               maxLength={200}
-              placeholder="The Circle"
-              autoFocus
+              defaultValue={group.name}
               className="mt-1.5 w-full px-3 py-2 text-sm border border-ink-200 rounded-md bg-white"
             />
           </label>
 
           <label className="block">
             <span className="text-xs uppercase tracking-wider text-ink-500 font-mono">
-              Description (optional)
+              Description
             </span>
             <p className="text-[11px] text-ink-500 italic mt-0.5">
-              A short paragraph shown to visitors on your storefront.
+              Shown to visitors on your storefront.
             </p>
             <textarea
               name="description"
               rows={3}
               maxLength={4000}
-              placeholder="A guided weekly group for women carrying a lot — one theme each week, gently held."
+              defaultValue={group.description ?? ""}
               className="mt-1.5 w-full px-3 py-2 text-sm border border-ink-200 rounded-md bg-white resize-y"
             />
           </label>
@@ -66,7 +90,7 @@ export function NewGroupDialog() {
               <input
                 type="number"
                 name="defaultCapacity"
-                defaultValue={20}
+                defaultValue={group.defaultCapacity}
                 min={2}
                 max={500}
                 className="mt-1.5 w-full px-2.5 py-1.5 text-sm border border-ink-200 rounded-md bg-white"
@@ -79,7 +103,7 @@ export function NewGroupDialog() {
               <input
                 type="number"
                 name="defaultDurationMinutes"
-                defaultValue={120}
+                defaultValue={group.defaultDurationMinutes}
                 min={15}
                 max={480}
                 step={15}
@@ -93,7 +117,7 @@ export function NewGroupDialog() {
               <input
                 type="number"
                 name="defaultPrice"
-                defaultValue={20}
+                defaultValue={(group.defaultPriceCents / 100).toString()}
                 min={0}
                 max={5000}
                 step={1}
@@ -106,13 +130,14 @@ export function NewGroupDialog() {
               </span>
               <select
                 name="defaultCurrency"
-                defaultValue="CAD"
+                defaultValue={group.defaultCurrency}
                 className="mt-1.5 w-full px-2.5 py-1.5 text-sm border border-ink-200 rounded-md bg-white"
               >
-                <option value="USD">USD $</option>
-                <option value="CAD">CAD $</option>
-                <option value="EUR">EUR €</option>
-                <option value="GBP">GBP £</option>
+                {CURRENCIES.map((c) => (
+                  <option key={c.v} value={c.v}>
+                    {c.label}
+                  </option>
+                ))}
               </select>
             </label>
           </div>
@@ -122,14 +147,13 @@ export function NewGroupDialog() {
               Payment instructions
             </span>
             <p className="text-[11px] text-ink-500 italic mt-0.5">
-              Shown to attendees after they sign up. e.g. &ldquo;Venmo @svit
-              $20 with &lsquo;Circle&rsquo; in the note&rdquo;.
+              Shown to attendees who pay manually (Venmo/cash), not by card.
             </p>
             <textarea
               name="paymentInstructions"
               rows={2}
               maxLength={1000}
-              placeholder="Venmo @svit-lana $20 — please include the session date."
+              defaultValue={group.paymentInstructions ?? ""}
               className="mt-1.5 w-full px-3 py-2 text-sm border border-ink-200 rounded-md bg-white resize-y"
             />
           </label>
@@ -139,14 +163,15 @@ export function NewGroupDialog() {
               type="checkbox"
               name="published"
               value="true"
-              defaultChecked
+              defaultChecked={group.published}
               className="rounded border-ink-300 mt-0.5"
             />
             <span className="text-sm text-ink-700 leading-snug">
-              Publish on my storefront
+              Public on my storefront
               <span className="block text-[11px] text-ink-500 italic mt-0.5">
-                When on, scheduled sessions appear in the &ldquo;Upcoming
-                Circles&rdquo; list on svit.live for anyone to sign up.
+                On = scheduled sessions appear in &ldquo;Upcoming Circles&rdquo;
+                on svit.live. Off = private (the public page 404s); useful for
+                invite-only groups.
               </span>
             </span>
           </label>
@@ -163,7 +188,7 @@ export function NewGroupDialog() {
               type="submit"
               className="px-4 py-2 text-sm bg-plum-700 hover:bg-plum-600 text-white rounded-md font-medium"
             >
-              Create group
+              Save Circle
             </button>
           </div>
         </form>
