@@ -123,6 +123,127 @@ export async function processReminders(): Promise<ReminderRunStats> {
   return stats;
 }
 
+/**
+ * Send reminders for ONE session immediately, if it's booked inside a reminder
+ * window. Called at booking time so a short-notice / same-day session still
+ * gets a heads-up — the hourly cron alone would miss the window (or fire after
+ * the session started). Idempotent: it stamps the same `*_reminder_sent_at`
+ * columns the cron checks, so neither path double-sends. Best-effort.
+ */
+export async function sendImmediateSessionReminders(
+  sessionId: string
+): Promise<void> {
+  const now = new Date();
+
+  const [row] = await db
+    .select({
+      accountId: sessions.accountId,
+      status: sessions.status,
+      scheduledAt: sessions.scheduledAt,
+      durationMinutes: sessions.durationMinutes,
+      sessionType: sessions.type,
+      meetUrl: sessions.meetUrl,
+      intention: sessions.intention,
+      sessionTimezone: sessions.timezone,
+      clientReminderSentAt: sessions.clientReminderSentAt,
+      practitionerReminderSentAt: sessions.practitionerReminderSentAt,
+      clientName: clients.fullName,
+      clientEmail: clients.email,
+      clientTimezone: clients.timezone,
+    })
+    .from(sessions)
+    .innerJoin(clients, eq(sessions.clientId, clients.id))
+    .where(eq(sessions.id, sessionId))
+    .limit(1);
+  if (!row) return;
+  if (row.status !== "scheduled") return;
+  const scheduledMs = new Date(row.scheduledAt).getTime();
+  if (scheduledMs <= now.getTime()) return; // already started / past
+
+  const [settings] = await db
+    .select()
+    .from(practitionerSettings)
+    .where(eq(practitionerSettings.accountId, row.accountId))
+    .limit(1);
+  if (!settings) return;
+  const [account] = await db
+    .select({ email: accounts.email })
+    .from(accounts)
+    .where(eq(accounts.id, row.accountId))
+    .limit(1);
+
+  const { sendEmail } = await import("./resend");
+
+  // CLIENT — only if inside the window, not already sent, and has an email.
+  const clientHours = settings.clientReminderHours;
+  if (
+    clientHours > 0 &&
+    !row.clientReminderSentAt &&
+    row.clientEmail &&
+    scheduledMs <= now.getTime() + clientHours * 60 * 60 * 1000
+  ) {
+    try {
+      const timeZone = resolveTimeZone(
+        row.clientTimezone,
+        row.sessionTimezone,
+        settings.timezone
+      );
+      const { html, text, subject } = buildClientReminderEmail({
+        clientName: row.clientName,
+        sessionType: row.sessionType,
+        scheduledAt: row.scheduledAt,
+        durationMinutes: row.durationMinutes,
+        meetUrl: row.meetUrl,
+        practitionerName: settings.practitionerName ?? "your practitioner",
+        timeZone,
+      });
+      await sendEmail({
+        to: row.clientEmail,
+        subject,
+        html,
+        text,
+        replyTo: settings.businessEmail ?? undefined,
+      });
+      await db
+        .update(sessions)
+        .set({ clientReminderSentAt: now })
+        .where(eq(sessions.id, sessionId));
+    } catch (err) {
+      console.error("[reminders] immediate client reminder failed:", err);
+    }
+  }
+
+  // PRACTITIONER — her own heads-up.
+  const practHours = settings.practitionerReminderHours;
+  if (
+    practHours > 0 &&
+    !row.practitionerReminderSentAt &&
+    account?.email &&
+    scheduledMs <= now.getTime() + practHours * 60 * 60 * 1000
+  ) {
+    try {
+      const timeZone = resolveTimeZone(row.sessionTimezone, settings.timezone);
+      const { html, text, subject } = buildPractitionerReminderEmail({
+        clientName: row.clientName,
+        sessionType: row.sessionType,
+        scheduledAt: row.scheduledAt,
+        durationMinutes: row.durationMinutes,
+        meetUrl: row.meetUrl,
+        intention: row.intention,
+        practitionerName: settings.practitionerName ?? "you",
+        timeZone,
+      });
+      await sendEmail({ to: account.email, subject, html, text });
+      await db
+        .update(sessions)
+        .set({ practitionerReminderSentAt: now })
+        .where(eq(sessions.id, sessionId));
+    } catch (err) {
+      console.error("[reminders] immediate practitioner reminder failed:", err);
+    }
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Per-audience senders
 // ─────────────────────────────────────────────────────────────────────────────

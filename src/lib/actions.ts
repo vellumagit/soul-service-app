@@ -1236,6 +1236,16 @@ export async function scheduleSession(
   const sync = await syncSessionToGoogle(created.id);
   const googleWarning = sync.ok === false ? sync.error : null;
 
+  // Short-notice guard: if the session is booked inside a reminder window, send
+  // the reminder(s) now so a same-day booking still gets a heads-up (the hourly
+  // cron would otherwise miss the window). Idempotent via *_reminder_sent_at.
+  try {
+    const { sendImmediateSessionReminders } = await import("./reminders");
+    await sendImmediateSessionReminders(created.id);
+  } catch (err) {
+    console.error("[schedule] immediate reminder check failed:", err);
+  }
+
   // Best-effort: auto-schedule the Recall.ai notetaker bot.
   // Runs AFTER syncSessionToGoogle so the Meet URL is on the row.
   await maybeAutoAddRecallBot(accountId, created.id);
@@ -2959,6 +2969,9 @@ async function syncSessionToGoogle(
         .join("\n"),
       startAt: session.scheduledAt,
       durationMinutes: session.durationMinutes,
+      // Pin the event's display zone to the session's zone (falling back to the
+      // practice zone), so Google never renders it in the calendar's default.
+      timeZone: resolveTimeZone(session.timezone, settings?.timezone),
       attendeeEmail: client.email,
       practitionerEmail: settings?.googleCalendarEmail ?? null,
     };

@@ -381,6 +381,10 @@ export type CalendarEventInput = {
   description?: string;
   startAt: Date;
   durationMinutes: number;
+  /** IANA zone the session belongs to. The instant is still carried by the
+   *  UTC dateTime, but pinning this makes the event's display zone explicit so
+   *  Google never falls back to the calendar's default zone. */
+  timeZone?: string | null;
   attendeeEmail?: string | null; // the client
   practitionerEmail?: string | null; // for the description/owner
 };
@@ -414,8 +418,14 @@ export async function createCalendarEvent(
     requestBody: {
       summary: input.summary,
       description: input.description,
-      start: { dateTime: input.startAt.toISOString() },
-      end: { dateTime: end.toISOString() },
+      start: {
+        dateTime: input.startAt.toISOString(),
+        timeZone: input.timeZone ?? undefined,
+      },
+      end: {
+        dateTime: end.toISOString(),
+        timeZone: input.timeZone ?? undefined,
+      },
       attendees: input.attendeeEmail
         ? [{ email: input.attendeeEmail }]
         : undefined,
@@ -467,8 +477,14 @@ export async function updateCalendarEvent(
       requestBody: {
         summary: input.summary,
         description: input.description,
-        start: { dateTime: input.startAt.toISOString() },
-        end: { dateTime: end.toISOString() },
+        start: {
+          dateTime: input.startAt.toISOString(),
+          timeZone: input.timeZone ?? undefined,
+        },
+        end: {
+          dateTime: end.toISOString(),
+          timeZone: input.timeZone ?? undefined,
+        },
         attendees: input.attendeeEmail
           ? [{ email: input.attendeeEmail }]
           : undefined,

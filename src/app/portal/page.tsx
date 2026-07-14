@@ -17,8 +17,9 @@
 import Link from "next/link";
 import { and, desc, eq, ne } from "drizzle-orm";
 import { db } from "@/db";
-import { sessions, practitionerSettings } from "@/db/schema";
+import { sessions, practitionerSettings, clients } from "@/db/schema";
 import { requirePortalSession, clearPortalSessionCookie } from "@/lib/portal-auth";
+import { PortalTimezoneCapture } from "@/components/PortalTimezoneCapture";
 import { fullDate, shortTime } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -73,6 +74,15 @@ export default async function PortalHomePage() {
   ]);
   const settings = settingsRows[0] ?? null;
 
+  // Whether we already know this client's timezone — drives the invisible
+  // auto-capture below (so reminder emails render in THEIR local time).
+  const [clientRow] = await db
+    .select({ timezone: clients.timezone })
+    .from(clients)
+    .where(eq(clients.id, session.clientId))
+    .limit(1);
+  const clientHasTz = !!clientRow?.timezone;
+
   const upcoming = sessionRows
     .filter((s) => new Date(s.scheduledAt) >= now && s.status !== "completed")
     .sort(
@@ -100,6 +110,10 @@ export default async function PortalHomePage() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 md:px-6 py-8 md:py-12">
+      {/* Invisible: record the client's timezone so their emails localize
+          to their own clock (no-op once we already know it). */}
+      <PortalTimezoneCapture hasTimezone={clientHasTz} />
+
       {/* Header — quiet greeting */}
       <header className="mb-8 flex items-baseline justify-between gap-3 flex-wrap">
         <div>
