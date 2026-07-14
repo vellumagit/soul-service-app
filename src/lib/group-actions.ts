@@ -9,7 +9,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { and, eq, gte, sql } from "drizzle-orm";
+import { and, eq, gte, sql, inArray } from "drizzle-orm";
 import { headers } from "next/headers";
 import { db } from "@/db";
 import {
@@ -719,7 +719,7 @@ export async function listUpcomingPublicGroupSessions(limit: number = 4) {
       .from(groupAttendees)
       .where(
         and(
-          sql`${groupAttendees.groupSessionId} = ANY(${sessionIds})`,
+          inArray(groupAttendees.groupSessionId, sessionIds),
           sql`${groupAttendees.status} <> 'cancelled'`
         )
       )

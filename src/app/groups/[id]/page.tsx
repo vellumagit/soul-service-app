@@ -3,7 +3,7 @@
 
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { and, eq, desc, sql } from "drizzle-orm";
+import { and, eq, desc, sql, inArray } from "drizzle-orm";
 import { AppShell } from "@/components/AppShell";
 import { QuickActions } from "@/components/QuickActions";
 import { requireSession } from "@/lib/session-cookies";
@@ -92,9 +92,7 @@ export default async function GroupDetailPage({
       ? await db
           .select()
           .from(groupAttendees)
-          .where(
-            sql`${groupAttendees.groupSessionId} = ANY(${sessionIds})`
-          )
+          .where(inArray(groupAttendees.groupSessionId, sessionIds))
           .orderBy(desc(groupAttendees.createdAt))
       : [];
 
