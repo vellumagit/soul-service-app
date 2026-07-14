@@ -20,18 +20,7 @@ export function LandingLangToggle({ current }: { current: LandingLang }) {
   }
 
   return (
-    <div className="lang-toggle" role="group" aria-label="Мова / Language">
-      <button
-        type="button"
-        onClick={() => pick("uk")}
-        aria-pressed={current === "uk"}
-        className={current === "uk" ? "active" : ""}
-      >
-        УКР
-      </button>
-      <span className="sep" aria-hidden="true">
-        ·
-      </span>
+    <div className="lang-toggle" role="group" aria-label="Language / Мова">
       <button
         type="button"
         onClick={() => pick("en")}
@@ -39,6 +28,17 @@ export function LandingLangToggle({ current }: { current: LandingLang }) {
         className={current === "en" ? "active" : ""}
       >
         EN
+      </button>
+      <span className="sep" aria-hidden="true">
+        ·
+      </span>
+      <button
+        type="button"
+        onClick={() => pick("uk")}
+        aria-pressed={current === "uk"}
+        className={current === "uk" ? "active" : ""}
+      >
+        УКР
       </button>
     </div>
   );
