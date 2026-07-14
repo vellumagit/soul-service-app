@@ -7,6 +7,7 @@ import { rethrowIfRedirect } from "@/lib/redirect-error";
 import type { PractitionerSettings } from "@/db/schema";
 import { SabbathDayPicker } from "./SabbathDayPicker";
 import { AvailabilityPanel } from "./AvailabilityPanel";
+import { LandingPortraitField } from "./LandingPortraitField";
 import { COMMON_TIME_ZONES } from "@/lib/timezone";
 import {
   LOCALE_LABELS,
@@ -197,15 +198,9 @@ export function SettingsForm({ settings }: { settings: PractitionerSettings }) {
         </Field>
         <Field
           label="Portrait photo"
-          hint="Paste an image link to fill the photo frame in the “Who I am” section. Leave blank for the soft placeholder. Tip: a file placed in the app’s public folder is reachable at /its-name.jpg — or paste any hosted image URL."
+          hint="The photo in the “Who I am” section of your landing page. Upload one straight from your device — no need to host it anywhere. Leave blank for the soft placeholder."
         >
-          <input
-            name="landingPortraitUrl"
-            defaultValue={settings.landingPortraitUrl ?? ""}
-            maxLength={500}
-            className={inputCls}
-            placeholder="/svitlana.jpg  or  https://…/photo.jpg"
-          />
+          <LandingPortraitField initialUrl={settings.landingPortraitUrl} />
         </Field>
         <p className="text-[11px] text-ink-400 italic mt-2">
           Preview your landing page at{" "}

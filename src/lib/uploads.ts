@@ -3,7 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { put } from "@vercel/blob";
 import { db } from "@/db";
-import { attachments, clients, sessions } from "@/db/schema";
+import {
+  attachments,
+  clients,
+  practitionerSettings,
+  sessions,
+} from "@/db/schema";
 import { and, eq } from "drizzle-orm";
 import { requireSession } from "./session-cookies";
 
@@ -13,6 +18,13 @@ function ensureBlobConfigured() {
       "File uploads aren't configured. Add BLOB_READ_WRITE_TOKEN to your environment (Vercel → Storage → Connect Blob)."
     );
   }
+}
+
+// Only URLs we created on Vercel Blob are safe to delete. Guards the cleanup
+// paths below from ever trying to `del()` a hand-pasted external link or a
+// "/public"-folder path (which aren't Blob objects and shouldn't be touched).
+function isVercelBlobUrl(url: string): boolean {
+  return url.includes(".public.blob.vercel-storage.com");
 }
 
 // Upload an avatar for a client. Replaces previous avatarUrl on the client row.
@@ -66,6 +78,92 @@ export async function uploadClientAvatar(formData: FormData) {
 
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/clients");
+}
+
+// Upload the landing-page portrait photo. Uploads directly to Blob, saves the
+// URL onto practitioner_settings, and revalidates the public landing page so
+// the new photo goes live immediately — no "paste a hosted URL" step. Returns
+// the new public URL so the Settings component can update its preview + the
+// hidden form field in one shot.
+export async function uploadLandingPortrait(
+  formData: FormData
+): Promise<{ url: string }> {
+  ensureBlobConfigured();
+  const { accountId } = await requireSession();
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0)
+    throw new Error("Choose an image first");
+  if (!file.type.startsWith("image/"))
+    throw new Error("Portrait must be an image (JPG or PNG)");
+  if (file.size > 5 * 1024 * 1024)
+    throw new Error("Portrait must be under 5 MB");
+
+  const [existing] = await db
+    .select({ url: practitionerSettings.landingPortraitUrl })
+    .from(practitionerSettings)
+    .where(eq(practitionerSettings.accountId, accountId))
+    .limit(1);
+  const previousUrl = existing?.url ?? null;
+
+  const ext = file.name.includes(".") ? file.name.split(".").pop() : "jpg";
+  const blob = await put(
+    `accounts/${accountId}/landing/portrait.${ext}`,
+    file,
+    {
+      access: "public",
+      addRandomSuffix: true, // new object each change → dodges CDN caching
+      allowOverwrite: true,
+    }
+  );
+
+  await db
+    .update(practitionerSettings)
+    .set({ landingPortraitUrl: blob.url, updatedAt: new Date() })
+    .where(eq(practitionerSettings.accountId, accountId));
+
+  // Best-effort cleanup of the previous photo — only if it was a Blob we made.
+  if (previousUrl && previousUrl !== blob.url && isVercelBlobUrl(previousUrl)) {
+    try {
+      const { del } = await import("@vercel/blob");
+      await del(previousUrl);
+    } catch (e) {
+      console.warn("[uploadLandingPortrait] couldn't delete previous:", e);
+    }
+  }
+
+  revalidatePath("/");
+  revalidatePath("/settings");
+  return { url: blob.url };
+}
+
+// Clear the landing portrait (back to the soft placeholder). Removes the DB
+// value and, if the stored value was a Blob we own, deletes the file too.
+export async function removeLandingPortrait(): Promise<void> {
+  const { accountId } = await requireSession();
+  const [existing] = await db
+    .select({ url: practitionerSettings.landingPortraitUrl })
+    .from(practitionerSettings)
+    .where(eq(practitionerSettings.accountId, accountId))
+    .limit(1);
+  const previousUrl = existing?.url ?? null;
+
+  await db
+    .update(practitionerSettings)
+    .set({ landingPortraitUrl: null, updatedAt: new Date() })
+    .where(eq(practitionerSettings.accountId, accountId));
+
+  if (previousUrl && isVercelBlobUrl(previousUrl)) {
+    try {
+      ensureBlobConfigured();
+      const { del } = await import("@vercel/blob");
+      await del(previousUrl);
+    } catch (e) {
+      console.warn("[removeLandingPortrait] couldn't delete previous:", e);
+    }
+  }
+
+  revalidatePath("/");
+  revalidatePath("/settings");
 }
 
 // Upload a generic file attached to a client (and optionally a session).
