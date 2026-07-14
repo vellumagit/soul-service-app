@@ -422,7 +422,10 @@ export async function refundPurchase(
 // Storefront listing — published products with uploaded video
 // ─────────────────────────────────────────────────────────────────────
 
-export async function listPublishedProducts(limit: number = 6) {
+export async function listPublishedProducts(
+  limit: number = 6,
+  accountId?: string
+) {
   return db
     .select({
       id: products.id,
@@ -438,7 +441,10 @@ export async function listPublishedProducts(limit: number = 6) {
         eq(products.published, true),
         isNull(products.archivedAt),
         // Only products with a finished upload — don't show "coming soon"
-        sql`${products.videoUploadedAt} IS NOT NULL`
+        sql`${products.videoUploadedAt} IS NOT NULL`,
+        // Scope to the storefront's account (see resolveStorefrontAccountId).
+        // Omitted → global, preserving the old behavior for any other caller.
+        ...(accountId ? [eq(products.accountId, accountId)] : [])
       )
     )
     .orderBy(desc(products.createdAt))

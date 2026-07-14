@@ -14,8 +14,10 @@ import { LandingReveal } from "@/components/LandingReveal";
 import { SecretSignInWordmark } from "@/components/SecretSignInWordmark";
 import { LandingLangToggle } from "@/components/LandingLangToggle";
 import { db } from "@/db";
+import { eq } from "drizzle-orm";
 import { practitionerSettings } from "@/db/schema";
 import { getAvailableWindows } from "@/lib/availability";
+import { resolveStorefrontAccountId } from "@/lib/storefront-account";
 import { listUpcomingPublicGroupSessions } from "@/lib/group-actions";
 import { listPublishedProducts } from "@/lib/product-actions";
 import { getLandingCopy } from "@/lib/landing-copy";
@@ -52,30 +54,48 @@ export default async function LandingPage() {
   let circleSignupsOpen = false;
   // Portrait photo for the About section. Blank → the gradient placeholder.
   let portraitUrl: string | null = null;
+
+  // Which account owns this storefront? The DB may hold several accounts
+  // (legacy import, sandbox, the real practitioner); resolve the canonical one
+  // so the portrait / sign-ups toggle / availability all read HER row, not an
+  // arbitrary `.limit(1)` pick. Also scopes the Circles + Library sections
+  // below. See resolveStorefrontAccountId for the resolution order.
+  let storefrontAccountId: string | null = null;
   try {
-    const settingsRow = await db
-      .select({
-        accountId: practitionerSettings.accountId,
-        showAvailability: practitionerSettings.showAvailabilityPublicly,
-        circleSignupsOpen: practitionerSettings.circleSignupsOpen,
-        landingPortraitUrl: practitionerSettings.landingPortraitUrl,
-      })
-      .from(practitionerSettings)
-      .limit(1);
-    const cfg = settingsRow[0];
-    circleSignupsOpen = cfg?.circleSignupsOpen ?? false;
-    portraitUrl = cfg?.landingPortraitUrl?.trim() || null;
-    if (cfg?.showAvailability) {
-      const windows = await getAvailableWindows(cfg.accountId, { limit: 6 });
-      availableWindows = windows.map((w) => ({
-        startAt: w.startAt.toISOString(),
-        endAt: w.endAt.toISOString(),
-        label: formatLandingWindowLabel(w.startAt, c.circles.dateLocale),
-      }));
-    }
+    storefrontAccountId = await resolveStorefrontAccountId();
   } catch (err) {
-    // Availability is a nice-to-have; never let it break the storefront.
-    console.warn("[landing] availability fetch failed:", err);
+    console.warn("[landing] storefront account resolve failed:", err);
+  }
+
+  if (storefrontAccountId) {
+    try {
+      const settingsRow = await db
+        .select({
+          accountId: practitionerSettings.accountId,
+          showAvailability: practitionerSettings.showAvailabilityPublicly,
+          circleSignupsOpen: practitionerSettings.circleSignupsOpen,
+          landingPortraitUrl: practitionerSettings.landingPortraitUrl,
+        })
+        .from(practitionerSettings)
+        .where(eq(practitionerSettings.accountId, storefrontAccountId))
+        .limit(1);
+      const cfg = settingsRow[0];
+      circleSignupsOpen = cfg?.circleSignupsOpen ?? false;
+      portraitUrl = cfg?.landingPortraitUrl?.trim() || null;
+      if (cfg?.showAvailability) {
+        const windows = await getAvailableWindows(storefrontAccountId, {
+          limit: 6,
+        });
+        availableWindows = windows.map((w) => ({
+          startAt: w.startAt.toISOString(),
+          endAt: w.endAt.toISOString(),
+          label: formatLandingWindowLabel(w.startAt, c.circles.dateLocale),
+        }));
+      }
+    } catch (err) {
+      // Availability is a nice-to-have; never let it break the storefront.
+      console.warn("[landing] availability fetch failed:", err);
+    }
   }
 
   // Upcoming public group sessions (Circles). Empty → section hidden.
@@ -83,7 +103,10 @@ export default async function LandingPage() {
     ReturnType<typeof listUpcomingPublicGroupSessions>
   > = [];
   try {
-    upcomingCircles = await listUpcomingPublicGroupSessions(4);
+    upcomingCircles = await listUpcomingPublicGroupSessions(
+      4,
+      storefrontAccountId ?? undefined
+    );
   } catch (err) {
     console.warn("[landing] upcoming circles fetch failed:", err);
   }
@@ -93,7 +116,10 @@ export default async function LandingPage() {
     ReturnType<typeof listPublishedProducts>
   > = [];
   try {
-    libraryProducts = await listPublishedProducts(6);
+    libraryProducts = await listPublishedProducts(
+      6,
+      storefrontAccountId ?? undefined
+    );
   } catch (err) {
     console.warn("[landing] library fetch failed:", err);
   }

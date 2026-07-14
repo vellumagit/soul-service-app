@@ -680,7 +680,10 @@ function clampInt(
 }
 
 // Re-export for convenience in pages that pull "next upcoming"
-export async function listUpcomingPublicGroupSessions(limit: number = 4) {
+export async function listUpcomingPublicGroupSessions(
+  limit: number = 4,
+  accountId?: string
+) {
   const rows = await db
     .select({
       sessionId: groupSessions.id,
@@ -701,7 +704,10 @@ export async function listUpcomingPublicGroupSessions(limit: number = 4) {
       and(
         eq(groupSessions.status, "scheduled"),
         eq(groups.published, true),
-        gte(groupSessions.scheduledAt, new Date())
+        gte(groupSessions.scheduledAt, new Date()),
+        // Scope to the storefront's account so a sandbox/legacy account's
+        // published Circles never leak onto svit.live. Omitted → global.
+        ...(accountId ? [eq(groups.accountId, accountId)] : [])
       )
     )
     .orderBy(groupSessions.scheduledAt)

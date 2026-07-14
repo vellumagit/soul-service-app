@@ -25,6 +25,7 @@ import {
   practitionerSettings,
 } from "@/db/schema";
 import { checkRateLimit } from "./rate-limit";
+import { resolveStorefrontAccountId } from "./storefront-account";
 import {
   generateLeadFormToken,
   hashLeadFormToken,
@@ -88,14 +89,10 @@ export async function submitLandingLead(
     };
   }
 
-  // Resolve the anchor account. Each Soul Service deployment has one
-  // practitioner; first row wins. If the deployment ever runs multiple
-  // accounts (unlikely), we'd want a LANDING_ACCOUNT_EMAIL env var.
-  const settingsRow = await db
-    .select({ accountId: practitionerSettings.accountId })
-    .from(practitionerSettings)
-    .limit(1);
-  const accountId = settingsRow[0]?.accountId;
+  // Resolve the storefront's account deterministically (env override, else
+  // the real practitioner by activity). The DB can hold several accounts, so a
+  // naive first-row pick would file leads under the wrong (e.g. legacy) one.
+  const accountId = await resolveStorefrontAccountId();
   if (!accountId) {
     return {
       ok: false,
