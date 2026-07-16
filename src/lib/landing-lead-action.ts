@@ -5,10 +5,9 @@
 // lead_submissions table that /api/leads/intake uses — meaning landing
 // leads show up alongside any other channel in /network/inbox.
 //
-// Anchoring to an account: we resolve the FIRST practitioner_settings
-// row (in practice each Soul Service deployment has exactly one
-// account). Could be wrapped in an env var later if Brian ever runs
-// multi-practitioner from the same deployment.
+// Anchoring to an account: resolveStorefrontAccountId() picks the storefront's
+// canonical account (env override, else the real practitioner by activity) so
+// leads never file under a stray legacy/sandbox account.
 //
 // Anti-abuse: honeypot field (_hp), per-IP rate limit (8/min — generous
 // for honest visitors, slow enough to make spray noisy), email
