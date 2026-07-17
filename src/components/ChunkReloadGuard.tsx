@@ -42,6 +42,23 @@ function looksLikeChunkError(err: unknown): boolean {
   );
 }
 
+// Deploying a new build also rotates Server Action IDs. A stale tab that POSTs
+// an action id the fresh server no longer has gets: "Server Action <id> was not
+// found on the server." Same root cause (stale client vs fresh server) → same
+// cure. (These don't always surface to a global handler, so a manual refresh
+// stays the guaranteed fix right after a deploy — this is best-effort.)
+function looksLikeStaleServerAction(err: unknown): boolean {
+  if (err == null) return false;
+  const msg =
+    typeof err === "string"
+      ? err
+      : (err as { message?: string }).message ?? String(err);
+  return (
+    /Server Action .* was not found on the server/i.test(msg) ||
+    /failed-to-find-server-action/i.test(msg)
+  );
+}
+
 function reloadOnce(why: string) {
   try {
     const last = Number(sessionStorage.getItem(RELOAD_KEY) || "0");
@@ -64,16 +81,27 @@ export function ChunkReloadGuard() {
   useEffect(() => {
     if (process.env.NODE_ENV !== "production") return;
 
-    // 1) Failed dynamic import() / lazy chunk → unhandled promise rejection.
+    // 1) Failed dynamic import() / lazy chunk, or a stale Server Action call →
+    //    unhandled promise rejection.
     const onRejection = (e: PromiseRejectionEvent) => {
       if (looksLikeChunkError(e.reason)) reloadOnce("import-rejection");
+      else if (looksLikeStaleServerAction(e.reason))
+        reloadOnce("stale-server-action");
     };
 
-    // 2) A thrown ChunkLoadError, OR a <script>/<link> build asset that 404s.
-    //    Resource errors don't bubble, so we listen in the CAPTURE phase.
+    // 2) A thrown ChunkLoadError / stale Server Action error, OR a
+    //    <script>/<link> build asset that 404s. Resource errors don't bubble,
+    //    so we listen in the CAPTURE phase.
     const onError = (e: ErrorEvent) => {
       if (looksLikeChunkError(e.error) || looksLikeChunkError(e.message)) {
         reloadOnce("error-event");
+        return;
+      }
+      if (
+        looksLikeStaleServerAction(e.error) ||
+        looksLikeStaleServerAction(e.message)
+      ) {
+        reloadOnce("stale-server-action");
         return;
       }
       const target = e.target as HTMLElement | null;
