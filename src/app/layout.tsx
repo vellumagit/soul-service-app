@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono, Fraunces } from "next/font/google";
 import "./globals.css";
+import { ChunkReloadGuard } from "@/components/ChunkReloadGuard";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -40,7 +41,10 @@ export default function RootLayout({
       lang="en"
       className={`${inter.variable} ${jetbrainsMono.variable} ${fraunces.variable} h-full antialiased`}
     >
-      <body className="min-h-full text-ink-800">{children}</body>
+      <body className="min-h-full text-ink-800">
+        <ChunkReloadGuard />
+        {children}
+      </body>
     </html>
   );
 }
