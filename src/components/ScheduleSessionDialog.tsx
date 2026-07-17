@@ -66,6 +66,11 @@ export function ScheduleSessionDialog({
   // The current value of the datetime-local picker — used to detect when
   // the chosen day is one she's marked off.
   const [pickedWhen, setPickedWhen] = useState<string>(defaultWhen());
+  // Online (Google Meet + remote notetaker) vs in-person (no Meet/bot; she
+  // records in the room with the "Record session" button on the card).
+  const [locationType, setLocationType] = useState<"online" | "in_person">(
+    "online"
+  );
 
   const sabbathSet = new Set(sabbathDays.map((d) => d.toLowerCase()));
   const pickedDate = pickedWhen ? new Date(pickedWhen) : null;
@@ -204,6 +209,12 @@ export function ScheduleSessionDialog({
             className="space-y-4"
           >
             <input type="hidden" name="timezone" value={browserTz} readOnly />
+            <input
+              type="hidden"
+              name="locationType"
+              value={locationType}
+              readOnly
+            />
             {error && (
               <div className="text-xs text-red-700 bg-red-50 border border-red-100 rounded p-2">
                 {error}
@@ -233,6 +244,37 @@ export function ScheduleSessionDialog({
                 className={inputCls}
                 placeholder="Whatever you call this kind of session"
               />
+            </Field>
+
+            <Field
+              label="Where"
+              hint={
+                locationType === "in_person"
+                  ? "No video link. Record it in the room with “Record session” on the card afterward."
+                  : "Google Meet link is generated for you (or paste your own below)."
+              }
+            >
+              <div className="inline-flex rounded-md border border-ink-200 overflow-hidden text-sm">
+                {(
+                  [
+                    { key: "online", label: "Online" },
+                    { key: "in_person", label: "In person" },
+                  ] as const
+                ).map((opt) => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => setLocationType(opt.key)}
+                    className={`px-4 py-1.5 transition ${
+                      locationType === opt.key
+                        ? "bg-ink-900 text-white"
+                        : "bg-white text-ink-600 hover:bg-ink-50"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
             </Field>
 
             <div className="grid grid-cols-[1fr_auto] gap-3">
@@ -284,14 +326,16 @@ export function ScheduleSessionDialog({
               </div>
             )}
 
-            <Field label="Google Meet link" hint="Paste the link after creating it in Google Meet">
-              <input
-                name="meetUrl"
-                type="url"
-                className={inputCls}
-                placeholder="https://meet.google.com/..."
-              />
-            </Field>
+            {locationType === "online" && (
+              <Field label="Google Meet link" hint="Paste the link after creating it in Google Meet">
+                <input
+                  name="meetUrl"
+                  type="url"
+                  className={inputCls}
+                  placeholder="https://meet.google.com/..."
+                />
+              </Field>
+            )}
 
             <Field label="What they're hoping for (optional)">
               <input

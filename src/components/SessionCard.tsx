@@ -30,6 +30,7 @@ import { PushToGoogleButton } from "./PushToGoogleButton";
 import { ClosingRitualDialog } from "./ClosingRitualDialog";
 import { WalkInButton } from "./WalkInButton";
 import { RecapUploadButton } from "./RecapUploadButton";
+import { RecordSessionDialog } from "./RecordSessionDialog";
 
 const STATUS_CHIP: Record<string, string> = {
   scheduled: "bg-plum-100 text-plum-700",
@@ -480,22 +481,40 @@ export function SessionCard({
                 Meet link ↗
               </a>
             )}
-            <PushToGoogleButton
-              sessionId={session.id}
-              hasGoogleEvent={!!session.googleEventId}
-            />
-            <RecallBotChip
-              sessionId={session.id}
-              status={session.recallBotStatus}
-              hasMeetUrl={!!session.meetUrl}
-              scheduledAt={new Date(session.scheduledAt)}
-              transcriptReceivedAt={
-                session.recallTranscriptReceivedAt
-                  ? new Date(session.recallTranscriptReceivedAt)
-                  : null
-              }
-              sessionStatus={session.status}
-            />
+            {session.locationType === "in_person" ? (
+              // In-person: no Meet/bot — she records in the room. The recorder
+              // feeds the same "From the meeting" panel as the remote notetaker.
+              <>
+                <span className="text-[11px] text-ink-400 font-mono">
+                  In person
+                </span>
+                <RecordSessionDialog
+                  sessionId={session.id}
+                  hasExistingNotes={
+                    !!session.notes && session.notes.trim().length > 0
+                  }
+                />
+              </>
+            ) : (
+              <>
+                <PushToGoogleButton
+                  sessionId={session.id}
+                  hasGoogleEvent={!!session.googleEventId}
+                />
+                <RecallBotChip
+                  sessionId={session.id}
+                  status={session.recallBotStatus}
+                  hasMeetUrl={!!session.meetUrl}
+                  scheduledAt={new Date(session.scheduledAt)}
+                  transcriptReceivedAt={
+                    session.recallTranscriptReceivedAt
+                      ? new Date(session.recallTranscriptReceivedAt)
+                      : null
+                  }
+                  sessionStatus={session.status}
+                />
+              </>
+            )}
             <div className="flex-1" />
             <ConfirmButton
               label={

@@ -220,6 +220,12 @@ export const sessions = pgTable(
     meetUrl: text("meet_url"),
     googleEventId: text("google_event_id"),
 
+    // "online" (default — a Google Meet / Zoom link, remote notetaker bot) or
+    // "in_person". In-person sessions skip Meet generation + the Recall bot;
+    // she records in the room with the in-app "Record session" button, which
+    // feeds the SAME transcript/aiSummary/aiSummaryTldr fields below.
+    locationType: text("location_type").default("online").notNull(),
+
     // Recurring-series linkage. Null = standalone session. When set, this
     // session was generated as part of a series — useful for "session 3 of 12"
     // labels and for bulk operations (e.g. cancel all future).

@@ -1183,6 +1183,10 @@ export async function scheduleSession(
   const scheduledAtRaw = required(str(formData, "scheduledAt"), "Date / time");
   const durationMinutes = num(formData, "durationMinutes") ?? 60;
   const manualMeetUrl = str(formData, "meetUrl");
+  // In-person sessions skip Meet generation + the Recall bot; she records in
+  // the room with the "Record session" button instead.
+  const isInPerson = str(formData, "locationType") === "in_person";
+  const locationType = isInPerson ? "in_person" : "online";
   // Zone she booked in, captured from her browser (see ScheduleSessionDialog).
   const tzRaw = str(formData, "timezone");
   const bookingTz = isValidTimeZone(tzRaw) ? tzRaw : null;
@@ -1198,7 +1202,10 @@ export async function scheduleSession(
       durationMinutes,
       timezone: bookingTz,
       intention: str(formData, "intention"),
-      meetUrl: manualMeetUrl, // fallback if Google isn't connected
+      locationType,
+      // No Meet link for in-person; otherwise the pasted fallback (used when
+      // Google isn't connected).
+      meetUrl: isInPerson ? null : manualMeetUrl,
     })
     .returning({ id: sessions.id });
 
@@ -1232,9 +1239,14 @@ export async function scheduleSession(
       )
     );
 
-  // Best-effort: push to Google Calendar (auto-generates Meet link + invites client)
-  const sync = await syncSessionToGoogle(created.id);
-  const googleWarning = sync.ok === false ? sync.error : null;
+  // Best-effort: push to Google Calendar (auto-generates Meet link + invites
+  // client). Skipped for in-person sessions — there's no Meet to generate and
+  // she doesn't want a video link on it.
+  let googleWarning: string | null = null;
+  if (!isInPerson) {
+    const sync = await syncSessionToGoogle(created.id);
+    googleWarning = sync.ok === false ? sync.error : null;
+  }
 
   // Short-notice guard: if the session is booked inside a reminder window, send
   // the reminder(s) now so a same-day booking still gets a heads-up (the hourly
@@ -1247,8 +1259,11 @@ export async function scheduleSession(
   }
 
   // Best-effort: auto-schedule the Recall.ai notetaker bot.
-  // Runs AFTER syncSessionToGoogle so the Meet URL is on the row.
-  await maybeAutoAddRecallBot(accountId, created.id);
+  // Runs AFTER syncSessionToGoogle so the Meet URL is on the row. Skipped for
+  // in-person — there's no call for a bot to join; she records in the room.
+  if (!isInPerson) {
+    await maybeAutoAddRecallBot(accountId, created.id);
+  }
 
   // App-sent booking confirmation to the client. Runs LAST and reads the
   // final Meet URL off the row (Google's link if sync succeeded, the manual
