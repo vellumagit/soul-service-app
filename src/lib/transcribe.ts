@@ -1,38 +1,53 @@
-// Whisper transcription for voice memos.
+// Whisper transcription for session/voice-memo audio.
 //
-// The practitioner records a memo on her phone (or uploads an audio file),
-// it lands on Vercel Blob via the existing attachment pipeline, and this
-// module pulls it back down and ships it to OpenAI Whisper for
-// transcription. The resulting transcript then goes through the existing
-// `generateNotesFromTranscript` Claude flow to become structured session
-// notes.
+// The practitioner records (in-person or a voice memo), the audio lands on
+// Vercel Blob via the existing attachment pipeline, and this module pulls it
+// back down and ships it to Whisper for transcription. The resulting
+// transcript then goes through the existing `generateNotesFromTranscript`
+// Claude flow to become structured session notes.
 //
-// Why OpenAI here when the rest of the AI stack is Anthropic: Claude
-// doesn't currently offer audio transcription, and Whisper is the
-// industry-standard model for this. Audio is sent to OpenAI; per their
-// API policy data is not retained for training (they keep ~30 days of
-// logs for abuse detection).
+// Provider: we default to GROQ (which hosts the same Whisper model,
+// `whisper-large-v3-turbo`, ~9x cheaper and much faster than OpenAI's Whisper),
+// and fall back to OpenAI (`whisper-1`) if only OPENAI_API_KEY is set. Groq's
+// API is OpenAI-compatible, so the same SDK drives both — only the base URL +
+// model differ. Claude doesn't offer audio transcription, which is why this one
+// step lives outside the Anthropic stack.
 //
-// 25 MB is Whisper's hard file-size cap. We surface that to the UI as a
-// friendly error rather than letting the API reject silently.
+// 25 MB is the safe single-file cap (OpenAI's hard limit and Groq's free-tier
+// limit). We surface that to the UI as a friendly error rather than letting the
+// API reject silently.
 
 import OpenAI from "openai";
 
 const WHISPER_MAX_BYTES = 25 * 1024 * 1024;
+const GROQ_BASE_URL = "https://api.groq.com/openai/v1";
 
-// Lazy client — never throws at module load (build stays green even
-// without the key). Same pattern as ai-notes.ts and help/route.ts.
-let _client: OpenAI | null = null;
-function getClient() {
-  if (_client) return _client;
-  const key = process.env.OPENAI_API_KEY;
-  if (!key) {
-    throw new Error(
-      "OPENAI_API_KEY is not set. Add it to .env.local (and Vercel env vars for production). Get one at https://platform.openai.com"
-    );
+type TranscribeProvider = { client: OpenAI; model: string };
+
+// Lazy provider — never throws at module load (build stays green even without
+// a key). Prefers Groq; falls back to OpenAI. Same lazy pattern as ai-notes.ts.
+let _provider: TranscribeProvider | null = null;
+function getProvider(): TranscribeProvider {
+  if (_provider) return _provider;
+
+  const groqKey = process.env.GROQ_API_KEY;
+  if (groqKey) {
+    _provider = {
+      client: new OpenAI({ apiKey: groqKey, baseURL: GROQ_BASE_URL }),
+      model: "whisper-large-v3-turbo",
+    };
+    return _provider;
   }
-  _client = new OpenAI({ apiKey: key });
-  return _client;
+
+  const openaiKey = process.env.OPENAI_API_KEY;
+  if (openaiKey) {
+    _provider = { client: new OpenAI({ apiKey: openaiKey }), model: "whisper-1" };
+    return _provider;
+  }
+
+  throw new Error(
+    "No transcription key is set. Add GROQ_API_KEY (recommended — cheap Whisper via Groq, get one at https://console.groq.com) or OPENAI_API_KEY to your Vercel env vars."
+  );
 }
 
 export type TranscribeInput = {
@@ -92,11 +107,12 @@ export async function transcribeAudioUrl(
     type: contentTypeForName(inferredName),
   });
 
-  const client = getClient();
+  const { client, model } = getProvider();
   const response = await client.audio.transcriptions.create({
     file: audioFile,
-    model: "whisper-1",
+    model,
     // verbose_json gives us language + duration in addition to the text.
+    // Supported by both OpenAI Whisper and Groq's whisper-large-v3-turbo.
     response_format: "verbose_json",
     language: language ?? undefined,
   });

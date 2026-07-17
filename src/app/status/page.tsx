@@ -81,11 +81,14 @@ export default async function StatusPage({
         : "Set ANTHROPIC_API_KEY in your Vercel env vars to enable AI note generation.",
     },
     {
-      label: "Voice memos → notes (Whisper + AI)",
-      state: process.env.OPENAI_API_KEY ? "ok" : "warn",
-      detail: process.env.OPENAI_API_KEY
-        ? "OpenAI Whisper key set. Use the 'From audio' button on any session to record / upload a voice memo and structure it into notes."
-        : "Set OPENAI_API_KEY in your Vercel env vars to enable the voice-memo → notes pipeline. Whisper handles the transcription; Claude (already configured above) structures it.",
+      label: "Recording → notes (Whisper + AI)",
+      state:
+        process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY ? "ok" : "warn",
+      detail: process.env.GROQ_API_KEY
+        ? "Transcription ready via Groq (Whisper large-v3-turbo). Powers in-person 'Record session' and the 'From audio' voice-memo button; Claude structures the transcript into notes."
+        : process.env.OPENAI_API_KEY
+          ? "Transcription ready via OpenAI Whisper. (Tip: set GROQ_API_KEY to switch to Groq — same Whisper model, ~9x cheaper.)"
+          : "Set GROQ_API_KEY (recommended — cheap Whisper via Groq, console.groq.com) or OPENAI_API_KEY in Vercel to enable in-person recording + voice-memo transcription. Claude (configured above) structures it.",
     },
     {
       label: "Card payments — Circles (Stripe)",

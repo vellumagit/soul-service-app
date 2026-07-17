@@ -305,7 +305,7 @@ If she asks "what's new?" / "что нового?" / "що нового?", lead 
 - Pipeline runs in three visible hops with progress lines: **Uploading audio…** → **Transcribing with Whisper…** → **Structuring notes with Claude…** → done. Takes ~20-60 seconds for a typical session length.
 - The audio file is saved as a "recording" attachment on the session, so she can listen back later via the Files tab.
 - Especially valuable for in-person sessions: she walks out, taps Record on her phone, talks for 5 minutes about what happened on the drive home, hits stop. The structured notes are waiting on the session by the time she's home.
-- Powered by OpenAI Whisper for transcription (the one piece of the AI stack that's not Anthropic, because Claude doesn't do audio yet) + the same Claude Sonnet 4.6 notes pipeline as the paste flow.
+- Powered by Whisper for transcription — hosted on **Groq** (\`whisper-large-v3-turbo\`, ~9x cheaper + faster than OpenAI; falls back to OpenAI Whisper if only that key is set). Transcription is the one piece of the AI stack that isn't Anthropic (Claude doesn't do audio yet); the transcript then goes through the same Claude Sonnet 4.6 notes pipeline as the paste flow.
 
 ## Calendar
 - /calendar shows a week view by default, with a Month/Week toggle in the toolbar.
