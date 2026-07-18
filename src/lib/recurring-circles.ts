@@ -55,8 +55,11 @@ async function ensureForGroup(
 
   const weeksAhead = Math.min(Math.max(group.recurrenceWeeksAhead ?? 4, 1), 12);
 
-  // Existing non-cancelled sessions from ~now forward → dedupe keys (tz day),
-  // so a manually-scheduled or already-generated session isn't duplicated.
+  // Existing sessions from ~now forward → dedupe keys (tz day), so we never
+  // double-book. We include CANCELLED sessions on purpose: if she cancelled a
+  // recurring occurrence, that week is intentionally handled ("skip this one")
+  // and must NOT be regenerated on the next top-up. To move a week, she cancels
+  // it (stays skipped) and schedules a one-off on the new day.
   const existing = await db
     .select({
       scheduledAt: groupSessions.scheduledAt,
@@ -74,7 +77,6 @@ async function ensureForGroup(
     );
   const taken = new Set<string>();
   for (const s of existing) {
-    if (s.status === "cancelled") continue;
     const ymd = zonedYearMonthDay(new Date(s.scheduledAt), tz);
     taken.add(dateKey(ymd.year, ymd.month0, ymd.day));
   }
