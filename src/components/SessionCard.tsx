@@ -31,6 +31,7 @@ import { ClosingRitualDialog } from "./ClosingRitualDialog";
 import { WalkInButton } from "./WalkInButton";
 import { RecapUploadButton } from "./RecapUploadButton";
 import { RecordSessionDialog } from "./RecordSessionDialog";
+import { MeetLinkEditor } from "./MeetLinkEditor";
 
 const STATUS_CHIP: Record<string, string> = {
   scheduled: "bg-plum-100 text-plum-700",
@@ -471,16 +472,6 @@ export function SessionCard({
                 />
               </>
             )}
-            {session.meetUrl && (
-              <a
-                href={session.meetUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="text-xs text-plum-700 hover:underline"
-              >
-                Meet link ↗
-              </a>
-            )}
             {session.locationType === "in_person" ? (
               // In-person: no Meet/bot — she records in the room. The recorder
               // feeds the same "From the meeting" panel as the remote notetaker.
@@ -497,6 +488,13 @@ export function SessionCard({
               </>
             ) : (
               <>
+                {/* Add / edit the meeting link after creation → emails the
+                    client the link. Fallback for when Google didn't generate
+                    one, or she made a Zoom/Meet room by hand. */}
+                <MeetLinkEditor
+                  sessionId={session.id}
+                  meetUrl={session.meetUrl}
+                />
                 <PushToGoogleButton
                   sessionId={session.id}
                   hasGoogleEvent={!!session.googleEventId}

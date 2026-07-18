@@ -1407,6 +1407,60 @@ async function maybeSendBookingConfirmation(
   }
 }
 
+// Add / replace a session's meeting link AFTER it was created (e.g. she made a
+// Zoom/Meet room by hand, or Google wasn't connected at schedule time), and
+// email the client the link + details. Reuses the booking-confirmation email.
+export type SetMeetUrlResult =
+  | { ok: true; emailed: boolean }
+  | { ok: false; error: string };
+
+export async function setSessionMeetUrl(
+  sessionId: string,
+  url: string
+): Promise<SetMeetUrlResult> {
+  const { accountId } = await requireSession();
+
+  const trimmed = (url ?? "").trim();
+  if (!trimmed) return { ok: false, error: "Paste a meeting link first." };
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return {
+      ok: false,
+      error: "That doesn't look like a link — include the https:// part.",
+    };
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return { ok: false, error: "The link must start with https://" };
+  }
+
+  const [sess] = await db
+    .select({ clientId: sessions.clientId, clientEmail: clients.email })
+    .from(sessions)
+    .innerJoin(clients, eq(clients.id, sessions.clientId))
+    .where(and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId)))
+    .limit(1);
+  if (!sess) return { ok: false, error: "Session not found." };
+
+  await db
+    .update(sessions)
+    .set({ meetUrl: trimmed, updatedAt: new Date() })
+    .where(and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId)));
+
+  // Invite the client — best-effort (never fails the save). Only when they
+  // have an email on file AND email is configured.
+  const { isResendConfigured } = await import("./resend");
+  const willEmail = !!sess.clientEmail && isResendConfigured();
+  if (willEmail) {
+    await maybeSendBookingConfirmation(accountId, sessionId);
+  }
+
+  revalidatePath(`/clients/${sess.clientId}`);
+  revalidatePath("/today");
+  return { ok: true, emailed: willEmail };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // RECALL — manual + emergency operations
 // ─────────────────────────────────────────────────────────────────────────────
