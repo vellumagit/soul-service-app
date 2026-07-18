@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 // A dialog wrapper. `open` controls visibility; we proxy that to <dialog>.
 // Click-outside closes. Esc closes (built into <dialog>).
@@ -28,13 +29,22 @@ export function Modal({
   locked?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement | null>(null);
+  // Render the <dialog> into <body> via a portal so it is NEVER a DOM
+  // descendant of a surrounding <form> (several dialogs are placed inside
+  // forms — e.g. the notes form on a session card). Nested <form>s are invalid
+  // HTML; the browser reparents them, which breaks hydration and silently kills
+  // every button in that subtree. Portaling to body sidesteps this entirely.
+  // We only portal after mount (server renders nothing for the closed modal),
+  // which also avoids an SSR/client hydration mismatch for the dialog itself.
+  const [container, setContainer] = useState<HTMLElement | null>(null);
+  useEffect(() => setContainer(document.body), []);
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     if (open && !el.open) el.showModal();
     if (!open && el.open) el.close();
-  }, [open]);
+  }, [open, container]);
 
   // Block Esc while locked. The native <dialog>'s cancel event fires on Esc.
   useEffect(() => {
@@ -59,7 +69,9 @@ export function Modal({
     lg: "max-w-2xl",
   }[size];
 
-  return (
+  if (!container) return null;
+
+  return createPortal(
     <dialog
       ref={ref}
       onClose={onClose}
@@ -96,6 +108,7 @@ export function Modal({
           {footer}
         </div>
       )}
-    </dialog>
+    </dialog>,
+    container
   );
 }

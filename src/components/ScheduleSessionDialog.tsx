@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { Modal } from "./Modal";
 import { Field, inputCls } from "./Form";
 import { scheduleSession } from "@/lib/actions";
@@ -63,6 +63,12 @@ export function ScheduleSessionDialog({
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Unique per instance — multiple ScheduleSessionDialogs mount on one page
+  // (client header, sessions tab, the "+ New" menu). A shared static id made
+  // the footer submit button's `form=` attribute resolve to the FIRST such
+  // form in the document (a different, closed instance), so clicking Schedule
+  // submitted an empty/hidden form — a dud button.
+  const scheduleFormId = useId();
   // The current value of the datetime-local picker — used to detect when
   // the chosen day is one she's marked off.
   const [pickedWhen, setPickedWhen] = useState<string>(defaultWhen());
@@ -153,7 +159,7 @@ export function ScheduleSessionDialog({
             </button>
             <button
               type="submit"
-              form="schedule-session-form"
+              form={scheduleFormId}
               disabled={submitting || noClients}
               className="px-4 py-2 text-sm bg-ink-900 hover:bg-ink-800 text-white rounded-md font-medium disabled:opacity-60"
             >
@@ -168,7 +174,7 @@ export function ScheduleSessionDialog({
           </div>
         ) : (
           <form
-            id="schedule-session-form"
+            id={scheduleFormId}
             action={async (fd) => {
               setSubmitting(true);
               setError(null);

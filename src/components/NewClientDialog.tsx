@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Modal } from "./Modal";
 import { Field, inputCls } from "./Form";
 import { createClient } from "@/lib/actions";
@@ -25,6 +25,10 @@ export function NewClientDialog({
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Unique per instance — multiple NewClientDialogs mount on one page (the
+  // "+ New" menu, the page-level button). A shared static id made the footer
+  // "Add client" button's form= target the wrong (closed) instance → dud.
+  const newClientFormId = useId();
 
   // Autosave the whole form to localStorage as she types. Keyed by
   // "new-client" (only one new-client form can be open at a time). Hook
@@ -117,7 +121,7 @@ export function NewClientDialog({
             </button>
             <button
               type="submit"
-              form="new-client-form"
+              form={newClientFormId}
               disabled={submitting}
               className="px-4 py-2 text-sm bg-ink-900 hover:bg-ink-800 text-white rounded-md font-medium disabled:opacity-60"
             >
@@ -127,7 +131,7 @@ export function NewClientDialog({
         }
       >
         <form
-          id="new-client-form"
+          id={newClientFormId}
           ref={formRef}
           // Autosave the whole form on every input event. Debounced inside
           // useDraft so we don't hammer localStorage.
