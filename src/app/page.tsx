@@ -287,14 +287,14 @@ export default async function LandingPage() {
           <div className="wrap ladder">
             {/* entry lane */}
             <div className="lane">
-              <div className="card free coming-soon rv">
+              <div className="card free rv">
                 <span className="step">{c.ways.quiz.step}</span>
                 <h3>{c.ways.quiz.title}</h3>
                 <div className="price">{c.ways.quiz.price}</div>
                 <p className="desc">{c.ways.quiz.desc}</p>
-                <span className="cta cta-soon" aria-disabled="true">
+                <a href="/quiz" className="cta">
                   {c.ways.quiz.cta}
-                </span>
+                </a>
               </div>
               <div className="card rv">
                 <span className="step">{c.ways.circle.step}</span>

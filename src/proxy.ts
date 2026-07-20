@@ -37,6 +37,7 @@ const PUBLIC_PREFIXES = [
 // Exact public paths.
 const PUBLIC_PATHS = new Set<string>([
   "/", // marketing homepage — ALWAYS public
+  "/quiz", // public self-selection quiz (lead magnet) — no auth
   "/favicon.ico",
   "/robots.txt",
   "/sitemap.xml",

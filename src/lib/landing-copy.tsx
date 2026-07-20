@@ -209,7 +209,7 @@ const EN: LandingCopy = {
       title: "The Quiz & Workbook",
       price: "Free",
       desc: "A quiet reflection to find which way your inner compass is pointing — with a guided workbook to begin coming home to yourself.",
-      cta: "Coming soon",
+      cta: "Take the quiz →",
     },
     circle: {
       step: "Weekly · in a circle of women",
@@ -420,7 +420,7 @@ const UK: LandingCopy = {
       title: "Тест і робочий зошит",
       price: "Безкоштовно",
       desc: "Тиха рефлексія, щоб побачити, куди вказує ваш внутрішній компас — із робочим зошитом, аби почати повертатися додому до себе.",
-      cta: "Незабаром",
+      cta: "Пройти тест →",
     },
     circle: {
       step: "Щотижня · у колі жінок",
