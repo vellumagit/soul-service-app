@@ -25,6 +25,7 @@ import {
   type RescheduleRequestRow,
   type BookingRequestRow,
   type GroupSignupRow,
+  type CircleRefundRequestRow as CircleRefundRequestData,
   type PendingProductPurchaseRow,
 } from "@/db/queries";
 import { fullDate, shortTime } from "@/lib/format";
@@ -33,6 +34,7 @@ import { LooseEndRowActions } from "@/components/LooseEndRowActions";
 import { RescheduleRequestRowActions } from "@/components/RescheduleRequestRowActions";
 import { BookingRequestRowActions } from "@/components/BookingRequestRowActions";
 import { GroupSignupRowActions } from "@/components/GroupSignupRowActions";
+import { CircleRefundRequestRow } from "@/components/CircleRefundRequestRow";
 import { ProductPurchaseLooseEndRow } from "@/components/ProductPurchaseLooseEndRow";
 
 export const dynamic = "force-dynamic";
@@ -90,6 +92,13 @@ export default async function LooseEndsPage() {
           {/* New booking requests — "I'd like to book another session." */}
           {ends.bookingRequests.length > 0 && (
             <BookingRequestsSection rows={ends.bookingRequests} />
+          )}
+
+          {/* Circle refund requests — a paid attendee asked to cancel; one-tap
+              approve issues the Stripe refund + frees the seat. High priority
+              (money owed), so it sits above the ordinary sign-ups. */}
+          {ends.refundRequests.length > 0 && (
+            <RefundRequestsSection rows={ends.refundRequests} />
           )}
 
           {/* Group sign-ups awaiting confirmation or payment. Time-sensitive
@@ -242,6 +251,51 @@ function ProductPurchasesSection({
           );
         })}
       </ul>
+    </section>
+  );
+}
+
+function RefundRequestsSection({
+  rows,
+}: {
+  rows: CircleRefundRequestData[];
+}) {
+  return (
+    <section className="paper-card p-6">
+      <div className="flex items-baseline justify-between mb-1 flex-wrap gap-2">
+        <h2
+          className="serif-italic text-xl text-plum-700"
+          style={{ fontWeight: 400 }}
+        >
+          Refund requests
+        </h2>
+        <span
+          className="text-[10px] uppercase tracking-wider font-mono px-2 py-0.5 rounded"
+          style={{
+            background: "var(--color-honey-50)",
+            color: "var(--color-honey-700)",
+          }}
+        >
+          {rows.length}
+        </span>
+      </div>
+      <p className="text-[13px] text-ink-500 italic mb-4 leading-relaxed">
+        Paid attendees who can&apos;t make it and asked to cancel. Tap{" "}
+        <strong>Refund &amp; release</strong> to send their money back and free
+        the seat — or <strong>Keep them in</strong> if they&apos;re staying.
+      </p>
+      <div className="space-y-3">
+        {rows.map((r) => (
+          <CircleRefundRequestRow
+            key={r.attendeeId}
+            attendeeId={r.attendeeId}
+            name={r.attendeeName}
+            email={r.attendeeEmail}
+            circleName={r.groupName}
+            whenLabel={`${fullDate(r.scheduledAt)} · ${shortTime(r.scheduledAt)}`}
+          />
+        ))}
+      </div>
     </section>
   );
 }

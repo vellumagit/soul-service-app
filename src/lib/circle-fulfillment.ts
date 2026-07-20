@@ -26,6 +26,7 @@ import {
   sendCircleReservationNotifyEmail,
 } from "./resend";
 import { formatSessionLong, resolveTimeZone } from "./timezone";
+import { circleCancelUrl } from "./circle-cancel-token";
 
 /** Resolve the meeting link for a circle: the session's own meet_url wins,
  *  else the practitioner's standing circle room link. */
@@ -192,6 +193,8 @@ export async function fulfillCircleSeat(
       note: row.paymentInstructions
         ? null // payment already handled; don't show pay instructions in welcome
         : null,
+      // Self-serve "can't make it?" link — only meaningful for a paid seat.
+      cancelUrl: row.paid ? circleCancelUrl(attendeeId) : null,
     });
 
     // Heads-up to the practitioner — best-effort, never blocks the seat. So she

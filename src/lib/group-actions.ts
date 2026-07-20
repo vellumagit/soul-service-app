@@ -9,10 +9,11 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { and, eq, gte, sql, inArray } from "drizzle-orm";
+import { and, eq, gte, isNull, sql, inArray } from "drizzle-orm";
 import { headers } from "next/headers";
 import { db } from "@/db";
 import {
+  accounts,
   groups,
   groupSessions,
   groupAttendees,
@@ -21,9 +22,14 @@ import {
 import { requireSession } from "./session-cookies";
 import { checkRateLimit } from "./rate-limit";
 import { getStripe, isStripeConfigured } from "./stripe";
-import { fulfillCircleSeat } from "./circle-fulfillment";
+import {
+  fulfillCircleSeat,
+  refundCircleSeatByPaymentIntent,
+} from "./circle-fulfillment";
 import { ensureRecurringCircleSessions } from "./recurring-circles";
 import { formatSessionLong, resolveTimeZone } from "./timezone";
+import { verifyCircleCancelToken } from "./circle-cancel-token";
+import { isResendConfigured, sendCircleRefundRequestedEmail } from "./resend";
 
 // ─────────────────────────────────────────────────────────────────────
 // Practitioner — create / update groups
@@ -660,6 +666,222 @@ export async function markAttendeeCancelled(
     return {
       ok: false,
       error: err instanceof Error ? err.message : "Couldn't cancel",
+    };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Client-initiated refund requests ("Can't make it?" link in Circle emails)
+// ─────────────────────────────────────────────────────────────────────
+
+export type RefundRequestResult =
+  | { ok: true; state: "requested" | "cancelled" | "already" }
+  | { ok: false; error: string };
+
+/** Public — called from the tokenized /circles/cancel/[token] page. The signed
+ *  token (not a client-supplied id) is the sole source of attendee identity. */
+export async function requestCircleRefund(
+  token: string
+): Promise<RefundRequestResult> {
+  const attendeeId = verifyCircleCancelToken(token);
+  if (!attendeeId) {
+    return { ok: false, error: "This link isn't valid. Please email me instead." };
+  }
+
+  const h = await headers();
+  const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const limit = checkRateLimit("circle-cancel", ip, {
+    limit: 10,
+    windowMs: 60_000,
+  });
+  if (!limit.ok) {
+    return { ok: false, error: `One moment — try again in ${limit.retryAfterSeconds}s.` };
+  }
+
+  const [row] = await db
+    .select({
+      id: groupAttendees.id,
+      accountId: groupAttendees.accountId,
+      name: groupAttendees.name,
+      email: groupAttendees.email,
+      paid: groupAttendees.paid,
+      status: groupAttendees.status,
+      refundedAt: groupAttendees.refundedAt,
+      refundRequestedAt: groupAttendees.refundRequestedAt,
+      stripePaymentIntentId: groupAttendees.stripePaymentIntentId,
+      scheduledAt: groupSessions.scheduledAt,
+      groupName: groups.name,
+    })
+    .from(groupAttendees)
+    .innerJoin(groupSessions, eq(groupSessions.id, groupAttendees.groupSessionId))
+    .innerJoin(groups, eq(groups.id, groupSessions.groupId))
+    .where(eq(groupAttendees.id, attendeeId))
+    .limit(1);
+  if (!row) return { ok: false, error: "We couldn't find that reservation." };
+  if (row.refundedAt || row.status === "cancelled") {
+    return { ok: true, state: "already" };
+  }
+  if (new Date(row.scheduledAt).getTime() < Date.now()) {
+    return { ok: false, error: "This circle has already taken place." };
+  }
+  if (row.refundRequestedAt) return { ok: true, state: "already" };
+
+  const now = new Date();
+  const paidViaStripe = row.paid && !!row.stripePaymentIntentId;
+
+  if (paidViaStripe) {
+    // Flag the request; she approves in Loose Ends (one tap → Stripe refund).
+    await db
+      .update(groupAttendees)
+      .set({ refundRequestedAt: now, updatedAt: now })
+      .where(
+        and(
+          eq(groupAttendees.id, attendeeId),
+          isNull(groupAttendees.refundRequestedAt)
+        )
+      );
+  } else {
+    // No card charge to refund — just release the seat directly.
+    await db
+      .update(groupAttendees)
+      .set({ status: "cancelled", updatedAt: now })
+      .where(eq(groupAttendees.id, attendeeId));
+  }
+
+  // Notify the practitioner (best-effort — never fail the client's request).
+  try {
+    if (isResendConfigured()) {
+      const [acct] = await db
+        .select({ email: accounts.email })
+        .from(accounts)
+        .where(eq(accounts.id, row.accountId))
+        .limit(1);
+      const [pset] = await db
+        .select({
+          businessEmail: practitionerSettings.businessEmail,
+          timezone: practitionerSettings.timezone,
+        })
+        .from(practitionerSettings)
+        .where(eq(practitionerSettings.accountId, row.accountId))
+        .limit(1);
+      const notifyTo = pset?.businessEmail || acct?.email || null;
+      if (notifyTo) {
+        await sendCircleRefundRequestedEmail({
+          to: notifyTo,
+          attendeeName: row.name,
+          attendeeEmail: row.email,
+          circleName: row.groupName,
+          whenLabel: formatSessionLong(
+            new Date(row.scheduledAt),
+            resolveTimeZone(pset?.timezone)
+          ),
+          paid: paidViaStripe,
+          replyTo: row.email,
+        });
+      }
+    }
+  } catch (err) {
+    console.error("[circle] refund-request notify failed", err);
+  }
+
+  revalidatePath("/loose-ends");
+  revalidatePath("/groups");
+  return { ok: true, state: paidViaStripe ? "requested" : "cancelled" };
+}
+
+/** Practitioner — one-tap approve: issue the Stripe refund on her connected
+ *  account. That frees the seat + emails the attendee via the existing refund
+ *  pipeline (called directly here too, so it works even if the charge.refunded
+ *  webhook isn't enabled). */
+export async function approveCircleRefund(
+  attendeeId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const { accountId } = await requireSession();
+    const [row] = await db
+      .select({
+        id: groupAttendees.id,
+        paid: groupAttendees.paid,
+        refundedAt: groupAttendees.refundedAt,
+        stripePaymentIntentId: groupAttendees.stripePaymentIntentId,
+        connectedAccountId: practitionerSettings.stripeAccountId,
+      })
+      .from(groupAttendees)
+      .leftJoin(
+        practitionerSettings,
+        eq(practitionerSettings.accountId, groupAttendees.accountId)
+      )
+      .where(
+        and(
+          eq(groupAttendees.accountId, accountId),
+          eq(groupAttendees.id, attendeeId)
+        )
+      )
+      .limit(1);
+    if (!row) return { ok: false, error: "Attendee not found." };
+    if (row.refundedAt) {
+      revalidatePath("/loose-ends");
+      return { ok: true }; // already refunded — idempotent
+    }
+    if (!row.paid || !row.stripePaymentIntentId) {
+      return {
+        ok: false,
+        error: "No card payment to refund. Use Remove to release the seat.",
+      };
+    }
+    if (!isStripeConfigured() || !row.connectedAccountId) {
+      return {
+        ok: false,
+        error: "Card payments aren't connected. Refund from Stripe directly.",
+      };
+    }
+
+    const stripe = getStripe();
+    await stripe.refunds.create(
+      { payment_intent: row.stripePaymentIntentId },
+      { stripeAccount: row.connectedAccountId }
+    );
+
+    // Free the seat + email the attendee now (idempotent; doesn't depend on the
+    // charge.refunded webhook being enabled).
+    try {
+      await refundCircleSeatByPaymentIntent(row.stripePaymentIntentId);
+    } catch (err) {
+      console.error("[circle] post-refund seat release failed", err);
+    }
+
+    revalidatePath("/loose-ends");
+    revalidatePath("/groups");
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Couldn't issue the refund.",
+    };
+  }
+}
+
+/** Practitioner — dismiss a refund request without refunding (they're staying). */
+export async function dismissCircleRefundRequest(
+  attendeeId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const { accountId } = await requireSession();
+    await db
+      .update(groupAttendees)
+      .set({ refundRequestedAt: null, updatedAt: new Date() })
+      .where(
+        and(
+          eq(groupAttendees.accountId, accountId),
+          eq(groupAttendees.id, attendeeId)
+        )
+      );
+    revalidatePath("/loose-ends");
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Couldn't update.",
     };
   }
 }

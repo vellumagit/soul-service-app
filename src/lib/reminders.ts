@@ -21,6 +21,7 @@ import {
 } from "@/db";
 import { groupSessions, groupAttendees, groups } from "@/db/schema";
 import { resolveCircleMeetingUrl } from "./circle-fulfillment";
+import { circleCancelUrl } from "./circle-cancel-token";
 import {
   resolveTimeZone,
   formatSessionLong,
@@ -473,6 +474,7 @@ async function sendDueCircleReminders(
           meetingUrl,
           practitionerName: settings.practitionerName ?? null,
           lead: pass.lead,
+          cancelUrl: circleCancelUrl(row.attendeeId),
         });
         await db
           .update(groupAttendees)

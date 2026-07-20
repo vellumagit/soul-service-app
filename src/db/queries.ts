@@ -1509,6 +1509,16 @@ export type PendingProductPurchaseRow = {
   requestedAt: Date;
 };
 
+export type CircleRefundRequestRow = {
+  attendeeId: string;
+  groupId: string;
+  groupName: string;
+  attendeeName: string;
+  attendeeEmail: string;
+  scheduledAt: Date;
+  requestedAt: Date;
+};
+
 export type LooseEnds = {
   botFailed: LooseEndRow[];
   needReflection: LooseEndRow[];
@@ -1521,6 +1531,8 @@ export type LooseEnds = {
   bookingRequests: BookingRequestRow[];
   /** Pending / unpaid attendees on upcoming public group sessions. */
   groupSignups: GroupSignupRow[];
+  /** Paid Circle attendees who asked to cancel + be refunded (one-tap approve). */
+  refundRequests: CircleRefundRequestRow[];
   /** Pending product purchase requests awaiting confirm + mark paid. */
   productPurchases: PendingProductPurchaseRow[];
   /** Sum across all categories — drives the empty state + the inbox badge. */
@@ -1724,6 +1736,45 @@ export async function getLooseEnds(accountId: string): Promise<LooseEnds> {
     signedUpAt: new Date(r.signedUpAt),
   }));
 
+  // Circle refund requests — paid attendees who clicked "Can't make it?" and
+  // asked to cancel + be refunded. One-tap approve issues the Stripe refund.
+  const refundRequestRows = await db
+    .select({
+      attendeeId: groupAttendees.id,
+      groupId: groupSessions.groupId,
+      groupName: groups.name,
+      attendeeName: groupAttendees.name,
+      attendeeEmail: groupAttendees.email,
+      scheduledAt: groupSessions.scheduledAt,
+      requestedAt: groupAttendees.refundRequestedAt,
+    })
+    .from(groupAttendees)
+    .innerJoin(
+      groupSessions,
+      eq(groupSessions.id, groupAttendees.groupSessionId)
+    )
+    .innerJoin(groups, eq(groups.id, groupSessions.groupId))
+    .where(
+      and(
+        eq(groupAttendees.accountId, accountId),
+        sql`${groupAttendees.refundRequestedAt} IS NOT NULL`,
+        sql`${groupAttendees.refundedAt} IS NULL`,
+        sql`${groupAttendees.status} <> 'cancelled'`
+      )
+    )
+    .orderBy(asc(groupAttendees.refundRequestedAt));
+  const refundRequestList: CircleRefundRequestRow[] = refundRequestRows.map(
+    (r) => ({
+      attendeeId: r.attendeeId,
+      groupId: r.groupId,
+      groupName: r.groupName,
+      attendeeName: r.attendeeName,
+      attendeeEmail: r.attendeeEmail,
+      scheduledAt: new Date(r.scheduledAt),
+      requestedAt: new Date(r.requestedAt as Date),
+    })
+  );
+
   // Pending product purchase requests — buyers waiting on her to confirm +
   // mark paid before the watch link goes out.
   const productPurchaseRows = await db
@@ -1781,6 +1832,7 @@ export async function getLooseEnds(accountId: string): Promise<LooseEnds> {
     allIds.size +
     bookingRequestList.length +
     groupSignupList.length +
+    refundRequestList.length +
     productPurchaseList.length;
 
   return {
@@ -1792,6 +1844,7 @@ export async function getLooseEnds(accountId: string): Promise<LooseEnds> {
     rescheduleRequests: rescheduleRequestList,
     bookingRequests: bookingRequestList,
     groupSignups: groupSignupList,
+    refundRequests: refundRequestList,
     productPurchases: productPurchaseList,
     totalCount,
   };

@@ -238,6 +238,8 @@ export type CircleEmailInput = {
   practitionerName: string | null;
   /** Optional note shown under the details — e.g. what to bring / expect. */
   note?: string | null;
+  /** Optional "Can't make it?" self-serve cancel/refund link (tokenized). */
+  cancelUrl?: string | null;
 };
 
 /** Welcome / confirmation email sent once a seat is paid (card or manual). */
@@ -252,13 +254,16 @@ export async function sendCircleWelcomeEmail(
     ? `\n\nJoin here when it's time:\n${input.meetingUrl}`
     : "\n\nI'll send the meeting link before we gather.";
   const noteLine = input.note ? `\n\n${input.note}` : "";
+  const cancelLine = input.cancelUrl
+    ? `\n\nCan't make it? Cancel & request a refund:\n${input.cancelUrl}`
+    : "";
   const text = `${greeting}
 
 Your seat in ${input.circleName} is held. 🤍
 
 · When: ${input.whenLabel}${linkLine}${noteLine}
 
-You'll get a gentle reminder before we begin. Come as you are.
+You'll get a gentle reminder before we begin. Come as you are.${cancelLine}
 
 ${circleContactLineText()}
 
@@ -271,6 +276,7 @@ ${circleContactLineText()}
     note: input.note ?? null,
     closing: "You'll get a gentle reminder before we begin. Come as you are.",
     signoff,
+    cancelUrl: input.cancelUrl ?? null,
   });
   await sendEmail({
     to: input.to,
@@ -296,13 +302,16 @@ export async function sendCircleReminderEmail(
   const linkLine = input.meetingUrl
     ? `\n\nJoin here:\n${input.meetingUrl}`
     : "";
+  const cancelLine = input.cancelUrl
+    ? `\n\nCan't make it? Cancel & request a refund:\n${input.cancelUrl}`
+    : "";
   const text = `${greeting}
 
 A gentle reminder that ${input.circleName} gathers ${soon}.
 
 · When: ${input.whenLabel}${linkLine}
 
-Take a breath. I'll see you there.
+Take a breath. I'll see you there.${cancelLine}
 
 ${circleContactLineText()}
 
@@ -315,6 +324,7 @@ ${circleContactLineText()}
     note: null,
     closing: "Take a breath. I'll see you there.",
     signoff,
+    cancelUrl: input.cancelUrl ?? null,
   });
   await sendEmail({
     to: input.to,
@@ -407,6 +417,62 @@ They've been sent the welcome email with the meeting link, and added to your Net
   await sendEmail({ to: input.to, subject, html, text, replyTo: input.replyTo });
 }
 
+/** Heads-up to the practitioner that a paid attendee asked to cancel + be
+ *  refunded (via the "Can't make it?" link). It also shows in Loose Ends for
+ *  one-tap approval — this email just makes sure she sees it fast. */
+export async function sendCircleRefundRequestedEmail(input: {
+  to: string;
+  attendeeName: string | null;
+  attendeeEmail: string;
+  circleName: string;
+  whenLabel: string;
+  paid: boolean;
+  replyTo?: string;
+}): Promise<void> {
+  const who = input.attendeeName?.trim() || input.attendeeEmail;
+  const subject = input.paid
+    ? `Refund requested — ${who}`
+    : `Sign-up cancelled — ${who}`;
+  const lead = input.paid
+    ? `${who} can't make it and asked to cancel &amp; be refunded.`
+    : `${who} can't make it and cancelled their (unpaid) spot.`;
+  const leadText = input.paid
+    ? `${who} can't make it and asked to cancel + be refunded.`
+    : `${who} can't make it and cancelled their (unpaid) spot.`;
+  const action = input.paid
+    ? `Open Loose Ends → "Refund requests" and tap Approve — that issues the refund and frees the seat.`
+    : `Their seat has been released. Nothing else to do.`;
+  const text = `${leadText}
+
+· Circle: ${input.circleName}
+· When: ${input.whenLabel}
+· Name: ${input.attendeeName ?? "—"}
+· Email: ${input.attendeeEmail}
+
+${action}`;
+  const html = `
+<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#faf6f0;font-family:Georgia,'Times New Roman',serif;color:#3d342e;">
+    <div style="max-width:480px;margin:48px auto;padding:32px 30px;background:#fdf9f1;border-radius:12px;border:1px solid #ead9c1;">
+      <p style="margin:0 0 18px 0;font-size:16px;line-height:1.5;color:#3d342e;">${lead}</p>
+      <p style="margin:0 0 6px 0;font-size:14px;color:#564a42;"><strong>Circle:</strong> ${escapeHtml(input.circleName)}</p>
+      <p style="margin:0 0 6px 0;font-size:14px;color:#564a42;"><strong>When:</strong> ${escapeHtml(input.whenLabel)}</p>
+      <p style="margin:0 0 6px 0;font-size:14px;color:#564a42;"><strong>Name:</strong> ${escapeHtml(input.attendeeName ?? "—")}</p>
+      <p style="margin:0 0 0 0;font-size:14px;color:#564a42;"><strong>Email:</strong> ${escapeHtml(input.attendeeEmail)}</p>
+      <p style="margin:20px 0 0 0;padding-top:16px;border-top:1px solid #ead9c1;font-size:13px;line-height:1.6;color:#564a42;">${escapeHtml(action)}</p>
+    </div>
+  </body>
+</html>`.trim();
+  await sendEmail({
+    to: input.to,
+    subject,
+    html,
+    text,
+    replyTo: input.replyTo,
+  });
+}
+
 function circleEmailHtml(p: {
   greeting: string;
   intro: string;
@@ -415,6 +481,7 @@ function circleEmailHtml(p: {
   note: string | null;
   closing: string;
   signoff: string;
+  cancelUrl?: string | null;
 }): string {
   return `
 <!doctype html>
@@ -437,7 +504,12 @@ function circleEmailHtml(p: {
       }
       <p style="margin:24px 0 0 0;font-size:14px;line-height:1.6;color:#564a42;">${escapeHtml(p.closing)}</p>
       <p style="margin:20px 0 0 0;font-size:14px;color:#564a42;font-style:italic;">— ${escapeHtml(p.signoff)}</p>
-      <p style="margin:22px 0 0 0;padding-top:16px;border-top:1px solid #ead9c1;font-size:12px;line-height:1.6;color:#8a7d71;">Questions, or need to cancel or ask about a refund? Just reply, or reach me at <a href="mailto:${escapeHtml(CIRCLE_CONTACT_EMAIL)}" style="color:#5a3f4f;">${escapeHtml(CIRCLE_CONTACT_EMAIL)}</a>.</p>
+      ${
+        p.cancelUrl
+          ? `<p style="margin:22px 0 0 0;font-size:13px;line-height:1.6;"><a href="${escapeHtml(p.cancelUrl)}" style="color:#8a7d71;">Can't make it? Cancel &amp; request a refund →</a></p>`
+          : ""
+      }
+      <p style="margin:${p.cancelUrl ? "12px" : "22px"} 0 0 0;padding-top:16px;border-top:1px solid #ead9c1;font-size:12px;line-height:1.6;color:#8a7d71;">Questions, or need to cancel or ask about a refund? Just reply, or reach me at <a href="mailto:${escapeHtml(CIRCLE_CONTACT_EMAIL)}" style="color:#5a3f4f;">${escapeHtml(CIRCLE_CONTACT_EMAIL)}</a>.</p>
     </div>
   </body>
 </html>`.trim();

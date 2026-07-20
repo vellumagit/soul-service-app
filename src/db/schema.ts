@@ -1181,6 +1181,9 @@ export const groupAttendees = pgTable(
     paid: boolean("paid").default(false).notNull(),
     paidAt: timestamp("paid_at"),
     paymentMethod: text("payment_method"),
+    // Set when the attendee asks to cancel + be refunded (via the "Can't make
+    // it?" link in their email). Surfaces as a one-tap approval in Loose Ends.
+    refundRequestedAt: timestamp("refund_requested_at"),
     // Set when a FULL refund is issued via Stripe. Frees the seat (status →
     // cancelled) and records that this paid seat was refunded.
     refundedAt: timestamp("refunded_at"),
