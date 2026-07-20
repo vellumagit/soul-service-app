@@ -20,6 +20,7 @@ import {
   clients,
 } from "@/db/schema";
 import { sendCircleWelcomeEmail } from "./resend";
+import { formatSessionLong, resolveTimeZone } from "./timezone";
 
 /** Resolve the meeting link for a circle: the session's own meet_url wins,
  *  else the practitioner's standing circle room link. */
@@ -28,17 +29,6 @@ export function resolveCircleMeetingUrl(
   circleRoomUrl: string | null
 ): string | null {
   return sessionMeetUrl?.trim() || circleRoomUrl?.trim() || null;
-}
-
-function formatWhen(d: Date): string {
-  return d.toLocaleString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZoneName: "short",
-  });
 }
 
 /**
@@ -139,6 +129,7 @@ export async function fulfillCircleSeat(
     .select({
       circleRoomUrl: practitionerSettings.circleRoomUrl,
       practitionerName: practitionerSettings.practitionerName,
+      timezone: practitionerSettings.timezone,
     })
     .from(practitionerSettings)
     .where(eq(practitionerSettings.accountId, row.accountId))
@@ -178,7 +169,10 @@ export async function fulfillCircleSeat(
       to: row.email,
       attendeeName: row.name,
       circleName: row.groupName,
-      whenLabel: formatWhen(new Date(row.scheduledAt)),
+      whenLabel: formatSessionLong(
+        new Date(row.scheduledAt),
+        resolveTimeZone(settings?.timezone)
+      ),
       meetingUrl,
       practitionerName: settings?.practitionerName ?? null,
       note: row.paymentInstructions

@@ -22,15 +22,22 @@ import { listUpcomingPublicGroupSessions } from "@/lib/group-actions";
 import { listPublishedProducts } from "@/lib/product-actions";
 import { getLandingCopy } from "@/lib/landing-copy";
 import { getLandingLang } from "@/lib/landing-lang";
+import { resolveTimeZone } from "@/lib/timezone";
 import "./landing.css";
 
-function formatLandingWindowLabel(d: Date, locale: string): string {
+function formatLandingWindowLabel(
+  d: Date,
+  locale: string,
+  timeZone: string
+): string {
   return d.toLocaleString(locale, {
     weekday: "short",
     month: "short",
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    timeZone,
+    timeZoneName: "short",
   });
 }
 
@@ -54,6 +61,9 @@ export default async function LandingPage() {
   let circleSignupsOpen = false;
   // Portrait photo for the About section. Blank → the gradient placeholder.
   let portraitUrl: string | null = null;
+  // Practice timezone — so every Circle time renders in HER local zone (with a
+  // zone label), never the server's UTC. Falls back to the app default.
+  let practiceTz: string = resolveTimeZone(null);
 
   // Which account owns this storefront? The DB may hold several accounts
   // (legacy import, sandbox, the real practitioner); resolve the canonical one
@@ -75,6 +85,7 @@ export default async function LandingPage() {
           showAvailability: practitionerSettings.showAvailabilityPublicly,
           circleSignupsOpen: practitionerSettings.circleSignupsOpen,
           landingPortraitUrl: practitionerSettings.landingPortraitUrl,
+          timezone: practitionerSettings.timezone,
         })
         .from(practitionerSettings)
         .where(eq(practitionerSettings.accountId, storefrontAccountId))
@@ -82,6 +93,7 @@ export default async function LandingPage() {
       const cfg = settingsRow[0];
       circleSignupsOpen = cfg?.circleSignupsOpen ?? false;
       portraitUrl = cfg?.landingPortraitUrl?.trim() || null;
+      practiceTz = resolveTimeZone(cfg?.timezone);
       if (cfg?.showAvailability) {
         const windows = await getAvailableWindows(storefrontAccountId, {
           limit: 6,
@@ -89,7 +101,11 @@ export default async function LandingPage() {
         availableWindows = windows.map((w) => ({
           startAt: w.startAt.toISOString(),
           endAt: w.endAt.toISOString(),
-          label: formatLandingWindowLabel(w.startAt, c.circles.dateLocale),
+          label: formatLandingWindowLabel(
+            w.startAt,
+            c.circles.dateLocale,
+            practiceTz
+          ),
         }));
       }
     } catch (err) {
@@ -388,6 +404,8 @@ export default async function LandingPage() {
                     day: "numeric",
                     hour: "numeric",
                     minute: "2-digit",
+                    timeZone: practiceTz,
+                    timeZoneName: "short",
                   }
                 );
                 return (

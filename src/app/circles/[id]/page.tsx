@@ -21,19 +21,10 @@ import { TimeOfDayProvider } from "@/components/TimeOfDayProvider";
 import { CircleSignupForm } from "@/components/CircleSignupForm";
 import { CirclePurchaseForm } from "@/components/CirclePurchaseForm";
 import { isStripeConfigured } from "@/lib/stripe";
+import { formatSessionLong, resolveTimeZone } from "@/lib/timezone";
 import "../../landing.css";
 
 export const dynamic = "force-dynamic";
-
-function formatWhen(d: Date): string {
-  return d.toLocaleString(undefined, {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
 
 function formatMoney(cents: number, currency: string): string {
   return new Intl.NumberFormat("en-US", {
@@ -70,6 +61,7 @@ export default async function CircleSignupPage({
       status: groupSessions.status,
       circleSignupsOpen: practitionerSettings.circleSignupsOpen,
       stripeChargesEnabled: practitionerSettings.stripeChargesEnabled,
+      timezone: practitionerSettings.timezone,
       takenCount: sql<number>`(
         SELECT COUNT(*)::int FROM ${groupAttendees}
         WHERE ${groupAttendees.groupSessionId} = ${groupSessions.id}
@@ -153,7 +145,7 @@ export default async function CircleSignupPage({
               )}
             </h2>
             <p className="p-lg" style={{ marginBottom: 4 }}>
-              {formatWhen(scheduledAt)}
+              {formatSessionLong(scheduledAt, resolveTimeZone(session.timezone))}
             </p>
             <p
               style={{

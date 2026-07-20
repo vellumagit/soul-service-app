@@ -23,6 +23,7 @@ import { checkRateLimit } from "./rate-limit";
 import { getStripe, isStripeConfigured } from "./stripe";
 import { fulfillCircleSeat } from "./circle-fulfillment";
 import { ensureRecurringCircleSessions } from "./recurring-circles";
+import { formatSessionLong, resolveTimeZone } from "./timezone";
 
 // ─────────────────────────────────────────────────────────────────────
 // Practitioner — create / update groups
@@ -437,6 +438,7 @@ export async function createCircleCheckout(input: {
       // Her connected Stripe account — payments are charged directly on it.
       stripeAccountId: practitionerSettings.stripeAccountId,
       stripeChargesEnabled: practitionerSettings.stripeChargesEnabled,
+      timezone: practitionerSettings.timezone,
     })
     .from(groupSessions)
     .innerJoin(groups, eq(groups.id, groupSessions.groupId))
@@ -531,12 +533,10 @@ export async function createCircleCheckout(input: {
 
   try {
     const stripe = getStripe();
-    const whenLabel = row.scheduledAt.toLocaleString("en-US", {
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    });
+    const whenLabel = formatSessionLong(
+      row.scheduledAt,
+      resolveTimeZone(row.timezone)
+    );
     const checkout = await stripe.checkout.sessions.create({
       mode: "payment",
       customer_email: email,

@@ -11,6 +11,7 @@ import { db } from "@/db";
 import { groups, groupSessions, groupAttendees } from "@/db/schema";
 import { getSettings, listClientsForPicker } from "@/db/queries";
 import { asLocale } from "@/lib/i18n";
+import { resolveTimeZone } from "@/lib/timezone";
 import { ScheduleGroupSessionDialog } from "@/components/ScheduleGroupSessionDialog";
 import { GroupAttendeeRow } from "@/components/GroupAttendeeRow";
 import { CancelGroupSessionButton } from "@/components/CancelGroupSessionButton";
@@ -28,13 +29,15 @@ function formatMoney(cents: number, currency: string): string {
   }).format(cents / 100);
 }
 
-function formatWhen(d: Date, locale: string): string {
+function formatWhen(d: Date, locale: string, timeZone: string): string {
   return new Intl.DateTimeFormat(locale, {
     weekday: "short",
     month: "short",
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    timeZone,
+    timeZoneName: "short",
   }).format(d);
 }
 
@@ -60,6 +63,7 @@ export default async function GroupDetailPage({
   if (!group) notFound();
 
   const locale = asLocale(settings.uiLanguage);
+  const practiceTz = resolveTimeZone(settings.timezone);
 
   const sessionRows = await db
     .select({
@@ -224,7 +228,7 @@ export default async function GroupDetailPage({
                         className="serif text-lg text-ink-900"
                         style={{ fontWeight: 500 }}
                       >
-                        {formatWhen(new Date(s.scheduledAt), locale)}
+                        {formatWhen(new Date(s.scheduledAt), locale, practiceTz)}
                       </h3>
                       <div className="text-[12px] text-ink-500 font-mono mt-1 flex items-center gap-2 flex-wrap">
                         <span>{s.durationMinutes}min</span>
@@ -268,7 +272,8 @@ export default async function GroupDetailPage({
                         sessionId={s.id}
                         scheduledAtLabel={formatWhen(
                           new Date(s.scheduledAt),
-                          locale
+                          locale,
+                          practiceTz
                         )}
                       />
                     </div>
@@ -346,7 +351,7 @@ export default async function GroupDetailPage({
                     className="serif text-base text-ink-700"
                     style={{ fontWeight: 500 }}
                   >
-                    {formatWhen(new Date(s.scheduledAt), locale)}
+                    {formatWhen(new Date(s.scheduledAt), locale, practiceTz)}
                     {s.status === "cancelled" && (
                       <span className="ml-2 text-[10px] uppercase tracking-wider font-mono px-1.5 py-0.5 rounded bg-ink-100 text-ink-500">
                         cancelled

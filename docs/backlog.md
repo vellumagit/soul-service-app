@@ -88,6 +88,25 @@ Optional but elegant. Some clients won't mind; the explicit consent moment is mo
 
 **Build estimate:** 4-5 hours.
 
+### J. Notetaker for Circles (group sessions)
+**Source:** Conversation 2026-07-19, while setting up weekly Circles for launch. Parked deliberately — not a launch blocker.
+**What:** The Recall notetaker is wired ONLY to 1-on-1 `sessions` — it attaches transcripts by `sessions.recallBotId` (`src/app/api/webhooks/recall/route.ts:154`), `scheduleGroupSession` never adds a bot, and there's no bot UI on a Circle session. So Circles on Meet currently get no recording/transcript/summary at all.
+
+Recall is actually the *better* fit for a group than our in-person Whisper recorder, because it returns **speaker-labeled** transcripts (diarization) — exactly what you want when several people share. The pipeline exists; it's just not connected to the group tables.
+
+**To build:**
+- Add recall columns to `group_sessions` (mirror the `sessions` ones: `recall_bot_id`, `recall_bot_status`, `recall_transcript_received_at`) + a place to store the group transcript/summary.
+- Auto-add a bot at Circle-session time pointed at the resolved meeting URL (per-session `meetUrl` or the standing `circleRoomUrl`).
+- Teach the Recall webhook to attach to a `group_session` when the bot id matches there instead of `sessions`.
+- Frame the AI summary differently: a group is "themes that came up / what happened in the circle," NOT per-client arc notes.
+
+**Wrinkles to handle:**
+- The standing room is **reused every week**, so the bot must be scheduled per-occurrence and the webhook must resolve WHICH week's `group_session` to attach to (by timing).
+- With Quick access OFF (admit-only), the bot **knocks** — she has to Admit it like any guest.
+- **Consent for a group** is the real gate: bake a "a notetaker will be present" line into the Circle welcome email; the bot is a visible participant + Meet shows a recording banner, so it's not covert. Overlaps with item I (consent flow), which is 1-on-1-focused.
+
+**Build estimate:** ~4-6 hours (migration + webhook branching + auto-add + UI + consent copy).
+
 ---
 
 ## When picking next work
