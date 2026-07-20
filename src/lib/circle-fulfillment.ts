@@ -19,7 +19,7 @@ import {
   practitionerSettings,
   clients,
 } from "@/db/schema";
-import { sendCircleWelcomeEmail } from "./resend";
+import { sendCircleWelcomeEmail, sendCircleRefundEmail } from "./resend";
 import { formatSessionLong, resolveTimeZone } from "./timezone";
 
 /** Resolve the meeting link for a circle: the session's own meet_url wins,
@@ -189,4 +189,88 @@ export async function fulfillCircleSeat(
     console.error("[circle] welcome email failed for", attendeeId, err);
     return { sent: false };
   }
+}
+
+/**
+ * Refund → seat-release pipeline. Called from the Stripe webhook when a FULL
+ * refund fires (charge.refunded). Finds the attendee by the payment intent we
+ * stored at checkout, frees the seat (status → cancelled) + stamps refunded_at,
+ * and emails them a short confirmation.
+ *
+ * Idempotent: the release is claimed atomically (UPDATE ... WHERE refunded_at
+ * IS NULL), so Stripe's webhook retries / duplicate events never double-process
+ * or re-send the email. Safe no-op for manual (non-Stripe) seats — those have
+ * no payment intent to match.
+ */
+export async function refundCircleSeatByPaymentIntent(
+  paymentIntentId: string
+): Promise<{ refunded: boolean }> {
+  if (!paymentIntentId) return { refunded: false };
+
+  // Find the attendee (+ details for the email) by the Stripe PI stored at
+  // checkout. If none matches, it wasn't one of ours — nothing to do.
+  const [row] = await db
+    .select({
+      id: groupAttendees.id,
+      accountId: groupAttendees.accountId,
+      name: groupAttendees.name,
+      email: groupAttendees.email,
+      refundedAt: groupAttendees.refundedAt,
+      scheduledAt: groupSessions.scheduledAt,
+      groupName: groups.name,
+    })
+    .from(groupAttendees)
+    .innerJoin(
+      groupSessions,
+      eq(groupSessions.id, groupAttendees.groupSessionId)
+    )
+    .innerJoin(groups, eq(groups.id, groupSessions.groupId))
+    .where(eq(groupAttendees.stripePaymentIntentId, paymentIntentId))
+    .limit(1);
+  if (!row) return { refunded: false };
+  if (row.refundedAt) return { refunded: false }; // already handled
+
+  // Atomically claim the refund + free the seat. WHERE refunded_at IS NULL so
+  // concurrent / retried webhook deliveries can't double-process or re-email.
+  const now = new Date();
+  const claimed = await db
+    .update(groupAttendees)
+    .set({ refundedAt: now, status: "cancelled", updatedAt: now })
+    .where(
+      and(
+        eq(groupAttendees.stripePaymentIntentId, paymentIntentId),
+        isNull(groupAttendees.refundedAt)
+      )
+    )
+    .returning({ id: groupAttendees.id });
+  if (claimed.length === 0) return { refunded: false };
+
+  // Practice tz + name for the email (best-effort — never block the release).
+  const [settings] = await db
+    .select({
+      timezone: practitionerSettings.timezone,
+      practitionerName: practitionerSettings.practitionerName,
+    })
+    .from(practitionerSettings)
+    .where(eq(practitionerSettings.accountId, row.accountId))
+    .limit(1);
+
+  try {
+    if (row.email && row.email.includes("@")) {
+      await sendCircleRefundEmail({
+        to: row.email,
+        attendeeName: row.name,
+        circleName: row.groupName,
+        whenLabel: formatSessionLong(
+          new Date(row.scheduledAt),
+          resolveTimeZone(settings?.timezone)
+        ),
+        practitionerName: settings?.practitionerName ?? null,
+      });
+    }
+  } catch (err) {
+    console.error("[circle] refund email failed for", row.id, err);
+  }
+
+  return { refunded: true };
 }

@@ -84,6 +84,7 @@ export default async function GroupDetailPage({
         SELECT COUNT(*)::int FROM ${groupAttendees}
         WHERE ${groupAttendees.groupSessionId} = ${groupSessions.id}
           AND ${groupAttendees.paid} = TRUE
+          AND ${groupAttendees.refundedAt} IS NULL
       )`,
     })
     .from(groupSessions)

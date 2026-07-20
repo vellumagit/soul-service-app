@@ -33,6 +33,18 @@ function defaultFrom(): string {
   );
 }
 
+/** Where Circle attendees reach the practitioner for questions,
+ *  cancellations, or refunds. Shown in every Circle email AND set as the
+ *  reply-to, so a simple reply lands in her inbox. Override with the
+ *  CIRCLE_CONTACT_EMAIL env var if the address ever changes. */
+const CIRCLE_CONTACT_EMAIL =
+  process.env.CIRCLE_CONTACT_EMAIL || "sss@svit.live";
+
+/** Plain-text contact footer appended to Circle emails. */
+function circleContactLineText(): string {
+  return `Questions, or need to cancel or ask about a refund? Just reply, or reach me at ${CIRCLE_CONTACT_EMAIL}.`;
+}
+
 export type SendEmailInput = {
   to: string;
   subject: string;
@@ -248,6 +260,8 @@ Your seat in ${input.circleName} is held. 🤍
 
 You'll get a gentle reminder before we begin. Come as you are.
 
+${circleContactLineText()}
+
 — ${signoff}`;
   const html = circleEmailHtml({
     greeting,
@@ -258,7 +272,13 @@ You'll get a gentle reminder before we begin. Come as you are.
     closing: "You'll get a gentle reminder before we begin. Come as you are.",
     signoff,
   });
-  await sendEmail({ to: input.to, subject, html, text });
+  await sendEmail({
+    to: input.to,
+    subject,
+    html,
+    text,
+    replyTo: CIRCLE_CONTACT_EMAIL,
+  });
 }
 
 /** Reminder email sent 24h and 1h before a Circle. */
@@ -284,6 +304,8 @@ A gentle reminder that ${input.circleName} gathers ${soon}.
 
 Take a breath. I'll see you there.
 
+${circleContactLineText()}
+
 — ${signoff}`;
   const html = circleEmailHtml({
     greeting,
@@ -294,7 +316,55 @@ Take a breath. I'll see you there.
     closing: "Take a breath. I'll see you there.",
     signoff,
   });
-  await sendEmail({ to: input.to, subject, html, text });
+  await sendEmail({
+    to: input.to,
+    subject,
+    html,
+    text,
+    replyTo: CIRCLE_CONTACT_EMAIL,
+  });
+}
+
+/** Sent when a Circle seat is refunded — confirms the money is on its way
+ *  back, that the seat is released, and how to reach the practitioner. */
+export async function sendCircleRefundEmail(input: {
+  to: string;
+  attendeeName: string | null;
+  circleName: string;
+  whenLabel: string;
+  practitionerName: string | null;
+}): Promise<void> {
+  const first = input.attendeeName?.split(" ")[0] ?? null;
+  const greeting = first ? `Hi ${first},` : "Hi,";
+  const signoff = input.practitionerName ?? "Svitlana";
+  const subject = `Refunded — ${input.circleName}`;
+  const text = `${greeting}
+
+Your payment for ${input.circleName} (${input.whenLabel}) has been refunded — it will return to your original payment method within a few business days, and your seat has been released.
+
+If this wasn't expected, or you'd like to join another week, just reply or reach me at ${CIRCLE_CONTACT_EMAIL}.
+
+— ${signoff}`;
+  const html = `
+<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#faf6f0;font-family:Georgia,'Times New Roman',serif;color:#3d342e;">
+    <div style="max-width:480px;margin:48px auto;padding:36px 32px;background:#fdf9f1;border-radius:12px;border:1px solid #ead9c1;">
+      <p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;color:#564a42;">${escapeHtml(greeting)}</p>
+      <p style="margin:0 0 20px 0;font-size:15px;line-height:1.6;color:#564a42;">Your payment for <strong>${escapeHtml(input.circleName)}</strong> has been <strong>refunded</strong> — it will return to your original payment method within a few business days, and your seat has been released.</p>
+      <p style="margin:0 0 8px 0;font-size:14px;color:#564a42;"><strong>Circle:</strong> ${escapeHtml(input.whenLabel)}</p>
+      <p style="margin:22px 0 0 0;font-size:14px;line-height:1.6;color:#564a42;">If this wasn't expected, or you'd like to join another week, just reply or reach me at <a href="mailto:${escapeHtml(CIRCLE_CONTACT_EMAIL)}" style="color:#5a3f4f;">${escapeHtml(CIRCLE_CONTACT_EMAIL)}</a>.</p>
+      <p style="margin:20px 0 0 0;font-size:14px;color:#564a42;font-style:italic;">— ${escapeHtml(signoff)}</p>
+    </div>
+  </body>
+</html>`.trim();
+  await sendEmail({
+    to: input.to,
+    subject,
+    html,
+    text,
+    replyTo: CIRCLE_CONTACT_EMAIL,
+  });
 }
 
 function circleEmailHtml(p: {
@@ -327,6 +397,7 @@ function circleEmailHtml(p: {
       }
       <p style="margin:24px 0 0 0;font-size:14px;line-height:1.6;color:#564a42;">${escapeHtml(p.closing)}</p>
       <p style="margin:20px 0 0 0;font-size:14px;color:#564a42;font-style:italic;">— ${escapeHtml(p.signoff)}</p>
+      <p style="margin:22px 0 0 0;padding-top:16px;border-top:1px solid #ead9c1;font-size:12px;line-height:1.6;color:#8a7d71;">Questions, or need to cancel or ask about a refund? Just reply, or reach me at <a href="mailto:${escapeHtml(CIRCLE_CONTACT_EMAIL)}" style="color:#5a3f4f;">${escapeHtml(CIRCLE_CONTACT_EMAIL)}</a>.</p>
     </div>
   </body>
 </html>`.trim();

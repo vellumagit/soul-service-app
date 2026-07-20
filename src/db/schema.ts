@@ -1181,6 +1181,9 @@ export const groupAttendees = pgTable(
     paid: boolean("paid").default(false).notNull(),
     paidAt: timestamp("paid_at"),
     paymentMethod: text("payment_method"),
+    // Set when a FULL refund is issued via Stripe. Frees the seat (status →
+    // cancelled) and records that this paid seat was refunded.
+    refundedAt: timestamp("refunded_at"),
     attended: boolean("attended"),
     practitionerNotes: text("practitioner_notes"),
     sourceIp: text("source_ip"),

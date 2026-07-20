@@ -7,6 +7,8 @@
 //   - checkout.session.completed → mark the held attendee paid + confirmed,
 //     store the payment intent, then fulfill (welcome email). Idempotent.
 //   - checkout.session.expired   → release the held seat (cancel the row).
+//   - charge.refunded (full)     → release the seat + stamp refunded_at +
+//     email the attendee a refund confirmation. Idempotent.
 //
 // Auth: Stripe signature over the raw request body, verified with
 // STRIPE_WEBHOOK_SECRET. The raw body MUST be read with req.text() — any
@@ -18,7 +20,10 @@ import type Stripe from "stripe";
 import { db } from "@/db";
 import { groupAttendees } from "@/db/schema";
 import { getStripe, getWebhookSecret, isStripeConfigured } from "@/lib/stripe";
-import { fulfillCircleSeat } from "@/lib/circle-fulfillment";
+import {
+  fulfillCircleSeat,
+  refundCircleSeatByPaymentIntent,
+} from "@/lib/circle-fulfillment";
 import {
   applyAccountUpdate,
   clearConnectedAccountByStripeId,
@@ -108,6 +113,24 @@ export async function POST(req: Request): Promise<Response> {
           );
       }
       return NextResponse.json({ ok: true, released: true });
+    }
+
+    if (event.type === "charge.refunded") {
+      const charge = event.data.object as Stripe.Charge;
+      // Only act on a FULL refund — `refunded` is true only when the whole
+      // charge is refunded. A partial refund leaves the seat intact.
+      if (!charge.refunded) {
+        return NextResponse.json({ ok: true, ignored: "partial refund" });
+      }
+      const pi =
+        typeof charge.payment_intent === "string"
+          ? charge.payment_intent
+          : (charge.payment_intent?.id ?? null);
+      if (!pi) {
+        return NextResponse.json({ ok: true, ignored: "no payment_intent" });
+      }
+      const res = await refundCircleSeatByPaymentIntent(pi);
+      return NextResponse.json({ ok: true, refunded: res.refunded });
     }
 
     if (event.type === "account.updated") {
