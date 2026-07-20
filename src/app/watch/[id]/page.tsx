@@ -58,7 +58,7 @@ export default async function WatchPage({
         >
           {!access || !access.videoId ? (
             <div
-              className="wrap narrow rv"
+              className="wrap narrow"
               style={{ textAlign: "center" }}
             >
               <span className="tag" style={{ display: "block" }}>
@@ -109,7 +109,7 @@ async function WatchBody({
   }
   return (
     <div
-      className="wrap rv"
+      className="wrap"
       style={{ maxWidth: 900, margin: "0 auto", textAlign: "center" }}
     >
       <span className="tag" style={{ display: "block" }}>

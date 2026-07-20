@@ -129,7 +129,7 @@ export default async function CircleSignupPage({
           style={{ padding: "60px 24px 80px" }}
         >
           <div
-            className="wrap narrow rv"
+            className="wrap narrow"
             style={{ textAlign: "center" }}
           >
             <span className="tag" style={{ display: "block" }}>
@@ -182,7 +182,7 @@ export default async function CircleSignupPage({
           </div>
 
           <div
-            className="form-shell rv"
+            className="form-shell"
             style={{
               maxWidth: 520,
               margin: "40px auto 0",

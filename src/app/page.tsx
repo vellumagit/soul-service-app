@@ -127,6 +127,15 @@ export default async function LandingPage() {
     console.warn("[landing] upcoming circles fetch failed:", err);
   }
 
+  // The "The Circle" pricing-ladder CTA should take a visitor straight to
+  // booking the soonest open Circle (its /circles/<id> reserve + pay page) —
+  // NOT the generic "send a note" contact form. Falls back to #contact only
+  // when sign-ups are closed or there's no upcoming Circle to book.
+  const circleCtaHref =
+    circleSignupsOpen && upcomingCircles[0]
+      ? `/circles/${upcomingCircles[0].sessionId}`
+      : "#contact";
+
   // Library — published video offerings. Same try/catch pattern.
   let libraryProducts: Awaited<
     ReturnType<typeof listPublishedProducts>
@@ -294,7 +303,7 @@ export default async function LandingPage() {
                   {c.ways.circle.price} <small>{c.ways.perSession}</small>
                 </div>
                 <p className="desc">{c.ways.circle.desc}</p>
-                <a href="#contact" className="cta">
+                <a href={circleCtaHref} className="cta">
                   {c.ways.circle.cta}
                 </a>
               </div>
