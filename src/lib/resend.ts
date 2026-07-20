@@ -367,6 +367,46 @@ If this wasn't expected, or you'd like to join another week, just reply or reach
   });
 }
 
+/** Heads-up to the PRACTITIONER the moment a Circle seat is confirmed — card
+ *  or manual. So she knows a sale happened without opening the app. Reply-to is
+ *  the attendee, so she can reach them straight from her inbox. */
+export async function sendCircleReservationNotifyEmail(input: {
+  to: string;
+  attendeeName: string | null;
+  attendeeEmail: string;
+  circleName: string;
+  whenLabel: string;
+  paid: boolean;
+  replyTo?: string;
+}): Promise<void> {
+  const who = input.attendeeName?.trim() || input.attendeeEmail;
+  const verb = input.paid ? "reserved and paid for" : "reserved";
+  const subject = `New Circle sign-up — ${who}`;
+  const text = `${who} just ${verb} a seat.
+
+· Circle: ${input.circleName}
+· When: ${input.whenLabel}
+· Name: ${input.attendeeName ?? "—"}
+· Email: ${input.attendeeEmail}
+
+They've been sent the welcome email with the meeting link, and added to your Network as a lead. Just reply to reach them.`;
+  const html = `
+<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#faf6f0;font-family:Georgia,'Times New Roman',serif;color:#3d342e;">
+    <div style="max-width:480px;margin:48px auto;padding:32px 30px;background:#fdf9f1;border-radius:12px;border:1px solid #ead9c1;">
+      <p style="margin:0 0 18px 0;font-size:16px;line-height:1.5;color:#3d342e;"><strong>${escapeHtml(who)}</strong> just ${verb} a seat. 🤍</p>
+      <p style="margin:0 0 6px 0;font-size:14px;color:#564a42;"><strong>Circle:</strong> ${escapeHtml(input.circleName)}</p>
+      <p style="margin:0 0 6px 0;font-size:14px;color:#564a42;"><strong>When:</strong> ${escapeHtml(input.whenLabel)}</p>
+      <p style="margin:0 0 6px 0;font-size:14px;color:#564a42;"><strong>Name:</strong> ${escapeHtml(input.attendeeName ?? "—")}</p>
+      <p style="margin:0 0 0 0;font-size:14px;color:#564a42;"><strong>Email:</strong> ${escapeHtml(input.attendeeEmail)}</p>
+      <p style="margin:20px 0 0 0;padding-top:16px;border-top:1px solid #ead9c1;font-size:12.5px;line-height:1.6;color:#8a7d71;">They've been sent the welcome email with the meeting link, and added to your Network as a lead. Just reply to reach them.</p>
+    </div>
+  </body>
+</html>`.trim();
+  await sendEmail({ to: input.to, subject, html, text, replyTo: input.replyTo });
+}
+
 function circleEmailHtml(p: {
   greeting: string;
   intro: string;

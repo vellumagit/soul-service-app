@@ -13,13 +13,18 @@ import "server-only";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  accounts,
   groupAttendees,
   groupSessions,
   groups,
   practitionerSettings,
   clients,
 } from "@/db/schema";
-import { sendCircleWelcomeEmail, sendCircleRefundEmail } from "./resend";
+import {
+  sendCircleWelcomeEmail,
+  sendCircleRefundEmail,
+  sendCircleReservationNotifyEmail,
+} from "./resend";
 import { formatSessionLong, resolveTimeZone } from "./timezone";
 
 /** Resolve the meeting link for a circle: the session's own meet_url wins,
@@ -109,6 +114,7 @@ export async function fulfillCircleSeat(
       accountId: groupAttendees.accountId,
       name: groupAttendees.name,
       email: groupAttendees.email,
+      paid: groupAttendees.paid,
       welcomeSentAt: groupAttendees.welcomeSentAt,
       scheduledAt: groupSessions.scheduledAt,
       sessionMeetUrl: groupSessions.meetUrl,
@@ -130,10 +136,18 @@ export async function fulfillCircleSeat(
       circleRoomUrl: practitionerSettings.circleRoomUrl,
       practitionerName: practitionerSettings.practitionerName,
       timezone: practitionerSettings.timezone,
+      businessEmail: practitionerSettings.businessEmail,
     })
     .from(practitionerSettings)
     .where(eq(practitionerSettings.accountId, row.accountId))
     .limit(1);
+  // Where to send the practitioner's "new sign-up" heads-up.
+  const [acct] = await db
+    .select({ email: accounts.email })
+    .from(accounts)
+    .where(eq(accounts.id, row.accountId))
+    .limit(1);
+  const practitionerNotifyTo = settings?.businessEmail || acct?.email || null;
 
   const meetingUrl = resolveCircleMeetingUrl(
     row.sessionMeetUrl,
@@ -179,6 +193,29 @@ export async function fulfillCircleSeat(
         ? null // payment already handled; don't show pay instructions in welcome
         : null,
     });
+
+    // Heads-up to the practitioner — best-effort, never blocks the seat. So she
+    // learns about a sign-up without opening the app. Runs for the single
+    // welcome-claim winner above, so it fires exactly once per attendee.
+    if (practitionerNotifyTo) {
+      try {
+        await sendCircleReservationNotifyEmail({
+          to: practitionerNotifyTo,
+          attendeeName: row.name,
+          attendeeEmail: row.email,
+          circleName: row.groupName,
+          whenLabel: formatSessionLong(
+            new Date(row.scheduledAt),
+            resolveTimeZone(settings?.timezone)
+          ),
+          paid: row.paid,
+          replyTo: row.email,
+        });
+      } catch (err) {
+        console.error("[circle] practitioner notify failed for", attendeeId, err);
+      }
+    }
+
     return { sent: true };
   } catch (err) {
     // Release the claim so a later retry can re-attempt.
