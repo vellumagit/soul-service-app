@@ -9,7 +9,7 @@
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, gt, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   groups,
@@ -35,6 +35,18 @@ function formatMoney(cents: number, currency: string): string {
   }).format(cents / 100);
 }
 
+// Compact label for the "prefer another week?" pills, in the practice zone.
+function formatPillDate(d: Date, timeZone: string): string {
+  return d.toLocaleString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone,
+  });
+}
+
 export default async function CircleSignupPage({
   params,
   searchParams,
@@ -48,6 +60,7 @@ export default async function CircleSignupPage({
   const rows = await db
     .select({
       sessionId: groupSessions.id,
+      groupId: groupSessions.groupId,
       groupName: groups.name,
       groupDescription: groups.description,
       paymentInstructions: groups.paymentInstructions,
@@ -97,6 +110,41 @@ export default async function CircleSignupPage({
     session.priceCents > 0 &&
     !!session.stripeChargesEnabled;
 
+  const tz = resolveTimeZone(session.timezone);
+
+  // Other upcoming dates of the SAME Circle, so a visitor who landed on the
+  // soonest one can jump to a week that suits them. Only surface dates that
+  // still have a seat; cap the list so it stays a quick glance.
+  const otherRows = await db
+    .select({
+      id: groupSessions.id,
+      scheduledAt: groupSessions.scheduledAt,
+      capacity: groupSessions.capacity,
+      takenCount: sql<number>`(
+        SELECT COUNT(*)::int FROM ${groupAttendees}
+        WHERE ${groupAttendees.groupSessionId} = ${groupSessions.id}
+          AND ${groupAttendees.status} <> 'cancelled'
+      )`,
+    })
+    .from(groupSessions)
+    .where(
+      and(
+        eq(groupSessions.groupId, session.groupId),
+        eq(groupSessions.status, "scheduled"),
+        gt(groupSessions.scheduledAt, new Date()),
+        ne(groupSessions.id, session.sessionId)
+      )
+    )
+    .orderBy(groupSessions.scheduledAt)
+    .limit(8);
+  const otherDates = otherRows
+    .map((r) => ({
+      id: r.id,
+      scheduledAt: new Date(r.scheduledAt),
+      spotsLeft: Math.max(0, r.capacity - r.takenCount),
+    }))
+    .filter((r) => r.spotsLeft > 0);
+
   return (
     <>
       <TimeOfDayProvider />
@@ -145,7 +193,7 @@ export default async function CircleSignupPage({
               )}
             </h2>
             <p className="p-lg" style={{ marginBottom: 4 }}>
-              {formatSessionLong(scheduledAt, resolveTimeZone(session.timezone))}
+              {formatSessionLong(scheduledAt, tz)}
             </p>
             <p
               style={{
@@ -178,6 +226,49 @@ export default async function CircleSignupPage({
               >
                 {session.groupDescription}
               </p>
+            )}
+
+            {otherDates.length > 0 && (
+              <div style={{ marginTop: 26 }}>
+                <p
+                  style={{
+                    fontSize: 12,
+                    color: "var(--land-ink-soft)",
+                    fontFamily: "var(--font-mono, monospace)",
+                    letterSpacing: "0.04em",
+                    marginBottom: 12,
+                  }}
+                >
+                  Prefer another week? Choose a date:
+                </p>
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 8,
+                    justifyContent: "center",
+                  }}
+                >
+                  {otherDates.map((d) => (
+                    <Link
+                      key={d.id}
+                      href={`/circles/${d.id}`}
+                      style={{
+                        fontSize: 13,
+                        padding: "7px 14px",
+                        borderRadius: 999,
+                        border: "1px solid rgba(176, 92, 54, 0.28)",
+                        background: "rgba(255, 251, 245, 0.65)",
+                        color: "var(--land-clay-deep)",
+                        textDecoration: "none",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {formatPillDate(d.scheduledAt, tz)}
+                    </Link>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
 
