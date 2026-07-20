@@ -171,7 +171,7 @@ export function EditGroupDialog({
               <span className="block text-[11px] text-ink-500 italic mt-0.5">
                 On = scheduled sessions appear in &ldquo;Upcoming Circles&rdquo;
                 on svit.live. Off = private (the public page 404s); useful for
-                invite-only groups.
+                invite-only circles.
               </span>
             </span>
           </label>

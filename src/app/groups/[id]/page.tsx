@@ -121,7 +121,7 @@ export default async function GroupDetailPage({
   return (
     <AppShell
       breadcrumb={[
-        { label: "Groups", href: "/groups" },
+        { label: "Circles", href: "/groups" },
         { label: group.name },
       ]}
       rightAction={<QuickActions clients={clientsList} />}

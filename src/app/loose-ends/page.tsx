@@ -254,7 +254,7 @@ function GroupSignupsSection({ rows }: { rows: GroupSignupRow[] }) {
           className="serif-italic text-xl text-plum-700"
           style={{ fontWeight: 400 }}
         >
-          Group sign-ups
+          Circle sign-ups
         </h2>
         <span
           className="text-[10px] uppercase tracking-wider font-mono px-2 py-0.5 rounded"

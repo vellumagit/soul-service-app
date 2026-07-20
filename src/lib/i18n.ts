@@ -122,7 +122,7 @@ const en: Record<TranslationKey, string> = {
   // Nav
   "nav.today": "Today",
   "nav.clients": "Clients",
-  "nav.groups": "Groups",
+  "nav.groups": "Circles",
   "nav.library": "Library",
   "nav.calendar": "Calendar",
   "nav.payments": "Payments",
@@ -204,7 +204,7 @@ const ru: Record<TranslationKey, string> = {
   // Nav
   "nav.today": "Сегодня",
   "nav.clients": "Клиенты",
-  "nav.groups": "Группы",
+  "nav.groups": "Круги",
   "nav.library": "Библиотека",
   "nav.calendar": "Календарь",
   "nav.payments": "Платежи",
@@ -286,7 +286,7 @@ const uk: Record<TranslationKey, string> = {
   // Nav
   "nav.today": "Сьогодні",
   "nav.clients": "Клієнти",
-  "nav.groups": "Групи",
+  "nav.groups": "Кола",
   "nav.library": "Бібліотека",
   "nav.calendar": "Календар",
   "nav.payments": "Платежі",

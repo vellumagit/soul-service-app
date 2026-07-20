@@ -56,7 +56,7 @@ export default async function GroupsPage() {
 
   return (
     <AppShell
-      breadcrumb={[{ label: "Groups" }]}
+      breadcrumb={[{ label: "Circles" }]}
       rightAction={<QuickActions clients={clientsList} />}
       userEmail={email}
       locale={locale}
@@ -67,10 +67,10 @@ export default async function GroupsPage() {
             className="text-3xl md:text-4xl text-ink-900 serif mb-1"
             style={{ fontWeight: 500, letterSpacing: "-0.015em" }}
           >
-            Groups
+            Circles
           </h1>
           <p className="text-sm text-ink-500 italic serif-italic">
-            The Circle and any other group offerings you hold.
+            The Circle and any other circle offerings you hold.
           </p>
         </div>
         <NewGroupDialog />
@@ -82,11 +82,11 @@ export default async function GroupsPage() {
             className="serif-italic text-lg text-plum-700 mb-2"
             style={{ fontWeight: 400 }}
           >
-            No groups yet.
+            No circles yet.
           </p>
           <p className="text-sm text-ink-500 leading-relaxed">
-            Click <strong>New group</strong> to create The Circle or any
-            other recurring group offering. Once you schedule sessions
+            Click <strong>New circle</strong> to create The Circle or any
+            other recurring circle offering. Once you schedule sessions
             under it, they&apos;ll appear on your storefront for visitors
             to sign up.
           </p>

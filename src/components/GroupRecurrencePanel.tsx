@@ -94,7 +94,7 @@ export function GroupRecurrencePanel({
 
       <p className="text-[11px] text-ink-500 italic mt-3">
         Times are in your practice timezone (Settings → Your business). Sessions
-        use this group&apos;s default capacity, duration, and price; the welcome
+        use this circle&apos;s default capacity, duration, and price; the welcome
         email uses your standing Circle room link.
       </p>
 

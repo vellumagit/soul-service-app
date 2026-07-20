@@ -18,12 +18,12 @@ export function NewGroupDialog() {
         onClick={() => setOpen(true)}
         className="px-3 py-2 text-sm bg-ink-900 hover:bg-ink-800 text-white rounded-md font-medium"
       >
-        + New group
+        + New circle
       </button>
       <Modal
         open={open}
         onClose={() => setOpen(false)}
-        title="New group"
+        title="New circle"
         size="md"
       >
         <form action={createGroup} className="space-y-4">
@@ -53,7 +53,7 @@ export function NewGroupDialog() {
               name="description"
               rows={3}
               maxLength={4000}
-              placeholder="A guided weekly group for women carrying a lot — one theme each week, gently held."
+              placeholder="A guided weekly circle for women carrying a lot — one theme each week, gently held."
               className="mt-1.5 w-full px-3 py-2 text-sm border border-ink-200 rounded-md bg-white resize-y"
             />
           </label>
@@ -163,7 +163,7 @@ export function NewGroupDialog() {
               type="submit"
               className="px-4 py-2 text-sm bg-plum-700 hover:bg-plum-600 text-white rounded-md font-medium"
             >
-              Create group
+              Create circle
             </button>
           </div>
         </form>
