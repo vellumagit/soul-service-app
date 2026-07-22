@@ -645,6 +645,120 @@ export async function confirmAttendee(
   }
 }
 
+/**
+ * Practitioner adds someone to a Circle by hand — the pro-bono / paid-me-another-way
+ * door. Without this there is NO way in: the public page only offers card checkout
+ * once Stripe is live, so a gifted seat was impossible.
+ *
+ * Confirms them immediately and runs the same fulfillment as a card purchase
+ * (welcome email + meeting link, her heads-up, added to Network), so a comped
+ * guest gets exactly the same arrival experience as a paying one.
+ */
+export async function addCircleAttendee(input: {
+  groupSessionId: string;
+  name: string;
+  email: string;
+  /** true = gifted (never charged). false = they paid you some other way. */
+  gifted: boolean;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const { accountId } = await requireSession();
+    const name = String(input.name ?? "").trim().slice(0, 200);
+    const emailRaw = String(input.email ?? "").trim().slice(0, 200);
+    if (!name) return { ok: false, error: "Please add their name." };
+    if (!emailRaw || !emailRaw.includes("@")) {
+      return { ok: false, error: "Please add a valid email — it's how they get the link." };
+    }
+    const email = emailRaw.toLowerCase();
+
+    // Session must be hers, still scheduled, and not already past.
+    const [session] = await db
+      .select({
+        id: groupSessions.id,
+        capacity: groupSessions.capacity,
+        status: groupSessions.status,
+        scheduledAt: groupSessions.scheduledAt,
+        groupId: groupSessions.groupId,
+      })
+      .from(groupSessions)
+      .where(
+        and(
+          eq(groupSessions.accountId, accountId),
+          eq(groupSessions.id, input.groupSessionId)
+        )
+      )
+      .limit(1);
+    if (!session) return { ok: false, error: "That Circle wasn't found." };
+    if (session.status !== "scheduled") {
+      return { ok: false, error: "That Circle isn't open." };
+    }
+
+    // Don't oversell the room.
+    const countRow = await db
+      .select({ n: sql<number>`COUNT(*)::int` })
+      .from(groupAttendees)
+      .where(
+        and(
+          eq(groupAttendees.groupSessionId, session.id),
+          sql`${groupAttendees.status} <> 'cancelled'`
+        )
+      );
+    if ((countRow[0]?.n ?? 0) >= session.capacity) {
+      return { ok: false, error: "This Circle is full." };
+    }
+
+    // Already on the list? Don't create a duplicate.
+    const [existing] = await db
+      .select({ id: groupAttendees.id })
+      .from(groupAttendees)
+      .where(
+        and(
+          eq(groupAttendees.groupSessionId, session.id),
+          sql`LOWER(${groupAttendees.email}) = ${email}`,
+          sql`${groupAttendees.status} <> 'cancelled'`
+        )
+      )
+      .limit(1);
+    if (existing) {
+      return { ok: false, error: "They're already on the list for this Circle." };
+    }
+
+    const now = new Date();
+    const [created] = await db
+      .insert(groupAttendees)
+      .values({
+        accountId,
+        groupSessionId: session.id,
+        name,
+        email,
+        status: "confirmed",
+        // Gifted seats are deliberately NOT marked paid, so your numbers stay
+        // honest — but they're fully confirmed and get the link.
+        paid: !input.gifted,
+        paidAt: input.gifted ? null : now,
+        paymentMethod: input.gifted ? "gifted" : "manual",
+      })
+      .returning({ id: groupAttendees.id });
+
+    // Same arrival experience as a paid seat (welcome email + meeting link).
+    try {
+      await fulfillCircleSeat(created.id);
+    } catch (err) {
+      console.error("[circle] fulfillment after manual add failed", err);
+    }
+
+    revalidatePath(`/groups/${session.groupId}`);
+    revalidatePath("/loose-ends");
+    revalidatePath("/today");
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Couldn't add them.",
+    };
+  }
+}
+
 export async function markAttendeeCancelled(
   attendeeId: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {

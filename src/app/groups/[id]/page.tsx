@@ -16,6 +16,7 @@ import { ScheduleGroupSessionDialog } from "@/components/ScheduleGroupSessionDia
 import { GroupAttendeeRow } from "@/components/GroupAttendeeRow";
 import { CancelGroupSessionButton } from "@/components/CancelGroupSessionButton";
 import { GroupRecurrencePanel } from "@/components/GroupRecurrencePanel";
+import { AddCircleAttendeeInline } from "@/components/AddCircleAttendeeInline";
 import { EditGroupDialog } from "@/components/EditGroupDialog";
 
 export const dynamic = "force-dynamic";
@@ -281,9 +282,12 @@ export default async function GroupDetailPage({
                   </header>
 
                   {attendees.length === 0 ? (
-                    <p className="text-xs text-ink-500 italic mt-3">
-                      No sign-ups yet. Share the public link to start.
-                    </p>
+                    <>
+                      <p className="text-xs text-ink-500 italic mt-3">
+                        No sign-ups yet. Share the public link to start.
+                      </p>
+                      <AddCircleAttendeeInline groupSessionId={s.id} />
+                    </>
                   ) : (
                     <div className="space-y-2 mt-3">
                       {pending.length > 0 && (
@@ -324,6 +328,7 @@ export default async function GroupDetailPage({
                           ))}
                         </>
                       )}
+                      <AddCircleAttendeeInline groupSessionId={s.id} />
                     </div>
                   )}
                 </article>

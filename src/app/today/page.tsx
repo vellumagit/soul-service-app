@@ -19,6 +19,7 @@ import {
   getSetupStatus,
   getTodaysAnniversaries,
   getCirclesForToday,
+  getPendingCircleApprovalsCount,
   listClientsForPicker,
 } from "@/db/queries";
 import { OnThisDayCard } from "@/components/OnThisDayCard";
@@ -37,6 +38,7 @@ export default async function HomePage() {
     setupStatus,
     anniversaries,
     todayCircles,
+    pendingApprovals,
   ] = await Promise.all([
     getDashboardData(accountId),
     listClientsForPicker(accountId),
@@ -45,6 +47,7 @@ export default async function HomePage() {
     getSetupStatus(accountId),
     getTodaysAnniversaries(accountId),
     getCirclesForToday(accountId),
+    getPendingCircleApprovalsCount(accountId),
   ]);
 
   const locale = asLocale(settings.uiLanguage);
@@ -66,6 +69,39 @@ export default async function HomePage() {
         </h1>
         <p className="text-sm text-ink-500 mt-1">{fullDate(new Date())}</p>
       </div>
+
+      {/* PEOPLE WAITING ON HER. Deliberately the loudest thing on the page —
+          someone has asked for a seat and is sitting in limbo until she acts.
+          A quiet sidebar pill wasn't enough. */}
+      {pendingApprovals > 0 && (
+        <Link
+          href="/loose-ends"
+          className="block mb-6 rounded-lg p-4 border-l-4 no-underline hover:brightness-[0.98] transition"
+          style={{
+            background: "var(--color-honey-50, #fbf3e4)",
+            borderColor: "var(--color-honey-700, #b05c36)",
+          }}
+        >
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <div
+                className="text-base text-ink-900"
+                style={{ fontWeight: 600 }}
+              >
+                {pendingApprovals === 1
+                  ? "1 person is waiting on you to approve their Circle seat"
+                  : `${pendingApprovals} people are waiting on you to approve their Circle seats`}
+              </div>
+              <div className="text-[13px] text-ink-600 mt-0.5">
+                They can&apos;t get the meeting link until you confirm them.
+              </div>
+            </div>
+            <span className="text-sm font-medium text-honey-700 whitespace-nowrap">
+              Review now →
+            </span>
+          </div>
+        </Link>
+      )}
 
       {/* Circles gathering today — her doorway into the room, with the roster.
           Sits up top because it's time-sensitive on the day. */}

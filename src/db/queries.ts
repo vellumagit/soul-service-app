@@ -1716,8 +1716,10 @@ export async function getLooseEnds(accountId: string): Promise<LooseEnds> {
       and(
         eq(groupAttendees.accountId, accountId),
         sql`${groupAttendees.status} <> 'cancelled'`,
-        // Either pending OR confirmed-but-unpaid — both are loose ends.
-        sql`(${groupAttendees.status} = 'pending' OR ${groupAttendees.paid} = FALSE)`,
+        // Either pending OR confirmed-but-unpaid — both are loose ends. A
+        // GIFTED seat is deliberately unpaid and already confirmed, so it must
+        // never nag her here.
+        sql`(${groupAttendees.status} = 'pending' OR (${groupAttendees.paid} = FALSE AND ${groupAttendees.paymentMethod} IS DISTINCT FROM 'gifted'))`,
         eq(groupSessions.status, "scheduled"),
         gte(groupSessions.scheduledAt, now)
       )
@@ -1848,6 +1850,36 @@ export async function getLooseEnds(accountId: string): Promise<LooseEnds> {
     productPurchases: productPurchaseList,
     totalCount,
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Circle approvals waiting on her — powers the loud banner on Today
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** How many people are waiting to be approved onto an upcoming Circle.
+ *  Same rule as the Loose Ends "Circle sign-ups" list: still pending, or
+ *  confirmed-but-unpaid. Gifted seats are excluded — they're intentional. */
+export async function getPendingCircleApprovalsCount(
+  accountId: string
+): Promise<number> {
+  const now = new Date();
+  const rows = await db
+    .select({ n: sql<number>`COUNT(*)::int` })
+    .from(groupAttendees)
+    .innerJoin(
+      groupSessions,
+      eq(groupSessions.id, groupAttendees.groupSessionId)
+    )
+    .where(
+      and(
+        eq(groupAttendees.accountId, accountId),
+        sql`${groupAttendees.status} <> 'cancelled'`,
+        sql`(${groupAttendees.status} = 'pending' OR (${groupAttendees.paid} = FALSE AND ${groupAttendees.paymentMethod} IS DISTINCT FROM 'gifted'))`,
+        eq(groupSessions.status, "scheduled"),
+        gte(groupSessions.scheduledAt, now)
+      )
+    );
+  return rows[0]?.n ?? 0;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
