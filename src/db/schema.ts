@@ -1156,6 +1156,10 @@ export const groupSessions = pgTable(
     recallBotId: text("recall_bot_id"),
     recallBotStatus: text("recall_bot_status"),
     recallTranscriptReceivedAt: timestamp("recall_transcript_received_at"),
+    /** Set when the "your Circle starts soon" email goes to the PRACTITIONER.
+     *  One per occurrence (attendees are stamped individually), so she can't
+     *  be double-emailed by repeat cron runs. */
+    hostRemindedAt: timestamp("host_reminded_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },

@@ -1851,6 +1851,83 @@ export async function getLooseEnds(accountId: string): Promise<LooseEnds> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Circles happening today — powers the "Walk into the Circle" card on Today
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type TodayCircleRow = {
+  sessionId: string;
+  groupId: string;
+  groupName: string;
+  scheduledAt: Date;
+  /** The session's own link; caller falls back to her standing circle room. */
+  meetUrl: string | null;
+  attendees: { name: string; paid: boolean }[];
+};
+
+/** Circles worth showing in the doorway: from 90 minutes ago (so she can still
+ *  step in if she's running late) through the next 14 hours. */
+export async function getCirclesForToday(
+  accountId: string
+): Promise<TodayCircleRow[]> {
+  const now = new Date();
+  const from = new Date(now.getTime() - 90 * 60 * 1000);
+  const to = new Date(now.getTime() + 14 * 60 * 60 * 1000);
+
+  const rows = await db
+    .select({
+      sessionId: groupSessions.id,
+      groupId: groupSessions.groupId,
+      groupName: groups.name,
+      scheduledAt: groupSessions.scheduledAt,
+      meetUrl: groupSessions.meetUrl,
+    })
+    .from(groupSessions)
+    .innerJoin(groups, eq(groups.id, groupSessions.groupId))
+    .where(
+      and(
+        eq(groupSessions.accountId, accountId),
+        eq(groupSessions.status, "scheduled"),
+        gte(groupSessions.scheduledAt, from),
+        lte(groupSessions.scheduledAt, to)
+      )
+    )
+    .orderBy(asc(groupSessions.scheduledAt));
+  if (rows.length === 0) return [];
+
+  const ids = rows.map((r) => r.sessionId);
+  const people = await db
+    .select({
+      groupSessionId: groupAttendees.groupSessionId,
+      name: groupAttendees.name,
+      paid: groupAttendees.paid,
+    })
+    .from(groupAttendees)
+    .where(
+      and(
+        inArray(groupAttendees.groupSessionId, ids),
+        sql`${groupAttendees.status} <> 'cancelled'`
+      )
+    )
+    .orderBy(asc(groupAttendees.createdAt));
+
+  const bySession = new Map<string, { name: string; paid: boolean }[]>();
+  for (const p of people) {
+    const list = bySession.get(p.groupSessionId) ?? [];
+    list.push({ name: p.name, paid: p.paid });
+    bySession.set(p.groupSessionId, list);
+  }
+
+  return rows.map((r) => ({
+    sessionId: r.sessionId,
+    groupId: r.groupId,
+    groupName: r.groupName,
+    scheduledAt: new Date(r.scheduledAt),
+    meetUrl: r.meetUrl,
+    attendees: bySession.get(r.sessionId) ?? [],
+  }));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Year in review — "Your practice this year"
 // ─────────────────────────────────────────────────────────────────────────────
 

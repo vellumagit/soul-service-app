@@ -11,7 +11,7 @@
 // own reminder-hour settings + Resend config.
 import "server-only";
 
-import { and, eq, gte, gt, isNull, lte, lt, sql } from "drizzle-orm";
+import { and, asc, eq, gte, gt, isNull, lte, lt, sql } from "drizzle-orm";
 import {
   db,
   sessions,
@@ -114,6 +114,19 @@ export async function processReminders(): Promise<ReminderRunStats> {
         settingsRow,
         now
       );
+
+      // "Your Circle starts soon" — to HER, once per occurrence, on her own
+      // practitioner lead time. Prefers her business/support address.
+      const hostNotifyTo = settingsRow.businessEmail || account.email;
+      if (practHours > 0 && hostNotifyTo) {
+        stats.circleRemindersSent += await sendDueCircleHostReminders(
+          account.id,
+          settingsRow,
+          hostNotifyTo,
+          practHours,
+          now
+        );
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
       stats.errors.push(`account ${account.id}: ${msg}`);
@@ -491,6 +504,92 @@ async function sendDueCircleReminders(
           err
         );
       }
+    }
+  }
+
+  return count;
+}
+
+/**
+ * "Your Circle starts soon" — to the PRACTITIONER, once per occurrence, using
+ * her own practitionerReminderHours lead time. Gives her the room link + who's
+ * coming so she can start without opening the app. Stamped via
+ * group_sessions.host_reminded_at so repeat cron runs can't double-send.
+ */
+async function sendDueCircleHostReminders(
+  accountId: string,
+  settings: typeof practitionerSettings.$inferSelect,
+  notifyTo: string,
+  leadHours: number,
+  now: Date
+): Promise<number> {
+  const windowEnd = new Date(now.getTime() + leadHours * 60 * 60 * 1000);
+
+  const rows = await db
+    .select({
+      sessionId: groupSessions.id,
+      scheduledAt: groupSessions.scheduledAt,
+      sessionMeetUrl: groupSessions.meetUrl,
+      groupName: groups.name,
+    })
+    .from(groupSessions)
+    .innerJoin(groups, eq(groups.id, groupSessions.groupId))
+    .where(
+      and(
+        eq(groupSessions.accountId, accountId),
+        eq(groupSessions.status, "scheduled"),
+        isNull(groupSessions.hostRemindedAt),
+        gt(groupSessions.scheduledAt, now),
+        lte(groupSessions.scheduledAt, windowEnd)
+      )
+    );
+
+  let count = 0;
+  for (const row of rows) {
+    try {
+      // Who's coming (everyone not cancelled), for the roster in the email.
+      const attendees = await db
+        .select({
+          name: groupAttendees.name,
+          paid: groupAttendees.paid,
+        })
+        .from(groupAttendees)
+        .where(
+          and(
+            eq(groupAttendees.groupSessionId, row.sessionId),
+            sql`${groupAttendees.status} <> 'cancelled'`
+          )
+        )
+        .orderBy(asc(groupAttendees.createdAt));
+
+      const meetingUrl = resolveCircleMeetingUrl(
+        row.sessionMeetUrl,
+        settings.circleRoomUrl ?? null
+      );
+
+      const { sendCircleHostReminderEmail } = await import("./resend");
+      await sendCircleHostReminderEmail({
+        to: notifyTo,
+        circleName: row.groupName,
+        whenLabel: formatSessionLong(
+          new Date(row.scheduledAt),
+          resolveTimeZone(settings.timezone)
+        ),
+        meetingUrl,
+        attendees: attendees.map((a) => ({ name: a.name, paid: a.paid })),
+        practitionerName: settings.practitionerName ?? null,
+      });
+
+      await db
+        .update(groupSessions)
+        .set({ hostRemindedAt: now })
+        .where(eq(groupSessions.id, row.sessionId));
+      count++;
+    } catch (err) {
+      console.error(
+        `[reminders] circle host reminder failed for session ${row.sessionId}:`,
+        err
+      );
     }
   }
 

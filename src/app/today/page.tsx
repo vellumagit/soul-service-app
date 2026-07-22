@@ -9,12 +9,16 @@ import { CapacityStrip } from "@/components/CapacityStrip";
 import { SetupChecklist } from "@/components/SetupChecklist";
 import { JoinMeetButton } from "@/components/JoinMeetButton";
 import { WalkInButton } from "@/components/WalkInButton";
+import { CircleTodayCard } from "@/components/CircleTodayCard";
+import { resolveCircleMeetingUrl } from "@/lib/circle-fulfillment";
+import { formatSessionLong, resolveTimeZone } from "@/lib/timezone";
 import {
   getDashboardData,
   getCapacity,
   getSettings,
   getSetupStatus,
   getTodaysAnniversaries,
+  getCirclesForToday,
   listClientsForPicker,
 } from "@/db/queries";
 import { OnThisDayCard } from "@/components/OnThisDayCard";
@@ -25,17 +29,26 @@ export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   const { email, accountId } = await requireSession();
-  const [data, clientsList, capacity, settings, setupStatus, anniversaries] =
-    await Promise.all([
-      getDashboardData(accountId),
-      listClientsForPicker(accountId),
-      getCapacity(accountId),
-      getSettings(accountId),
-      getSetupStatus(accountId),
-      getTodaysAnniversaries(accountId),
-    ]);
+  const [
+    data,
+    clientsList,
+    capacity,
+    settings,
+    setupStatus,
+    anniversaries,
+    todayCircles,
+  ] = await Promise.all([
+    getDashboardData(accountId),
+    listClientsForPicker(accountId),
+    getCapacity(accountId),
+    getSettings(accountId),
+    getSetupStatus(accountId),
+    getTodaysAnniversaries(accountId),
+    getCirclesForToday(accountId),
+  ]);
 
   const locale = asLocale(settings.uiLanguage);
+  const practiceTz = resolveTimeZone(settings.timezone);
   const upcomingToday = data.todaySessions.filter(
     (s) => s.status === "scheduled"
   );
@@ -53,6 +66,24 @@ export default async function HomePage() {
         </h1>
         <p className="text-sm text-ink-500 mt-1">{fullDate(new Date())}</p>
       </div>
+
+      {/* Circles gathering today — her doorway into the room, with the roster.
+          Sits up top because it's time-sensitive on the day. */}
+      {todayCircles.length > 0 && (
+        <div className="space-y-3 mb-6">
+          {todayCircles.map((circle) => (
+            <CircleTodayCard
+              key={circle.sessionId}
+              circle={circle}
+              meetingUrl={resolveCircleMeetingUrl(
+                circle.meetUrl,
+                settings.circleRoomUrl ?? null
+              )}
+              whenLabel={formatSessionLong(circle.scheduledAt, practiceTz)}
+            />
+          ))}
+        </div>
+      )}
 
       {/* Setup checklist auto-hides when all 4 steps are done */}
       <SetupChecklist status={setupStatus} clients={clientsList} />

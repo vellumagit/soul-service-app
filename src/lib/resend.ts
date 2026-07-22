@@ -473,6 +473,65 @@ ${action}`;
   });
 }
 
+/** "Your Circle starts soon" — to the PRACTITIONER, with the room link and who's
+ *  coming, so she can start without opening the app. One per occurrence. */
+export async function sendCircleHostReminderEmail(input: {
+  to: string;
+  circleName: string;
+  whenLabel: string;
+  meetingUrl: string | null;
+  attendees: { name: string; paid: boolean }[];
+  practitionerName: string | null;
+}): Promise<void> {
+  const n = input.attendees.length;
+  const paidCount = input.attendees.filter((a) => a.paid).length;
+  const subject = `Starting soon — ${input.circleName}`;
+  const roster =
+    n === 0
+      ? "No one has reserved a seat yet."
+      : input.attendees
+          .map((a) => `· ${a.name}${a.paid ? "" : " (unpaid)"}`)
+          .join("\n");
+  const text = `${input.circleName} gathers soon.
+
+· When: ${input.whenLabel}
+· ${n} ${n === 1 ? "person" : "people"} coming (${paidCount} paid)
+${input.meetingUrl ? `\nYour room:\n${input.meetingUrl}\n` : "\nNo meeting link set — add one in Settings → circle room link.\n"}
+Who's coming:
+${roster}
+
+Take a breath. They're lucky to have you.`;
+  const html = `
+<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#faf6f0;font-family:Georgia,'Times New Roman',serif;color:#3d342e;">
+    <div style="max-width:480px;margin:48px auto;padding:32px 30px;background:#fdf9f1;border-radius:12px;border:1px solid #ead9c1;">
+      <p style="margin:0 0 18px 0;font-size:16px;line-height:1.5;"><strong>${escapeHtml(input.circleName)}</strong> gathers soon.</p>
+      <p style="margin:0 0 6px 0;font-size:14px;color:#564a42;"><strong>When:</strong> ${escapeHtml(input.whenLabel)}</p>
+      <p style="margin:0 0 6px 0;font-size:14px;color:#564a42;"><strong>Coming:</strong> ${n} ${n === 1 ? "person" : "people"} (${paidCount} paid)</p>
+      ${
+        input.meetingUrl
+          ? `<a href="${escapeHtml(input.meetingUrl)}" style="display:inline-block;margin:18px 0 6px 0;background:#5a3f4f;color:#fdf9f1;text-decoration:none;font-size:14px;font-weight:500;padding:12px 22px;border-radius:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">Open your room</a>`
+          : `<p style="margin:16px 0 0 0;font-size:13px;color:#a3402a;">No meeting link set — add one in Settings → circle room link.</p>`
+      }
+      <p style="margin:22px 0 6px 0;font-size:12px;text-transform:uppercase;letter-spacing:0.08em;color:#8a7d71;">Who's coming</p>
+      <p style="margin:0;font-size:14px;line-height:1.7;color:#564a42;">${
+        n === 0
+          ? "<em>No one has reserved a seat yet.</em>"
+          : input.attendees
+              .map(
+                (a) =>
+                  `${escapeHtml(a.name)}${a.paid ? "" : ' <span style="color:#a3402a;font-size:12px;">(unpaid)</span>'}`
+              )
+              .join("<br>")
+      }</p>
+      <p style="margin:22px 0 0 0;padding-top:16px;border-top:1px solid #ead9c1;font-size:13px;font-style:italic;color:#786b60;">Take a breath. They're lucky to have you.</p>
+    </div>
+  </body>
+</html>`.trim();
+  await sendEmail({ to: input.to, subject, html, text });
+}
+
 function circleEmailHtml(p: {
   greeting: string;
   intro: string;
