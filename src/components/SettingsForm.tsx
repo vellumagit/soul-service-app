@@ -8,6 +8,7 @@ import type { PractitionerSettings } from "@/db/schema";
 import { SabbathDayPicker } from "./SabbathDayPicker";
 import { AvailabilityPanel } from "./AvailabilityPanel";
 import { LandingPortraitField } from "./LandingPortraitField";
+import { LandingCopyEditor } from "./LandingCopyEditor";
 import { COMMON_TIME_ZONES } from "@/lib/timezone";
 import {
   LOCALE_LABELS,
@@ -143,59 +144,9 @@ export function SettingsForm({ settings }: { settings: PractitionerSettings }) {
       {/* Landing page copy */}
       <Section
         title="Landing page"
-        subtitle="What visitors see at your public URL. Leave blank to use the soft default copy — replace with your own words whenever you're ready."
+        subtitle="The words on your public storefront — in English and Ukrainian. Anything you leave blank keeps the wording that's already there."
       >
-        <Field
-          label="Tagline"
-          hint="One sentence under your name. Sets the tone."
-        >
-          <input
-            name="landingTagline"
-            defaultValue={settings.landingTagline ?? ""}
-            maxLength={200}
-            className={inputCls}
-            placeholder="One-on-one soul work, held with care…"
-          />
-        </Field>
-        <Field
-          label="About"
-          hint="A short paragraph — who you work with, what you bring."
-        >
-          <textarea
-            name="landingAbout"
-            defaultValue={settings.landingAbout ?? ""}
-            rows={4}
-            maxLength={2000}
-            className={`${inputCls} resize-y leading-relaxed`}
-            placeholder="I work with people moving through tender stretches…"
-          />
-        </Field>
-        <Field
-          label="How I work"
-          hint="The shape of a session — what the rhythm looks like."
-        >
-          <textarea
-            name="landingHowItWorks"
-            defaultValue={settings.landingHowItWorks ?? ""}
-            rows={4}
-            maxLength={2000}
-            className={`${inputCls} resize-y leading-relaxed`}
-            placeholder="We meet for an hour at a time…"
-          />
-        </Field>
-        <Field
-          label="What to expect"
-          hint="The longer arc — what working together looks like over time."
-        >
-          <textarea
-            name="landingWhatToExpect"
-            defaultValue={settings.landingWhatToExpect ?? ""}
-            rows={4}
-            maxLength={2000}
-            className={`${inputCls} resize-y leading-relaxed`}
-            placeholder="Not a quick fix. A steady relationship over time…"
-          />
-        </Field>
+        <LandingCopyEditor initial={settings.landingCopyOverrides ?? null} />
         <Field
           label="Portrait photo"
           hint="The photo in the “Who I am” section of your landing page. Upload one straight from your device — no need to host it anywhere. Leave blank for the soft placeholder."

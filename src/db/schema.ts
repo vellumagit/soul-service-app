@@ -607,10 +607,19 @@ export const practitionerSettings = pgTable("practitioner_settings", {
   // /settings. All optional; the landing page falls back to sensible
   // defaults if any are NULL so it stays presentable on day one before
   // she's written anything.
+  // LEGACY (pre-bilingual landing): these four are no longer rendered on the
+  // storefront. Superseded by landingCopyOverrides below. Kept only so old rows
+  // aren't destroyed; nothing reads or writes them.
   landingTagline: text("landing_tagline"),
   landingAbout: text("landing_about"),
   landingHowItWorks: text("landing_how_it_works"),
   landingWhatToExpect: text("landing_what_to_expect"),
+  /** Per-language storefront copy overrides: { en: {key: text}, uk: {...} }.
+   *  Blank/absent key → falls back to the hand-written landing-copy dictionary.
+   *  See src/lib/landing-overrides.ts for the editable field registry. */
+  landingCopyOverrides: jsonb("landing_copy_overrides").$type<
+    Record<string, Record<string, string>>
+  >(),
 
   // Availability config — drives smart scheduling in ScheduleSessionDialog
   // (conflict warnings against her Google Calendar) and the public

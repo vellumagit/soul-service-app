@@ -24,6 +24,7 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { getSettings } from "@/db/queries";
 import { requireSession } from "./session-cookies";
 import { isValidTimeZone, resolveTimeZone } from "./timezone";
+import { parseLandingOverridesFromForm } from "./landing-overrides";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Form helpers
@@ -2445,11 +2446,11 @@ export async function updateSettings(formData: FormData) {
       businessPhone: str(formData, "businessPhone"),
       businessAddress: str(formData, "businessAddress"),
       websiteUrl: str(formData, "websiteUrl"),
-      // Landing page copy — public-facing, edited from /settings.
-      landingTagline: str(formData, "landingTagline"),
-      landingAbout: str(formData, "landingAbout"),
-      landingHowItWorks: str(formData, "landingHowItWorks"),
-      landingWhatToExpect: str(formData, "landingWhatToExpect"),
+      // Storefront copy she edits from /settings, per language. Blank fields
+      // are dropped so the hand-written default shows through. (The old
+      // landingTagline/About/HowItWorks/WhatToExpect columns are legacy and no
+      // longer rendered — we intentionally no longer write them.)
+      landingCopyOverrides: parseLandingOverridesFromForm(formData),
       uiLanguage,
       defaultRateCents:
         defaultRate !== null ? Math.round(defaultRate * 100) : 13500,

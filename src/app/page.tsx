@@ -22,6 +22,7 @@ import { listUpcomingPublicGroupSessions } from "@/lib/group-actions";
 import { listPublishedProducts } from "@/lib/product-actions";
 import { getLandingCopy } from "@/lib/landing-copy";
 import { getLandingLang } from "@/lib/landing-lang";
+import { applyLandingOverrides } from "@/lib/landing-overrides";
 import { resolveTimeZone } from "@/lib/timezone";
 import "./landing.css";
 
@@ -50,7 +51,9 @@ export default async function LandingPage() {
   // theirs the same way (→ /portal).
 
   const lang = await getLandingLang();
-  const c = getLandingCopy(lang);
+  // Base = the hand-written dictionary; her Settings copy for this language is
+  // patched over it below (blank fields keep the default wording).
+  let c = getLandingCopy(lang);
 
   // Pull next available windows for the inquiry form — but ONLY when the
   // practitioner has opted in (Settings → Availability). Off → free-text
@@ -86,6 +89,7 @@ export default async function LandingPage() {
           circleSignupsOpen: practitionerSettings.circleSignupsOpen,
           landingPortraitUrl: practitionerSettings.landingPortraitUrl,
           timezone: practitionerSettings.timezone,
+          landingCopyOverrides: practitionerSettings.landingCopyOverrides,
         })
         .from(practitionerSettings)
         .where(eq(practitionerSettings.accountId, storefrontAccountId))
@@ -94,6 +98,8 @@ export default async function LandingPage() {
       circleSignupsOpen = cfg?.circleSignupsOpen ?? false;
       portraitUrl = cfg?.landingPortraitUrl?.trim() || null;
       practiceTz = resolveTimeZone(cfg?.timezone);
+      // Her Settings copy for THIS language wins over the dictionary default.
+      c = applyLandingOverrides(c, cfg?.landingCopyOverrides ?? null, lang);
       if (cfg?.showAvailability) {
         const windows = await getAvailableWindows(storefrontAccountId, {
           limit: 6,
