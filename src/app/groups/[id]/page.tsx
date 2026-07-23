@@ -118,6 +118,19 @@ export default async function GroupDetailPage({
     (s) =>
       s.status !== "scheduled" || new Date(s.scheduledAt).getTime() < now
   );
+  // Newest first — the most recent circle is the one she'd look for.
+  const pastSorted = [...past].sort(
+    (a, b) =>
+      new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime()
+  );
+  // "Held" = actually gathered people. Everything else (cancelled, or nobody
+  // signed up) is noise that shouldn't inflate the headline count.
+  const pastHeld = past.filter(
+    (s) => s.status !== "cancelled" && s.attendeeCount > 0
+  );
+  const pastQuiet = past.filter(
+    (s) => s.status === "cancelled" || s.attendeeCount === 0
+  );
 
   return (
     <AppShell
@@ -341,43 +354,74 @@ export default async function GroupDetailPage({
 
       {past.length > 0 && (
         <section>
-          <h2
-            className="serif text-xl text-ink-900 mb-3"
-            style={{ fontWeight: 500 }}
-          >
-            Past sessions
-          </h2>
-          <div className="space-y-2">
-            {past.map((s) => (
-              <div
-                key={s.id}
-                className="paper-card p-4 flex items-baseline justify-between gap-3 flex-wrap"
+          {/* Past sessions are history, not working surface — a weekly circle
+              adds one every week, so a flat list of full-width cards buries the
+              page within a couple of months. Collapsed by default, compact rows
+              inside, newest first, and the ones that actually gathered people
+              read louder than the cancelled/empty ones. */}
+          <details className="paper-card px-4 py-3 group">
+            <summary className="flex items-baseline gap-2 cursor-pointer list-none select-none">
+              <span
+                className="serif text-xl text-ink-900"
+                style={{ fontWeight: 500 }}
               >
-                <div>
-                  <div
-                    className="serif text-base text-ink-700"
-                    style={{ fontWeight: 500 }}
+                Past sessions
+              </span>
+              <span className="font-mono text-xs text-ink-400">
+                · {pastHeld.length} held
+                {pastQuiet.length > 0 && ` · ${pastQuiet.length} cancelled/empty`}
+              </span>
+              <span className="flex-1" />
+              <span className="text-xs text-plum-700 group-open:hidden">
+                Show
+              </span>
+              <span className="text-xs text-plum-700 hidden group-open:inline">
+                Hide
+              </span>
+            </summary>
+
+            <ol className="mt-3 border-t border-ink-100 divide-y divide-ink-100">
+              {pastSorted.map((s) => {
+                const quiet =
+                  s.status === "cancelled" || s.attendeeCount === 0;
+                return (
+                  <li
+                    key={s.id}
+                    className="flex items-baseline gap-3 py-2 text-sm flex-wrap"
                   >
-                    {formatWhen(new Date(s.scheduledAt), locale, practiceTz)}
-                    {s.status === "cancelled" && (
-                      <span className="ml-2 text-[10px] uppercase tracking-wider font-mono px-1.5 py-0.5 rounded bg-ink-100 text-ink-500">
+                    <span
+                      className={`font-mono text-xs w-44 shrink-0 ${
+                        quiet ? "text-ink-400" : "text-ink-700"
+                      }`}
+                    >
+                      {formatWhen(new Date(s.scheduledAt), locale, practiceTz)}
+                    </span>
+                    {s.status === "cancelled" ? (
+                      <span className="text-[10px] uppercase tracking-wider font-mono px-1.5 py-0.5 rounded bg-ink-100 text-ink-500">
                         cancelled
                       </span>
+                    ) : s.attendeeCount === 0 ? (
+                      <span className="text-xs text-ink-400 italic">
+                        no one signed up
+                      </span>
+                    ) : (
+                      <span className="text-xs text-ink-700">
+                        <strong style={{ fontWeight: 600 }}>
+                          {s.attendeeCount}
+                        </strong>{" "}
+                        came · {s.paidCount} paid
+                      </span>
                     )}
-                  </div>
-                  <div className="text-[11px] text-ink-500 font-mono mt-0.5">
-                    {s.attendeeCount} signed up · {s.paidCount} paid
                     {s.topic && (
-                      <>
-                        <span> · </span>
-                        <span className="italic">{s.topic}</span>
-                      </>
+                      <span className="text-xs text-ink-500 italic truncate">
+                        {s.topic}
+                      </span>
                     )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+                  </li>
+                );
+              })}
+            </ol>
+          </details>
         </section>
       )}
     </AppShell>
