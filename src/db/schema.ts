@@ -1215,6 +1215,10 @@ export const groupAttendees = pgTable(
     reminder1hSentAt: timestamp("reminder_1h_sent_at"),
     /** "Thank you + come again" email, sent once after the Circle ends. */
     postCircleSentAt: timestamp("post_circle_sent_at"),
+    /** Day-2 "go deeper one-to-one" invitation — the Circle→session
+     *  conversion email. Sent ~36h after a Circle ends, in the morning,
+     *  capped to once per 30 days per email address. */
+    deeperInviteSentAt: timestamp("deeper_invite_sent_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },

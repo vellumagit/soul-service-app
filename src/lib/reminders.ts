@@ -27,6 +27,7 @@ import {
   formatSessionLong,
   formatSessionShortDate,
   formatSessionShortTime,
+  zonedClock,
 } from "./timezone";
 
 // Anchor "now" once per run so all queries see the same moment
@@ -130,6 +131,14 @@ export async function processReminders(): Promise<ReminderRunStats> {
 
       // Post-Circle "thank you + come again" to each attendee after it ends.
       stats.circleRemindersSent += await sendDuePostCircleEmails(
+        account.id,
+        settingsRow,
+        now
+      );
+
+      // Day-2 "go deeper one-to-one" invitation — the Circle→session
+      // conversion email. Morning-gated, capped, and skips existing clients.
+      stats.circleRemindersSent += await sendDueCircleDeeperInvites(
         account.id,
         settingsRow,
         now
@@ -699,6 +708,129 @@ async function sendDuePostCircleEmails(
           err
         );
       }
+    }
+  }
+  return count;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Day-2 "go deeper one-to-one" invitation — the Circle→session conversion email
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Why this timing: the same-evening thank-you seals the experience (peak-end)
+// and deliberately doesn't sell. Conversion happens when whatever surfaced in
+// the Circle is STILL tugging a day or two later — so this lands on day-2
+// morning (9–11am practice time, ~36h after an evening circle), naming that
+// persistence as the reason to reach out. Primary CTA is a reply — a
+// conversation, not a purchase.
+//
+// Guard rails:
+//   - never sent to someone who already books 1-on-1 sessions (tone-deaf)
+//   - capped at one per 30 days per email address, so a weekly regular gets
+//     the thank-you weekly but this invitation only occasionally
+//   - eligibility window 30h–5d after the Circle ends, so a cron outage
+//     can't dump stale invites a week later
+
+async function sendDueCircleDeeperInvites(
+  accountId: string,
+  settings: typeof practitionerSettings.$inferSelect,
+  now: Date
+): Promise<number> {
+  // Morning gate, in HER practice timezone. The cron is hourly, so the first
+  // run inside the window picks up everyone eligible.
+  const tz = resolveTimeZone(settings.timezone);
+  const { hour } = zonedClock(now, tz);
+  if (hour < 9 || hour >= 11) return 0;
+
+  const rows = await db
+    .select({
+      attendeeId: groupAttendees.id,
+      name: groupAttendees.name,
+      email: groupAttendees.email,
+      groupName: groups.name,
+    })
+    .from(groupAttendees)
+    .innerJoin(
+      groupSessions,
+      eq(groupSessions.id, groupAttendees.groupSessionId)
+    )
+    .innerJoin(groups, eq(groups.id, groupSessions.groupId))
+    .where(
+      and(
+        eq(groupAttendees.accountId, accountId),
+        eq(groupAttendees.status, "confirmed"),
+        isNull(groupAttendees.deeperInviteSentAt),
+        sql`${groupAttendees.email} LIKE '%@%'`,
+        sql`${groupSessions.status} <> 'cancelled'`,
+        // Ended 30h–5d ago: day-2 for an evening circle, bounded so a cron
+        // outage can't send stale invites.
+        sql`${groupSessions.scheduledAt} + (${groupSessions.durationMinutes} * interval '1 minute') < now() - interval '30 hours'`,
+        sql`${groupSessions.scheduledAt} + (${groupSessions.durationMinutes} * interval '1 minute') > now() - interval '5 days'`,
+        // Skip anyone who's already a 1-on-1 client — "consider a session"
+        // to someone who books sessions reads as not knowing them.
+        sql`NOT EXISTS (
+          SELECT 1 FROM ${clients} c
+          JOIN ${sessions} s ON s.client_id = c.id
+          WHERE c.account_id = ${accountId}
+            AND LOWER(c.email) = LOWER(${groupAttendees.email})
+            AND s.status <> 'cancelled'
+        )`,
+        // Frequency cap: one invitation per address per 30 days, across all
+        // their attendances.
+        sql`NOT EXISTS (
+          SELECT 1 FROM ${groupAttendees} ga2
+          WHERE ga2.account_id = ${accountId}
+            AND LOWER(ga2.email) = LOWER(${groupAttendees.email})
+            AND ga2.deeper_invite_sent_at > now() - interval '30 days'
+        )`
+      )
+    );
+  if (rows.length === 0) return 0;
+
+  // "Ways to work together" ladder on the storefront — the 1-on-1 options.
+  const optionsUrl = `${circleBaseUrl()}/#ways`;
+
+  let count = 0;
+  // The 30-day cap is checked at SELECT time, so one address attending two
+  // eligible circles would pass twice in the same batch — dedupe here.
+  const seenThisBatch = new Set<string>();
+  for (const row of rows) {
+    if (!row.email) continue;
+    const emailKey = row.email.trim().toLowerCase();
+    if (seenThisBatch.has(emailKey)) continue;
+    seenThisBatch.add(emailKey);
+    // Claim atomically first so a crash mid-send can't double-email.
+    const claimed = await db
+      .update(groupAttendees)
+      .set({ deeperInviteSentAt: now })
+      .where(
+        and(
+          eq(groupAttendees.id, row.attendeeId),
+          isNull(groupAttendees.deeperInviteSentAt)
+        )
+      )
+      .returning({ id: groupAttendees.id });
+    if (claimed.length === 0) continue;
+    try {
+      const { sendCircleDeeperInviteEmail } = await import("./resend");
+      await sendCircleDeeperInviteEmail({
+        to: row.email,
+        attendeeName: row.name,
+        circleName: row.groupName,
+        optionsUrl,
+        practitionerName: settings.practitionerName ?? null,
+      });
+      count++;
+    } catch (err) {
+      // Release the claim so a later run can retry.
+      await db
+        .update(groupAttendees)
+        .set({ deeperInviteSentAt: null })
+        .where(eq(groupAttendees.id, row.attendeeId));
+      console.error(
+        `[reminders] deeper-invite email failed for attendee ${row.attendeeId}:`,
+        err
+      );
     }
   }
   return count;

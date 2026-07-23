@@ -8,7 +8,13 @@ import { AppShell } from "@/components/AppShell";
 import { QuickActions } from "@/components/QuickActions";
 import { requireSession } from "@/lib/session-cookies";
 import { db } from "@/db";
-import { groups, groupSessions, groupAttendees } from "@/db/schema";
+import {
+  groups,
+  groupSessions,
+  groupAttendees,
+  clients,
+  sessions,
+} from "@/db/schema";
 import { getSettings, listClientsForPicker } from "@/db/queries";
 import { asLocale } from "@/lib/i18n";
 import { resolveTimeZone } from "@/lib/timezone";
@@ -194,6 +200,29 @@ export default async function GroupDetailPage({
     }
     peopleMap.set(key, p);
   }
+  // Which attendees are ALREADY 1-on-1 clients — so the "warm" tag below only
+  // marks people who keep coming back but haven't crossed over yet. Those are
+  // the highest-value personal-note candidates in the whole funnel.
+  const clientEmailRows =
+    peopleMap.size > 0
+      ? await db
+          .selectDistinct({ email: clients.email })
+          .from(clients)
+          .innerJoin(sessions, eq(sessions.clientId, clients.id))
+          .where(
+            and(
+              eq(clients.accountId, accountId),
+              sql`${sessions.status} <> 'cancelled'`,
+              sql`${clients.email} IS NOT NULL`
+            )
+          )
+      : [];
+  const oneOnOneEmails = new Set(
+    clientEmailRows
+      .map((r) => (r.email ?? "").trim().toLowerCase())
+      .filter(Boolean)
+  );
+
   // Most-frequent first — the regulars rise to the top.
   const people = [...peopleMap.values()].sort(
     (a, b) => b.attended - a.attended || (b.lastAt ?? 0) - (a.lastAt ?? 0)
@@ -521,6 +550,22 @@ export default async function GroupDetailPage({
                     </span>
                   )}
                   <span className="flex-1" />
+                  {/* Warm = keeps coming back, hasn't gone 1-on-1. The single
+                      best personal-note candidate — an automated email is the
+                      floor, her own two lines are the ceiling. */}
+                  {p.attended >= 2 &&
+                    !oneOnOneEmails.has(p.email.trim().toLowerCase()) && (
+                      <span
+                        className="text-[10px] uppercase tracking-wider font-mono px-1.5 py-0.5 rounded"
+                        style={{
+                          background: "var(--color-honey-50, #fbf3e4)",
+                          color: "var(--color-honey-700, #b05c36)",
+                        }}
+                        title="Has come more than once and hasn't tried a one-to-one yet — a short personal note from you converts better than any automated email."
+                      >
+                        warm
+                      </span>
+                    )}
                   {p.coming && (
                     <span className="text-[10px] uppercase tracking-wider font-mono px-1.5 py-0.5 rounded bg-plum-50 text-plum-700">
                       coming

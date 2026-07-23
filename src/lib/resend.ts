@@ -388,6 +388,65 @@ And if something stirred that you'd like to follow one-to-one, just reply — I'
   });
 }
 
+/** Day-2 "go deeper" invitation — the Circle→1-on-1 conversion email.
+ *
+ *  Sent ~36h after a Circle ends, in the morning (see
+ *  sendDueCircleDeeperInvites for the window). Deliberately separate from the
+ *  same-evening thank-you: that one seals the experience (peak-end), this one
+ *  arrives when whatever surfaced is still tugging — and names that as the
+ *  reason to reach out. Primary CTA is a REPLY (a conversation, not a
+ *  purchase); the link to session options is the quieter second door. */
+export async function sendCircleDeeperInviteEmail(input: {
+  to: string;
+  attendeeName: string | null;
+  circleName: string;
+  optionsUrl: string;
+  practitionerName: string | null;
+}): Promise<void> {
+  const first = input.attendeeName?.split(" ")[0] ?? null;
+  const greeting = first ? `Hi ${first},` : "Hi,";
+  const signoff = input.practitionerName ?? "Svitlana";
+  const subject = "If the Circle is still with you";
+  const text = `${greeting}
+
+It was good to have you in ${input.circleName} this week.
+
+Sometimes a Circle opens something that doesn't finish when the call ends — a thread that keeps tugging a day or two later. If that's happening for you, it usually means it wants more room than a group evening can give it.
+
+That's what one-to-one work is for.
+
+The simplest way to start is to just reply to this note and tell me what's been sitting with you — I read every reply myself. Or, if you'd rather look first:
+
+${input.optionsUrl}
+
+Either way, no pressure. The Circle is always here.
+
+— ${signoff}`;
+  const html = `
+<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#faf6f0;font-family:Georgia,'Times New Roman',serif;color:#3d342e;">
+    <div style="max-width:480px;margin:48px auto;padding:36px 32px;background:#fdf9f1;border-radius:12px;border:1px solid #ead9c1;">
+      <p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;color:#564a42;">${escapeHtml(greeting)}</p>
+      <p style="margin:0 0 18px 0;font-size:15px;line-height:1.6;color:#564a42;">It was good to have you in <strong>${escapeHtml(input.circleName)}</strong> this week.</p>
+      <p style="margin:0 0 18px 0;font-size:15px;line-height:1.6;color:#564a42;">Sometimes a Circle opens something that doesn&apos;t finish when the call ends — a thread that keeps tugging a day or two later. If that&apos;s happening for you, it usually means it wants more room than a group evening can give it.</p>
+      <p style="margin:0 0 18px 0;font-size:15px;line-height:1.6;color:#564a42;">That&apos;s what one-to-one work is for.</p>
+      <p style="margin:0 0 8px 0;font-size:15px;line-height:1.6;color:#564a42;">The simplest way to start is to <strong>just reply to this note</strong> and tell me what&apos;s been sitting with you — I read every reply myself. Or, if you&apos;d rather look first:</p>
+      <a href="${escapeHtml(input.optionsUrl)}" style="display:inline-block;margin:14px 0 6px 0;background:#5a3f4f;color:#fdf9f1;text-decoration:none;font-size:14px;font-weight:500;padding:12px 22px;border-radius:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">Ways to work together →</a>
+      <p style="margin:20px 0 0 0;font-size:14px;line-height:1.6;color:#8a7c70;">Either way, no pressure. The Circle is always here.</p>
+      <p style="margin:20px 0 0 0;font-size:14px;color:#564a42;font-style:italic;">— ${escapeHtml(signoff)}</p>
+    </div>
+  </body>
+</html>`.trim();
+  await sendEmail({
+    to: input.to,
+    subject,
+    html,
+    text,
+    replyTo: CIRCLE_CONTACT_EMAIL,
+  });
+}
+
 /** Sent when a Circle seat is refunded — confirms the money is on its way
  *  back, that the seat is released, and how to reach the practitioner. */
 export async function sendCircleRefundEmail(input: {
