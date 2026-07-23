@@ -335,6 +335,59 @@ ${circleContactLineText()}
   });
 }
 
+/** Sent to each attendee the evening after a Circle ends: a warm thank-you and
+ *  a gentle come-again CTA (the next open Circle, or a one-to-one). This is the
+ *  retention loop — one Circle becomes the next. */
+export async function sendCirclePostEmail(input: {
+  to: string;
+  attendeeName: string | null;
+  circleName: string;
+  nextCircleUrl: string | null;
+  practitionerName: string | null;
+}): Promise<void> {
+  const first = input.attendeeName?.split(" ")[0] ?? null;
+  const greeting = first ? `Hi ${first},` : "Hi,";
+  const signoff = input.practitionerName ?? "Svitlana";
+  const subject = `Thank you for being here — ${input.circleName}`;
+  const ctaText = input.nextCircleUrl
+    ? `\n\nIf it felt like home, the next Circle is open — come again:\n${input.nextCircleUrl}`
+    : "";
+  const text = `${greeting}
+
+Thank you for being in ${input.circleName} tonight. However much you shared or simply witnessed, your presence was part of what held the room.
+
+Be gentle with yourself as it settles.${ctaText}
+
+And if something stirred that you'd like to follow one-to-one, just reply — I'd love to sit with you.
+
+— ${signoff}`;
+  const html = `
+<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#faf6f0;font-family:Georgia,'Times New Roman',serif;color:#3d342e;">
+    <div style="max-width:480px;margin:48px auto;padding:36px 32px;background:#fdf9f1;border-radius:12px;border:1px solid #ead9c1;">
+      <p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;color:#564a42;">${escapeHtml(greeting)}</p>
+      <p style="margin:0 0 18px 0;font-size:15px;line-height:1.6;color:#564a42;">Thank you for being in <strong>${escapeHtml(input.circleName)}</strong> tonight. However much you shared or simply witnessed, your presence was part of what held the room.</p>
+      <p style="margin:0 0 8px 0;font-size:15px;line-height:1.6;color:#564a42;">Be gentle with yourself as it settles.</p>
+      ${
+        input.nextCircleUrl
+          ? `<a href="${escapeHtml(input.nextCircleUrl)}" style="display:inline-block;margin:18px 0 6px 0;background:#5a3f4f;color:#fdf9f1;text-decoration:none;font-size:14px;font-weight:500;padding:12px 22px;border-radius:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">Come to the next Circle →</a>`
+          : ""
+      }
+      <p style="margin:20px 0 0 0;font-size:14px;line-height:1.6;color:#564a42;">And if something stirred that you&apos;d like to follow one-to-one, just reply — I&apos;d love to sit with you.</p>
+      <p style="margin:20px 0 0 0;font-size:14px;color:#564a42;font-style:italic;">— ${escapeHtml(signoff)}</p>
+    </div>
+  </body>
+</html>`.trim();
+  await sendEmail({
+    to: input.to,
+    subject,
+    html,
+    text,
+    replyTo: CIRCLE_CONTACT_EMAIL,
+  });
+}
+
 /** Sent when a Circle seat is refunded — confirms the money is on its way
  *  back, that the seat is released, and how to reach the practitioner. */
 export async function sendCircleRefundEmail(input: {

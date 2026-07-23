@@ -1213,6 +1213,8 @@ export const groupAttendees = pgTable(
     welcomeSentAt: timestamp("welcome_sent_at"),
     reminder24hSentAt: timestamp("reminder_24h_sent_at"),
     reminder1hSentAt: timestamp("reminder_1h_sent_at"),
+    /** "Thank you + come again" email, sent once after the Circle ends. */
+    postCircleSentAt: timestamp("post_circle_sent_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },

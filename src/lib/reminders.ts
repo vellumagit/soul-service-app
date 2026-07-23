@@ -21,7 +21,7 @@ import {
 } from "@/db";
 import { groupSessions, groupAttendees, groups } from "@/db/schema";
 import { resolveCircleMeetingUrl } from "./circle-fulfillment";
-import { circleCancelUrl } from "./circle-cancel-token";
+import { circleCancelUrl, circleBaseUrl } from "./circle-cancel-token";
 import {
   resolveTimeZone,
   formatSessionLong,
@@ -127,6 +127,13 @@ export async function processReminders(): Promise<ReminderRunStats> {
           now
         );
       }
+
+      // Post-Circle "thank you + come again" to each attendee after it ends.
+      stats.circleRemindersSent += await sendDuePostCircleEmails(
+        account.id,
+        settingsRow,
+        now
+      );
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
       stats.errors.push(`account ${account.id}: ${msg}`);
@@ -593,6 +600,107 @@ async function sendDueCircleHostReminders(
     }
   }
 
+  return count;
+}
+
+/**
+ * Post-Circle "thank you + come again" email to each confirmed attendee, once,
+ * after the Circle ends. Points them at the next open Circle (the retention
+ * loop). Only fires for Circles that ended within the last 18h — so a missed
+ * run still catches them, but historical attendees are never back-emailed on
+ * first deploy. Claimed via post_circle_sent_at so it sends exactly once.
+ */
+async function sendDuePostCircleEmails(
+  accountId: string,
+  settings: typeof practitionerSettings.$inferSelect,
+  now: Date
+): Promise<number> {
+  const endedSessions = await db
+    .select({ sessionId: groupSessions.id, groupName: groups.name })
+    .from(groupSessions)
+    .innerJoin(groups, eq(groups.id, groupSessions.groupId))
+    .where(
+      and(
+        eq(groupSessions.accountId, accountId),
+        sql`${groupSessions.status} <> 'cancelled'`,
+        sql`${groupSessions.scheduledAt} + (${groupSessions.durationMinutes} * interval '1 minute') < now()`,
+        sql`${groupSessions.scheduledAt} + (${groupSessions.durationMinutes} * interval '1 minute') > now() - interval '18 hours'`
+      )
+    );
+  if (endedSessions.length === 0) return 0;
+
+  // The next open Circle to invite them back to (soonest upcoming, published).
+  const [nextCircle] = await db
+    .select({ id: groupSessions.id })
+    .from(groupSessions)
+    .innerJoin(groups, eq(groups.id, groupSessions.groupId))
+    .where(
+      and(
+        eq(groupSessions.accountId, accountId),
+        eq(groupSessions.status, "scheduled"),
+        eq(groups.published, true),
+        gt(groupSessions.scheduledAt, now)
+      )
+    )
+    .orderBy(asc(groupSessions.scheduledAt))
+    .limit(1);
+  const nextCircleUrl = nextCircle
+    ? `${circleBaseUrl()}/circles/${nextCircle.id}`
+    : null;
+
+  let count = 0;
+  for (const s of endedSessions) {
+    const attendees = await db
+      .select({
+        id: groupAttendees.id,
+        name: groupAttendees.name,
+        email: groupAttendees.email,
+      })
+      .from(groupAttendees)
+      .where(
+        and(
+          eq(groupAttendees.groupSessionId, s.sessionId),
+          eq(groupAttendees.status, "confirmed"),
+          isNull(groupAttendees.postCircleSentAt)
+        )
+      );
+    for (const a of attendees) {
+      if (!a.email || !a.email.includes("@")) continue;
+      // Claim atomically first so a crash mid-send can't double-email.
+      const claimed = await db
+        .update(groupAttendees)
+        .set({ postCircleSentAt: now })
+        .where(
+          and(
+            eq(groupAttendees.id, a.id),
+            isNull(groupAttendees.postCircleSentAt)
+          )
+        )
+        .returning({ id: groupAttendees.id });
+      if (claimed.length === 0) continue;
+      try {
+        const { sendCirclePostEmail } = await import("./resend");
+        await sendCirclePostEmail({
+          to: a.email,
+          attendeeName: a.name,
+          circleName: s.groupName,
+          nextCircleUrl,
+          practitionerName: settings.practitionerName ?? null,
+        });
+        count++;
+      } catch (err) {
+        // Release the claim so a later run can retry.
+        await db
+          .update(groupAttendees)
+          .set({ postCircleSentAt: null })
+          .where(eq(groupAttendees.id, a.id));
+        console.error(
+          `[reminders] post-circle email failed for attendee ${a.id}:`,
+          err
+        );
+      }
+    }
+  }
   return count;
 }
 
