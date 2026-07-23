@@ -85,12 +85,17 @@ export async function createGroup(formData: FormData): Promise<void> {
   redirect(`/groups/${inserted[0].id}`);
 }
 
-export async function updateGroup(formData: FormData): Promise<void> {
+/** Edit a circle's defaults. Returns a result (rather than void with silent
+ *  `return`s) so EditGroupDialog can close on success and show the reason on
+ *  failure instead of just sitting there. */
+export async function updateGroup(
+  formData: FormData
+): Promise<ScheduleGroupSessionResult> {
   const { accountId } = await requireSession();
   const id = String(formData.get("id") ?? "");
-  if (!id) return;
+  if (!id) return { ok: false, error: "Missing circle reference." };
   const name = String(formData.get("name") ?? "").trim().slice(0, 200);
-  if (!name) return;
+  if (!name) return { ok: false, error: "Please give the circle a name." };
   const description =
     String(formData.get("description") ?? "").trim().slice(0, 4000) || null;
   const capacity = clampInt(formData.get("defaultCapacity"), 2, 500, 20);
@@ -130,6 +135,7 @@ export async function updateGroup(formData: FormData): Promise<void> {
   revalidatePath("/groups");
   revalidatePath(`/groups/${id}`);
   revalidatePath("/");
+  return { ok: true };
 }
 
 export async function archiveGroup(id: string): Promise<{ ok: true }> {
@@ -197,10 +203,21 @@ export async function setGroupRecurrence(formData: FormData): Promise<void> {
 // Practitioner — schedule / cancel group sessions
 // ─────────────────────────────────────────────────────────────────────
 
-export async function scheduleGroupSession(formData: FormData): Promise<void> {
+export type ScheduleGroupSessionResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
+/** Schedule one session under a circle.
+ *
+ *  Returns a result instead of silently `return`-ing: every guard below used to
+ *  bail with a bare `return`, so a rejected submit looked identical to a dead
+ *  button — nothing saved, nothing said. The dialog surfaces `error` now. */
+export async function scheduleGroupSession(
+  formData: FormData
+): Promise<ScheduleGroupSessionResult> {
   const { accountId } = await requireSession();
   const groupId = String(formData.get("groupId") ?? "");
-  if (!groupId) return;
+  if (!groupId) return { ok: false, error: "Missing circle reference." };
 
   // Verify the group belongs to this account.
   const [group] = await db
@@ -208,11 +225,17 @@ export async function scheduleGroupSession(formData: FormData): Promise<void> {
     .from(groups)
     .where(and(eq(groups.accountId, accountId), eq(groups.id, groupId)))
     .limit(1);
-  if (!group) return;
+  if (!group) return { ok: false, error: "That circle no longer exists." };
 
+  // scheduledAt arrives as a tz-aware ISO string from LocalDateTimeInput, so
+  // `new Date()` resolves the exact instant she picked. (It used to be a bare
+  // "2026-07-26T19:00" from a raw datetime-local input, which the UTC server
+  // parsed as 19:00 UTC — landing the circle 6h off in Edmonton.)
   const scheduledAtRaw = String(formData.get("scheduledAt") ?? "");
   const scheduledAt = new Date(scheduledAtRaw);
-  if (!Number.isFinite(scheduledAt.getTime())) return;
+  if (!Number.isFinite(scheduledAt.getTime())) {
+    return { ok: false, error: "Please pick a valid date and time." };
+  }
 
   const duration = clampInt(
     formData.get("durationMinutes"),
@@ -246,6 +269,7 @@ export async function scheduleGroupSession(formData: FormData): Promise<void> {
   revalidatePath(`/groups/${groupId}`);
   revalidatePath("/calendar");
   revalidatePath("/");
+  return { ok: true };
 }
 
 export async function cancelGroupSession(id: string): Promise<{ ok: true }> {

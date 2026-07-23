@@ -11,6 +11,7 @@ import { Modal } from "./Modal";
 import { Field, inputCls } from "./Form";
 import { ConfirmButton } from "./ConfirmButton";
 import { shortDateTime } from "@/lib/format";
+import { LocalDateTimeInput } from "./LocalDateTimeInput";
 import { useTimeZone } from "./TimeZoneProvider";
 import { rethrowIfRedirect } from "@/lib/redirect-error";
 
@@ -258,11 +259,9 @@ function AddTaskInline({ clientId }: { clientId?: string }) {
           />
         </Field>
         <Field label="Due (optional)">
-          <input
-            name="dueAt"
-            type="datetime-local"
-            className={inputCls}
-          />
+          {/* tz-aware: a bare datetime-local string would be parsed as UTC by
+              the server, shifting the due time by her offset. */}
+          <LocalDateTimeInput name="dueAt" className={inputCls} />
         </Field>
         <Field label="Notes (optional)">
           <input name="body" className={inputCls} />

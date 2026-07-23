@@ -8,6 +8,9 @@
 import { useState } from "react";
 import { Modal } from "./Modal";
 import { scheduleGroupSession } from "@/lib/group-actions";
+import { LocalDateTimeInput } from "./LocalDateTimeInput";
+import { rethrowIfRedirect } from "@/lib/redirect-error";
+import { notify } from "./FlashNotifier";
 
 interface Props {
   groupId: string;
@@ -33,6 +36,8 @@ export function ScheduleGroupSessionDialog({
   defaultCapacity,
 }: Props) {
   const [open, setOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Default to the next round hour, ~3 days out, so the picker shows
   // something useful immediately.
@@ -55,22 +60,61 @@ export function ScheduleGroupSessionDialog({
       <Modal
         open={open}
         onClose={() => setOpen(false)}
+        locked={submitting}
         title={`Schedule a ${groupName} session`}
         size="md"
       >
-        <form action={scheduleGroupSession} className="space-y-4">
+        <form
+          action={async (fd) => {
+            // Wrapped (rather than handing the server action straight to
+            // `action=`) so the dialog can actually respond: close on success,
+            // show the reason on failure. Before this, every outcome looked
+            // identical — the dialog just sat there.
+            setSubmitting(true);
+            setError(null);
+            try {
+              const result = await scheduleGroupSession(fd);
+              if (result.ok) {
+                setOpen(false);
+                notify({
+                  kind: "success",
+                  title: "Circle session scheduled",
+                  ttlMs: 3500,
+                });
+              } else {
+                setError(result.error);
+              }
+            } catch (err) {
+              rethrowIfRedirect(err);
+              setError(
+                err instanceof Error ? err.message : "Something went wrong"
+              );
+            } finally {
+              setSubmitting(false);
+            }
+          }}
+          className="space-y-4"
+        >
           <input type="hidden" name="groupId" value={groupId} />
+
+          {error && (
+            <div className="text-xs text-red-700 bg-red-50 border border-red-100 rounded p-2">
+              {error}
+            </div>
+          )}
 
           <label className="block">
             <span className="text-xs uppercase tracking-wider text-ink-500 font-mono">
               When
             </span>
-            <input
-              type="datetime-local"
+            {/* LocalDateTimeInput submits a tz-aware ISO string. A raw
+                datetime-local sends "2026-07-26T19:00" with no zone, which the
+                UTC server read as 19:00 UTC — putting a 7pm circle at 1pm
+                Edmonton. */}
+            <LocalDateTimeInput
               name="scheduledAt"
               required
               defaultValue={suggested}
-              autoFocus
               className="mt-1.5 w-full px-3 py-2 text-sm border border-ink-200 rounded-md bg-white"
             />
           </label>
@@ -139,15 +183,17 @@ export function ScheduleGroupSessionDialog({
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="px-3 py-2 text-sm text-ink-600 hover:text-ink-900"
+              disabled={submitting}
+              className="px-3 py-2 text-sm text-ink-600 hover:text-ink-900 disabled:opacity-60"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 text-sm bg-plum-700 hover:bg-plum-600 text-white rounded-md font-medium"
+              disabled={submitting}
+              className="px-4 py-2 text-sm bg-plum-700 hover:bg-plum-600 text-white rounded-md font-medium disabled:opacity-60"
             >
-              Schedule
+              {submitting ? "Scheduling…" : "Schedule"}
             </button>
           </div>
         </form>

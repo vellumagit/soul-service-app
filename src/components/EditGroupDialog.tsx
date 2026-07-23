@@ -9,6 +9,8 @@
 import { useState } from "react";
 import { Modal } from "./Modal";
 import { updateGroup } from "@/lib/group-actions";
+import { rethrowIfRedirect } from "@/lib/redirect-error";
+import { notify } from "./FlashNotifier";
 
 const CURRENCIES = [
   { v: "USD", label: "USD $" },
@@ -33,6 +35,8 @@ export function EditGroupDialog({
   };
 }) {
   const [open, setOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   return (
     <>
@@ -46,11 +50,43 @@ export function EditGroupDialog({
       <Modal
         open={open}
         onClose={() => setOpen(false)}
+        locked={submitting}
         title="Circle settings"
         size="md"
       >
-        <form action={updateGroup} className="space-y-4">
+        <form
+          action={async (fd) => {
+            // Wrapped so the dialog closes on success and shows the reason on
+            // failure — updateGroup revalidates in place (no redirect), so
+            // handing it straight to `action=` left the dialog open forever.
+            setSubmitting(true);
+            setError(null);
+            try {
+              const result = await updateGroup(fd);
+              if (result.ok) {
+                setOpen(false);
+                notify({ kind: "success", title: "Circle updated", ttlMs: 3000 });
+              } else {
+                setError(result.error);
+              }
+            } catch (err) {
+              rethrowIfRedirect(err);
+              setError(
+                err instanceof Error ? err.message : "Something went wrong"
+              );
+            } finally {
+              setSubmitting(false);
+            }
+          }}
+          className="space-y-4"
+        >
           <input type="hidden" name="id" value={group.id} />
+
+          {error && (
+            <div className="text-xs text-red-700 bg-red-50 border border-red-100 rounded p-2">
+              {error}
+            </div>
+          )}
 
           <label className="block">
             <span className="text-xs uppercase tracking-wider text-ink-500 font-mono">
@@ -180,15 +216,17 @@ export function EditGroupDialog({
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="px-3 py-2 text-sm text-ink-600 hover:text-ink-900"
+              disabled={submitting}
+              className="px-3 py-2 text-sm text-ink-600 hover:text-ink-900 disabled:opacity-60"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 text-sm bg-plum-700 hover:bg-plum-600 text-white rounded-md font-medium"
+              disabled={submitting}
+              className="px-4 py-2 text-sm bg-plum-700 hover:bg-plum-600 text-white rounded-md font-medium disabled:opacity-60"
             >
-              Save Circle
+              {submitting ? "Saving…" : "Save Circle"}
             </button>
           </div>
         </form>
