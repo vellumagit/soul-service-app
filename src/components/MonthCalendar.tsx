@@ -8,6 +8,8 @@ import { useTimeZone } from "./TimeZoneProvider";
 type CalSession = {
   id: string;
   clientId: string;
+  /** Where clicking goes. Circles point at /groups/[id], not a client. */
+  href?: string;
   clientName: string;
   type: string;
   status: string;
@@ -176,7 +178,7 @@ export function MonthCalendar({
                 return (
                   <Link
                     key={s.id}
-                    href={`/clients/${s.clientId}#${s.id}`}
+                    href={s.href ?? `/clients/${s.clientId}#${s.id}`}
                     className={[
                       "block px-1.5 py-0.5 rounded text-[10px] leading-tight truncate hover:translate-x-px transition",
                       `tone-${tone}`,

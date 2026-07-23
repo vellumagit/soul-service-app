@@ -24,6 +24,7 @@ import { CancelGroupSessionButton } from "@/components/CancelGroupSessionButton"
 import { GroupRecurrencePanel } from "@/components/GroupRecurrencePanel";
 import { AddCircleAttendeeInline } from "@/components/AddCircleAttendeeInline";
 import { EditGroupDialog } from "@/components/EditGroupDialog";
+import { resolveCircleMeetingUrl } from "@/lib/circle-fulfillment";
 
 export const dynamic = "force-dynamic";
 
@@ -387,16 +388,27 @@ export default async function GroupDetailPage({
                           </>
                         )}
                       </div>
-                      {s.meetUrl && (
-                        <a
-                          href={s.meetUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-[12px] text-plum-700 hover:underline mt-1 inline-block break-all"
-                        >
-                          {s.meetUrl}
-                        </a>
-                      )}
+                      {/* Resolve through the standing circle room, like the
+                          Today card and both emails do. Reading s.meetUrl raw
+                          meant the page where she SCHEDULED the Circle was the
+                          one place showing no way in. */}
+                      {(() => {
+                        const roomUrl = resolveCircleMeetingUrl(
+                          s.meetUrl,
+                          settings.circleRoomUrl ?? null
+                        );
+                        if (!roomUrl) return null;
+                        return (
+                          <a
+                            href={roomUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-md bg-plum-700 hover:bg-plum-600 text-white text-[13px] font-medium no-underline"
+                          >
+                            Walk into the Circle →
+                          </a>
+                        );
+                      })()}
                     </div>
                     <div className="flex flex-col items-end gap-1.5">
                       <Link

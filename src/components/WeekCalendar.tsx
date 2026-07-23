@@ -9,6 +9,8 @@ import { useTimeZone } from "./TimeZoneProvider";
 type CalSession = {
   id: string;
   clientId: string;
+  /** Where clicking goes. Circles point at /groups/[id], not a client. */
+  href?: string;
   clientName: string;
   type: string;
   status: string;
@@ -73,7 +75,11 @@ export function WeekCalendar({
   });
 
   const totalMin = sessions.reduce((s, r) => s + r.durationMinutes, 0);
-  const clients = new Set(sessions.map((r) => r.clientId)).size;
+  // Circles carry a groupId in clientId (they have no client), so exclude them
+  // — otherwise a Circle would count as a "client" in this stat.
+  const clients = new Set(
+    sessions.filter((r) => !r.href).map((r) => r.clientId)
+  ).size;
   const nowClock = zonedClock(new Date(), tz);
   const nowHour = nowClock.hour + nowClock.minute / 60;
   const zoneLabel = zoneAbbrev(new Date(), tz);
@@ -162,7 +168,7 @@ export function WeekCalendar({
                   {daySessions.map((s) => (
                     <Link
                       key={s.id}
-                      href={`/clients/${s.clientId}`}
+                      href={s.href ?? `/clients/${s.clientId}`}
                       className="block border border-ink-200 rounded-md p-3 bg-white hover:bg-ink-50"
                     >
                       <div className="flex items-center gap-3">
@@ -297,7 +303,7 @@ export function WeekCalendar({
                   return (
                     <Link
                       key={s.id}
-                      href={`/clients/${s.clientId}`}
+                      href={s.href ?? `/clients/${s.clientId}`}
                       className={`cal-block tone-${tone}`}
                       style={{ top, height }}
                     >

@@ -1160,6 +1160,9 @@ export const groupSessions = pgTable(
      *  One per occurrence (attendees are stamped individually), so she can't
      *  be double-emailed by repeat cron runs. */
     hostRemindedAt: timestamp("host_reminded_at"),
+    /** T-10 "walk in now" nudge to the practitioner — the doorway prompt at
+     *  the moment of action, distinct from the 1h heads-up. */
+    walkInNudgeSentAt: timestamp("walk_in_nudge_sent_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },

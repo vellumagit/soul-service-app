@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { and, eq, gte, lt } from "drizzle-orm";
+import { db } from "@/db";
+import { groupSessions, groups } from "@/db/schema";
 import { AppShell } from "@/components/AppShell";
 import {
   listSessionsInRange,
@@ -64,23 +67,58 @@ export default async function CalendarPage({
     monthStart = new Date(weekStart.getFullYear(), weekStart.getMonth(), 1);
   }
 
-  const [sessions, clients, settings] = await Promise.all([
+  const [sessions, clients, settings, circleRows] = await Promise.all([
     listSessionsInRange(accountId, rangeStart, rangeEnd),
     listClientsForPicker(accountId),
     getSettings(accountId),
+    // Circles were invisible on her own calendar — she could double-book
+    // herself against one and nothing would flag it.
+    db
+      .select({
+        id: groupSessions.id,
+        groupId: groupSessions.groupId,
+        groupName: groups.name,
+        scheduledAt: groupSessions.scheduledAt,
+        durationMinutes: groupSessions.durationMinutes,
+        status: groupSessions.status,
+      })
+      .from(groupSessions)
+      .innerJoin(groups, eq(groups.id, groupSessions.groupId))
+      .where(
+        and(
+          eq(groupSessions.accountId, accountId),
+          gte(groupSessions.scheduledAt, rangeStart),
+          lt(groupSessions.scheduledAt, rangeEnd)
+        )
+      ),
   ]);
   const locale = asLocale(settings.uiLanguage);
 
-  const sessionData = sessions.map((s) => ({
-    id: s.id,
-    clientId: s.clientId,
-    clientName: s.clientName,
-    type: s.type,
-    status: s.status,
-    scheduledAt: s.scheduledAt.toISOString(),
-    durationMinutes: s.durationMinutes,
-    paid: s.paid,
-  }));
+  const sessionData = [
+    ...sessions.map((s) => ({
+      id: s.id,
+      clientId: s.clientId,
+      clientName: s.clientName,
+      type: s.type,
+      status: s.status,
+      scheduledAt: s.scheduledAt.toISOString(),
+      durationMinutes: s.durationMinutes,
+      paid: s.paid,
+    })),
+    ...circleRows.map((c) => ({
+      id: c.id,
+      // No client — a Circle belongs to a group. `href` sends the click to the
+      // Circle instead of a client profile.
+      clientId: c.groupId,
+      href: `/groups/${c.groupId}`,
+      clientName: c.groupName,
+      type: "Circle",
+      status: c.status,
+      scheduledAt: c.scheduledAt.toISOString(),
+      durationMinutes: c.durationMinutes,
+      paid: true,
+    })),
+  ];
 
   // Navigation helpers
   const prevHref =

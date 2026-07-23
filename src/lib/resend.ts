@@ -447,6 +447,53 @@ Either way, no pressure. The Circle is always here.
   });
 }
 
+/** T-10 "walk in now" nudge to the practitioner. The 1h heads-up tells her a
+ *  Circle is coming; this is the doorway prompt at the moment of action, with
+ *  the room link as the only thing to click. Short by design — it's read on a
+ *  phone ten minutes before she opens the room. */
+export async function sendCircleWalkInNudgeEmail(input: {
+  to: string;
+  circleName: string;
+  whenLabel: string;
+  meetingUrl: string | null;
+  attendeeCount: number;
+}): Promise<void> {
+  const subject = `Starting in 10 minutes — ${input.circleName}`;
+  const who =
+    input.attendeeCount === 1
+      ? "1 person is expected."
+      : `${input.attendeeCount} people are expected.`;
+  const text = `${input.circleName} starts in about 10 minutes (${input.whenLabel}).
+
+${who}
+${input.meetingUrl ? `\nOpen the room:\n${input.meetingUrl}\n` : ""}
+See you in there.`;
+  const html = `
+<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#faf6f0;font-family:Georgia,'Times New Roman',serif;color:#3d342e;">
+    <div style="max-width:480px;margin:48px auto;padding:32px;background:#fdf9f1;border-radius:12px;border:1px solid #ead9c1;">
+      <p style="margin:0 0 6px 0;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#b05c36;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">Starting in 10 minutes</p>
+      <p style="margin:0 0 4px 0;font-size:20px;line-height:1.3;color:#3d342e;"><strong>${escapeHtml(input.circleName)}</strong></p>
+      <p style="margin:0 0 18px 0;font-size:14px;color:#8a7c70;">${escapeHtml(input.whenLabel)} · ${escapeHtml(who)}</p>
+      ${
+        input.meetingUrl
+          ? `<a href="${escapeHtml(input.meetingUrl)}" style="display:inline-block;background:#5a3f4f;color:#fdf9f1;text-decoration:none;font-size:15px;font-weight:500;padding:14px 26px;border-radius:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">Walk into the Circle →</a>`
+          : `<p style="margin:0;font-size:14px;color:#b05c36;">No meeting link is set for this Circle — add one on its page before you start.</p>`
+      }
+      <p style="margin:22px 0 0 0;font-size:14px;color:#564a42;font-style:italic;">See you in there.</p>
+    </div>
+  </body>
+</html>`.trim();
+  await sendEmail({
+    to: input.to,
+    subject,
+    html,
+    text,
+    replyTo: CIRCLE_CONTACT_EMAIL,
+  });
+}
+
 /** Sent when a Circle seat is refunded — confirms the money is on its way
  *  back, that the seat is released, and how to reach the practitioner. */
 export async function sendCircleRefundEmail(input: {

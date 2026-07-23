@@ -129,6 +129,16 @@ export async function processReminders(): Promise<ReminderRunStats> {
         );
       }
 
+      // T-10 "walk in now" — the doorway prompt, room link as the only click.
+      if (hostNotifyTo) {
+        stats.circleRemindersSent += await sendDueCircleWalkInNudges(
+          account.id,
+          settingsRow,
+          hostNotifyTo,
+          now
+        );
+      }
+
       // Post-Circle "thank you + come again" to each attendee after it ends.
       stats.circleRemindersSent += await sendDuePostCircleEmails(
         account.id,
@@ -708,6 +718,94 @@ async function sendDuePostCircleEmails(
           err
         );
       }
+    }
+  }
+  return count;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// T-10 "walk in now" nudge to the practitioner
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// The 1h heads-up says a Circle is coming; this is the prompt at the moment of
+// action, with the room link as the only thing to click. Requires a cron that
+// runs more often than hourly (see vercel.json) — an hourly cron has no 4:50
+// run for a 5:00 Circle.
+//
+// Window is (now, now+12min] rather than exactly 10: the cron ticks every 5
+// minutes and can drift, so a hard 10-minute edge would be missable. The
+// idempotency stamp means the slightly-wide window still sends exactly once.
+
+async function sendDueCircleWalkInNudges(
+  accountId: string,
+  settings: typeof practitionerSettings.$inferSelect,
+  notifyTo: string,
+  now: Date
+): Promise<number> {
+  const windowEnd = new Date(now.getTime() + 12 * 60 * 1000);
+  const rows = await db
+    .select({
+      id: groupSessions.id,
+      scheduledAt: groupSessions.scheduledAt,
+      meetUrl: groupSessions.meetUrl,
+      groupName: groups.name,
+      attendeeCount: sql<number>`(
+        SELECT COUNT(*)::int FROM ${groupAttendees}
+        WHERE ${groupAttendees.groupSessionId} = ${groupSessions.id}
+          AND ${groupAttendees.status} = 'confirmed'
+      )`,
+    })
+    .from(groupSessions)
+    .innerJoin(groups, eq(groups.id, groupSessions.groupId))
+    .where(
+      and(
+        eq(groupSessions.accountId, accountId),
+        eq(groupSessions.status, "scheduled"),
+        isNull(groupSessions.walkInNudgeSentAt),
+        gt(groupSessions.scheduledAt, now),
+        lte(groupSessions.scheduledAt, windowEnd)
+      )
+    );
+
+  let count = 0;
+  for (const row of rows) {
+    // Claim first — a 5-minute cron overlapping itself must not double-send.
+    const claimed = await db
+      .update(groupSessions)
+      .set({ walkInNudgeSentAt: now })
+      .where(
+        and(
+          eq(groupSessions.id, row.id),
+          isNull(groupSessions.walkInNudgeSentAt)
+        )
+      )
+      .returning({ id: groupSessions.id });
+    if (claimed.length === 0) continue;
+    try {
+      const { sendCircleWalkInNudgeEmail } = await import("./resend");
+      await sendCircleWalkInNudgeEmail({
+        to: notifyTo,
+        circleName: row.groupName,
+        whenLabel: formatSessionLong(
+          new Date(row.scheduledAt),
+          resolveTimeZone(settings.timezone)
+        ),
+        meetingUrl: resolveCircleMeetingUrl(
+          row.meetUrl,
+          settings.circleRoomUrl ?? null
+        ),
+        attendeeCount: row.attendeeCount,
+      });
+      count++;
+    } catch (err) {
+      await db
+        .update(groupSessions)
+        .set({ walkInNudgeSentAt: null })
+        .where(eq(groupSessions.id, row.id));
+      console.error(
+        `[reminders] walk-in nudge failed for circle ${row.id}:`,
+        err
+      );
     }
   }
   return count;
