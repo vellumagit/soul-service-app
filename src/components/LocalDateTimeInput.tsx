@@ -1,23 +1,46 @@
 "use client";
 
-// Datetime-local picker that submits a tz-aware ISO string.
+// Datetime picker that means what the rest of the workspace says.
 //
-// Why this exists: HTML's <input type="datetime-local"> produces strings like
-// "2026-05-17T14:00" with NO timezone marker. When the server parses that with
-// `new Date(str)`, it interprets it as the SERVER'S local time. On Vercel
-// that's UTC, so a 4pm pick in Buenos Aires gets stored as 16:00 UTC = 13:00
-// Buenos Aires when rendered back to her — silently 3 hours off.
+// The whole practitioner workspace displays times in HER practice timezone
+// (see TimeZoneProvider). So when she — or Brian, administering from Brazil —
+// types "6:30 PM" into a picker, it has to MEAN 6:30 PM in that same practice
+// zone. Otherwise the app contradicts itself: you type 6:30 and it shows 2:30.
 //
-// Fix: keep the visible <input> as datetime-local (great UX, native picker),
-// but mirror its value into a hidden field as a proper ISO string with the
-// user's timezone applied. The form sends the ISO version under the same
-// name the actions read. The server's `new Date(iso)` then correctly resolves
-// to the moment she actually picked.
+// Two things this component fixes about a bare <input type="datetime-local">:
 //
-// Usage is a drop-in replacement: same `name`, same `defaultValue` (in
-// datetime-local format), same `required` semantics.
+//  1. It has no timezone marker at all. "2026-07-26T19:00" sent to a UTC server
+//     and parsed with `new Date()` becomes 19:00 UTC — a 7pm circle landing at
+//     1pm Edmonton.
+//  2. Even when converted client-side, the browser converts using the VIEWER's
+//     zone, so the same keystrokes mean different instants depending on where
+//     you're sitting.
+//
+// So: the visible picker stays a native datetime-local (good UX), but the
+// wall-clock it shows is interpreted in `timeZone` — defaulting to the practice
+// zone from context — and mirrored into a hidden field as a true ISO instant.
+// A small zone badge sits next to it so the zone is never a guess.
 
 import { useState } from "react";
+import { zonedWallTimeToUtc } from "@/lib/timezone";
+import { zoneAbbrev } from "@/lib/format";
+import { useTimeZone } from "./TimeZoneProvider";
+
+/** "2026-07-26T19:00" + zone → the true UTC instant for that wall clock. */
+function wallToIso(local: string, timeZone: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(local);
+  if (!m) return local; // let the server's `required`/parse check complain
+  const [, y, mo, d, h, mi] = m;
+  const instant = zonedWallTimeToUtc(
+    Number(y),
+    Number(mo) - 1,
+    Number(d),
+    Number(h),
+    Number(mi),
+    timeZone
+  );
+  return Number.isNaN(instant.getTime()) ? local : instant.toISOString();
+}
 
 export function LocalDateTimeInput({
   name,
@@ -28,6 +51,7 @@ export function LocalDateTimeInput({
   max,
   disabled,
   onChange,
+  timeZone,
 }: {
   name: string;
   defaultValue?: string;
@@ -37,23 +61,28 @@ export function LocalDateTimeInput({
   max?: string;
   disabled?: boolean;
   onChange?: (localValue: string, isoValue: string) => void;
+  /** Override the zone the typed wall-clock is read in. Defaults to the
+   *  practice timezone from TimeZoneProvider. */
+  timeZone?: string;
 }) {
+  const contextTz = useTimeZone();
+  const tz = timeZone ?? contextTz;
   const [local, setLocal] = useState(defaultValue ?? "");
 
-  // Convert "2026-05-17T14:00" (interpreted in browser's local TZ) to an ISO
-  // string with the correct UTC moment. `new Date(localStr)` is the same
-  // local-tz-aware parse the browser does for date pickers.
-  const iso = local ? safeToIso(local) : "";
+  const iso = local ? wallToIso(local, tz) : "";
+  // Label the zone for the moment being picked, so DST reads correctly
+  // (MDT in July, MST in December).
+  const zoneLabel = zoneAbbrev(iso ? new Date(iso) : new Date(), tz);
 
   return (
-    <>
+    <span className="inline-flex items-center gap-2 w-full">
       <input
         type="datetime-local"
         value={local}
         onChange={(e) => {
           const next = e.target.value;
           setLocal(next);
-          onChange?.(next, next ? safeToIso(next) : "");
+          onChange?.(next, next ? wallToIso(next, tz) : "");
         }}
         required={required}
         className={className}
@@ -61,19 +90,18 @@ export function LocalDateTimeInput({
         max={max}
         disabled={disabled}
       />
-      {/* The hidden field is what the form actually submits. The visible
-          datetime-local input has no `name`, so its raw (timezone-less)
-          string never reaches the server. */}
+      {/* The hidden field is what the form actually submits — a true instant.
+          The visible picker has no `name`, so its zone-less string never
+          reaches the server. */}
       <input type="hidden" name={name} value={iso} />
-    </>
+      {zoneLabel && (
+        <span
+          className="text-[10px] uppercase tracking-wide text-ink-400 font-mono shrink-0"
+          title={`Times are entered in your practice timezone (${tz})`}
+        >
+          {zoneLabel}
+        </span>
+      )}
+    </span>
   );
-}
-
-function safeToIso(local: string): string {
-  // Defensive: if the browser hands us something unparseable (shouldn't happen
-  // with datetime-local but be paranoid), fall back to the raw value so the
-  // server-side `required` check still fires with a sensible error.
-  const d = new Date(local);
-  if (Number.isNaN(d.getTime())) return local;
-  return d.toISOString();
 }

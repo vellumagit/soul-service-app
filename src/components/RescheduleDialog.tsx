@@ -6,6 +6,8 @@ import { Field, inputCls } from "./Form";
 import { rescheduleSession } from "@/lib/actions";
 import { rethrowIfRedirect } from "@/lib/redirect-error";
 import { LocalDateTimeInput } from "./LocalDateTimeInput";
+import { zonedLocalInputValue } from "@/lib/timezone";
+import { useTimeZone } from "./TimeZoneProvider";
 
 // Reschedule a session — change date/time and optionally duration. If Google
 // Calendar is connected, the event is updated and the client is notified.
@@ -24,16 +26,17 @@ export function RescheduleDialog({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Format Date → datetime-local string in the user's timezone
-  const initialWhen = (() => {
-    const d =
-      typeof currentScheduledAt === "string"
-        ? new Date(currentScheduledAt)
-        : currentScheduledAt;
-    const offset = d.getTimezoneOffset();
-    const local = new Date(d.getTime() - offset * 60 * 1000);
-    return local.toISOString().slice(0, 16);
-  })();
+  // Prefill the picker with the session's current wall-clock time IN THE
+  // PRACTICE ZONE — the same zone the picker reads back. Using the viewer's
+  // offset here would silently shift the session by their UTC difference the
+  // moment she opened this dialog and hit Save without changing anything.
+  const practiceTz = useTimeZone();
+  const initialWhen = zonedLocalInputValue(
+    typeof currentScheduledAt === "string"
+      ? new Date(currentScheduledAt)
+      : currentScheduledAt,
+    practiceTz
+  );
 
   return (
     <>

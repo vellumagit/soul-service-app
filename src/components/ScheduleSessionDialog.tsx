@@ -6,18 +6,19 @@ import { Field, inputCls } from "./Form";
 import { scheduleSession } from "@/lib/actions";
 import { rethrowIfRedirect } from "@/lib/redirect-error";
 import { LocalDateTimeInput } from "./LocalDateTimeInput";
+import { useTimeZone } from "./TimeZoneProvider";
+import { zonedLocalInputValue } from "@/lib/timezone";
 import { notify } from "./FlashNotifier";
 
 type ClientOption = { id: string; fullName: string };
 
-// Default to next hour, formatted for datetime-local
-function defaultWhen() {
+// Default to the next round hour — expressed as HER local wall clock, since
+// that's the zone the picker reads back.
+function defaultWhen(timeZone: string) {
   const d = new Date();
   d.setMinutes(0, 0, 0);
   d.setHours(d.getHours() + 1);
-  const offset = d.getTimezoneOffset();
-  const local = new Date(d.getTime() - offset * 60 * 1000);
-  return local.toISOString().slice(0, 16);
+  return zonedLocalInputValue(d, timeZone);
 }
 
 // JS Date.getDay() index → ISO weekday name. Used to check the picked
@@ -69,9 +70,12 @@ export function ScheduleSessionDialog({
   // form in the document (a different, closed instance), so clicking Schedule
   // submitted an empty/hidden form — a dud button.
   const scheduleFormId = useId();
+  // Her practice timezone — the picker reads and writes in this zone.
+  const practiceTz = useTimeZone();
+  const initialWhen = defaultWhen(practiceTz);
   // The current value of the datetime-local picker — used to detect when
   // the chosen day is one she's marked off.
-  const [pickedWhen, setPickedWhen] = useState<string>(defaultWhen());
+  const [pickedWhen, setPickedWhen] = useState<string>(initialWhen);
   // Online (Google Meet + remote notetaker) vs in-person (no Meet/bot; she
   // records in the room with the "Record session" button on the card).
   const [locationType, setLocationType] = useState<"online" | "in_person">(
@@ -104,18 +108,10 @@ export function ScheduleSessionDialog({
       window.removeEventListener("shortcuts:schedule-session", handler);
   }, [respondToShortcut]);
 
-  // Capture the browser's IANA timezone so the session remembers the zone she
-  // booked it in — this is what makes reminder/confirmation emails show the
-  // right local time even when she later travels. Read in an effect (not during
-  // render) to avoid an SSR mismatch: the server has no browser zone.
-  const [browserTz, setBrowserTz] = useState("");
-  useEffect(() => {
-    try {
-      setBrowserTz(Intl.DateTimeFormat().resolvedOptions().timeZone || "");
-    } catch {
-      // Intl unavailable — leave blank; the server falls back to the practice zone.
-    }
-  }, []);
+  // Stamp the session with the PRACTICE zone — the same zone the picker reads
+  // in. (This used to capture the browser's zone, so booking on her behalf from
+  // another country stamped that country onto her session and leaked into the
+  // client's confirmation email.)
 
   return (
     <>
@@ -214,7 +210,7 @@ export function ScheduleSessionDialog({
             }}
             className="space-y-4"
           >
-            <input type="hidden" name="timezone" value={browserTz} readOnly />
+            <input type="hidden" name="timezone" value={practiceTz} readOnly />
             <input
               type="hidden"
               name="locationType"
@@ -292,7 +288,7 @@ export function ScheduleSessionDialog({
                 <LocalDateTimeInput
                   name="scheduledAt"
                   required
-                  defaultValue={defaultWhen()}
+                  defaultValue={initialWhen}
                   onChange={(localValue) => setPickedWhen(localValue)}
                   className={inputCls}
                 />

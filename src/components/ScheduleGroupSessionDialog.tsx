@@ -9,6 +9,8 @@ import { useState } from "react";
 import { Modal } from "./Modal";
 import { scheduleGroupSession } from "@/lib/group-actions";
 import { LocalDateTimeInput } from "./LocalDateTimeInput";
+import { useTimeZone } from "./TimeZoneProvider";
+import { zonedYearMonthDay } from "@/lib/timezone";
 import { rethrowIfRedirect } from "@/lib/redirect-error";
 import { notify } from "./FlashNotifier";
 
@@ -39,13 +41,19 @@ export function ScheduleGroupSessionDialog({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Default to the next round hour, ~3 days out, so the picker shows
-  // something useful immediately.
+  const practiceTz = useTimeZone();
+
+  // Default to 7:00 PM, ~3 days out — as HER wall clock, since that's the zone
+  // the picker reads back. (7pm is the evening-circle hour; building it from
+  // the viewer's clock would have made it 7pm somewhere else.)
   const suggested = (() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 3);
-    d.setHours(19, 0, 0, 0);
-    return toLocalDatetimeValue(d);
+    const { year, month0, day } = zonedYearMonthDay(new Date(), practiceTz);
+    const d = new Date(Date.UTC(year, month0, day + 3));
+    const p = (n: number) => String(n).padStart(2, "0");
+    return (
+      `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}` +
+      `T19:00`
+    );
   })();
 
   return (

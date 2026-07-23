@@ -5,6 +5,8 @@ import { Modal } from "./Modal";
 import { Field, inputCls } from "./Form";
 import { scheduleSessionSeries } from "@/lib/actions";
 import { rethrowIfRedirect } from "@/lib/redirect-error";
+import { useTimeZone } from "./TimeZoneProvider";
+import { zonedWallTimeToUtc, zonedYearMonthDay } from "@/lib/timezone";
 
 type ClientOption = { id: string; fullName: string };
 
@@ -12,26 +14,41 @@ type Frequency = "weekly" | "biweekly" | "monthly";
 
 const MAX_OCCURRENCES = 52;
 
-// datetime-local string, defaulted to "tomorrow at 10am"
-function defaultFirstAt() {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  d.setHours(10, 0, 0, 0);
-  const offset = d.getTimezoneOffset();
-  const local = new Date(d.getTime() - offset * 60 * 1000);
-  return local.toISOString().slice(0, 16);
+// "Tomorrow at 10am" as HER wall clock — the zone this dialog reads back.
+function defaultFirstAt(tz: string) {
+  const { year, month0, day } = zonedYearMonthDay(new Date(), tz);
+  const d = new Date(Date.UTC(year, month0, day + 1));
+  const p = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}T10:00`
+  );
 }
 
-// Convert a datetime-local string (no timezone marker) to a proper ISO string
-// using the browser's local timezone. Mirrors LocalDateTimeInput — needed
-// inline here because this dialog uses a controlled input for the live preview.
-function localToIso(local: string): string {
-  const d = new Date(local);
+/** Split "YYYY-MM-DDTHH:mm" into its parts. Null when unparseable. */
+function parseWall(local: string) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(local);
+  if (!m) return null;
+  return {
+    year: Number(m[1]),
+    month0: Number(m[2]) - 1,
+    day: Number(m[3]),
+    hour: Number(m[4]),
+    minute: Number(m[5]),
+  };
+}
+
+// Convert the typed wall clock to a true instant, read in HER practice zone
+// (not the browser's) so the series means the same thing wherever it's booked.
+function localToIso(local: string, tz: string): string {
+  const w = parseWall(local);
+  if (!w) return local;
+  const d = zonedWallTimeToUtc(w.year, w.month0, w.day, w.hour, w.minute, tz);
   return Number.isNaN(d.getTime()) ? local : d.toISOString();
 }
 
-function formatPreview(d: Date): string {
-  return d.toLocaleString(undefined, {
+function formatPreview(d: Date, tz: string): string {
+  return d.toLocaleString("en-US", {
+    timeZone: tz,
     weekday: "short",
     month: "short",
     day: "numeric",
@@ -40,18 +57,36 @@ function formatPreview(d: Date): string {
   });
 }
 
+/** Step the series by WALL CLOCK in her zone, so "Monday 10am" stays 10am
+ *  across the DST boundary instead of drifting an hour. */
 function computeDates(
-  firstAt: Date,
+  firstLocal: string,
   frequency: Frequency,
-  count: number
+  count: number,
+  tz: string
 ): Date[] {
+  const w = parseWall(firstLocal);
+  if (!w) return [];
   const dates: Date[] = [];
   for (let i = 0; i < count; i++) {
-    const d = new Date(firstAt);
-    if (frequency === "weekly") d.setDate(firstAt.getDate() + i * 7);
-    else if (frequency === "biweekly") d.setDate(firstAt.getDate() + i * 14);
-    else d.setMonth(firstAt.getMonth() + i);
-    dates.push(d);
+    const step = new Date(
+      Date.UTC(
+        w.year,
+        w.month0 + (frequency === "monthly" ? i : 0),
+        w.day +
+          (frequency === "weekly" ? i * 7 : frequency === "biweekly" ? i * 14 : 0)
+      )
+    );
+    dates.push(
+      zonedWallTimeToUtc(
+        step.getUTCFullYear(),
+        step.getUTCMonth(),
+        step.getUTCDate(),
+        w.hour,
+        w.minute,
+        tz
+      )
+    );
   }
   return dates;
 }
@@ -93,19 +128,22 @@ export function ScheduleSeriesDialog({
     }
   }, []);
 
+  // Her practice timezone — what the picker and the preview both speak.
+  const practiceTz = useTimeZone();
+
   // Controlled bits we need for the live preview
-  const [firstAt, setFirstAt] = useState<string>(defaultFirstAt());
+  const [firstAt, setFirstAt] = useState<string>(() =>
+    defaultFirstAt(practiceTz)
+  );
   const [frequency, setFrequency] = useState<Frequency>("weekly");
   const [occurrenceCount, setOccurrenceCount] = useState<number>(8);
 
   const noClients = clients.length === 0;
 
   const previewDates = useMemo(() => {
-    const d = new Date(firstAt);
-    if (Number.isNaN(d.getTime())) return [];
     const safeCount = Math.min(Math.max(1, occurrenceCount), MAX_OCCURRENCES);
-    return computeDates(d, frequency, safeCount);
-  }, [firstAt, frequency, occurrenceCount]);
+    return computeDates(firstAt, frequency, safeCount, practiceTz);
+  }, [firstAt, frequency, occurrenceCount, practiceTz]);
 
   const lastDate = previewDates[previewDates.length - 1];
 
@@ -190,7 +228,7 @@ export function ScheduleSeriesDialog({
             }}
             className="space-y-4"
           >
-            <input type="hidden" name="timezone" value={browserTz} readOnly />
+            <input type="hidden" name="timezone" value={practiceTz} readOnly />
             {error && (
               <div className="text-xs text-red-700 bg-red-50 border border-red-100 rounded p-2">
                 {error}
@@ -263,7 +301,7 @@ export function ScheduleSeriesDialog({
               <input
                 type="hidden"
                 name="firstAt"
-                value={firstAt ? localToIso(firstAt) : ""}
+                value={firstAt ? localToIso(firstAt, practiceTz) : ""}
               />
             </Field>
 
@@ -319,7 +357,7 @@ export function ScheduleSeriesDialog({
                   <div className="text-[11px] text-ink-500">
                     Last:{" "}
                     <span className="text-ink-700 font-medium">
-                      {formatPreview(lastDate)}
+                      {formatPreview(lastDate, practiceTz)}
                     </span>
                   </div>
                 )}
@@ -341,7 +379,7 @@ export function ScheduleSeriesDialog({
                             : "text-ink-700"
                         }
                       >
-                        {formatPreview(d)}
+                        {formatPreview(d, practiceTz)}
                       </span>
                       {d < new Date() && (
                         <span className="chip bg-ink-100 text-ink-500 shrink-0">

@@ -143,6 +143,17 @@ export function zonedWallTimeToUtc(
   return new Date(ts);
 }
 
+/** Format an instant as a `<input type="datetime-local">` value
+ *  ("YYYY-MM-DDTHH:mm") showing the wall-clock time in `tz`. Pairs with
+ *  zonedWallTimeToUtc for a lossless round-trip through a picker that is
+ *  pinned to the practice timezone. */
+export function zonedLocalInputValue(date: Date, tz: string): string {
+  const { year, month0, day } = zonedYearMonthDay(date, tz);
+  const { hour, minute } = zonedClock(date, tz);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${year}-${p(month0 + 1)}-${p(day)}T${p(hour)}:${p(minute)}`;
+}
+
 /** Wall-clock hour (0–23) and minute of an instant, as seen in `tz`. Lets the
  *  calendar position a block by HER local hour instead of the viewer's. */
 export function zonedClock(

@@ -6,17 +6,18 @@ import { Field, inputCls } from "./Form";
 import { logPastSession } from "@/lib/actions";
 import { rethrowIfRedirect } from "@/lib/redirect-error";
 import { LocalDateTimeInput } from "./LocalDateTimeInput";
+import { useTimeZone } from "./TimeZoneProvider";
+import { zonedLocalInputValue } from "@/lib/timezone";
 
 type ClientOption = { id: string; fullName: string };
 
-// Default to "today at last hour" for datetime-local
-function defaultWhen() {
+// Default to "today at last hour" — as HER local wall clock, since that's the
+// zone the picker reads back.
+function defaultWhen(timeZone: string) {
   const d = new Date();
   d.setMinutes(0, 0, 0);
   d.setHours(d.getHours() - 1);
-  const offset = d.getTimezoneOffset();
-  const local = new Date(d.getTime() - offset * 60 * 1000);
-  return local.toISOString().slice(0, 16);
+  return zonedLocalInputValue(d, timeZone);
 }
 
 export function LogPastSessionDialog({
@@ -32,6 +33,7 @@ export function LogPastSessionDialog({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paid, setPaid] = useState(false);
+  const practiceTz = useTimeZone();
 
   const noClients = clients.length === 0;
 
@@ -137,7 +139,7 @@ export function LogPastSessionDialog({
                 <LocalDateTimeInput
                   name="scheduledAt"
                   required
-                  defaultValue={defaultWhen()}
+                  defaultValue={defaultWhen(practiceTz)}
                   className={inputCls}
                 />
               </Field>
