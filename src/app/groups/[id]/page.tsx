@@ -132,6 +132,73 @@ export default async function GroupDetailPage({
     (s) => s.status === "cancelled" || s.attendeeCount === 0
   );
 
+  // Soonest first — the next Circle is the one she actually runs. (The base
+  // query is newest-first, which is right for history and backwards for
+  // what's coming.)
+  const upcomingSorted = [...upcoming].sort(
+    (a, b) =>
+      new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime()
+  );
+  const nextUp = upcomingSorted[0] ?? null;
+  const laterUp = upcomingSorted.slice(1);
+
+  // Everyone waiting on her across every upcoming session — surfaced in the
+  // header so she doesn't have to scroll each session to find out.
+  const pendingTotal = upcomingSorted.reduce(
+    (n, s) =>
+      n +
+      (attendeesBySession.get(s.id)?.filter((a) => a.status === "pending")
+        .length ?? 0),
+    0
+  );
+
+  // ── People: the same person across every session of this Circle ─────────
+  // Attendance lives per-session, so "who are my regulars?" was unanswerable.
+  // Folded here from data already loaded — no extra query.
+  const priceBySession = new Map(sessionRows.map((s) => [s.id, s.priceCents]));
+  const whenBySession = new Map(
+    sessionRows.map((s) => [s.id, new Date(s.scheduledAt).getTime()])
+  );
+  type Person = {
+    name: string;
+    email: string;
+    attended: number;
+    paidCents: number;
+    lastAt: number | null;
+    coming: boolean;
+  };
+  const peopleMap = new Map<string, Person>();
+  for (const a of allAttendees) {
+    if (a.status === "cancelled") continue;
+    const email = (a.email ?? "").trim().toLowerCase();
+    const key = email || `name:${(a.name ?? "").trim().toLowerCase()}`;
+    if (!key) continue;
+    const when = whenBySession.get(a.groupSessionId) ?? 0;
+    const p: Person = peopleMap.get(key) ?? {
+      name: a.name ?? "",
+      email: a.email ?? "",
+      attended: 0,
+      paidCents: 0,
+      lastAt: null,
+      coming: false,
+    };
+    if (a.name) p.name = a.name;
+    if (when < now) {
+      p.attended += 1;
+      p.lastAt = Math.max(p.lastAt ?? 0, when);
+    } else {
+      p.coming = true;
+    }
+    if (a.paid && !a.refundedAt) {
+      p.paidCents += priceBySession.get(a.groupSessionId) ?? 0;
+    }
+    peopleMap.set(key, p);
+  }
+  // Most-frequent first — the regulars rise to the top.
+  const people = [...peopleMap.values()].sort(
+    (a, b) => b.attended - a.attended || (b.lastAt ?? 0) - (a.lastAt ?? 0)
+  );
+
   return (
     <AppShell
       breadcrumb={[
@@ -170,6 +237,28 @@ export default async function GroupDetailPage({
               {formatMoney(group.defaultPriceCents, group.defaultCurrency)}/seat
             </span>
           </div>
+          {/* Anyone waiting on her, across every upcoming session — visible
+              before she scrolls. Loose Ends is the queue where they're cleared
+              in one pass; this is the pointer to it. */}
+          {pendingTotal > 0 && (
+            <Link
+              href="/loose-ends"
+              className="inline-flex items-center gap-2 mt-3 px-3 py-1.5 rounded-md no-underline hover:brightness-[0.98] transition"
+              style={{
+                background: "var(--color-honey-50, #fbf3e4)",
+                border: "1px solid var(--color-honey-100, #f0dfc4)",
+              }}
+            >
+              <span className="text-sm text-ink-900" style={{ fontWeight: 600 }}>
+                {pendingTotal === 1
+                  ? "1 person is waiting to be approved"
+                  : `${pendingTotal} people are waiting to be approved`}
+              </span>
+              <span className="text-xs text-honey-700 whitespace-nowrap">
+                Review →
+              </span>
+            </Link>
+          )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <EditGroupDialog
@@ -221,14 +310,18 @@ export default async function GroupDetailPage({
         >
           Upcoming sessions
         </h2>
-        {upcoming.length === 0 ? (
+        {upcomingSorted.length === 0 ? (
           <p className="text-sm text-ink-500 italic">
             None scheduled. Click <strong>Schedule session</strong> above to
             add one.
           </p>
         ) : (
-          <div className="space-y-6">
-            {upcoming.map((s) => {
+          <div className="space-y-3">
+            {[...(nextUp ? [nextUp] : []), ...laterUp].map((s, idx) => {
+              // Only the NEXT circle is expanded — it's the one she actually
+              // runs. Everything after it is a compact row that opens on click,
+              // so a 12-week recurrence doesn't stack 12 rosters on one page.
+              const isNext = idx === 0;
               const attendees = attendeesBySession.get(s.id) ?? [];
               const pending = attendees.filter(
                 (a) => a.status === "pending"
@@ -236,7 +329,7 @@ export default async function GroupDetailPage({
               const confirmed = attendees.filter(
                 (a) => a.status === "confirmed"
               );
-              return (
+              const block = (
                 <article key={s.id} className="paper-card p-5">
                   <header className="flex items-baseline justify-between gap-3 flex-wrap mb-3">
                     <div>
@@ -347,10 +440,112 @@ export default async function GroupDetailPage({
                   )}
                 </article>
               );
+
+              if (isNext) return <div key={s.id}>{block}</div>;
+
+              return (
+                <details
+                  key={s.id}
+                  className="border border-ink-100 rounded-md bg-white px-4 py-3"
+                >
+                  <summary className="flex items-baseline gap-3 cursor-pointer list-none select-none flex-wrap">
+                    <span className="font-mono text-xs text-ink-600">
+                      {formatWhen(new Date(s.scheduledAt), locale, practiceTz)}
+                    </span>
+                    <span className="text-xs text-ink-500">
+                      {s.attendeeCount}/{s.capacity} spots
+                    </span>
+                    {pending.length > 0 && (
+                      <span
+                        className="text-[10px] uppercase tracking-wider font-mono px-1.5 py-0.5 rounded"
+                        style={{
+                          background: "var(--color-honey-50, #fbf3e4)",
+                          color: "var(--color-honey-700, #b05c36)",
+                        }}
+                      >
+                        {pending.length} waiting
+                      </span>
+                    )}
+                    {s.topic && (
+                      <span className="text-xs text-plum-700 truncate">
+                        {s.topic}
+                      </span>
+                    )}
+                    <span className="flex-1" />
+                    <span className="text-xs text-plum-700">Open</span>
+                  </summary>
+                  <div className="mt-3">{block}</div>
+                </details>
+              );
             })}
           </div>
         )}
       </section>
+
+      {people.length > 0 && (
+        <section className="mb-10">
+          {/* Attendance is stored per session, so "who keeps coming back?" was
+              unanswerable without reading every session. Folded together here:
+              one row per person across the whole Circle, regulars first. */}
+          <details className="paper-card px-4 py-3 group">
+            <summary className="flex items-baseline gap-2 cursor-pointer list-none select-none">
+              <span
+                className="serif text-xl text-ink-900"
+                style={{ fontWeight: 500 }}
+              >
+                People
+              </span>
+              <span className="font-mono text-xs text-ink-400">
+                · {people.length} {people.length === 1 ? "person" : "people"}
+              </span>
+              <span className="flex-1" />
+              <span className="text-xs text-plum-700 group-open:hidden">
+                Show
+              </span>
+              <span className="text-xs text-plum-700 hidden group-open:inline">
+                Hide
+              </span>
+            </summary>
+            <ol className="mt-3 border-t border-ink-100 divide-y divide-ink-100">
+              {people.map((p) => (
+                <li
+                  key={p.email || p.name}
+                  className="flex items-baseline gap-3 py-2 text-sm flex-wrap"
+                >
+                  <span className="text-ink-900" style={{ fontWeight: 500 }}>
+                    {p.name || "(no name)"}
+                  </span>
+                  {p.email && (
+                    <span className="text-[11px] text-ink-500 break-all">
+                      {p.email}
+                    </span>
+                  )}
+                  <span className="flex-1" />
+                  {p.coming && (
+                    <span className="text-[10px] uppercase tracking-wider font-mono px-1.5 py-0.5 rounded bg-plum-50 text-plum-700">
+                      coming
+                    </span>
+                  )}
+                  <span className="font-mono text-xs text-ink-600">
+                    {p.attended === 0
+                      ? "—"
+                      : `${p.attended}×`}
+                  </span>
+                  <span className="font-mono text-xs text-ink-500 w-16 text-right">
+                    {p.paidCents > 0
+                      ? formatMoney(p.paidCents, group.defaultCurrency)
+                      : "—"}
+                  </span>
+                </li>
+              ))}
+            </ol>
+            <p className="text-[11px] text-ink-400 mt-2">
+              Times attended · total paid. Someone who has only booked an
+              upcoming Circle shows “—” until it happens.
+            </p>
+          </details>
+        </section>
+      )}
 
       {past.length > 0 && (
         <section>

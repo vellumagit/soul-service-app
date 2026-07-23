@@ -12,9 +12,14 @@ import "server-only";
  * double-books and is safe to run repeatedly.
  */
 
-import { and, eq, gte, isNull } from "drizzle-orm";
+import { and, eq, gte, isNull, lt, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { groups, groupSessions, practitionerSettings } from "@/db/schema";
+import {
+  groups,
+  groupSessions,
+  groupAttendees,
+  practitionerSettings,
+} from "@/db/schema";
 import {
   resolveTimeZone,
   zonedWallTimeToUtc,
@@ -109,6 +114,43 @@ async function ensureForGroup(
     created++;
   }
   return created;
+}
+
+/**
+ * Delete cancelled Circle sessions that nobody ever joined.
+ *
+ * A cancelled session with zero attendees carries no history — but they pile up
+ * invisibly (14 had stacked on a single slot before this existed), burying the
+ * sessions that matter. Two hard guards:
+ *   - only `cancelled` rows, never a scheduled one
+ *   - only rows with NO attendee record at all, so anything with a real person
+ *     (or a payment) is untouchable
+ * A day of grace on `updatedAt` means an accidental cancel is still recoverable
+ * the same day.
+ */
+export async function pruneEmptyCancelledCircleSessions(): Promise<number> {
+  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const doomed = await db
+    .select({ id: groupSessions.id })
+    .from(groupSessions)
+    .where(
+      and(
+        eq(groupSessions.status, "cancelled"),
+        lt(groupSessions.updatedAt, cutoff),
+        sql`NOT EXISTS (
+          SELECT 1 FROM ${groupAttendees}
+          WHERE ${groupAttendees.groupSessionId} = ${groupSessions.id}
+        )`
+      )
+    );
+  if (doomed.length === 0) return 0;
+  await db.delete(groupSessions).where(
+    inArray(
+      groupSessions.id,
+      doomed.map((d) => d.id)
+    )
+  );
+  return doomed.length;
 }
 
 export async function ensureRecurringCircleSessions(opts?: {

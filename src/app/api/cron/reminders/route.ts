@@ -5,7 +5,10 @@
 // requests. Anyone else hitting this endpoint gets 401.
 import { NextResponse } from "next/server";
 import { processReminders } from "@/lib/reminders";
-import { ensureRecurringCircleSessions } from "@/lib/recurring-circles";
+import {
+  ensureRecurringCircleSessions,
+  pruneEmptyCancelledCircleSessions,
+} from "@/lib/recurring-circles";
 
 export const dynamic = "force-dynamic";
 // Reminders can take a few seconds across many accounts — give it room.
@@ -36,5 +39,19 @@ export async function GET(request: Request) {
     console.error("[cron] recurring circles top-up failed", err);
   }
 
-  return NextResponse.json({ ok: true, ...stats, recurringCircles });
+  // Sweep away cancelled Circle sessions nobody joined — they carry no history
+  // and otherwise accumulate silently, burying the sessions that matter.
+  let prunedCircles = 0;
+  try {
+    prunedCircles = await pruneEmptyCancelledCircleSessions();
+  } catch (err) {
+    console.error("[cron] empty-cancelled circle prune failed", err);
+  }
+
+  return NextResponse.json({
+    ok: true,
+    ...stats,
+    recurringCircles,
+    prunedCircles,
+  });
 }
