@@ -10,6 +10,7 @@ import {
 import type { Theme, Observation, Session } from "@/db/schema";
 import { ConfirmButton } from "./ConfirmButton";
 import { shortDate } from "@/lib/format";
+import { useTimeZone } from "./TimeZoneProvider";
 
 export function PatternsTab({
   clientId,
@@ -22,6 +23,7 @@ export function PatternsTab({
   observations: Observation[];
   sessions: Session[];
 }) {
+  const tz = useTimeZone();
   const completed = sessions.filter((s) => s.status === "completed");
 
   // Modality breakdown — count + average something useful
@@ -60,7 +62,7 @@ export function PatternsTab({
                 className="grid grid-cols-[80px_1fr] gap-3 text-sm border-l-2 border-ink-100 pl-3 py-1"
               >
                 <span className="font-mono text-xs text-ink-500">
-                  {shortDate(s.scheduledAt)}
+                  {shortDate(s.scheduledAt, tz)}
                 </span>
                 <div>
                   <div className="text-ink-700">

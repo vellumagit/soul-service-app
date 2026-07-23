@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { shortTime, toneFor } from "@/lib/format";
+import { shortTime, zoneAbbrev, toneFor } from "@/lib/format";
+import { zonedDateKey } from "@/lib/timezone";
+import { useTimeZone } from "./TimeZoneProvider";
 
 type CalSession = {
   id: string;
@@ -46,35 +48,34 @@ export function MonthCalendar({
   /** Lowercase ISO weekday names she's marked as sacred-off. */
   sabbathDays?: string[];
 }) {
+  // All grid math runs on pure calendar dates (UTC arithmetic) and all session
+  // bucketing runs in HER practice timezone — so the month reads identically
+  // whether the browser is in Edmonton or Brazil.
+  const tz = useTimeZone();
   const sabbathSet = new Set(sabbathDays.map((d) => d.toLowerCase()));
-  const isSabbath = (date: Date) =>
-    sabbathSet.has(WEEKDAY_NAME[date.getDay()]);
-  const anchor = new Date(monthStart);
-  const year = anchor.getFullYear();
-  const month = anchor.getMonth();
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  // Month identity from the date string, NOT browser-local Date (a UTC-midnight
+  // ISO parsed in a behind-UTC browser would report the previous month).
+  const [year, mm] = monthStart.slice(0, 10).split("-").map(Number);
+  const month = mm - 1; // 0-based
 
-  // First cell = the Sunday on/before the 1st of the month.
-  const firstOfMonth = new Date(year, month, 1);
-  const gridStart = new Date(firstOfMonth);
-  gridStart.setDate(firstOfMonth.getDate() - firstOfMonth.getDay());
+  const todayKey = zonedDateKey(new Date(), tz);
+  const zoneLabel = zoneAbbrev(new Date(), tz);
 
-  // 6 rows × 7 cols = always 42 cells. Some months need 5 rows; the 6th row
-  // ends up empty/dimmed. Trade-off for a stable grid height.
+  // First cell = the Sunday on/before the 1st. getUTCDay() of a pure-date
+  // instant gives the true weekday for that calendar date.
+  const firstDow = new Date(Date.UTC(year, month, 1)).getUTCDay();
+
+  // 6 rows × 7 cols = always 42 cells, as UTC calendar dates.
   const days: Date[] = [];
   for (let i = 0; i < 42; i++) {
-    const d = new Date(gridStart);
-    d.setDate(gridStart.getDate() + i);
-    days.push(d);
+    days.push(new Date(Date.UTC(year, month, 1 - firstDow + i)));
   }
 
-  // Bucket sessions by YYYY-MM-DD for quick lookup
+  // Bucket sessions by HER-local YYYY-MM-DD for quick lookup
   const buckets: Record<string, CalSession[]> = {};
   for (const s of sessions) {
-    const d = new Date(s.scheduledAt);
-    const key = ymd(d);
+    const key = zonedDateKey(new Date(s.scheduledAt), tz);
     if (!buckets[key]) buckets[key] = [];
     buckets[key].push(s);
   }
@@ -89,31 +90,41 @@ export function MonthCalendar({
   return (
     <div className="border border-ink-200 rounded-md bg-white overflow-hidden">
       {/* Weekday header */}
-      <div className="grid grid-cols-7 border-b border-ink-100 text-[10px] uppercase tracking-wider text-ink-500 bg-ink-50/50">
+      <div className="grid grid-cols-7 border-b border-ink-100 text-[10px] uppercase tracking-wider text-ink-500 bg-ink-50/50 relative">
         {DAY_NAMES.map((n) => (
           <div key={n} className="px-2 py-2 text-center font-medium">
             {n}
           </div>
         ))}
+        {zoneLabel && (
+          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] text-ink-400 normal-case tracking-normal hidden sm:block">
+            times in {zoneLabel}
+          </span>
+        )}
       </div>
 
       {/* Grid */}
       <div className="grid grid-cols-7 grid-rows-6">
         {days.map((d, i) => {
-          const inMonth = d.getMonth() === month;
-          const isToday = d.getTime() === today.getTime();
-          const isPast = d < today;
-          const key = ymd(d);
+          const key = d.toISOString().slice(0, 10);
+          const inMonth = d.getUTCMonth() === month;
+          const isToday = key === todayKey;
+          const isPast = key < todayKey;
           const daySessions = buckets[key] ?? [];
           const visible = daySessions.slice(0, MAX_CHIPS_PER_DAY);
           const overflow = daySessions.length - visible.length;
 
           // Link the empty area of the cell to the week view containing this day
-          const weekStart = new Date(d);
-          weekStart.setDate(d.getDate() - d.getDay());
+          const weekStart = new Date(
+            Date.UTC(
+              d.getUTCFullYear(),
+              d.getUTCMonth(),
+              d.getUTCDate() - d.getUTCDay()
+            )
+          );
           const weekHref = `/calendar?view=week&start=${weekStart.toISOString()}`;
 
-          const off = isSabbath(d);
+          const off = sabbathSet.has(WEEKDAY_NAME[d.getUTCDay()]);
           return (
             <div
               key={i}
@@ -149,7 +160,7 @@ export function MonthCalendar({
                     isToday ? "text-plum-700 font-semibold" : "",
                   ].join(" ")}
                 >
-                  {d.getDate()}
+                  {d.getUTCDate()}
                 </span>
                 {daySessions.length > 0 && (
                   <span className="text-[9px] text-ink-400 font-mono">
@@ -172,10 +183,10 @@ export function MonthCalendar({
                       cancelled ? "opacity-50 line-through" : "",
                       isPast && !cancelled ? "opacity-75" : "",
                     ].join(" ")}
-                    title={`${s.clientName} · ${s.type} · ${shortTime(s.scheduledAt)}`}
+                    title={`${s.clientName} · ${s.type} · ${shortTime(s.scheduledAt, tz)}`}
                   >
                     <span className="font-mono text-[9px] opacity-70">
-                      {shortTime(s.scheduledAt)}
+                      {shortTime(s.scheduledAt, tz)}
                     </span>{" "}
                     <span className="font-medium">{s.clientName}</span>
                   </Link>
@@ -196,11 +207,4 @@ export function MonthCalendar({
       </div>
     </div>
   );
-}
-
-function ymd(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
-    2,
-    "0"
-  )}-${String(d.getDate()).padStart(2, "0")}`;
 }

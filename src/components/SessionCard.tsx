@@ -11,9 +11,11 @@ import type { NoteTemplate, Session } from "@/db/schema";
 import {
   fullDate,
   shortTime,
+  zoneAbbrev,
   paymentMethodLabel,
   money,
 } from "@/lib/format";
+import { useTimeZone } from "./TimeZoneProvider";
 import { Field, inputCls } from "./Form";
 import { ConfirmButton } from "./ConfirmButton";
 import { MarkPaidDialog } from "./MarkPaidDialog";
@@ -70,6 +72,10 @@ export function SessionCard({
   //   2. clicking the card header to collapse asks for confirmation, since
   //      collapsing unmounts the form and loses everything she typed.
   const [dirty, setDirty] = useState(false);
+  // Render this session's time in HER practice timezone, not the viewer's
+  // browser zone — so it reads the same whether she's home in Edmonton or
+  // Brian's looking at it from Brazil.
+  const tz = useTimeZone();
 
   useEffect(() => {
     if (!dirty) return;
@@ -117,10 +123,13 @@ export function SessionCard({
         </svg>
         <div className="text-sm flex-1 min-w-0">
           <div className="font-medium text-ink-900">
-            {fullDate(session.scheduledAt)}{" "}
+            {fullDate(session.scheduledAt, tz)}{" "}
             <span className="text-ink-400 font-normal">·</span>{" "}
             <span className="text-ink-600 font-normal">
-              {shortTime(session.scheduledAt)}
+              {shortTime(session.scheduledAt, tz)}
+            </span>{" "}
+            <span className="text-ink-400 font-normal text-[11px] uppercase tracking-wide">
+              {zoneAbbrev(session.scheduledAt, tz)}
             </span>
           </div>
           <div className="text-xs text-ink-500 mt-0.5 truncate">

@@ -50,6 +50,7 @@ export default async function ClientsPage({
       rightAction={<QuickActions clients={picker} />}
       userEmail={email}
       locale={locale}
+      timeZone={settings.timezone}
     >
       <div className="flex items-end justify-between mb-5 gap-4 flex-wrap">
         <div>

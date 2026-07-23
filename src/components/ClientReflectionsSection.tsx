@@ -15,9 +15,12 @@ const PREVIEW_LIMIT = 5;
 export async function ClientReflectionsSection({
   accountId,
   clientId,
+  timeZone,
 }: {
   accountId: string;
   clientId: string;
+  /** Practice timezone — render dates in HER local zone, not the server's. */
+  timeZone?: string;
 }) {
   const rows = await db
     .select({
@@ -71,7 +74,7 @@ export async function ClientReflectionsSection({
               {r.body}
             </p>
             <p className="text-[11px] text-ink-400 italic mt-1.5">
-              {fullDate(new Date(r.createdAt))}
+              {fullDate(new Date(r.createdAt), timeZone)}
               {r.sessionScheduledAt && (
                 <>
                   {" · "}
@@ -79,7 +82,7 @@ export async function ClientReflectionsSection({
                     href={`/clients/${clientId}?tab=sessions#${r.sessionId}`}
                     className="hover:text-plum-700 hover:underline"
                   >
-                    about {fullDate(new Date(r.sessionScheduledAt))}
+                    about {fullDate(new Date(r.sessionScheduledAt), timeZone)}
                   </Link>
                 </>
               )}

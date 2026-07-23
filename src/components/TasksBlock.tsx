@@ -11,6 +11,7 @@ import { Modal } from "./Modal";
 import { Field, inputCls } from "./Form";
 import { ConfirmButton } from "./ConfirmButton";
 import { shortDateTime } from "@/lib/format";
+import { useTimeZone } from "./TimeZoneProvider";
 import { rethrowIfRedirect } from "@/lib/redirect-error";
 
 // Loose row type — TasksBlock works for both full Task rows and slim
@@ -81,6 +82,7 @@ function TaskRowItem({
   task: TaskRow;
   showClient: boolean;
 }) {
+  const tz = useTimeZone();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const isDone = !!task.completedAt;
@@ -145,7 +147,7 @@ function TaskRowItem({
             {task.dueAt && (
               <span className={isOverdue ? "text-red-700 font-medium" : ""}>
                 {isOverdue ? "Overdue · " : "Due "}
-                {shortDateTime(task.dueAt)}
+                {shortDateTime(task.dueAt, tz)}
               </span>
             )}
             {showClient && task.clientName && (

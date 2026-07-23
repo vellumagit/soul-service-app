@@ -63,6 +63,7 @@ export default async function LibraryPage() {
       rightAction={<QuickActions clients={clientsList} />}
       userEmail={email}
       locale={locale}
+      timeZone={settings.timezone}
     >
       <header className="mb-7 flex items-baseline justify-between gap-3 flex-wrap">
         <div>

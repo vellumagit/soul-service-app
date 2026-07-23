@@ -11,6 +11,7 @@ import {
   getSettings,
 } from "@/db/queries";
 import { shortDate } from "@/lib/format";
+import { resolveTimeZone } from "@/lib/timezone";
 import { GoalsBlock } from "@/components/GoalsBlock";
 import { AttachmentsBlock } from "@/components/AttachmentsBlock";
 import { QuickActions } from "@/components/QuickActions";
@@ -95,6 +96,7 @@ export default async function ClientProfilePage({
 
   const openTasks = file.tasks.filter((t) => !t.completedAt);
   const locale = asLocale(settings.uiLanguage);
+  const practiceTz = resolveTimeZone(settings.timezone);
 
   return (
     <AppShell
@@ -105,6 +107,7 @@ export default async function ClientProfilePage({
       rightAction={<QuickActions clients={allClients} />}
       userEmail={email}
       locale={locale}
+      timeZone={settings.timezone}
     >
       {/* Sensitivity flags — first thing visible if any */}
       <SensitivityFlags
@@ -147,6 +150,7 @@ export default async function ClientProfilePage({
       <ClientReflectionsSection
         accountId={accountId}
         clientId={client.id}
+        timeZone={practiceTz}
       />
 
       {/* Tabs — folder-divider style, visually sit on the content below */}
@@ -200,6 +204,7 @@ export default async function ClientProfilePage({
               Less prominent than a header, still scannable if she wants the numbers. */}
           <ClientStatStrip
             clientId={client.id}
+            timeZone={practiceTz}
             stats={{
               sessionsHeld: completedSessions.length,
               togetherSince: client.createdAt,
@@ -334,7 +339,9 @@ export default async function ClientProfilePage({
         </div>
       )}
 
-      {tab === "activity" && <ActivityTimeline events={activity} />}
+      {tab === "activity" && (
+        <ActivityTimeline events={activity} timeZone={practiceTz} />
+      )}
 
       {tab === "sessions" && (
         <div>
@@ -360,6 +367,7 @@ export default async function ClientProfilePage({
               clientName={client.fullName}
               noteTemplates={noteTpls}
               autoUploadAiNotes={settings.autoUploadAiNotes}
+              timeZone={practiceTz}
             />
           )}
         </div>
@@ -370,6 +378,7 @@ export default async function ClientProfilePage({
           accountId={accountId}
           clientId={client.id}
           clientFullName={client.fullName}
+          timeZone={practiceTz}
         />
       )}
 

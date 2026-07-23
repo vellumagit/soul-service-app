@@ -25,6 +25,7 @@ import {
 } from "@/db/queries";
 import type { NetworkFilter } from "@/db/queries";
 import { initials, relativeTime, shortDate } from "@/lib/format";
+import { resolveTimeZone } from "@/lib/timezone";
 import { requireSession } from "@/lib/session-cookies";
 import { asLocale, t } from "@/lib/i18n";
 
@@ -75,6 +76,7 @@ export default async function NetworkPage({
     getLeadInboxCount(accountId),
   ]);
   const locale = asLocale(settings.uiLanguage);
+  const practiceTz = resolveTimeZone(settings.timezone);
 
   return (
     <AppShell
@@ -88,6 +90,7 @@ export default async function NetworkPage({
       rightAction={<QuickActions clients={picker} />}
       userEmail={email}
       locale={locale}
+      timeZone={settings.timezone}
     >
       <header className="mb-6">
         <div className="flex items-end justify-between gap-4 flex-wrap mb-2">
@@ -251,7 +254,7 @@ export default async function NetworkPage({
                     <span title="When you met">
                       <span className="text-ink-400">met</span>{" "}
                       <span className="text-ink-700 font-mono">
-                        {shortDate(p.metOn)}
+                        {shortDate(p.metOn, practiceTz)}
                       </span>
                     </span>
                   )}

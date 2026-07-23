@@ -54,6 +54,7 @@ export default async function LeadFormsPage() {
       rightAction={<QuickActions clients={picker} />}
       userEmail={email}
       locale={locale}
+      timeZone={settings.timezone}
     >
       <header className="mb-6">
         <div className="flex items-end justify-between gap-4 flex-wrap mb-2">

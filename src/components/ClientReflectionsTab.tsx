@@ -15,10 +15,13 @@ export async function ClientReflectionsTab({
   accountId,
   clientId,
   clientFullName,
+  timeZone,
 }: {
   accountId: string;
   clientId: string;
   clientFullName: string;
+  /** Practice timezone — render dates in HER local zone, not the server's. */
+  timeZone?: string;
 }) {
   const rows = await db
     .select({
@@ -110,7 +113,7 @@ export async function ClientReflectionsTab({
                       {r.body}
                     </p>
                     <p className="text-[11px] text-ink-500 italic mt-3">
-                      {fullDate(new Date(r.createdAt))}
+                      {fullDate(new Date(r.createdAt), timeZone)}
                       {r.sessionScheduledAt && (
                         <>
                           {" · "}
@@ -118,7 +121,7 @@ export async function ClientReflectionsTab({
                             href={`/clients/${clientId}?tab=sessions#${r.sessionId}`}
                             className="hover:text-plum-700 hover:underline"
                           >
-                            about {fullDate(new Date(r.sessionScheduledAt))} ·{" "}
+                            about {fullDate(new Date(r.sessionScheduledAt), timeZone)} ·{" "}
                             {r.sessionType}
                           </Link>
                         </>

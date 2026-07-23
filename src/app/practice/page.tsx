@@ -21,6 +21,7 @@ import {
   listClientsForPicker,
 } from "@/db/queries";
 import { fullDate } from "@/lib/format";
+import { resolveTimeZone } from "@/lib/timezone";
 import { asLocale, t } from "@/lib/i18n";
 
 export const dynamic = "force-dynamic";
@@ -48,6 +49,7 @@ export default async function PracticePage({
     listClientsForPicker(accountId),
   ]);
   const locale = asLocale(settings.uiLanguage);
+  const practiceTz = resolveTimeZone(settings.timezone);
   const hours = Math.round((review.totalMinutes / 60) * 10) / 10;
   const empty =
     review.sessionsHeld === 0 &&
@@ -63,6 +65,7 @@ export default async function PracticePage({
       rightAction={<QuickActions clients={clients} />}
       userEmail={email}
       locale={locale}
+      timeZone={settings.timezone}
     >
       {/* Header — year picker + tagline */}
       <header className="mb-8">
@@ -152,7 +155,7 @@ export default async function PracticePage({
                         {m.clientName}
                       </Link>
                       <span className="text-ink-300 mx-1.5">·</span>
-                      {fullDate(m.sessionAt)}
+                      {fullDate(m.sessionAt, practiceTz)}
                     </p>
                   </li>
                 ))}
@@ -198,7 +201,7 @@ export default async function PracticePage({
                       {m.clientName}
                     </Link>
                     <span className="text-ink-400 text-xs">
-                      · {fullDate(m.sessionAt)}
+                      · {fullDate(m.sessionAt, practiceTz)}
                     </span>
                   </li>
                 ))}
@@ -261,7 +264,7 @@ export default async function PracticePage({
                         </Link>
                         <span className="text-ink-400 text-[11px]">
                           {" "}
-                          · {fullDate(b.firstAt)}
+                          · {fullDate(b.firstAt, practiceTz)}
                         </span>
                       </li>
                     ))}

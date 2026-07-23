@@ -27,13 +27,27 @@ export function relativeTime(date: Date | string | null): string {
   return diffDays === 1 ? "tomorrow" : `in ${diffDays}d`;
 }
 
-export function shortDate(date: Date | string | null): string {
+// Every date/time helper below takes an optional `timeZone` (an IANA zone like
+// "America/Edmonton"). When supplied, the value is rendered in THAT zone rather
+// than the runtime's — which on Vercel server components is UTC, and in the
+// browser is the viewer's local zone. Threading the practice timezone through
+// these keeps the whole practitioner workspace speaking in her local time no
+// matter where it renders or who's logged in. Omit it and behavior is unchanged
+// (legacy callers, and client-facing surfaces that intentionally use local tz).
+export function shortDate(
+  date: Date | string | null,
+  timeZone?: string
+): string {
   if (!date) return "—";
   const d = typeof date === "string" ? new Date(date) : date;
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    ...(timeZone ? { timeZone } : {}),
+  });
 }
 
-export function fullDate(date: Date | string | null): string {
+export function fullDate(date: Date | string | null, timeZone?: string): string {
   if (!date) return "—";
   const d = typeof date === "string" ? new Date(date) : date;
   return d.toLocaleDateString("en-US", {
@@ -41,22 +55,48 @@ export function fullDate(date: Date | string | null): string {
     month: "short",
     day: "numeric",
     year: "numeric",
+    ...(timeZone ? { timeZone } : {}),
   });
 }
 
-export function shortTime(date: Date | string | null): string {
+export function shortTime(
+  date: Date | string | null,
+  timeZone?: string
+): string {
   if (!date) return "—";
   const d = typeof date === "string" ? new Date(date) : date;
   return d.toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",
+    ...(timeZone ? { timeZone } : {}),
   });
 }
 
-export function shortDateTime(date: Date | string | null): string {
+export function shortDateTime(
+  date: Date | string | null,
+  timeZone?: string
+): string {
   if (!date) return "—";
   const d = typeof date === "string" ? new Date(date) : date;
-  return shortDate(d) + " · " + shortTime(d);
+  return shortDate(d, timeZone) + " · " + shortTime(d, timeZone);
+}
+
+/** Just the zone abbreviation for an instant — "MDT" / "MST" / "EST" — so a
+ *  surface can label its times once ("All times MDT") instead of repeating the
+ *  zone on every row. Returns "" when no zone is given. */
+export function zoneAbbrev(
+  date: Date | string | null,
+  timeZone?: string
+): string {
+  if (!date || !timeZone) return "";
+  const d = typeof date === "string" ? new Date(date) : date;
+  const part = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    timeZoneName: "short",
+  })
+    .formatToParts(d)
+    .find((p) => p.type === "timeZoneName");
+  return part?.value ?? "";
 }
 
 export function bytes(n: number | null | undefined): string {

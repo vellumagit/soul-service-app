@@ -14,8 +14,9 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { requireSession } from "@/lib/session-cookies";
-import { getSessionPrep } from "@/db/queries";
+import { getSessionPrep, getSettings } from "@/db/queries";
 import { fullDate, shortTime, relativeTime } from "@/lib/format";
+import { resolveTimeZone } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -27,8 +28,12 @@ export default async function ThresholdPage({
   const { accountId } = await requireSession();
   const { id } = await params;
 
-  const prep = await getSessionPrep(accountId, id);
+  const [prep, settings] = await Promise.all([
+    getSessionPrep(accountId, id),
+    getSettings(accountId),
+  ]);
   if (!prep) notFound();
+  const practiceTz = resolveTimeZone(settings.timezone);
 
   // If she lands on a cancelled session by accident, bounce her — the
   // ritual is for sessions that are actually happening.
@@ -89,7 +94,7 @@ export default async function ThresholdPage({
             <div className="text-sm text-ink-600">
               {session.type}
               <span className="text-ink-300 mx-2">·</span>
-              {shortTime(session.scheduledAt)}{" "}
+              {shortTime(session.scheduledAt, practiceTz)}{" "}
               <span className="text-ink-400">
                 ({session.durationMinutes} min)
               </span>
@@ -167,7 +172,7 @@ export default async function ThresholdPage({
                 Where you left off
               </div>
               <div className="text-center text-sm text-ink-600">
-                {fullDate(lastSession.scheduledAt)}
+                {fullDate(lastSession.scheduledAt, practiceTz)}
                 <span className="text-ink-300 mx-2">·</span>
                 {relativeTime(lastSession.scheduledAt)}
               </div>

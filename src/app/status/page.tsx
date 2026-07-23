@@ -244,6 +244,7 @@ export default async function StatusPage({
       rightAction={<QuickActions clients={clientsList} />}
       userEmail={email}
       locale={locale}
+      timeZone={settings.timezone}
     >
       <div className="mb-5">
         <h1 className="text-2xl font-semibold text-ink-900 tracking-tight">

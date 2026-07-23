@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { fullDate, shortTime, toneFor } from "@/lib/format";
+import { fullDate, shortDate, shortTime, zoneAbbrev, toneFor } from "@/lib/format";
+import { zonedClock, zonedDateKey } from "@/lib/timezone";
+import { useTimeZone } from "./TimeZoneProvider";
 
 type CalSession = {
   id: string;
@@ -20,9 +22,8 @@ const HOUR_END = 21;
 const PX_PER_HOUR = 48;
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-// JS Date.getDay() → ISO weekday name (lowercase).
-// JS: 0=Sun, 1=Mon, ..., 6=Sat. Maps to the strings stored in
-// practitioner_settings.sabbath_days.
+// Column index (0=Sun … 6=Sat) → ISO weekday name (lowercase), matching the
+// strings stored in practitioner_settings.sabbath_days.
 const WEEKDAY_NAME = [
   "sunday",
   "monday",
@@ -44,42 +45,41 @@ export function WeekCalendar({
   sabbathDays?: string[];
 }) {
   const router = useRouter();
-  const start = new Date(weekStart);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const todayDayIndex =
-    today >= start &&
-    today < new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000)
-      ? today.getDay()
-      : -1;
+  // Everything below is computed in HER practice timezone, so a block lands in
+  // the right row/column no matter what zone the browser is in (Svit in
+  // Edmonton, Brian in Brazil — identical view).
+  const tz = useTimeZone();
 
-  const days = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(start);
-    d.setDate(d.getDate() + i);
-    return d;
-  });
+  // The 7 day columns as pure "YYYY-MM-DD" calendar dates, built from the
+  // week's Sunday. Viewer- and server-tz independent (plain date arithmetic).
+  const [wy, wm, wd] = weekStart.slice(0, 10).split("-").map(Number);
+  const dayKeys = Array.from({ length: 7 }, (_, i) =>
+    new Date(Date.UTC(wy, wm - 1, wd + i)).toISOString().slice(0, 10)
+  );
+  // A safe midday-UTC anchor per column for date labels (never rolls to an
+  // adjacent day when formatted in UTC).
+  const dayDates = dayKeys.map((k) => new Date(`${k}T12:00:00Z`));
+
+  const todayKey = zonedDateKey(new Date(), tz);
+  const todayDayIndex = dayKeys.indexOf(todayKey);
 
   const sabbathSet = new Set(sabbathDays.map((d) => d.toLowerCase()));
-  function isSabbath(date: Date): boolean {
-    return sabbathSet.has(WEEKDAY_NAME[date.getDay()]);
-  }
+  const isSabbathCol = (i: number) => sabbathSet.has(WEEKDAY_NAME[i]);
 
   const sessionsByDay: CalSession[][] = Array.from({ length: 7 }, () => []);
   sessions.forEach((r) => {
-    const d = new Date(r.scheduledAt);
-    const idx = Math.floor(
-      (d.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)
-    );
-    if (idx >= 0 && idx < 7) sessionsByDay[idx].push(r);
+    const idx = dayKeys.indexOf(zonedDateKey(new Date(r.scheduledAt), tz));
+    if (idx >= 0) sessionsByDay[idx].push(r);
   });
 
   const totalMin = sessions.reduce((s, r) => s + r.durationMinutes, 0);
   const clients = new Set(sessions.map((r) => r.clientId)).size;
-  const nowHour = new Date().getHours() + new Date().getMinutes() / 60;
+  const nowClock = zonedClock(new Date(), tz);
+  const nowHour = nowClock.hour + nowClock.minute / 60;
+  const zoneLabel = zoneAbbrev(new Date(), tz);
 
   function shiftWeek(deltaDays: number) {
-    const newStart = new Date(start);
-    newStart.setDate(newStart.getDate() + deltaDays);
+    const newStart = new Date(Date.UTC(wy, wm - 1, wd + deltaDays));
     router.push(`/calendar?start=${newStart.toISOString().slice(0, 10)}`);
   }
 
@@ -91,16 +91,13 @@ export function WeekCalendar({
             This week
           </h1>
           <p className="text-sm text-ink-500 mt-1">
-            {start.toLocaleDateString("en-US", {
-              month: "short",
-              day: "numeric",
-            })}{" "}
-            –{" "}
-            {days[6].toLocaleDateString("en-US", {
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-            })}
+            {shortDate(dayDates[0], "UTC")} – {fullDate(dayDates[6], "UTC")}
+            {zoneLabel && (
+              <span className="text-ink-400">
+                {" "}
+                · all times {zoneLabel}
+              </span>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-2 text-sm">
@@ -142,7 +139,7 @@ export function WeekCalendar({
 
       {/* Mobile: list view */}
       <div className="md:hidden space-y-4">
-        {days.map((d, i) => {
+        {dayDates.map((d, i) => {
           const daySessions = sessionsByDay[i];
           if (daySessions.length === 0 && i !== todayDayIndex) return null;
           const isToday = i === todayDayIndex;
@@ -153,7 +150,7 @@ export function WeekCalendar({
                   isToday ? "text-plum-700 font-semibold" : "text-ink-500"
                 }`}
               >
-                {DAY_NAMES[i]} · {fullDate(d)}
+                {DAY_NAMES[i]} · {fullDate(d, "UTC")}
                 {isToday && " · today"}
               </div>
               {daySessions.length === 0 ? (
@@ -170,7 +167,7 @@ export function WeekCalendar({
                     >
                       <div className="flex items-center gap-3">
                         <span className="font-mono text-sm text-plum-700 font-medium">
-                          {shortTime(s.scheduledAt)}
+                          {shortTime(s.scheduledAt, tz)}
                         </span>
                         <div className="flex-1 min-w-0">
                           <div className="text-sm font-medium text-ink-900 truncate">
@@ -208,8 +205,9 @@ export function WeekCalendar({
           style={{ gridTemplateColumns: "56px repeat(7, 1fr)" }}
         >
           <div />
-          {days.map((d, i) => {
+          {dayKeys.map((key, i) => {
             const isToday = i === todayDayIndex;
+            const dayNum = Number(key.slice(8, 10));
             return (
               <div
                 key={i}
@@ -225,10 +223,10 @@ export function WeekCalendar({
                 <div className="mt-0.5">
                   {isToday ? (
                     <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-plum-600 text-white text-xs font-semibold">
-                      {d.getDate()}
+                      {dayNum}
                     </span>
                   ) : (
-                    <span className="text-sm text-ink-800">{d.getDate()}</span>
+                    <span className="text-sm text-ink-800">{dayNum}</span>
                   )}
                 </div>
               </div>
@@ -268,9 +266,9 @@ export function WeekCalendar({
           </div>
 
           {/* Day columns */}
-          {days.map((d, dayIdx) => {
+          {dayKeys.map((key, dayIdx) => {
             const isToday = dayIdx === todayDayIndex;
-            const isOff = isSabbath(d);
+            const isOff = isSabbathCol(dayIdx);
             return (
               <div
                 key={dayIdx}
@@ -283,17 +281,19 @@ export function WeekCalendar({
                     slightly so it reads as a quiet annotation, not a heading. */}
                 {isOff && <span className="sabbath-label">Off</span>}
                 {sessionsByDay[dayIdx].map((s) => {
-                  const d = new Date(s.scheduledAt);
-                  const startH = d.getHours() + d.getMinutes() / 60;
+                  // Position by HER local clock, not the browser's.
+                  const startInstant = new Date(s.scheduledAt);
+                  const { hour, minute } = zonedClock(startInstant, tz);
+                  const startH = hour + minute / 60;
                   const top = (startH - HOUR_START) * PX_PER_HOUR;
                   const height =
                     (s.durationMinutes / 60) * PX_PER_HOUR - 4;
                   if (top < 0 || top > (HOUR_END - HOUR_START) * PX_PER_HOUR)
                     return null;
                   const tone = toneFor(s.type);
-                  const endMin = d.getMinutes() + s.durationMinutes;
-                  const endD = new Date(d);
-                  endD.setMinutes(endMin);
+                  const endInstant = new Date(
+                    startInstant.getTime() + s.durationMinutes * 60000
+                  );
                   return (
                     <Link
                       key={s.id}
@@ -302,7 +302,7 @@ export function WeekCalendar({
                       style={{ top, height }}
                     >
                       <div className="t">
-                        {shortTime(d)}–{shortTime(endD)}
+                        {shortTime(startInstant, tz)}–{shortTime(endInstant, tz)}
                       </div>
                       <div className="n">{s.clientName}</div>
                       {height > 44 && <div className="m">{s.type}</div>}

@@ -118,6 +118,7 @@ export default async function CalendarPage({
       rightAction={<QuickActions clients={clients} />}
       userEmail={email}
       locale={locale}
+      timeZone={settings.timezone}
     >
       {/* Toolbar: nav + range label + view switcher + create actions */}
       <div className="flex items-center gap-2 flex-wrap mb-4">

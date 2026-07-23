@@ -143,6 +143,36 @@ export function zonedWallTimeToUtc(
   return new Date(ts);
 }
 
+/** Wall-clock hour (0–23) and minute of an instant, as seen in `tz`. Lets the
+ *  calendar position a block by HER local hour instead of the viewer's. */
+export function zonedClock(
+  date: Date,
+  tz: string
+): { hour: number; minute: number } {
+  const zone = resolveTimeZone(tz);
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    timeZone: zone,
+    hourCycle: "h23",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const map: Record<string, string> = {};
+  for (const p of dtf.formatToParts(date)) {
+    if (p.type !== "literal") map[p.type] = p.value;
+  }
+  return { hour: Number(map.hour), minute: Number(map.minute) };
+}
+
+/** "YYYY-MM-DD" calendar date of an instant, as seen in `tz`. Used to bucket
+ *  sessions into day columns/cells by HER local day, viewer-independent. */
+export function zonedDateKey(date: Date, tz: string): string {
+  const { year, month0, day } = zonedYearMonthDay(date, tz);
+  return `${year}-${String(month0 + 1).padStart(2, "0")}-${String(day).padStart(
+    2,
+    "0"
+  )}`;
+}
+
 /** Calendar year / month (0-based) / day of an instant, as seen in `tz`. */
 export function zonedYearMonthDay(
   date: Date,

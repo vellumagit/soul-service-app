@@ -19,8 +19,11 @@ const KIND_META: Record<
 
 export function ActivityTimeline({
   events,
+  timeZone,
 }: {
   events: ActivityEvent[];
+  /** Practice timezone — render the hover timestamp in HER local zone. */
+  timeZone?: string;
 }) {
   if (events.length === 0) {
     return (
@@ -59,7 +62,7 @@ export function ActivityTimeline({
                 </div>
                 <div
                   className="text-[11px] text-ink-400 font-mono"
-                  title={shortDateTime(e.occurredAt)}
+                  title={shortDateTime(e.occurredAt, timeZone)}
                 >
                   {relativeTime(e.occurredAt)}
                 </div>

@@ -11,6 +11,7 @@ import {
   money,
   paymentMethodLabel,
 } from "@/lib/format";
+import { resolveTimeZone } from "@/lib/timezone";
 import { MarkPaidDialog } from "@/components/MarkPaidDialog";
 import { QuickActions } from "@/components/QuickActions";
 import { requireSession } from "@/lib/session-cookies";
@@ -33,6 +34,7 @@ export default async function PaymentsPage({
     getSettings(accountId),
   ]);
   const locale = asLocale(settings.uiLanguage);
+  const practiceTz = resolveTimeZone(settings.timezone);
 
   const filtered = sessions.filter((s) => {
     if (filter === "unpaid")
@@ -51,6 +53,7 @@ export default async function PaymentsPage({
       rightAction={<QuickActions clients={clients} />}
       userEmail={userEmail}
       locale={locale}
+      timeZone={settings.timezone}
     >
       <div className="mb-5">
         <h1 className="text-2xl font-semibold text-ink-900 tracking-tight">
@@ -138,7 +141,7 @@ export default async function PaymentsPage({
                   </span>
                 </div>
                 <div className="text-xs text-ink-500">
-                  {s.type} · {fullDate(s.scheduledAt)}
+                  {s.type} · {fullDate(s.scheduledAt, practiceTz)}
                 </div>
                 <div className="mt-2 flex items-center justify-between">
                   <span className="text-sm text-ink-700 font-medium">
@@ -182,7 +185,7 @@ export default async function PaymentsPage({
                 {filtered.map((s) => (
                   <tr key={s.id} className="row-hover">
                     <td className="px-4 py-2 font-mono text-xs text-ink-600">
-                      {fullDate(s.scheduledAt)}
+                      {fullDate(s.scheduledAt, practiceTz)}
                     </td>
                     <td className="px-4 py-2">
                       <Link

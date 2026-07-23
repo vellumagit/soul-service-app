@@ -9,6 +9,7 @@
 
 import Link from "next/link";
 import { SessionCard } from "./SessionCard";
+import { zonedDateKey } from "@/lib/timezone";
 import type { NoteTemplate, Session } from "@/db/schema";
 
 type Group = {
@@ -19,19 +20,25 @@ type Group = {
   sessions: Session[];
 };
 
-function groupByMonth(sessions: Session[]): Group[] {
-  // Sessions arrive sorted desc by scheduledAt from the page query.
+function groupByMonth(sessions: Session[], timeZone?: string): Group[] {
+  // Sessions arrive sorted desc by scheduledAt from the page query. Group by
+  // HER local month so a late-evening session doesn't slip into the next
+  // month's header when the server (UTC) or a remote viewer reads it.
   const grouped: Record<string, Session[]> = {};
   for (const s of sessions) {
-    const d = new Date(s.scheduledAt);
-    const key = `${d.getFullYear()}-${String(d.getMonth()).padStart(2, "0")}`;
+    // "YYYY-MM" of the session as seen in the practice timezone.
+    const key = zonedDateKey(new Date(s.scheduledAt), timeZone ?? "UTC").slice(
+      0,
+      7
+    );
     if (!grouped[key]) grouped[key] = [];
     grouped[key].push(s);
   }
   return Object.entries(grouped)
     .sort(([a], [b]) => b.localeCompare(a)) // newest month first
     .map(([key, group]) => {
-      const [year, month] = key.split("-").map(Number);
+      const [year, month1] = key.split("-").map(Number);
+      const month = month1 - 1; // 0-based
       const label = new Date(year, month, 1).toLocaleDateString("en-US", {
         month: "long",
         year: "numeric",
@@ -50,6 +57,7 @@ export function SessionsLog({
   clientName,
   noteTemplates,
   autoUploadAiNotes,
+  timeZone,
 }: {
   sessions: Session[];
   /** The client these sessions belong to — passed through to SessionCard so
@@ -58,8 +66,10 @@ export function SessionsLog({
   clientName: string;
   noteTemplates: NoteTemplate[];
   autoUploadAiNotes?: boolean;
+  /** Practice timezone — groups sessions by HER local month. */
+  timeZone?: string;
 }) {
-  const groups = groupByMonth(sessions);
+  const groups = groupByMonth(sessions, timeZone);
 
   return (
     <div className="space-y-8">

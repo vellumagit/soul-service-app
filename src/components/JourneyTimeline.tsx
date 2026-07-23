@@ -27,6 +27,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { Session } from "@/db/schema";
 import { fullDate, shortTime } from "@/lib/format";
+import { useTimeZone } from "./TimeZoneProvider";
 
 type TimelinePoint = {
   id: string;
@@ -51,6 +52,7 @@ export function JourneyTimeline({
   clientId: string;
   sessions: Session[];
 }) {
+  const tz = useTimeZone();
   // Hovered marker — drives the tooltip.
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
@@ -137,7 +139,7 @@ export function JourneyTimeline({
         </div>
       </div>
       <div className="text-[11px] text-ink-500 mb-5">
-        Began {fullDate(firstAt)}.
+        Began {fullDate(firstAt, tz)}.
       </div>
 
       {/* The arc itself — relative-positioned canvas; markers absolute.
@@ -179,7 +181,7 @@ export function JourneyTimeline({
               onMouseLeave={() => setHoveredId(null)}
               onFocus={() => setHoveredId(p.id)}
               onBlur={() => setHoveredId(null)}
-              aria-label={`${p.type} on ${fullDate(p.date)}${
+              aria-label={`${p.type} on ${fullDate(p.date, tz)}${
                 p.milestoneLabel ? ` — ${p.milestoneLabel}` : ""
               }`}
               className="absolute group"
@@ -277,10 +279,10 @@ export function JourneyTimeline({
             }}
           >
             <div className="text-ink-900 font-medium">
-              {fullDate(hovered.date)}
+              {fullDate(hovered.date, tz)}
               <span className="text-ink-400 mx-1.5">·</span>
               <span className="text-ink-600 font-normal">
-                {shortTime(hovered.date)} · {hovered.type}
+                {shortTime(hovered.date, tz)} · {hovered.type}
               </span>
             </div>
             {hovered.neverForgetLine && (

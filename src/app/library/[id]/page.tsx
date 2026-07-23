@@ -93,6 +93,7 @@ export default async function ProductDetailPage({
       rightAction={<QuickActions clients={clientsList} />}
       userEmail={email}
       locale={locale}
+      timeZone={settings.timezone}
     >
       <header className="mb-7 flex items-baseline justify-between gap-3 flex-wrap">
         <div className="min-w-0 flex-1">

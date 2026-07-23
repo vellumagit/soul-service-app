@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ConfirmButton } from "./ConfirmButton";
 import { startGoogleConnect, disconnectGoogleAction } from "@/lib/actions";
 import { fullDate } from "@/lib/format";
+import { useTimeZone } from "./TimeZoneProvider";
 
 type Props = {
   connected: boolean;
@@ -16,6 +17,7 @@ type Props = {
 };
 
 export function GoogleCalendarSection(props: Props) {
+  const tz = useTimeZone();
   const [connecting, setConnecting] = useState(false);
 
   return (
@@ -58,7 +60,7 @@ export function GoogleCalendarSection(props: Props) {
           </div>
           {props.connectedAt && (
             <span className="text-[11px] text-ink-400">
-              since {fullDate(props.connectedAt)}
+              since {fullDate(props.connectedAt, tz)}
             </span>
           )}
           <div className="flex-1" />

@@ -7,6 +7,7 @@ import { SearchPalette } from "./SearchPalette";
 import { SignOutButton } from "./SignOutButton";
 import { KeyboardShortcuts, KeyboardShortcutsTrigger } from "./KeyboardShortcuts";
 import { LocaleProvider, useT } from "./LocaleProvider";
+import { TimeZoneProvider } from "./TimeZoneProvider";
 import { HelpBuddy } from "./HelpBuddy";
 import { FlashNotifier } from "./FlashNotifier";
 import { TimeOfDayProvider } from "./TimeOfDayProvider";
@@ -65,6 +66,7 @@ export function AppShell({
   rightAction,
   userEmail,
   locale = DEFAULT_LOCALE,
+  timeZone,
   children,
 }: {
   breadcrumb: { label: string; href?: string }[];
@@ -73,17 +75,22 @@ export function AppShell({
   userEmail?: string;
   /** UI locale — drives nav labels + footer chip via LocaleProvider context. */
   locale?: Locale;
+  /** Practice IANA timezone (practitionerSettings.timezone). Seeds the
+   *  TimeZoneProvider so every client surface renders times in HER zone. */
+  timeZone?: string | null;
   children: React.ReactNode;
 }) {
   return (
     <LocaleProvider locale={locale}>
-      <AppShellInner
-        breadcrumb={breadcrumb}
-        rightAction={rightAction}
-        userEmail={userEmail}
-      >
-        {children}
-      </AppShellInner>
+      <TimeZoneProvider timeZone={timeZone}>
+        <AppShellInner
+          breadcrumb={breadcrumb}
+          rightAction={rightAction}
+          userEmail={userEmail}
+        >
+          {children}
+        </AppShellInner>
+      </TimeZoneProvider>
     </LocaleProvider>
   );
 }

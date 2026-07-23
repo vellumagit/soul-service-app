@@ -62,12 +62,15 @@ export default async function HomePage() {
       rightAction={<QuickActions clients={clientsList} />}
       userEmail={email}
       locale={locale}
+      timeZone={settings.timezone}
     >
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-ink-900 tracking-tight">
           {t(locale, "home.title")}
         </h1>
-        <p className="text-sm text-ink-500 mt-1">{fullDate(new Date())}</p>
+        <p className="text-sm text-ink-500 mt-1">
+          {fullDate(new Date(), practiceTz)}
+        </p>
       </div>
 
       {/* PEOPLE WAITING ON HER. Deliberately the loudest thing on the page —
@@ -160,7 +163,7 @@ export default async function HomePage() {
                       className="flex items-center gap-3 px-4 py-3 hover:bg-ink-50"
                     >
                       <div className="font-mono text-sm text-plum-700 font-medium w-20 shrink-0">
-                        {shortTime(s.scheduledAt)}
+                        {shortTime(s.scheduledAt, practiceTz)}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium text-ink-900">
@@ -201,7 +204,7 @@ export default async function HomePage() {
                           <span className="text-ink-600">{s.type}</span>{" "}
                           <span className="text-ink-500">·</span>{" "}
                           <span className="text-ink-500 text-xs">
-                            {fullDate(s.scheduledAt)}
+                            {fullDate(s.scheduledAt, practiceTz)}
                           </span>
                         </>
                       }
@@ -229,7 +232,7 @@ export default async function HomePage() {
                           </Link>{" "}
                           <span className="text-ink-500">·</span>{" "}
                           <span className="text-ink-500 text-xs">
-                            {fullDate(s.scheduledAt)}
+                            {fullDate(s.scheduledAt, practiceTz)}
                           </span>
                         </>
                       }

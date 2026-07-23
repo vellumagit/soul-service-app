@@ -19,6 +19,7 @@
 import Link from "next/link";
 import type { ClientDigest } from "@/db/queries";
 import { fullDate, relativeTime, shortTime } from "@/lib/format";
+import { useTimeZone } from "./TimeZoneProvider";
 import { WalkInButton } from "./WalkInButton";
 
 export function WalkInCard({
@@ -28,6 +29,7 @@ export function WalkInCard({
   digest: ClientDigest;
   clientName: string;
 }) {
+  const tz = useTimeZone();
   const firstName = clientName.split(" ")[0] ?? clientName;
 
   // The "pull quote": prefer her own words (latestIntention.text), fall back
@@ -73,7 +75,7 @@ export function WalkInCard({
           {digest.lastSession ? (
             <>
               <div className="font-serif text-base text-ink-900">
-                {fullDate(digest.lastSession.when)}
+                {fullDate(digest.lastSession.when, tz)}
               </div>
               <div className="text-xs text-ink-500 mt-0.5">
                 {digest.lastSession.type}
@@ -134,10 +136,10 @@ export function WalkInCard({
           {digest.nextSession ? (
             <>
               <div className="font-serif text-base text-ink-900">
-                {fullDate(digest.nextSession.when)}
+                {fullDate(digest.nextSession.when, tz)}
               </div>
               <div className="text-xs text-ink-500 mt-0.5">
-                {shortTime(digest.nextSession.when)}
+                {shortTime(digest.nextSession.when, tz)}
                 {" · "}
                 {digest.nextSession.type}
                 {" · "}

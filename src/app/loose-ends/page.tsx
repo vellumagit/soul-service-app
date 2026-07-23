@@ -29,6 +29,7 @@ import {
   type PendingProductPurchaseRow,
 } from "@/db/queries";
 import { fullDate, shortTime } from "@/lib/format";
+import { resolveTimeZone } from "@/lib/timezone";
 import { asLocale } from "@/lib/i18n";
 import { LooseEndRowActions } from "@/components/LooseEndRowActions";
 import { RescheduleRequestRowActions } from "@/components/RescheduleRequestRowActions";
@@ -48,6 +49,7 @@ export default async function LooseEndsPage() {
     listClientsForPicker(accountId),
   ]);
   const locale = asLocale(settings.uiLanguage);
+  const practiceTz = resolveTimeZone(settings.timezone);
 
   return (
     <AppShell
@@ -55,6 +57,7 @@ export default async function LooseEndsPage() {
       rightAction={<QuickActions clients={clients} />}
       userEmail={email}
       locale={locale}
+      timeZone={settings.timezone}
     >
       <header className="mb-8 max-w-3xl">
         <h1
@@ -86,31 +89,46 @@ export default async function LooseEndsPage() {
           {/* Reschedule requests from the portal — most time-sensitive of all,
               because the client is actively asking for an answer. */}
           {ends.rescheduleRequests.length > 0 && (
-            <RescheduleRequestsSection rows={ends.rescheduleRequests} />
+            <RescheduleRequestsSection
+              rows={ends.rescheduleRequests}
+              timeZone={practiceTz}
+            />
           )}
 
           {/* New booking requests — "I'd like to book another session." */}
           {ends.bookingRequests.length > 0 && (
-            <BookingRequestsSection rows={ends.bookingRequests} />
+            <BookingRequestsSection
+              rows={ends.bookingRequests}
+              timeZone={practiceTz}
+            />
           )}
 
           {/* Circle refund requests — a paid attendee asked to cancel; one-tap
               approve issues the Stripe refund + frees the seat. High priority
               (money owed), so it sits above the ordinary sign-ups. */}
           {ends.refundRequests.length > 0 && (
-            <RefundRequestsSection rows={ends.refundRequests} />
+            <RefundRequestsSection
+              rows={ends.refundRequests}
+              timeZone={practiceTz}
+            />
           )}
 
           {/* Group sign-ups awaiting confirmation or payment. Time-sensitive
               because the session is upcoming. */}
           {ends.groupSignups.length > 0 && (
-            <GroupSignupsSection rows={ends.groupSignups} />
+            <GroupSignupsSection
+              rows={ends.groupSignups}
+              timeZone={practiceTz}
+            />
           )}
 
           {/* Pending product purchases — people who requested a recorded
               offering and are waiting on her to confirm + mark paid. */}
           {ends.productPurchases.length > 0 && (
-            <ProductPurchasesSection rows={ends.productPurchases} />
+            <ProductPurchasesSection
+              rows={ends.productPurchases}
+              timeZone={practiceTz}
+            />
           )}
 
           {/* Most time-sensitive first: a failed notetaker bot might still
@@ -123,6 +141,7 @@ export default async function LooseEndsPage() {
               tone="warning"
               rows={ends.botFailed}
               actionLabel="Open session →"
+              timeZone={practiceTz}
               showRetryBot
             />
           )}
@@ -134,6 +153,7 @@ export default async function LooseEndsPage() {
               count={ends.needReflection.length}
               rows={ends.needReflection}
               actionLabel="Reflect →"
+              timeZone={practiceTz}
               showReflectInline
             />
           )}
@@ -145,6 +165,7 @@ export default async function LooseEndsPage() {
               count={ends.needNotes.length}
               rows={ends.needNotes}
               actionLabel="Open session →"
+              timeZone={practiceTz}
             />
           )}
 
@@ -155,6 +176,7 @@ export default async function LooseEndsPage() {
               count={ends.needIntention.length}
               rows={ends.needIntention}
               actionLabel="Open session →"
+              timeZone={practiceTz}
             />
           )}
 
@@ -165,6 +187,7 @@ export default async function LooseEndsPage() {
               count={ends.needPayment.length}
               rows={ends.needPayment}
               actionLabel="Open session →"
+              timeZone={practiceTz}
             />
           )}
         </div>
@@ -175,8 +198,10 @@ export default async function LooseEndsPage() {
 
 function ProductPurchasesSection({
   rows,
+  timeZone,
 }: {
   rows: PendingProductPurchaseRow[];
+  timeZone?: string;
 }) {
   return (
     <section className="paper-card p-6">
@@ -226,7 +251,7 @@ function ProductPurchasesSection({
                   </span>
                 </div>
                 <span className="text-[11px] text-ink-400 font-mono">
-                  {fullDate(r.requestedAt)}
+                  {fullDate(r.requestedAt, timeZone)}
                 </span>
               </div>
               <div className="text-[12px] text-ink-600 mt-0.5">
@@ -257,8 +282,10 @@ function ProductPurchasesSection({
 
 function RefundRequestsSection({
   rows,
+  timeZone,
 }: {
   rows: CircleRefundRequestData[];
+  timeZone?: string;
 }) {
   return (
     <section className="paper-card p-6">
@@ -292,7 +319,7 @@ function RefundRequestsSection({
             name={r.attendeeName}
             email={r.attendeeEmail}
             circleName={r.groupName}
-            whenLabel={`${fullDate(r.scheduledAt)} · ${shortTime(r.scheduledAt)}`}
+            whenLabel={`${fullDate(r.scheduledAt, timeZone)} · ${shortTime(r.scheduledAt, timeZone)}`}
           />
         ))}
       </div>
@@ -300,7 +327,13 @@ function RefundRequestsSection({
   );
 }
 
-function GroupSignupsSection({ rows }: { rows: GroupSignupRow[] }) {
+function GroupSignupsSection({
+  rows,
+  timeZone,
+}: {
+  rows: GroupSignupRow[];
+  timeZone?: string;
+}) {
   return (
     <section className="paper-card p-6">
       <div className="flex items-baseline justify-between mb-1 flex-wrap gap-2">
@@ -341,7 +374,7 @@ function GroupSignupsSection({ rows }: { rows: GroupSignupRow[] }) {
                 </span>
               </div>
               <span className="text-[11px] text-ink-400 font-mono">
-                {fullDate(r.signedUpAt)}
+                {fullDate(r.signedUpAt, timeZone)}
               </span>
             </div>
             <div className="text-[12px] text-ink-600 mt-0.5">
@@ -351,7 +384,7 @@ function GroupSignupsSection({ rows }: { rows: GroupSignupRow[] }) {
               >
                 {r.groupName}
               </Link>{" "}
-              · {fullDate(r.scheduledAt)} · {shortTime(r.scheduledAt)}
+              · {fullDate(r.scheduledAt, timeZone)} · {shortTime(r.scheduledAt, timeZone)}
               {!r.paid && r.status === "confirmed" && (
                 <span className="ml-2 text-[10px] uppercase tracking-wider font-mono px-1.5 py-0.5 rounded bg-honey-100 text-honey-700">
                   confirmed · unpaid
@@ -377,7 +410,13 @@ function GroupSignupsSection({ rows }: { rows: GroupSignupRow[] }) {
   );
 }
 
-function BookingRequestsSection({ rows }: { rows: BookingRequestRow[] }) {
+function BookingRequestsSection({
+  rows,
+  timeZone,
+}: {
+  rows: BookingRequestRow[];
+  timeZone?: string;
+}) {
   return (
     <section className="paper-card p-6">
       <div className="flex items-baseline justify-between mb-1 flex-wrap gap-2">
@@ -415,7 +454,7 @@ function BookingRequestsSection({ rows }: { rows: BookingRequestRow[] }) {
                 {r.clientName}
               </Link>
               <span className="text-[11px] text-ink-400 font-mono">
-                {fullDate(r.requestedAt)}
+                {fullDate(r.requestedAt, timeZone)}
               </span>
             </div>
             {r.preferredTimes && (
@@ -442,7 +481,13 @@ function BookingRequestsSection({ rows }: { rows: BookingRequestRow[] }) {
   );
 }
 
-function RescheduleRequestsSection({ rows }: { rows: RescheduleRequestRow[] }) {
+function RescheduleRequestsSection({
+  rows,
+  timeZone,
+}: {
+  rows: RescheduleRequestRow[];
+  timeZone?: string;
+}) {
   return (
     <section className="paper-card p-6">
       <div className="flex items-baseline justify-between mb-1 flex-wrap gap-2">
@@ -481,8 +526,8 @@ function RescheduleRequestsSection({ rows }: { rows: RescheduleRequestRow[] }) {
                 {r.clientName}
               </Link>
               <span className="text-[11px] text-ink-400 font-mono">
-                {r.type} · {fullDate(r.scheduledAt)} ·{" "}
-                {shortTime(r.scheduledAt)}
+                {r.type} · {fullDate(r.scheduledAt, timeZone)} ·{" "}
+                {shortTime(r.scheduledAt, timeZone)}
               </span>
             </div>
             {r.reason && (
@@ -513,6 +558,7 @@ function Section({
   actionLabel,
   showReflectInline,
   showRetryBot,
+  timeZone,
 }: {
   title: string;
   hint: string;
@@ -522,6 +568,7 @@ function Section({
   actionLabel: string;
   showReflectInline?: boolean;
   showRetryBot?: boolean;
+  timeZone?: string;
 }) {
   const isWarning = tone === "warning";
   return (
@@ -562,7 +609,7 @@ function Section({
                 {r.clientName}
               </Link>
               <div className="text-[11px] text-ink-500 mt-0.5">
-                {r.type} · {fullDate(r.scheduledAt)} · {shortTime(r.scheduledAt)}
+                {r.type} · {fullDate(r.scheduledAt, timeZone)} · {shortTime(r.scheduledAt, timeZone)}
               </div>
             </div>
             <LooseEndRowActions

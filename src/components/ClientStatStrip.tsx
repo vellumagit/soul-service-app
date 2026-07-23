@@ -15,9 +15,12 @@ type Stats = {
 export function ClientStatStrip({
   stats,
   clientId,
+  timeZone,
 }: {
   stats: Stats;
   clientId: string;
+  /** Practice timezone — render the next-session date in HER local zone. */
+  timeZone?: string;
 }) {
   const monthsSince = monthsBetween(stats.togetherSince, new Date());
 
@@ -43,7 +46,9 @@ export function ClientStatStrip({
           stats.nextSessionAt ? relativeTime(stats.nextSessionAt) : "—"
         }
         sub={
-          stats.nextSessionAt ? fullDate(stats.nextSessionAt) : "nothing booked"
+          stats.nextSessionAt
+            ? fullDate(stats.nextSessionAt, timeZone)
+            : "nothing booked"
         }
         accent={stats.nextSessionAt ? "flame" : "muted"}
       />
