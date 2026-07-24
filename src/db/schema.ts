@@ -1216,6 +1216,9 @@ export const groupAttendees = pgTable(
     welcomeSentAt: timestamp("welcome_sent_at"),
     reminder24hSentAt: timestamp("reminder_24h_sent_at"),
     reminder1hSentAt: timestamp("reminder_1h_sent_at"),
+    /** T-10 "we're starting, walk in →" nudge to this guest. Separate from the
+     *  host's own T-10 stamp (which lives on group_sessions). */
+    walkInNudgeSentAt: timestamp("walk_in_nudge_sent_at"),
     /** "Thank you + come again" email, sent once after the Circle ends. */
     postCircleSentAt: timestamp("post_circle_sent_at"),
     /** Day-2 "go deeper one-to-one" invitation — the Circle→session

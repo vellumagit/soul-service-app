@@ -494,6 +494,55 @@ See you in there.`;
   });
 }
 
+/** T-10 "we're starting, walk in →" nudge to a GUEST. The 1h reminder tells
+ *  them it's coming; this lands the link in their hand at the moment the
+ *  Circle actually opens. Short — read on a phone ten minutes before. */
+export async function sendCircleGuestWalkInEmail(input: {
+  to: string;
+  attendeeName: string | null;
+  circleName: string;
+  meetingUrl: string | null;
+  practitionerName: string | null;
+}): Promise<void> {
+  const first = input.attendeeName?.split(" ")[0] ?? null;
+  const greeting = first ? `${first},` : "Hi,";
+  const signoff = input.practitionerName ?? "Svitlana";
+  const subject = `We're beginning — ${input.circleName}`;
+  const text = `${greeting}
+
+${input.circleName} is beginning now.${
+    input.meetingUrl ? `\n\nWalk in:\n${input.meetingUrl}` : ""
+  }
+
+See you in the circle.
+
+— ${signoff}`;
+  const html = `
+<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#faf6f0;font-family:Georgia,'Times New Roman',serif;color:#3d342e;">
+    <div style="max-width:480px;margin:48px auto;padding:32px;background:#fdf9f1;border-radius:12px;border:1px solid #ead9c1;">
+      <p style="margin:0 0 6px 0;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#b05c36;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">We're beginning</p>
+      <p style="margin:0 0 18px 0;font-size:20px;line-height:1.3;color:#3d342e;"><strong>${escapeHtml(input.circleName)}</strong> is starting now.</p>
+      ${
+        input.meetingUrl
+          ? `<a href="${escapeHtml(input.meetingUrl)}" style="display:inline-block;background:#5a3f4f;color:#fdf9f1;text-decoration:none;font-size:15px;font-weight:500;padding:14px 26px;border-radius:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">Walk into the Circle →</a>`
+          : `<p style="margin:0;font-size:14px;color:#8a7c70;">Your host will share the room link shortly.</p>`
+      }
+      <p style="margin:22px 0 0 0;font-size:14px;color:#564a42;font-style:italic;">See you in the circle.</p>
+      <p style="margin:16px 0 0 0;font-size:14px;color:#564a42;">— ${escapeHtml(signoff)}</p>
+    </div>
+  </body>
+</html>`.trim();
+  await sendEmail({
+    to: input.to,
+    subject,
+    html,
+    text,
+    replyTo: CIRCLE_CONTACT_EMAIL,
+  });
+}
+
 /** Sent when a Circle seat is refunded — confirms the money is on its way
  *  back, that the seat is released, and how to reach the practitioner. */
 export async function sendCircleRefundEmail(input: {

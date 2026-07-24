@@ -130,6 +130,7 @@ export async function processReminders(): Promise<ReminderRunStats> {
       }
 
       // T-10 "walk in now" — the doorway prompt, room link as the only click.
+      // To the host…
       if (hostNotifyTo) {
         stats.circleRemindersSent += await sendDueCircleWalkInNudges(
           account.id,
@@ -138,6 +139,13 @@ export async function processReminders(): Promise<ReminderRunStats> {
           now
         );
       }
+      // …and to every confirmed guest — the link in their hand at the moment
+      // the Circle opens.
+      stats.circleRemindersSent += await sendDueCircleGuestWalkInNudges(
+        account.id,
+        settingsRow,
+        now
+      );
 
       // Post-Circle "thank you + come again" to each attendee after it ends.
       stats.circleRemindersSent += await sendDuePostCircleEmails(
@@ -804,6 +812,81 @@ async function sendDueCircleWalkInNudges(
         .where(eq(groupSessions.id, row.id));
       console.error(
         `[reminders] walk-in nudge failed for circle ${row.id}:`,
+        err
+      );
+    }
+  }
+  return count;
+}
+
+// The GUEST half of the T-10 nudge: each confirmed attendee gets the room link
+// the moment the Circle opens. Same (now, now+12min] window and idempotency
+// discipline as the host nudge, but stamped per-attendee.
+async function sendDueCircleGuestWalkInNudges(
+  accountId: string,
+  settings: typeof practitionerSettings.$inferSelect,
+  now: Date
+): Promise<number> {
+  const windowEnd = new Date(now.getTime() + 12 * 60 * 1000);
+  const rows = await db
+    .select({
+      attendeeId: groupAttendees.id,
+      name: groupAttendees.name,
+      email: groupAttendees.email,
+      sessionMeetUrl: groupSessions.meetUrl,
+      groupName: groups.name,
+    })
+    .from(groupAttendees)
+    .innerJoin(
+      groupSessions,
+      eq(groupSessions.id, groupAttendees.groupSessionId)
+    )
+    .innerJoin(groups, eq(groups.id, groupSessions.groupId))
+    .where(
+      and(
+        eq(groupAttendees.accountId, accountId),
+        eq(groupAttendees.status, "confirmed"),
+        isNull(groupAttendees.walkInNudgeSentAt),
+        eq(groupSessions.status, "scheduled"),
+        gt(groupSessions.scheduledAt, now),
+        lte(groupSessions.scheduledAt, windowEnd)
+      )
+    );
+
+  let count = 0;
+  for (const row of rows) {
+    if (!row.email || !row.email.includes("@")) continue;
+    const claimed = await db
+      .update(groupAttendees)
+      .set({ walkInNudgeSentAt: now })
+      .where(
+        and(
+          eq(groupAttendees.id, row.attendeeId),
+          isNull(groupAttendees.walkInNudgeSentAt)
+        )
+      )
+      .returning({ id: groupAttendees.id });
+    if (claimed.length === 0) continue;
+    try {
+      const { sendCircleGuestWalkInEmail } = await import("./resend");
+      await sendCircleGuestWalkInEmail({
+        to: row.email,
+        attendeeName: row.name,
+        circleName: row.groupName,
+        meetingUrl: resolveCircleMeetingUrl(
+          row.sessionMeetUrl,
+          settings.circleRoomUrl ?? null
+        ),
+        practitionerName: settings.practitionerName ?? null,
+      });
+      count++;
+    } catch (err) {
+      await db
+        .update(groupAttendees)
+        .set({ walkInNudgeSentAt: null })
+        .where(eq(groupAttendees.id, row.attendeeId));
+      console.error(
+        `[reminders] guest walk-in nudge failed for attendee ${row.attendeeId}:`,
         err
       );
     }
