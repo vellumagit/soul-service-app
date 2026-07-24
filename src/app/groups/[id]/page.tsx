@@ -247,6 +247,11 @@ export default async function GroupDetailPage({
             style={{ fontWeight: 500, letterSpacing: "-0.015em" }}
           >
             {group.name}
+            {group.language === "uk" && (
+              <span className="ml-3 align-middle text-[10px] uppercase tracking-wider font-mono px-2 py-0.5 rounded bg-plum-50 text-plum-700">
+                УКР
+              </span>
+            )}
             {!group.published && (
               <span className="ml-3 align-middle text-[10px] uppercase tracking-wider font-mono px-2 py-0.5 rounded bg-ink-100 text-ink-500">
                 Private
@@ -302,6 +307,7 @@ export default async function GroupDetailPage({
               defaultCurrency: group.defaultCurrency,
               paymentInstructions: group.paymentInstructions,
               published: group.published,
+              language: group.language,
             }}
           />
           <ScheduleGroupSessionDialog

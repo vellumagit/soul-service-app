@@ -38,6 +38,7 @@ export default async function GroupsPage() {
         defaultPriceCents: groups.defaultPriceCents,
         defaultCurrency: groups.defaultCurrency,
         published: groups.published,
+        language: groups.language,
         upcomingCount: sql<number>`(
           SELECT COUNT(*)::int FROM ${groupSessions}
           WHERE ${groupSessions.groupId} = ${groups.id}
@@ -106,6 +107,11 @@ export default async function GroupsPage() {
                   style={{ fontWeight: 500 }}
                 >
                   {g.name}
+                  {g.language === "uk" && (
+                    <span className="ml-2 align-middle text-[10px] uppercase tracking-wider font-mono px-1.5 py-0.5 rounded bg-plum-50 text-plum-700">
+                      УКР
+                    </span>
+                  )}
                 </h2>
                 {!g.published && (
                   <span className="text-[10px] uppercase tracking-wider font-mono px-2 py-0.5 rounded bg-ink-100 text-ink-500">

@@ -133,6 +133,17 @@ export default async function LandingPage() {
     console.warn("[landing] upcoming circles fetch failed:", err);
   }
 
+  // Circles in the visitor's current language rise to the top (stable sort —
+  // soonest-first is preserved within each language). Nothing is hidden: a УКР
+  // browser still sees the English circles below, clearly badged, and vice
+  // versa — hiding could make her only circle invisible to half the visitors.
+  const viewLangCircle = lang === "uk" ? "uk" : "en";
+  upcomingCircles = [...upcomingCircles].sort((a, b) => {
+    const am = a.language === viewLangCircle ? 0 : 1;
+    const bm = b.language === viewLangCircle ? 0 : 1;
+    return am - bm;
+  });
+
   // The "The Circle" pricing-ladder CTA should take a visitor straight to
   // booking the soonest open Circle (its /circles/<id> reserve + pay page) —
   // NOT the generic "send a note" contact form. Falls back to #contact only
@@ -425,7 +436,27 @@ export default async function LandingPage() {
                 );
                 return (
                   <div className="circle-card rv" key={circle.sessionId}>
-                    <h3>{circle.groupName}</h3>
+                    <h3>
+                      {circle.groupName}
+                      {/* Language chip — always shown so a visitor knows which
+                          room they're walking into before they pay. */}
+                      <span
+                        style={{
+                          marginLeft: 8,
+                          fontSize: 10,
+                          letterSpacing: ".08em",
+                          textTransform: "uppercase",
+                          verticalAlign: "middle",
+                          padding: "2px 7px",
+                          borderRadius: 6,
+                          background: "var(--color-plum-50, #f3e8ef)",
+                          color: "var(--color-plum-700, #5a3f4f)",
+                          fontFamily: "ui-monospace, monospace",
+                        }}
+                      >
+                        {circle.language === "uk" ? "УКР" : "EN"}
+                      </span>
+                    </h3>
                     <div className="when">{when}</div>
                     <div className="meta">
                       {circle.durationMinutes}

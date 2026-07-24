@@ -63,6 +63,7 @@ export default async function CircleSignupPage({
       groupId: groupSessions.groupId,
       groupName: groups.name,
       groupDescription: groups.description,
+      groupLanguage: groups.language,
       paymentInstructions: groups.paymentInstructions,
       published: groups.published,
       scheduledAt: groupSessions.scheduledAt,
@@ -191,6 +192,27 @@ export default async function CircleSignupPage({
                   <em>· {session.topic}</em>
                 </>
               )}
+              {/* Language chip — someone landing here from a shared link
+                  should know which language the room is held in before
+                  they pay. */}
+              <span
+                style={{
+                  marginLeft: 10,
+                  fontSize: 11,
+                  letterSpacing: ".08em",
+                  textTransform: "uppercase",
+                  verticalAlign: "middle",
+                  padding: "3px 8px",
+                  borderRadius: 6,
+                  background: "var(--color-plum-50, #f3e8ef)",
+                  color: "var(--color-plum-700, #5a3f4f)",
+                  fontFamily: "ui-monospace, monospace",
+                }}
+              >
+                {session.groupLanguage === "uk"
+                  ? "Українською"
+                  : "In English"}
+              </span>
             </h2>
             <p className="p-lg" style={{ marginBottom: 4 }}>
               {formatSessionLong(scheduledAt, tz)}

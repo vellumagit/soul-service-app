@@ -32,6 +32,7 @@ export function EditGroupDialog({
     defaultCurrency: string;
     paymentInstructions: string | null;
     published: boolean;
+    language: string;
   };
 }) {
   const [open, setOpen] = useState(false);
@@ -100,6 +101,20 @@ export function EditGroupDialog({
               defaultValue={group.name}
               className="mt-1.5 w-full px-3 py-2 text-sm border border-ink-200 rounded-md bg-white"
             />
+          </label>
+
+          <label className="block">
+            <span className="text-xs uppercase tracking-wider text-ink-500 font-mono">
+              Language
+            </span>
+            <select
+              name="language"
+              defaultValue={group.language === "uk" ? "uk" : "en"}
+              className="mt-1.5 w-full px-2.5 py-1.5 text-sm border border-ink-200 rounded-md bg-white"
+            >
+              <option value="en">English</option>
+              <option value="uk">Українська</option>
+            </select>
           </label>
 
           <label className="block">

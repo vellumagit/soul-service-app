@@ -1110,6 +1110,10 @@ export const groups = pgTable(
       .notNull(),
     paymentInstructions: text("payment_instructions"),
     published: boolean("published").default(true).notNull(),
+    /** Language the Circle is held in ('en' | 'uk'). Lives on the GROUP so
+     *  recurring sessions, storefront cards and the public signup page all
+     *  inherit it — she picks once at creation and everything follows. */
+    language: text("language").default("en").notNull(),
 
     // Recurring weekly Circle. When enabled, a job keeps the next
     // `recurrence_weeks_ahead` weeks filled with a session on

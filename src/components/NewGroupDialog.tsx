@@ -44,6 +44,24 @@ export function NewGroupDialog() {
 
           <label className="block">
             <span className="text-xs uppercase tracking-wider text-ink-500 font-mono">
+              Language
+            </span>
+            <p className="text-[11px] text-ink-500 italic mt-0.5">
+              The language this Circle is held in — shown on your storefront so
+              people join the right room.
+            </p>
+            <select
+              name="language"
+              defaultValue="en"
+              className="mt-1.5 w-full px-2.5 py-1.5 text-sm border border-ink-200 rounded-md bg-white"
+            >
+              <option value="en">English</option>
+              <option value="uk">Українська</option>
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="text-xs uppercase tracking-wider text-ink-500 font-mono">
               Description (optional)
             </span>
             <p className="text-[11px] text-ink-500 italic mt-0.5">

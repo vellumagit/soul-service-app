@@ -41,6 +41,12 @@ function normalizeCurrency(raw: FormDataEntryValue | null): string {
   return CIRCLE_CURRENCIES.includes(c) ? c : "USD";
 }
 
+/** Whitelist the Circle language — anything unexpected falls back to English
+ *  rather than storing junk that downstream filters would choke on. */
+function parseCircleLanguage(value: FormDataEntryValue | null): "en" | "uk" {
+  return value === "uk" ? "uk" : "en";
+}
+
 export async function createGroup(formData: FormData): Promise<void> {
   const { accountId } = await requireSession();
   const name = String(formData.get("name") ?? "").trim().slice(0, 200);
@@ -78,6 +84,7 @@ export async function createGroup(formData: FormData): Promise<void> {
       defaultCurrency: currency,
       paymentInstructions,
       published,
+      language: parseCircleLanguage(formData.get("language")),
     })
     .returning({ id: groups.id });
 
@@ -128,6 +135,7 @@ export async function updateGroup(
       defaultCurrency: currency,
       paymentInstructions,
       published,
+      language: parseCircleLanguage(formData.get("language")),
       updatedAt: new Date(),
     })
     .where(and(eq(groups.accountId, accountId), eq(groups.id, id)));
@@ -1078,6 +1086,7 @@ export async function listUpcomingPublicGroupSessions(
       priceCents: groupSessions.priceCents,
       currency: groups.defaultCurrency,
       topic: groupSessions.topic,
+      language: groups.language,
     })
     .from(groupSessions)
     .innerJoin(groups, eq(groups.id, groupSessions.groupId))
