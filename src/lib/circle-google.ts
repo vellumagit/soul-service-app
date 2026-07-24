@@ -31,6 +31,15 @@ import {
   groups,
   practitionerSettings,
 } from "@/db/schema";
+
+/** A successful Google op proves the connection is healthy — wipe any stale
+ *  error so /status stops flagging a problem that's already fixed. */
+async function clearGoogleError(accountId: string): Promise<void> {
+  await db
+    .update(practitionerSettings)
+    .set({ googleLastError: null, googleLastErrorAt: null, updatedAt: new Date() })
+    .where(eq(practitionerSettings.accountId, accountId));
+}
 import {
   createCalendarEvent,
   updateCalendarEvent,
@@ -126,6 +135,7 @@ export async function syncCircleToGoogle(
             updatedAt: new Date(),
           })
           .where(eq(groupSessions.id, row.id));
+        await clearGoogleError(row.accountId);
         return { ok: true, meetUrl: updated.meetUrl, created: false };
       }
       // Event vanished on Google's side — clear our ref and fall through to
@@ -150,6 +160,7 @@ export async function syncCircleToGoogle(
         updatedAt: new Date(),
       })
       .where(eq(groupSessions.id, row.id));
+    await clearGoogleError(row.accountId);
     return { ok: true, meetUrl: created.meetUrl, created: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown Google error";

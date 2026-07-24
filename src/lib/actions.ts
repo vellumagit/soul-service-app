@@ -2883,6 +2883,19 @@ export async function testGoogleConnectionAction(): Promise<TestGoogleResult> {
       console.warn("[testGoogleConnection] probe cleanup failed:", e);
     }
 
+    // The probe just succeeded, so the connection is healthy right now. Clear
+    // any stale error so /status stops showing a red banner for a problem
+    // that's already fixed. (This is exactly what confused us: a passing test
+    // sitting under a six-day-old error message.)
+    await db
+      .update(practitionerSettings)
+      .set({
+        googleLastError: null,
+        googleLastErrorAt: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(practitionerSettings.accountId, accountId));
+
     return {
       ok: true,
       meetUrl: result.meetUrl,
