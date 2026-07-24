@@ -357,6 +357,31 @@ export async function listLeadForms(
   }));
 }
 
+/** Pending inbox inquiries + how long the oldest has been waiting — for the
+ *  Today-page banner. A real person wrote in from the website and sat unseen
+ *  for a month once; the inbox being two clicks deep with a quiet pill wasn't
+ *  enough. Same loud treatment Circle approvals get. */
+export async function getPendingInquiries(
+  accountId: string
+): Promise<{ count: number; oldestAt: Date | null }> {
+  const [row] = await db
+    .select({
+      count: sql<number>`COUNT(*)::int`,
+      oldestAt: sql<Date | null>`MIN(${leadSubmissions.createdAt})`,
+    })
+    .from(leadSubmissions)
+    .where(
+      and(
+        eq(leadSubmissions.accountId, accountId),
+        eq(leadSubmissions.status, "pending")
+      )
+    );
+  return {
+    count: row?.count ?? 0,
+    oldestAt: row?.oldestAt ? new Date(row.oldestAt) : null,
+  };
+}
+
 export async function getLeadInboxCount(accountId: string): Promise<number> {
   const [row] = await db
     .select({ count: sql<number>`COUNT(*)::int` })

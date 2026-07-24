@@ -20,6 +20,7 @@ import {
   getTodaysAnniversaries,
   getCirclesForToday,
   getPendingCircleApprovalsCount,
+  getPendingInquiries,
   listClientsForPicker,
 } from "@/db/queries";
 import { OnThisDayCard } from "@/components/OnThisDayCard";
@@ -39,6 +40,7 @@ export default async function HomePage() {
     anniversaries,
     todayCircles,
     pendingApprovals,
+    pendingInquiries,
   ] = await Promise.all([
     getDashboardData(accountId),
     listClientsForPicker(accountId),
@@ -48,6 +50,7 @@ export default async function HomePage() {
     getTodaysAnniversaries(accountId),
     getCirclesForToday(accountId),
     getPendingCircleApprovalsCount(accountId),
+    getPendingInquiries(accountId),
   ]);
 
   const locale = asLocale(settings.uiLanguage);
@@ -101,6 +104,42 @@ export default async function HomePage() {
             </div>
             <span className="text-sm font-medium text-honey-700 whitespace-nowrap">
               Review now →
+            </span>
+          </div>
+        </Link>
+      )}
+
+      {/* Someone wrote in from the website and is waiting for a reply. This
+          used to live only two clicks deep in Network → Inbox with a quiet
+          pill — a real inquiry once sat unseen for a month. Same loud honey
+          treatment as Circle approvals: a person is waiting on you. */}
+      {pendingInquiries.count > 0 && (
+        <Link
+          href="/network/inbox"
+          className="block mb-6 rounded-lg p-4 border-l-4 no-underline hover:brightness-[0.98] transition"
+          style={{
+            background: "var(--color-honey-50, #fbf3e4)",
+            borderColor: "var(--color-honey-700, #b05c36)",
+          }}
+        >
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <div
+                className="text-base text-ink-900"
+                style={{ fontWeight: 600 }}
+              >
+                {pendingInquiries.count === 1
+                  ? "1 person wrote to you from your website"
+                  : `${pendingInquiries.count} people wrote to you from your website`}
+              </div>
+              <div className="text-[13px] text-ink-600 mt-0.5">
+                {pendingInquiries.oldestAt
+                  ? `Waiting since ${fullDate(pendingInquiries.oldestAt, practiceTz)} — they'd love to hear back.`
+                  : "They'd love to hear back."}
+              </div>
+            </div>
+            <span className="text-sm font-medium text-honey-700 whitespace-nowrap">
+              Read &amp; reply →
             </span>
           </div>
         </Link>
