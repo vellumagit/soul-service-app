@@ -254,17 +254,31 @@ export async function scheduleGroupSession(
   const meetUrl =
     String(formData.get("meetUrl") ?? "").trim().slice(0, 500) || null;
 
-  await db.insert(groupSessions).values({
-    accountId,
-    groupId,
-    scheduledAt,
-    durationMinutes: duration,
-    capacity,
-    priceCents: group.defaultPriceCents,
-    topic,
-    meetUrl,
-    status: "scheduled",
-  });
+  const [createdSession] = await db
+    .insert(groupSessions)
+    .values({
+      accountId,
+      groupId,
+      scheduledAt,
+      durationMinutes: duration,
+      capacity,
+      priceCents: group.defaultPriceCents,
+      topic,
+      meetUrl,
+      status: "scheduled",
+    })
+    .returning({ id: groupSessions.id });
+
+  // Put it on her Google Calendar with its own Meet link. Best-effort — a
+  // Google hiccup must never stop the Circle from being scheduled.
+  if (createdSession) {
+    try {
+      const { syncCircleToGoogle } = await import("./circle-google");
+      await syncCircleToGoogle(createdSession.id);
+    } catch (err) {
+      console.error("[circle] google sync on schedule failed:", err);
+    }
+  }
 
   revalidatePath(`/groups/${groupId}`);
   revalidatePath("/calendar");
@@ -282,6 +296,13 @@ export async function cancelGroupSession(id: string): Promise<{ ok: true }> {
     )
     .returning({ groupId: groupSessions.groupId });
   if (row) {
+    // Pull the event off her calendar — Google tells the invitees it's off.
+    try {
+      const { removeCircleFromGoogle } = await import("./circle-google");
+      await removeCircleFromGoogle(id);
+    } catch (err) {
+      console.error("[circle] google delete on cancel failed:", err);
+    }
     revalidatePath(`/groups/${row.groupId}`);
     revalidatePath("/calendar");
     revalidatePath("/");

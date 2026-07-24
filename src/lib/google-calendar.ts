@@ -385,9 +385,27 @@ export type CalendarEventInput = {
    *  UTC dateTime, but pinning this makes the event's display zone explicit so
    *  Google never falls back to the calendar's default zone. */
   timeZone?: string | null;
-  attendeeEmail?: string | null; // the client
+  attendeeEmail?: string | null; // the client (1-on-1)
+  /** Circles have many guests. Listing them as real Google invitees is what
+   *  lets them join WITHOUT knocking — Google recognises an invited address
+   *  and skips the admit wall. */
+  attendeeEmails?: string[] | null;
   practitionerEmail?: string | null; // for the description/owner
 };
+
+/** Normalise the two attendee shapes into one list for the Google payload. */
+function attendeeList(
+  input: CalendarEventInput
+): { email: string }[] | undefined {
+  const emails = [
+    ...(input.attendeeEmail ? [input.attendeeEmail] : []),
+    ...(input.attendeeEmails ?? []),
+  ]
+    .map((e) => e.trim().toLowerCase())
+    .filter((e) => e.includes("@"));
+  const unique = [...new Set(emails)];
+  return unique.length > 0 ? unique.map((email) => ({ email })) : undefined;
+}
 
 export type CalendarEventResult = {
   eventId: string;
@@ -411,9 +429,11 @@ export async function createCalendarEvent(
     .toString(36)
     .slice(2)}`;
 
+  const guests = attendeeList(input);
+
   const res = await calendar.events.insert({
     calendarId: "primary",
-    sendUpdates: input.attendeeEmail ? "all" : "none",
+    sendUpdates: guests ? "all" : "none",
     conferenceDataVersion: 1, // required for Meet auto-creation
     requestBody: {
       summary: input.summary,
@@ -426,9 +446,7 @@ export async function createCalendarEvent(
         dateTime: end.toISOString(),
         timeZone: input.timeZone ?? undefined,
       },
-      attendees: input.attendeeEmail
-        ? [{ email: input.attendeeEmail }]
-        : undefined,
+      attendees: guests,
       conferenceData: {
         createRequest: {
           requestId,
@@ -470,10 +488,12 @@ export async function updateCalendarEvent(
   const end = new Date(input.startAt.getTime() + input.durationMinutes * 60000);
 
   try {
+    const guests = attendeeList(input);
+
     const res = await calendar.events.patch({
       calendarId: "primary",
       eventId,
-      sendUpdates: input.attendeeEmail ? "all" : "none",
+      sendUpdates: guests ? "all" : "none",
       requestBody: {
         summary: input.summary,
         description: input.description,
@@ -485,9 +505,7 @@ export async function updateCalendarEvent(
           dateTime: end.toISOString(),
           timeZone: input.timeZone ?? undefined,
         },
-        attendees: input.attendeeEmail
-          ? [{ email: input.attendeeEmail }]
-          : undefined,
+        attendees: guests,
       },
     });
 

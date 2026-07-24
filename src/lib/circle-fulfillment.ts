@@ -117,6 +117,7 @@ export async function fulfillCircleSeat(
       email: groupAttendees.email,
       paid: groupAttendees.paid,
       welcomeSentAt: groupAttendees.welcomeSentAt,
+      groupSessionId: groupAttendees.groupSessionId,
       scheduledAt: groupSessions.scheduledAt,
       sessionMeetUrl: groupSessions.meetUrl,
       groupName: groups.name,
@@ -150,8 +151,22 @@ export async function fulfillCircleSeat(
     .limit(1);
   const practitionerNotifyTo = settings?.businessEmail || acct?.email || null;
 
+  // Put this now-confirmed guest on the Circle's Google Calendar invite. Two
+  // things come out of it: Google recognises them and lets them walk in
+  // WITHOUT the host having to admit them, and the event carries a per-Circle
+  // Meet link (so an old guest's copy of the standing room isn't a permanent
+  // key to every future Circle). Best-effort — never blocks the welcome email.
+  let syncedMeetUrl: string | null = null;
+  try {
+    const { syncCircleToGoogle } = await import("./circle-google");
+    const res = await syncCircleToGoogle(row.groupSessionId);
+    if (res.ok) syncedMeetUrl = res.meetUrl;
+  } catch (err) {
+    console.error("[circle] google invite on fulfil failed:", err);
+  }
+
   const meetingUrl = resolveCircleMeetingUrl(
-    row.sessionMeetUrl,
+    syncedMeetUrl ?? row.sessionMeetUrl,
     settings?.circleRoomUrl ?? null
   );
 

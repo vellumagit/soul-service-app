@@ -102,14 +102,27 @@ async function ensureForGroup(
     const instant = zonedWallTimeToUtc(y, mo, da, hour, minute, tz);
     if (instant.getTime() <= now.getTime()) continue; // don't create past slots
 
-    await db.insert(groupSessions).values({
-      accountId: group.accountId,
-      groupId: group.id,
-      scheduledAt: instant,
-      durationMinutes: group.defaultDurationMinutes,
-      capacity: group.defaultCapacity,
-      priceCents: group.defaultPriceCents,
-    });
+    const [made] = await db
+      .insert(groupSessions)
+      .values({
+        accountId: group.accountId,
+        groupId: group.id,
+        scheduledAt: instant,
+        durationMinutes: group.defaultDurationMinutes,
+        capacity: group.defaultCapacity,
+        priceCents: group.defaultPriceCents,
+      })
+      .returning({ id: groupSessions.id });
+    // Auto-generated Circles need to reach her calendar too — otherwise only
+    // the ones she books by hand would show up there.
+    if (made) {
+      try {
+        const { syncCircleToGoogle } = await import("./circle-google");
+        await syncCircleToGoogle(made.id);
+      } catch (err) {
+        console.error("[circle] google sync on recurrence failed:", err);
+      }
+    }
     taken.add(key);
     created++;
   }
