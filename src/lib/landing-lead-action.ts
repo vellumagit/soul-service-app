@@ -24,6 +24,7 @@ import {
   practitionerSettings,
 } from "@/db/schema";
 import { checkRateLimit } from "./rate-limit";
+import { scoreLandingLead } from "./spam-filter";
 import { resolveStorefrontAccountId } from "./storefront-account";
 import {
   generateLeadFormToken,
@@ -138,9 +139,17 @@ export async function submitLandingLead(
     formId = inserted[0].id;
   }
 
+  // Spam scoring — tuned against the actual spam this form receives. A spam
+  // verdict is quarantined, not deleted: stored with status 'spam' (shown in a
+  // collapsed inbox section with one-tap restore), no notification emails, no
+  // inbox badge. Real inquiries are unaffected — none of the signals fire on
+  // a short personal note.
+  const verdict = scoreLandingLead({ name, email, message });
+
   const fields: Record<string, unknown> = {};
   if (message) fields.message = message;
   if (preferredWindowIso) fields.preferredWindow = preferredWindowIso;
+  if (verdict.spam) fields.spamReasons = verdict.reasons;
   await db.insert(leadSubmissions).values({
     accountId,
     formId,
@@ -150,8 +159,15 @@ export async function submitLandingLead(
     sourceIp: ip === "unknown" ? null : ip,
     userAgent: h.get("user-agent") ?? null,
     referer: h.get("referer") ?? null,
-    status: "pending",
+    status: verdict.spam ? "spam" : "pending",
   });
+
+  // Quarantined: no ack to the sender (that's backscatter — it confirms the
+  // address works and invites more), no "new inquiry" alert to the
+  // practitioner. Tell the bot it succeeded and stop.
+  if (verdict.spam) {
+    return { ok: true };
+  }
 
   // Notifications — best-effort. The inquiry is ALREADY saved above, so a
   // mail failure must never fail the submission or hide it from her inbox.

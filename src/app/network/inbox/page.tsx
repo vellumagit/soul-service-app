@@ -27,12 +27,13 @@ import { QuickActions } from "@/components/QuickActions";
 export const dynamic = "force-dynamic";
 
 const FILTERS: {
-  value: "pending" | "accepted" | "rejected" | "all";
+  value: "pending" | "accepted" | "rejected" | "spam" | "all";
   label: string;
 }[] = [
   { value: "pending", label: "Pending" },
   { value: "accepted", label: "Accepted" },
   { value: "rejected", label: "Rejected" },
+  { value: "spam", label: "Spam" },
   { value: "all", label: "All" },
 ];
 
@@ -45,7 +46,7 @@ export default async function LeadInboxPage({
   const { filter: filterRaw = "pending" } = await searchParams;
   const filter = (
     FILTERS.some((f) => f.value === filterRaw) ? filterRaw : "pending"
-  ) as "pending" | "accepted" | "rejected" | "all";
+  ) as "pending" | "accepted" | "rejected" | "spam" | "all";
 
   const [submissions, picker, settings] = await Promise.all([
     listLeadInbox(accountId, filter),

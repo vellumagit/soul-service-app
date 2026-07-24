@@ -12,6 +12,7 @@ import {
   acceptLeadSubmission,
   rejectLeadSubmission,
   deleteLeadSubmission,
+  markLeadSubmissionNotSpam,
 } from "@/lib/actions";
 import type { LeadSubmissionRow } from "@/db/queries";
 import { notify } from "./FlashNotifier";
@@ -22,7 +23,7 @@ export function LeadInboxList({
   filter,
 }: {
   submissions: LeadSubmissionRow[];
-  filter: "pending" | "accepted" | "rejected" | "all";
+  filter: "pending" | "accepted" | "rejected" | "spam" | "all";
 }) {
   return (
     <ul className="space-y-2">
@@ -42,7 +43,7 @@ function SubmissionRow({
 }) {
   const [pending, startTransition] = useTransition();
   const [busy, setBusy] = useState<
-    "accept" | "reject" | "delete" | null
+    "accept" | "reject" | "delete" | "notspam" | null
   >(null);
   const [hidden, setHidden] = useState(false);
   const fields = (s.fields ?? {}) as Record<string, unknown>;
@@ -78,6 +79,8 @@ function SubmissionRow({
         return (
           <span className="chip bg-ink-100 text-ink-500">duplicate</span>
         );
+      case "spam":
+        return <span className="chip bg-red-50 text-red-700">spam</span>;
       default:
         return null;
     }
@@ -217,6 +220,36 @@ function SubmissionRow({
                 Reject
               </button>
             </>
+          )}
+          {s.status === "spam" && (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() =>
+                startTransition(async () => {
+                  setBusy("notspam");
+                  const r = await markLeadSubmissionNotSpam(s.id);
+                  setBusy(null);
+                  if (!r.ok) {
+                    notify({
+                      kind: "warning",
+                      title: "Restore failed",
+                      body: r.error,
+                    });
+                    return;
+                  }
+                  notify({
+                    kind: "success",
+                    title: "Moved back to Pending",
+                    ttlMs: 2500,
+                  });
+                  setHidden(true);
+                })
+              }
+              className="px-3 py-1.5 text-xs font-medium text-sage-700 hover:text-sage-800 border border-sage-200 rounded-md disabled:opacity-50"
+            >
+              {busy === "notspam" ? "Restoring…" : "Not spam"}
+            </button>
           )}
           {(filter !== "pending" || s.status !== "pending") && (
             <button

@@ -894,6 +894,38 @@ export async function rejectLeadSubmission(
   }
 }
 
+/** Rescue a submission the spam filter caught: back to pending so it shows in
+ *  the inbox and can be accepted normally. The one-click safety valve that
+ *  makes auto-quarantine acceptable — a false positive costs a tap, not a
+ *  person. */
+export async function markLeadSubmissionNotSpam(
+  submissionId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const { accountId } = await requireSession();
+    const updated = await db
+      .update(leadSubmissions)
+      .set({ status: "pending", reviewedAt: null, reviewedAction: null })
+      .where(
+        and(
+          eq(leadSubmissions.accountId, accountId),
+          eq(leadSubmissions.id, submissionId),
+          eq(leadSubmissions.status, "spam")
+        )
+      )
+      .returning({ id: leadSubmissions.id });
+    if (updated.length === 0)
+      return { ok: false, error: "Submission not found (or not spam)" };
+    revalidatePath("/network/inbox");
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Restore failed",
+    };
+  }
+}
+
 /** Permanently delete a submission. Used to clear out reviewed/rejected
  *  entries from history. Cascades naturally — no related rows. */
 export async function deleteLeadSubmission(

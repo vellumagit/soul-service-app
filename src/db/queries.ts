@@ -378,7 +378,7 @@ export type LeadSubmissionRow = LeadSubmission & {
 
 export async function listLeadInbox(
   accountId: string,
-  status: "pending" | "accepted" | "rejected" | "duplicate" | "all" = "pending"
+  status: "pending" | "accepted" | "rejected" | "duplicate" | "spam" | "all" = "pending"
 ): Promise<LeadSubmissionRow[]> {
   const baseWhere =
     status === "all"
