@@ -89,16 +89,19 @@ export function KeyboardShortcuts() {
       // Modifier keys (ctrl/meta/alt) → not our shortcuts
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
-      // ? overlay — allow even in inputs (it's Shift+/)
+      // Skip ALL shortcuts while typing in a text field — including `?`.
+      // The overlay used to claim `?` even inside inputs, which meant no text
+      // field in the whole app could type a question mark (she literally
+      // couldn't ask the Help Buddy a question). Typing always wins.
+      if (inEditable) return;
+
+      // ? overlay — only when not typing
       if (e.key === "?") {
         e.preventDefault();
         setOverlayOpen(true);
         resetSequence();
         return;
       }
-
-      // Skip everything else while in a text field
-      if (inEditable) return;
 
       // Two-key sequence: g <letter>
       if (sequenceRef.current === "g") {

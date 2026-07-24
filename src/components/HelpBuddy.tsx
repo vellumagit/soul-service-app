@@ -58,7 +58,7 @@ type ChatMessage = {
 
 // Greeting only shown when the panel is empty.
 const GREETING =
-  "Hi! I'm your in-app help buddy. Ask me anything about how this app works — where to find things, how to do something, what's coming soon. I'll keep it short.";
+  "Hi — I live here, in the corner of your workspace, and I know every inch of it. Ask me anything: where something is, how to do it, what's new. I'll keep it short.";
 
 export function HelpBuddy() {
   const [open, setOpen] = useState(false);

@@ -10,7 +10,7 @@ The orange chat bubble in the bottom-right of every page is the practitioner's f
 
 **If you ship a user-facing change, update that file in the same commit.** Specifically:
 
-- Added a button, page, dialog, shortcut, toast, or workflow → add a sentence to the relevant section in `What she can do RIGHT NOW`.
+- Added a button, page, dialog, shortcut, toast, or workflow → add a sentence to the relevant section in `What you can do RIGHT NOW`.
 - Changed how an existing flow works → revise the relevant section so it stays truthful.
 - Shipped something noteworthy (new feature, fix she'd notice) → also drop a one-line bullet at the top of the **Recent updates** block so she can ask "what's new?" and get a real, current answer.
 - Removed or deprecated something → remove the bullet, don't leave dead references.
@@ -18,3 +18,5 @@ The orange chat bubble in the bottom-right of every page is the practitioner's f
 Why this matters: if the prompt is stale, the buddy will tell her "I don't see that in the app yet" about a button she's literally looking at. That's worse than no buddy at all — it erodes trust in the app.
 
 The prompt is large (~6KB) and cached via `cache_control: ephemeral`, so adding a few lines costs essentially nothing per call. Don't worry about being concise — be accurate.
+
+**Voice rule:** the entire prompt speaks TO Svitlana in the second person ("you can…"), never about her ("she can…"). The buddy is her personal companion, not a manual. Keep any new bullets in that register.
