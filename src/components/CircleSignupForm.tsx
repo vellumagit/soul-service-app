@@ -5,23 +5,30 @@
 // On success, replaces itself with a thank-you card that includes the
 // practitioner's payment instructions so the attendee knows how to
 // settle up.
+//
+// All visible text arrives via `copy` — the page passes strings in the
+// CIRCLE's language (EN or УКР), so a shared Ukrainian circle link reads
+// Ukrainian end to end.
 
 import { useActionState } from "react";
 import {
   signUpForGroupSession,
   type SignUpResult,
 } from "@/lib/group-actions";
+import type { CircleFormCopy } from "@/lib/landing-copy";
 
 const initialState: SignUpResult | undefined = undefined;
 
 interface Props {
   sessionId: string;
   paymentInstructions: string | null;
+  copy: CircleFormCopy;
 }
 
 export function CircleSignupForm({
   sessionId,
   paymentInstructions,
+  copy,
 }: Props) {
   const [state, action, pending] = useActionState(
     signUpForGroupSession,
@@ -41,12 +48,10 @@ export function CircleSignupForm({
           className="serif-italic text-lg text-plum-700 mb-2"
           style={{ fontWeight: 400 }}
         >
-          Your seat is held.
+          {copy.successTitle}
         </p>
         <p className="text-sm text-ink-600 leading-relaxed">
-          Svitlana will reach out by email with everything you need. If
-          you don&apos;t hear back within a day or two, check your spam
-          folder.
+          {copy.successBody}
         </p>
         {paymentInstructions && (
           <div
@@ -60,7 +65,7 @@ export function CircleSignupForm({
               className="text-[10px] uppercase tracking-wider font-mono mb-2"
               style={{ color: "var(--land-clay, #b05c36)" }}
             >
-              Payment
+              {copy.paymentLabel}
             </div>
             <p className="text-sm text-ink-700 whitespace-pre-wrap leading-relaxed">
               {paymentInstructions}
@@ -94,7 +99,7 @@ export function CircleSignupForm({
 
       <label className="block">
         <span className="text-xs uppercase tracking-wider text-ink-500 font-mono">
-          Your name
+          {copy.nameLabel}
         </span>
         <input
           type="text"
@@ -102,14 +107,14 @@ export function CircleSignupForm({
           required
           maxLength={200}
           autoComplete="name"
-          placeholder="What people call you"
+          placeholder={copy.namePlaceholder}
           className="mt-1.5 w-full px-3 py-2.5 text-sm border border-ink-200 rounded-md bg-white outline-none focus:border-plum-500 focus:ring-1 focus:ring-plum-100"
         />
       </label>
 
       <label className="block">
         <span className="text-xs uppercase tracking-wider text-ink-500 font-mono">
-          Email
+          {copy.emailLabel}
         </span>
         <input
           type="email"
@@ -117,21 +122,21 @@ export function CircleSignupForm({
           required
           maxLength={200}
           autoComplete="email"
-          placeholder="So Svitlana can be in touch"
+          placeholder={copy.emailPlaceholderHold}
           className="mt-1.5 w-full px-3 py-2.5 text-sm border border-ink-200 rounded-md bg-white outline-none focus:border-plum-500 focus:ring-1 focus:ring-plum-100"
         />
       </label>
 
       <label className="block">
         <span className="text-xs uppercase tracking-wider text-ink-500 font-mono">
-          Phone (optional)
+          {copy.phoneLabel}
         </span>
         <input
           type="tel"
           name="phone"
           maxLength={50}
           autoComplete="tel"
-          placeholder="If you'd prefer a text"
+          placeholder={copy.phonePlaceholder}
           className="mt-1.5 w-full px-3 py-2.5 text-sm border border-ink-200 rounded-md bg-white outline-none focus:border-plum-500 focus:ring-1 focus:ring-plum-100"
         />
       </label>
@@ -151,11 +156,11 @@ export function CircleSignupForm({
           letterSpacing: "0.02em",
         }}
       >
-        {pending ? "Holding your seat..." : "Hold my seat →"}
+        {pending ? copy.holdSubmitting : copy.holdSubmit}
       </button>
 
       <p className="text-[11px] italic text-center text-ink-500 serif-italic mt-3">
-        No payment now — Svitlana will confirm and share details.
+        {copy.holdFootnote}
       </p>
     </form>
   );

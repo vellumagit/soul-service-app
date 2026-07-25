@@ -10,8 +10,52 @@
 // italic accent survives translation. Everything else is a plain string.
 
 import type { ReactNode } from "react";
+import Link from "next/link";
 
 export type LandingLang = "en" | "uk";
+
+// Inline link used inside circle-page sentences — same clay underline the
+// page uses for its other in-copy links.
+function CircleLink({
+  href,
+  children,
+}: {
+  href: string;
+  children: ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      style={{ color: "var(--land-clay)", textDecoration: "underline" }}
+    >
+      {children}
+    </Link>
+  );
+}
+
+// Plain-string bundle handed to the client-side circle forms. Everything is
+// serializable (no functions cross the server→client boundary) — the priced
+// CTA is resolved server-side into reserveLabel.
+export interface CircleFormCopy {
+  nameLabel: string;
+  namePlaceholder: string;
+  emailLabel: string;
+  emailPlaceholderHold: string;
+  emailPlaceholderPay: string;
+  phoneLabel: string;
+  phonePlaceholder: string;
+  holdSubmit: string;
+  holdSubmitting: string;
+  holdFootnote: string;
+  successTitle: string;
+  successBody: string;
+  paymentLabel: string;
+  reserveLabel: string;
+  checkoutPending: string;
+  stripeNote: string;
+  showOtherWays: string;
+  hideOtherWays: string;
+}
 
 export interface LandingCopy {
   nav: { signIn: string; workWithMe: string; reachOut: string };
@@ -113,6 +157,27 @@ export interface LandingCopy {
     successBody: string;
     errorGeneric: string;
     privacyNote: string;
+  };
+  // Public /circles/[id] sign-up page. Unlike the storefront (which follows
+  // the visitor's cookie), this page renders in the CIRCLE's own language —
+  // one shared link, and a УКР circle greets people in Ukrainian.
+  circlePage: {
+    holdYourSeat: string;
+    preferAnotherWeek: string;
+    paidTitle: string;
+    paidBody: string;
+    passedTitle: string;
+    passedBody: ReactNode;
+    cancelledTitle: string;
+    cancelledBody: ReactNode;
+    fullTitle: string;
+    fullBody: ReactNode;
+    closedTitle: string;
+    closedBody: ReactNode;
+    paymentCanceled: string;
+  };
+  circleForm: Omit<CircleFormCopy, "reserveLabel"> & {
+    reserveCta: (price: string) => string;
   };
 }
 
@@ -333,6 +398,67 @@ const EN: LandingCopy = {
     errorGeneric: "Something went sideways sending that. Try once more?",
     privacyNote: "Your note goes directly to the practitioner. Nothing is shared.",
   },
+  circlePage: {
+    holdYourSeat: "Hold your seat",
+    preferAnotherWeek: "Prefer another week? Choose a date:",
+    paidTitle: "You're in. 🤍",
+    paidBody:
+      "Your seat is paid and held. Check your email for your welcome note and the meeting link — a gentle reminder will reach you before we gather.",
+    passedTitle: "This circle has passed.",
+    passedBody: (
+      <>
+        Visit <CircleLink href="/">the storefront</CircleLink> to see
+        what&apos;s coming next.
+      </>
+    ),
+    cancelledTitle: "This circle was cancelled.",
+    cancelledBody: (
+      <>
+        Visit <CircleLink href="/">the storefront</CircleLink> to see other
+        upcoming gatherings.
+      </>
+    ),
+    fullTitle: "This circle is full.",
+    fullBody: (
+      <>
+        Send a note via{" "}
+        <CircleLink href="/#contact">the contact form</CircleLink> and
+        Svitlana will hold a place for the next one.
+      </>
+    ),
+    closedTitle: "Sign-ups aren't open online just yet.",
+    closedBody: (
+      <>
+        These Circles gather by warm invitation. Send a note via{" "}
+        <CircleLink href="/#contact">the contact form</CircleLink> and
+        Svitlana will hold a place for you.
+      </>
+    ),
+    paymentCanceled:
+      "Payment canceled — no charge. You can try again whenever you're ready.",
+  },
+  circleForm: {
+    nameLabel: "Your name",
+    namePlaceholder: "What people call you",
+    emailLabel: "Email",
+    emailPlaceholderHold: "So Svitlana can be in touch",
+    emailPlaceholderPay: "Where your details + link will go",
+    phoneLabel: "Phone (optional)",
+    phonePlaceholder: "If you'd prefer a text",
+    holdSubmit: "Hold my seat →",
+    holdSubmitting: "Holding your seat...",
+    holdFootnote: "No payment now — Svitlana will confirm and share details.",
+    successTitle: "Your seat is held.",
+    successBody:
+      "Svitlana will reach out by email with everything you need. If you don't hear back within a day or two, check your spam folder.",
+    paymentLabel: "Payment",
+    reserveCta: (price) => `Reserve your seat — ${price} →`,
+    checkoutPending: "Taking you to checkout…",
+    stripeNote:
+      "Secure card payment via Stripe. Your welcome email + meeting link arrive right after.",
+    showOtherWays: "or ask about other ways to pay",
+    hideOtherWays: "Hide other ways to pay",
+  },
 };
 
 const UK: LandingCopy = {
@@ -542,6 +668,67 @@ const UK: LandingCopy = {
       "Ваша записка надійшла. Я відповім протягом кількох днів — зазвичай швидше. Зробіть тихий вдих.",
     errorGeneric: "Щось пішло не так під час надсилання. Спробуєте ще раз?",
     privacyNote: "Ваша записка йде напряму до практика. Нічим не діляться.",
+  },
+  circlePage: {
+    holdYourSeat: "Забронюйте місце",
+    preferAnotherWeek: "Зручніше іншого тижня? Оберіть дату:",
+    paidTitle: "Ви з нами. 🤍",
+    paidBody:
+      "Ваше місце оплачене й закріплене. Перевірте пошту — там вітальна записка та посилання на зустріч. Лагідне нагадування прийде перед тим, як ми зберемося.",
+    passedTitle: "Це Коло вже відбулося.",
+    passedBody: (
+      <>
+        Загляньте на <CircleLink href="/">головну сторінку</CircleLink>, щоб
+        побачити, що попереду.
+      </>
+    ),
+    cancelledTitle: "Це Коло скасовано.",
+    cancelledBody: (
+      <>
+        Загляньте на <CircleLink href="/">головну сторінку</CircleLink>, щоб
+        побачити інші найближчі зустрічі.
+      </>
+    ),
+    fullTitle: "У цьому Колі місць уже немає.",
+    fullBody: (
+      <>
+        Напишіть через{" "}
+        <CircleLink href="/#contact">форму зв’язку</CircleLink> — і Світлана
+        притримає для вас місце наступного разу.
+      </>
+    ),
+    closedTitle: "Онлайн-запис поки не відкрито.",
+    closedBody: (
+      <>
+        Ці Кола збираються за теплим запрошенням. Напишіть через{" "}
+        <CircleLink href="/#contact">форму зв’язку</CircleLink> — і Світлана
+        притримає місце для вас.
+      </>
+    ),
+    paymentCanceled:
+      "Оплату скасовано — кошти не списано. Спробуйте знову, коли будете готові.",
+  },
+  circleForm: {
+    nameLabel: "Ваше ім’я",
+    namePlaceholder: "Як вас називають",
+    emailLabel: "Електронна пошта",
+    emailPlaceholderHold: "Щоб Світлана могла зв’язатися",
+    emailPlaceholderPay: "Сюди прийдуть деталі й посилання",
+    phoneLabel: "Телефон (необов’язково)",
+    phonePlaceholder: "Якщо зручніше повідомлення",
+    holdSubmit: "Забронювати місце →",
+    holdSubmitting: "Бронюємо ваше місце…",
+    holdFootnote: "Оплата не зараз — Світлана підтвердить і надішле деталі.",
+    successTitle: "Ваше місце заброньоване.",
+    successBody:
+      "Світлана напише вам на пошту з усім потрібним. Якщо відповіді немає день-два — перевірте папку зі спамом.",
+    paymentLabel: "Оплата",
+    reserveCta: (price) => `Зарезервувати місце — ${price} →`,
+    checkoutPending: "Переходимо до оплати…",
+    stripeNote:
+      "Безпечна оплата карткою через Stripe. Вітальний лист і посилання на зустріч прийдуть одразу після оплати.",
+    showOtherWays: "або запитайте про інші способи оплати",
+    hideOtherWays: "Сховати інші способи оплати",
   },
 };
 

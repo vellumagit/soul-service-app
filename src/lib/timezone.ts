@@ -51,9 +51,13 @@ export function resolveTimeZone(
 }
 
 /** "Monday, July 14 at 3:30 PM EDT" — the full labelled line for email bodies. */
-export function formatSessionLong(date: Date, timeZone: string): string {
+export function formatSessionLong(
+  date: Date,
+  timeZone: string,
+  locale = "en-US"
+): string {
   const tz = resolveTimeZone(timeZone);
-  return date.toLocaleString("en-US", {
+  return date.toLocaleString(locale, {
     timeZone: tz,
     weekday: "long",
     month: "long",

@@ -7,21 +7,25 @@
 //
 // Below it, a quiet "other ways to pay" toggle reveals the existing manual
 // hold-a-seat form (Venmo/cash lane).
+//
+// All visible text arrives via `copy` in the CIRCLE's language — the
+// priced CTA (reserveLabel) is resolved server-side.
 
 import { useState, useTransition } from "react";
 import { createCircleCheckout } from "@/lib/group-actions";
 import { CircleSignupForm } from "./CircleSignupForm";
+import type { CircleFormCopy } from "@/lib/landing-copy";
 
 interface Props {
   sessionId: string;
-  priceLabel: string;
   paymentInstructions: string | null;
+  copy: CircleFormCopy;
 }
 
 export function CirclePurchaseForm({
   sessionId,
-  priceLabel,
   paymentInstructions,
+  copy,
 }: Props) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -70,7 +74,7 @@ export function CirclePurchaseForm({
 
         <label className="block">
           <span className="text-xs uppercase tracking-wider text-ink-500 font-mono">
-            Your name
+            {copy.nameLabel}
           </span>
           <input
             type="text"
@@ -78,14 +82,14 @@ export function CirclePurchaseForm({
             required
             maxLength={200}
             autoComplete="name"
-            placeholder="What people call you"
+            placeholder={copy.namePlaceholder}
             className="mt-1.5 w-full px-3 py-2.5 text-sm border border-ink-200 rounded-md bg-white outline-none focus:border-plum-500 focus:ring-1 focus:ring-plum-100"
           />
         </label>
 
         <label className="block">
           <span className="text-xs uppercase tracking-wider text-ink-500 font-mono">
-            Email
+            {copy.emailLabel}
           </span>
           <input
             type="email"
@@ -93,20 +97,21 @@ export function CirclePurchaseForm({
             required
             maxLength={200}
             autoComplete="email"
-            placeholder="Where your details + link will go"
+            placeholder={copy.emailPlaceholderPay}
             className="mt-1.5 w-full px-3 py-2.5 text-sm border border-ink-200 rounded-md bg-white outline-none focus:border-plum-500 focus:ring-1 focus:ring-plum-100"
           />
         </label>
 
         <label className="block">
           <span className="text-xs uppercase tracking-wider text-ink-500 font-mono">
-            Phone (optional)
+            {copy.phoneLabel}
           </span>
           <input
             type="tel"
             name="phone"
             maxLength={50}
             autoComplete="tel"
+            placeholder={copy.phonePlaceholder}
             className="mt-1.5 w-full px-3 py-2.5 text-sm border border-ink-200 rounded-md bg-white outline-none focus:border-plum-500 focus:ring-1 focus:ring-plum-100"
           />
         </label>
@@ -121,12 +126,11 @@ export function CirclePurchaseForm({
           className="w-full py-3 text-sm font-medium text-white rounded-md disabled:opacity-50"
           style={{ background: "var(--land-clay, #b05c36)", letterSpacing: "0.02em" }}
         >
-          {pending ? "Taking you to checkout…" : `Reserve your seat — ${priceLabel} →`}
+          {pending ? copy.checkoutPending : copy.reserveLabel}
         </button>
 
         <p className="text-[11px] italic text-center text-ink-500 serif-italic">
-          Secure card payment via Stripe. Your welcome email + meeting link
-          arrive right after.
+          {copy.stripeNote}
         </p>
       </form>
 
@@ -136,7 +140,7 @@ export function CirclePurchaseForm({
           onClick={() => setShowManual((v) => !v)}
           className="text-[12px] text-ink-500 hover:text-plum-700 underline"
         >
-          {showManual ? "Hide other ways to pay" : "or ask about other ways to pay"}
+          {showManual ? copy.hideOtherWays : copy.showOtherWays}
         </button>
       </div>
 
@@ -145,6 +149,7 @@ export function CirclePurchaseForm({
           <CircleSignupForm
             sessionId={sessionId}
             paymentInstructions={paymentInstructions}
+            copy={copy}
           />
         </div>
       )}

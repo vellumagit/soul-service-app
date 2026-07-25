@@ -6,6 +6,11 @@
 // Renders nothing recognizable as Svit's workspace — uses the same
 // landing.css palette so the experience feels like part of the
 // storefront, not the ops app.
+//
+// Language: this page speaks the CIRCLE's language, not the visitor's
+// storefront cookie — a УКР circle's shared link reads Ukrainian end to
+// end (chrome, dates, forms), an EN circle stays English. The room's
+// language is the honest context for the person about to join it.
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -22,12 +27,20 @@ import { CircleSignupForm } from "@/components/CircleSignupForm";
 import { CirclePurchaseForm } from "@/components/CirclePurchaseForm";
 import { isStripeConfigured } from "@/lib/stripe";
 import { formatSessionLong, resolveTimeZone } from "@/lib/timezone";
+import {
+  getLandingCopy,
+  type CircleFormCopy,
+} from "@/lib/landing-copy";
 import "../../landing.css";
 
 export const dynamic = "force-dynamic";
 
-function formatMoney(cents: number, currency: string): string {
-  return new Intl.NumberFormat("en-US", {
+function formatMoney(
+  cents: number,
+  currency: string,
+  locale = "en-US"
+): string {
+  return new Intl.NumberFormat(locale, {
     style: "currency",
     currency,
     minimumFractionDigits: 0,
@@ -36,8 +49,12 @@ function formatMoney(cents: number, currency: string): string {
 }
 
 // Compact label for the "prefer another week?" pills, in the practice zone.
-function formatPillDate(d: Date, timeZone: string): string {
-  return d.toLocaleString("en-US", {
+function formatPillDate(
+  d: Date,
+  timeZone: string,
+  locale = "en-US"
+): string {
+  return d.toLocaleString(locale, {
     weekday: "short",
     month: "short",
     day: "numeric",
@@ -94,6 +111,12 @@ export default async function CircleSignupPage({
   const session = rows[0];
   if (!session) notFound();
 
+  // The circle's language drives every word on this page.
+  const lang = session.groupLanguage === "uk" ? "uk" : "en";
+  const c = getLandingCopy(lang);
+  const cp = c.circlePage;
+  const locale = c.circles.dateLocale;
+
   const scheduledAt = new Date(session.scheduledAt);
   const past = scheduledAt.getTime() < Date.now();
   const cancelled = session.status !== "scheduled";
@@ -112,6 +135,16 @@ export default async function CircleSignupPage({
     !!session.stripeChargesEnabled;
 
   const tz = resolveTimeZone(session.timezone);
+
+  // Serializable string bundle for the client forms — the priced CTA is
+  // resolved here so no function crosses the server→client boundary.
+  const { reserveCta, ...formStrings } = c.circleForm;
+  const formCopy: CircleFormCopy = {
+    ...formStrings,
+    reserveLabel: reserveCta(
+      formatMoney(session.priceCents, session.currency, locale)
+    ),
+  };
 
   // Other upcoming dates of the SAME Circle, so a visitor who landed on the
   // soonest one can jump to a week that suits them. Only surface dates that
@@ -182,7 +215,7 @@ export default async function CircleSignupPage({
             style={{ textAlign: "center" }}
           >
             <span className="tag" style={{ display: "block" }}>
-              Hold your seat
+              {cp.holdYourSeat}
             </span>
             <h2 style={{ marginBottom: 12 }}>
               {session.groupName}
@@ -215,7 +248,7 @@ export default async function CircleSignupPage({
               </span>
             </h2>
             <p className="p-lg" style={{ marginBottom: 4 }}>
-              {formatSessionLong(scheduledAt, tz)}
+              {formatSessionLong(scheduledAt, tz, locale)}
             </p>
             <p
               style={{
@@ -225,12 +258,13 @@ export default async function CircleSignupPage({
                 letterSpacing: "0.04em",
               }}
             >
-              {session.durationMinutes}min ·{" "}
-              {formatMoney(session.priceCents, session.currency)}
+              {session.durationMinutes}
+              {c.circles.minShort} ·{" "}
+              {formatMoney(session.priceCents, session.currency, locale)}
               {open && (
                 <>
                   {" · "}
-                  {spotsLeft} seat{spotsLeft === 1 ? "" : "s"} left
+                  {c.circles.seatsLeft(spotsLeft)}
                 </>
               )}
             </p>
@@ -261,7 +295,7 @@ export default async function CircleSignupPage({
                     marginBottom: 12,
                   }}
                 >
-                  Prefer another week? Choose a date:
+                  {cp.preferAnotherWeek}
                 </p>
                 <div
                   style={{
@@ -286,7 +320,7 @@ export default async function CircleSignupPage({
                         whiteSpace: "nowrap",
                       }}
                     >
-                      {formatPillDate(d.scheduledAt, tz)}
+                      {formatPillDate(d.scheduledAt, tz, locale)}
                     </Link>
                   ))}
                 </div>
@@ -319,12 +353,10 @@ export default async function CircleSignupPage({
                     marginBottom: 10,
                   }}
                 >
-                  You&apos;re in. 🤍
+                  {cp.paidTitle}
                 </p>
                 <p style={{ fontSize: 14, lineHeight: 1.6 }}>
-                  Your seat is paid and held. Check your email for your welcome
-                  note and the meeting link — a gentle reminder will reach you
-                  before we gather.
+                  {cp.paidBody}
                 </p>
               </div>
             )}
@@ -346,21 +378,9 @@ export default async function CircleSignupPage({
                     marginBottom: 8,
                   }}
                 >
-                  This circle has passed.
+                  {cp.passedTitle}
                 </p>
-                <p style={{ fontSize: 13 }}>
-                  Visit{" "}
-                  <Link
-                    href="/"
-                    style={{
-                      color: "var(--land-clay)",
-                      textDecoration: "underline",
-                    }}
-                  >
-                    the storefront
-                  </Link>{" "}
-                  to see what&apos;s coming next.
-                </p>
+                <p style={{ fontSize: 13 }}>{cp.passedBody}</p>
               </div>
             )}
             {!past && cancelled && (
@@ -381,21 +401,9 @@ export default async function CircleSignupPage({
                     marginBottom: 8,
                   }}
                 >
-                  This circle was cancelled.
+                  {cp.cancelledTitle}
                 </p>
-                <p style={{ fontSize: 13 }}>
-                  Visit{" "}
-                  <Link
-                    href="/"
-                    style={{
-                      color: "var(--land-clay)",
-                      textDecoration: "underline",
-                    }}
-                  >
-                    the storefront
-                  </Link>{" "}
-                  to see other upcoming gatherings.
-                </p>
+                <p style={{ fontSize: 13 }}>{cp.cancelledBody}</p>
               </div>
             )}
             {!past && !cancelled && spotsLeft === 0 && (
@@ -416,21 +424,9 @@ export default async function CircleSignupPage({
                     marginBottom: 8,
                   }}
                 >
-                  This circle is full.
+                  {cp.fullTitle}
                 </p>
-                <p style={{ fontSize: 13 }}>
-                  Send a note via{" "}
-                  <Link
-                    href="/#contact"
-                    style={{
-                      color: "var(--land-clay)",
-                      textDecoration: "underline",
-                    }}
-                  >
-                    the contact form
-                  </Link>{" "}
-                  and Svitlana will hold a place for the next one.
-                </p>
+                <p style={{ fontSize: 13 }}>{cp.fullBody}</p>
               </div>
             )}
             {open && !justPaid && !signupsOpen && (
@@ -451,20 +447,10 @@ export default async function CircleSignupPage({
                     marginBottom: 8,
                   }}
                 >
-                  Sign-ups aren&apos;t open online just yet.
+                  {cp.closedTitle}
                 </p>
                 <p style={{ fontSize: 13, lineHeight: 1.6 }}>
-                  These Circles gather by warm invitation. Send a note via{" "}
-                  <Link
-                    href="/#contact"
-                    style={{
-                      color: "var(--land-clay)",
-                      textDecoration: "underline",
-                    }}
-                  >
-                    the contact form
-                  </Link>{" "}
-                  and Svitlana will hold a place for you.
+                  {cp.closedBody}
                 </p>
               </div>
             )}
@@ -478,8 +464,7 @@ export default async function CircleSignupPage({
                   marginBottom: 14,
                 }}
               >
-                Payment canceled — no charge. You can try again whenever
-                you&apos;re ready.
+                {cp.paymentCanceled}
               </p>
             )}
             {open &&
@@ -488,16 +473,14 @@ export default async function CircleSignupPage({
               (stripeReady ? (
                 <CirclePurchaseForm
                   sessionId={session.sessionId}
-                  priceLabel={formatMoney(
-                    session.priceCents,
-                    session.currency
-                  )}
                   paymentInstructions={session.paymentInstructions}
+                  copy={formCopy}
                 />
               ) : (
                 <CircleSignupForm
                   sessionId={session.sessionId}
                   paymentInstructions={session.paymentInstructions}
+                  copy={formCopy}
                 />
               ))}
           </div>
