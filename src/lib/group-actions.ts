@@ -318,6 +318,72 @@ export async function cancelGroupSession(id: string): Promise<{ ok: true }> {
   return { ok: true };
 }
 
+export type DeleteGroupResult = { ok: true } | { ok: false; error: string };
+
+// Delete a Circle outright. Guarded: a Circle with ANY sign-up history —
+// any attendee row on any of its sessions, whatever the status — refuses
+// to die, because those rows are payment + relationship records. The
+// button exists for its real purpose: removing a Circle created by
+// mistake, or a test nobody ever joined. For a retired Circle with
+// history, unpublishing (Edit circle) is the right move.
+export async function deleteGroup(
+  groupId: string
+): Promise<DeleteGroupResult> {
+  const { accountId } = await requireSession();
+
+  const [group] = await db
+    .select({ id: groups.id })
+    .from(groups)
+    .where(and(eq(groups.id, groupId), eq(groups.accountId, accountId)))
+    .limit(1);
+  if (!group) return { ok: false, error: "Circle not found." };
+
+  const [{ n }] = await db
+    .select({ n: sql<number>`COUNT(*)::int` })
+    .from(groupAttendees)
+    .innerJoin(
+      groupSessions,
+      eq(groupSessions.id, groupAttendees.groupSessionId)
+    )
+    .where(eq(groupSessions.groupId, groupId));
+  if (n > 0) {
+    return {
+      ok: false,
+      error:
+        "This Circle has sign-up history, so it can't be deleted — its records are part of your books. To retire it, open Edit circle and untick “Publish on my storefront” instead.",
+    };
+  }
+
+  // Pull any Google events for its sessions off her calendar (best-effort —
+  // Google being down shouldn't block the delete).
+  const sessionRows = await db
+    .select({
+      id: groupSessions.id,
+      googleEventId: groupSessions.googleEventId,
+    })
+    .from(groupSessions)
+    .where(eq(groupSessions.groupId, groupId));
+  for (const s of sessionRows) {
+    if (!s.googleEventId) continue;
+    try {
+      const { removeCircleFromGoogle } = await import("./circle-google");
+      await removeCircleFromGoogle(s.id);
+    } catch (err) {
+      console.error("[circle] google delete on circle delete failed:", err);
+    }
+  }
+
+  await db
+    .delete(groups)
+    .where(and(eq(groups.id, groupId), eq(groups.accountId, accountId)));
+
+  revalidatePath("/groups");
+  revalidatePath("/calendar");
+  revalidatePath("/today");
+  revalidatePath("/");
+  return { ok: true };
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // Public — sign up for a group session (no auth)
 // ─────────────────────────────────────────────────────────────────────

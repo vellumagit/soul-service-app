@@ -24,6 +24,7 @@ import { CancelGroupSessionButton } from "@/components/CancelGroupSessionButton"
 import { GroupRecurrencePanel } from "@/components/GroupRecurrencePanel";
 import { AddCircleAttendeeInline } from "@/components/AddCircleAttendeeInline";
 import { EditGroupDialog } from "@/components/EditGroupDialog";
+import { DeleteGroupButton } from "@/components/DeleteGroupButton";
 import { resolveCircleMeetingUrl } from "@/lib/circle-fulfillment";
 
 export const dynamic = "force-dynamic";
@@ -682,6 +683,12 @@ export default async function GroupDetailPage({
           </details>
         </section>
       )}
+
+      {/* Danger zone — deliberately last and quiet. The action itself
+          refuses if the Circle has any sign-up history. */}
+      <div className="mt-10 pt-4 border-t border-ink-100 text-right">
+        <DeleteGroupButton groupId={group.id} groupName={group.name} />
+      </div>
     </AppShell>
   );
 }
