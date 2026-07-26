@@ -40,9 +40,36 @@ function defaultFrom(): string {
 const CIRCLE_CONTACT_EMAIL =
   process.env.CIRCLE_CONTACT_EMAIL || "sss@svit.live";
 
+/** Attendee-facing Circle emails speak the CIRCLE's language. */
+export type CircleEmailLang = "en" | "uk";
+
+/** Normalise a stored group language for the email senders. */
+export function asCircleEmailLang(
+  raw: string | null | undefined
+): CircleEmailLang {
+  return raw === "uk" ? "uk" : "en";
+}
+
 /** Plain-text contact footer appended to Circle emails. */
-function circleContactLineText(): string {
-  return `Questions, or need to cancel or ask about a refund? Just reply, or reach me at ${CIRCLE_CONTACT_EMAIL}.`;
+function circleContactLineText(lang: CircleEmailLang = "en"): string {
+  return lang === "uk"
+    ? `Питання, скасування чи повернення коштів? Просто відповідайте на цей лист або пишіть на ${CIRCLE_CONTACT_EMAIL}.`
+    : `Questions, or need to cancel or ask about a refund? Just reply, or reach me at ${CIRCLE_CONTACT_EMAIL}.`;
+}
+
+/** English escape hatch — the LAST line of every Ukrainian circle email, in
+ *  case someone reserved a seat in a УКР Circle without realising. Short,
+ *  faded, and in English on purpose. */
+const UK_ESCAPE_TEXT =
+  "In English: this email is in Ukrainian because this Circle is held in Ukrainian. If that's a surprise, just reply in English — happy to help.";
+
+function ukEscapeHatchHtml(lang: CircleEmailLang): string {
+  if (lang !== "uk") return "";
+  return `<p style="margin:14px 0 0 0;font-size:11px;line-height:1.55;color:#a39689;">${escapeHtml(UK_ESCAPE_TEXT)}</p>`;
+}
+
+function ukEscapeHatchText(lang: CircleEmailLang): string {
+  return lang === "uk" ? `\n\n${UK_ESCAPE_TEXT}` : "";
 }
 
 export type SendEmailInput = {
@@ -240,43 +267,76 @@ export type CircleEmailInput = {
   note?: string | null;
   /** Optional "Can't make it?" self-serve cancel/refund link (tokenized). */
   cancelUrl?: string | null;
+  /** The CIRCLE's language — drives every word of the email. */
+  language?: CircleEmailLang;
 };
+
+function circleGreeting(
+  first: string | null,
+  lang: CircleEmailLang
+): string {
+  if (lang === "uk") return first ? `Привіт, ${first}!` : "Привіт!";
+  return first ? `Hi ${first},` : "Hi,";
+}
 
 /** Welcome / confirmation email sent once a seat is paid (card or manual). */
 export async function sendCircleWelcomeEmail(
   input: CircleEmailInput
 ): Promise<void> {
+  const lang = input.language ?? "en";
   const first = input.attendeeName?.split(" ")[0] ?? null;
-  const greeting = first ? `Hi ${first},` : "Hi,";
+  const greeting = circleGreeting(first, lang);
   const signoff = input.practitionerName ?? "Svitlana";
-  const subject = `You're in — ${input.circleName} on ${input.whenLabel}`;
+  const subject =
+    lang === "uk"
+      ? `Ви з нами — ${input.circleName}, ${input.whenLabel}`
+      : `You're in — ${input.circleName} on ${input.whenLabel}`;
   const linkLine = input.meetingUrl
-    ? `\n\nJoin here when it's time:\n${input.meetingUrl}`
-    : "\n\nI'll send the meeting link before we gather.";
+    ? lang === "uk"
+      ? `\n\nПриєднуйтеся за цим посиланням, коли настане час:\n${input.meetingUrl}`
+      : `\n\nJoin here when it's time:\n${input.meetingUrl}`
+    : lang === "uk"
+      ? "\n\nПосилання на зустріч надішлю перед тим, як ми зберемося."
+      : "\n\nI'll send the meeting link before we gather.";
   const noteLine = input.note ? `\n\n${input.note}` : "";
   const cancelLine = input.cancelUrl
-    ? `\n\nCan't make it? Cancel & request a refund:\n${input.cancelUrl}`
+    ? lang === "uk"
+      ? `\n\nНе зможете прийти? Скасувати й запросити повернення:\n${input.cancelUrl}`
+      : `\n\nCan't make it? Cancel & request a refund:\n${input.cancelUrl}`
     : "";
+  const heldLine =
+    lang === "uk"
+      ? `Ваше місце в ${input.circleName} закріплене. 🤍`
+      : `Your seat in ${input.circleName} is held. 🤍`;
+  const whenWord = lang === "uk" ? "Коли" : "When";
+  const closing =
+    lang === "uk"
+      ? "Перед початком прийде лагідне нагадування. Приходьте як є."
+      : "You'll get a gentle reminder before we begin. Come as you are.";
   const text = `${greeting}
 
-Your seat in ${input.circleName} is held. 🤍
+${heldLine}
 
-· When: ${input.whenLabel}${linkLine}${noteLine}
+· ${whenWord}: ${input.whenLabel}${linkLine}${noteLine}
 
-You'll get a gentle reminder before we begin. Come as you are.${cancelLine}
+${closing}${cancelLine}
 
-${circleContactLineText()}
+${circleContactLineText(lang)}
 
-— ${signoff}`;
+— ${signoff}${ukEscapeHatchText(lang)}`;
   const html = circleEmailHtml({
     greeting,
-    intro: `Your seat in <strong>${escapeHtml(input.circleName)}</strong> is held.`,
+    intro:
+      lang === "uk"
+        ? `Ваше місце в <strong>${escapeHtml(input.circleName)}</strong> закріплене.`
+        : `Your seat in <strong>${escapeHtml(input.circleName)}</strong> is held.`,
     whenLabel: input.whenLabel,
     meetingUrl: input.meetingUrl,
     note: input.note ?? null,
-    closing: "You'll get a gentle reminder before we begin. Come as you are.",
+    closing,
     signoff,
     cancelUrl: input.cancelUrl ?? null,
+    lang,
   });
   await sendEmail({
     to: input.to,
@@ -291,40 +351,69 @@ ${circleContactLineText()}
 export async function sendCircleReminderEmail(
   input: CircleEmailInput & { lead: "24h" | "1h" }
 ): Promise<void> {
+  const lang = input.language ?? "en";
   const first = input.attendeeName?.split(" ")[0] ?? null;
-  const greeting = first ? `Hi ${first},` : "Hi,";
+  const greeting = circleGreeting(first, lang);
   const signoff = input.practitionerName ?? "Svitlana";
-  const soon = input.lead === "1h" ? "in about an hour" : "tomorrow";
+  const soon =
+    lang === "uk"
+      ? input.lead === "1h"
+        ? "приблизно за годину"
+        : "завтра"
+      : input.lead === "1h"
+        ? "in about an hour"
+        : "tomorrow";
   const subject =
-    input.lead === "1h"
-      ? `Starting soon — ${input.circleName}`
-      : `Tomorrow — ${input.circleName} on ${input.whenLabel}`;
+    lang === "uk"
+      ? input.lead === "1h"
+        ? `Скоро починаємо — ${input.circleName}`
+        : `Завтра — ${input.circleName}, ${input.whenLabel}`
+      : input.lead === "1h"
+        ? `Starting soon — ${input.circleName}`
+        : `Tomorrow — ${input.circleName} on ${input.whenLabel}`;
   const linkLine = input.meetingUrl
-    ? `\n\nJoin here:\n${input.meetingUrl}`
+    ? lang === "uk"
+      ? `\n\nПриєднатися:\n${input.meetingUrl}`
+      : `\n\nJoin here:\n${input.meetingUrl}`
     : "";
   const cancelLine = input.cancelUrl
-    ? `\n\nCan't make it? Cancel & request a refund:\n${input.cancelUrl}`
+    ? lang === "uk"
+      ? `\n\nНе зможете прийти? Скасувати й запросити повернення:\n${input.cancelUrl}`
+      : `\n\nCan't make it? Cancel & request a refund:\n${input.cancelUrl}`
     : "";
+  const reminderLine =
+    lang === "uk"
+      ? `Лагідне нагадування: ${input.circleName} збирається ${soon}.`
+      : `A gentle reminder that ${input.circleName} gathers ${soon}.`;
+  const whenWord = lang === "uk" ? "Коли" : "When";
+  const closing =
+    lang === "uk"
+      ? "Зробіть вдих. До зустрічі."
+      : "Take a breath. I'll see you there.";
   const text = `${greeting}
 
-A gentle reminder that ${input.circleName} gathers ${soon}.
+${reminderLine}
 
-· When: ${input.whenLabel}${linkLine}
+· ${whenWord}: ${input.whenLabel}${linkLine}
 
-Take a breath. I'll see you there.${cancelLine}
+${closing}${cancelLine}
 
-${circleContactLineText()}
+${circleContactLineText(lang)}
 
-— ${signoff}`;
+— ${signoff}${ukEscapeHatchText(lang)}`;
   const html = circleEmailHtml({
     greeting,
-    intro: `A gentle reminder that <strong>${escapeHtml(input.circleName)}</strong> gathers ${soon}.`,
+    intro:
+      lang === "uk"
+        ? `Лагідне нагадування: <strong>${escapeHtml(input.circleName)}</strong> збирається ${soon}.`
+        : `A gentle reminder that <strong>${escapeHtml(input.circleName)}</strong> gathers ${soon}.`,
     whenLabel: input.whenLabel,
     meetingUrl: input.meetingUrl,
     note: null,
-    closing: "Take a breath. I'll see you there.",
+    closing,
     signoff,
     cancelUrl: input.cancelUrl ?? null,
+    lang,
   });
   await sendEmail({
     to: input.to,
@@ -344,38 +433,63 @@ export async function sendCirclePostEmail(input: {
   circleName: string;
   nextCircleUrl: string | null;
   practitionerName: string | null;
+  language?: CircleEmailLang;
 }): Promise<void> {
+  const lang = input.language ?? "en";
   const first = input.attendeeName?.split(" ")[0] ?? null;
-  const greeting = first ? `Hi ${first},` : "Hi,";
+  const greeting = circleGreeting(first, lang);
   const signoff = input.practitionerName ?? "Svitlana";
-  const subject = `Thank you for being here — ${input.circleName}`;
-  const ctaText = input.nextCircleUrl
-    ? `\n\nIf it felt like home, the next Circle is open — come again:\n${input.nextCircleUrl}`
-    : "";
+  const t =
+    lang === "uk"
+      ? {
+          subject: `Дякую, що були з нами — ${input.circleName}`,
+          thanks: `Дякую, що були в ${input.circleName} цього вечора. Скільки б ви не поділилися — чи просто були свідком — ваша присутність тримала цей простір.`,
+          thanksHtml: `Дякую, що були в <strong>${escapeHtml(input.circleName)}</strong> цього вечора. Скільки б ви не поділилися — чи просто були свідком — ваша присутність тримала цей простір.`,
+          settle: "Будьте лагідні до себе, поки все вкладається.",
+          ctaText: (url: string) =>
+            `\n\nЯкщо це відчулося як дім — наступне Коло відкрите, приходьте знову:\n${url}`,
+          ctaButton: "Прийти на наступне Коло →",
+          reply:
+            "А якщо щось відгукнулося і хочеться продовжити віч-на-віч — просто відповідайте на цей лист. Я буду рада посидіти з вами.",
+        }
+      : {
+          subject: `Thank you for being here — ${input.circleName}`,
+          thanks: `Thank you for being in ${input.circleName} tonight. However much you shared or simply witnessed, your presence was part of what held the room.`,
+          thanksHtml: `Thank you for being in <strong>${escapeHtml(input.circleName)}</strong> tonight. However much you shared or simply witnessed, your presence was part of what held the room.`,
+          settle: "Be gentle with yourself as it settles.",
+          ctaText: (url: string) =>
+            `\n\nIf it felt like home, the next Circle is open — come again:\n${url}`,
+          ctaButton: "Come to the next Circle →",
+          reply:
+            "And if something stirred that you'd like to follow one-to-one, just reply — I'd love to sit with you.",
+        };
+  const subject = t.subject;
+  const ctaText = input.nextCircleUrl ? t.ctaText(input.nextCircleUrl) : "";
   const text = `${greeting}
 
-Thank you for being in ${input.circleName} tonight. However much you shared or simply witnessed, your presence was part of what held the room.
+${t.thanks}
 
-Be gentle with yourself as it settles.${ctaText}
+${t.settle}${ctaText}
 
-And if something stirred that you'd like to follow one-to-one, just reply — I'd love to sit with you.
+${t.reply}
 
-— ${signoff}`;
+— ${signoff}${ukEscapeHatchText(lang)}`;
   const html = `
 <!doctype html>
 <html>
   <body style="margin:0;padding:0;background:#faf6f0;font-family:Georgia,'Times New Roman',serif;color:#3d342e;">
     <div style="max-width:480px;margin:48px auto;padding:36px 32px;background:#fdf9f1;border-radius:12px;border:1px solid #ead9c1;">
       <p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;color:#564a42;">${escapeHtml(greeting)}</p>
-      <p style="margin:0 0 18px 0;font-size:15px;line-height:1.6;color:#564a42;">Thank you for being in <strong>${escapeHtml(input.circleName)}</strong> tonight. However much you shared or simply witnessed, your presence was part of what held the room.</p>
-      <p style="margin:0 0 8px 0;font-size:15px;line-height:1.6;color:#564a42;">Be gentle with yourself as it settles.</p>
+      <p style="margin:0 0 18px 0;font-size:15px;line-height:1.6;color:#564a42;">${t.thanksHtml}</p>
+      <p style="margin:0 0 8px 0;font-size:15px;line-height:1.6;color:#564a42;">${escapeHtml(t.settle)}</p>
       ${
         input.nextCircleUrl
-          ? `<a href="${escapeHtml(input.nextCircleUrl)}" style="display:inline-block;margin:18px 0 6px 0;background:#5a3f4f;color:#fdf9f1;text-decoration:none;font-size:14px;font-weight:500;padding:12px 22px;border-radius:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">Come to the next Circle →</a>`
+          ? `<a href="${escapeHtml(input.nextCircleUrl)}" style="display:inline-block;margin:18px 0 6px 0;background:#5a3f4f;color:#fdf9f1;text-decoration:none;font-size:14px;font-weight:500;padding:12px 22px;border-radius:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">${t.ctaButton}</a>`
           : ""
       }
-      <p style="margin:20px 0 0 0;font-size:14px;line-height:1.6;color:#564a42;">And if something stirred that you&apos;d like to follow one-to-one, just reply — I&apos;d love to sit with you.</p>
+      <p style="margin:20px 0 0 0;font-size:14px;line-height:1.6;color:#564a42;">${escapeHtml(t.reply)}</p>
       <p style="margin:20px 0 0 0;font-size:14px;color:#564a42;font-style:italic;">— ${escapeHtml(signoff)}</p>
+      ${ukEscapeHatchHtml(lang)}
     </div>
   </body>
 </html>`.trim();
@@ -402,39 +516,72 @@ export async function sendCircleDeeperInviteEmail(input: {
   circleName: string;
   optionsUrl: string;
   practitionerName: string | null;
+  language?: CircleEmailLang;
 }): Promise<void> {
+  const lang = input.language ?? "en";
   const first = input.attendeeName?.split(" ")[0] ?? null;
-  const greeting = first ? `Hi ${first},` : "Hi,";
+  const greeting = circleGreeting(first, lang);
   const signoff = input.practitionerName ?? "Svitlana";
-  const subject = "If the Circle is still with you";
+  const t =
+    lang === "uk"
+      ? {
+          subject: "Якщо Коло ще з вами",
+          good: `Було добре мати вас у ${input.circleName} цього тижня.`,
+          goodHtml: `Було добре мати вас у <strong>${escapeHtml(input.circleName)}</strong> цього тижня.`,
+          opens:
+            "Іноді Коло відкриває те, що не завершується разом із дзвінком — ниточка, що тягнеться ще день-два. Якщо це про вас — зазвичай це означає, що цьому потрібно більше простору, ніж може дати груповий вечір.",
+          oneToOne: "Саме для цього є робота віч-на-віч.",
+          replyText:
+            "Найпростіше почати — просто відповісти на цей лист і розповісти, що з вами лишилося. Я читаю кожну відповідь сама. Або, якщо хочете спочатку роздивитися:",
+          replyHtml:
+            "Найпростіше почати — <strong>просто відповісти на цей лист</strong> і розповісти, що з вами лишилося. Я читаю кожну відповідь сама. Або, якщо хочете спочатку роздивитися:",
+          button: "Формати роботи →",
+          noPressure: "У будь-якому разі — без тиску. Коло завжди тут.",
+        }
+      : {
+          subject: "If the Circle is still with you",
+          good: `It was good to have you in ${input.circleName} this week.`,
+          goodHtml: `It was good to have you in <strong>${escapeHtml(input.circleName)}</strong> this week.`,
+          opens:
+            "Sometimes a Circle opens something that doesn't finish when the call ends — a thread that keeps tugging a day or two later. If that's happening for you, it usually means it wants more room than a group evening can give it.",
+          oneToOne: "That's what one-to-one work is for.",
+          replyText:
+            "The simplest way to start is to just reply to this note and tell me what's been sitting with you — I read every reply myself. Or, if you'd rather look first:",
+          replyHtml:
+            "The simplest way to start is to <strong>just reply to this note</strong> and tell me what's been sitting with you — I read every reply myself. Or, if you'd rather look first:",
+          button: "Ways to work together →",
+          noPressure: "Either way, no pressure. The Circle is always here.",
+        };
+  const subject = t.subject;
   const text = `${greeting}
 
-It was good to have you in ${input.circleName} this week.
+${t.good}
 
-Sometimes a Circle opens something that doesn't finish when the call ends — a thread that keeps tugging a day or two later. If that's happening for you, it usually means it wants more room than a group evening can give it.
+${t.opens}
 
-That's what one-to-one work is for.
+${t.oneToOne}
 
-The simplest way to start is to just reply to this note and tell me what's been sitting with you — I read every reply myself. Or, if you'd rather look first:
+${t.replyText}
 
 ${input.optionsUrl}
 
-Either way, no pressure. The Circle is always here.
+${t.noPressure}
 
-— ${signoff}`;
+— ${signoff}${ukEscapeHatchText(lang)}`;
   const html = `
 <!doctype html>
 <html>
   <body style="margin:0;padding:0;background:#faf6f0;font-family:Georgia,'Times New Roman',serif;color:#3d342e;">
     <div style="max-width:480px;margin:48px auto;padding:36px 32px;background:#fdf9f1;border-radius:12px;border:1px solid #ead9c1;">
       <p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;color:#564a42;">${escapeHtml(greeting)}</p>
-      <p style="margin:0 0 18px 0;font-size:15px;line-height:1.6;color:#564a42;">It was good to have you in <strong>${escapeHtml(input.circleName)}</strong> this week.</p>
-      <p style="margin:0 0 18px 0;font-size:15px;line-height:1.6;color:#564a42;">Sometimes a Circle opens something that doesn&apos;t finish when the call ends — a thread that keeps tugging a day or two later. If that&apos;s happening for you, it usually means it wants more room than a group evening can give it.</p>
-      <p style="margin:0 0 18px 0;font-size:15px;line-height:1.6;color:#564a42;">That&apos;s what one-to-one work is for.</p>
-      <p style="margin:0 0 8px 0;font-size:15px;line-height:1.6;color:#564a42;">The simplest way to start is to <strong>just reply to this note</strong> and tell me what&apos;s been sitting with you — I read every reply myself. Or, if you&apos;d rather look first:</p>
-      <a href="${escapeHtml(input.optionsUrl)}" style="display:inline-block;margin:14px 0 6px 0;background:#5a3f4f;color:#fdf9f1;text-decoration:none;font-size:14px;font-weight:500;padding:12px 22px;border-radius:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">Ways to work together →</a>
-      <p style="margin:20px 0 0 0;font-size:14px;line-height:1.6;color:#8a7c70;">Either way, no pressure. The Circle is always here.</p>
+      <p style="margin:0 0 18px 0;font-size:15px;line-height:1.6;color:#564a42;">${t.goodHtml}</p>
+      <p style="margin:0 0 18px 0;font-size:15px;line-height:1.6;color:#564a42;">${escapeHtml(t.opens)}</p>
+      <p style="margin:0 0 18px 0;font-size:15px;line-height:1.6;color:#564a42;">${escapeHtml(t.oneToOne)}</p>
+      <p style="margin:0 0 8px 0;font-size:15px;line-height:1.6;color:#564a42;">${t.replyHtml}</p>
+      <a href="${escapeHtml(input.optionsUrl)}" style="display:inline-block;margin:14px 0 6px 0;background:#5a3f4f;color:#fdf9f1;text-decoration:none;font-size:14px;font-weight:500;padding:12px 22px;border-radius:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">${t.button}</a>
+      <p style="margin:20px 0 0 0;font-size:14px;line-height:1.6;color:#8a7c70;">${escapeHtml(t.noPressure)}</p>
       <p style="margin:20px 0 0 0;font-size:14px;color:#564a42;font-style:italic;">— ${escapeHtml(signoff)}</p>
+      ${ukEscapeHatchHtml(lang)}
     </div>
   </body>
 </html>`.trim();
@@ -503,34 +650,58 @@ export async function sendCircleGuestWalkInEmail(input: {
   circleName: string;
   meetingUrl: string | null;
   practitionerName: string | null;
+  language?: CircleEmailLang;
 }): Promise<void> {
+  const lang = input.language ?? "en";
   const first = input.attendeeName?.split(" ")[0] ?? null;
-  const greeting = first ? `${first},` : "Hi,";
+  const greeting =
+    lang === "uk" ? (first ? `${first},` : "Привіт!") : first ? `${first},` : "Hi,";
   const signoff = input.practitionerName ?? "Svitlana";
-  const subject = `We're beginning — ${input.circleName}`;
+  const t =
+    lang === "uk"
+      ? {
+          subject: `Ми починаємо — ${input.circleName}`,
+          tag: "Ми починаємо",
+          startingText: `${input.circleName} починається просто зараз.`,
+          startingHtml: `<strong>${escapeHtml(input.circleName)}</strong> починається просто зараз.`,
+          walkIn: (url: string) => `\n\nУвійти:\n${url}`,
+          button: "Увійти до Кола →",
+          linkSoon: "Ведуча за мить надішле посилання на кімнату.",
+          seeYou: "До зустрічі в колі.",
+        }
+      : {
+          subject: `We're beginning — ${input.circleName}`,
+          tag: "We're beginning",
+          startingText: `${input.circleName} is beginning now.`,
+          startingHtml: `<strong>${escapeHtml(input.circleName)}</strong> is starting now.`,
+          walkIn: (url: string) => `\n\nWalk in:\n${url}`,
+          button: "Walk into the Circle →",
+          linkSoon: "Your host will share the room link shortly.",
+          seeYou: "See you in the circle.",
+        };
+  const subject = t.subject;
   const text = `${greeting}
 
-${input.circleName} is beginning now.${
-    input.meetingUrl ? `\n\nWalk in:\n${input.meetingUrl}` : ""
-  }
+${t.startingText}${input.meetingUrl ? t.walkIn(input.meetingUrl) : ""}
 
-See you in the circle.
+${t.seeYou}
 
-— ${signoff}`;
+— ${signoff}${ukEscapeHatchText(lang)}`;
   const html = `
 <!doctype html>
 <html>
   <body style="margin:0;padding:0;background:#faf6f0;font-family:Georgia,'Times New Roman',serif;color:#3d342e;">
     <div style="max-width:480px;margin:48px auto;padding:32px;background:#fdf9f1;border-radius:12px;border:1px solid #ead9c1;">
-      <p style="margin:0 0 6px 0;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#b05c36;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">We're beginning</p>
-      <p style="margin:0 0 18px 0;font-size:20px;line-height:1.3;color:#3d342e;"><strong>${escapeHtml(input.circleName)}</strong> is starting now.</p>
+      <p style="margin:0 0 6px 0;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#b05c36;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">${escapeHtml(t.tag)}</p>
+      <p style="margin:0 0 18px 0;font-size:20px;line-height:1.3;color:#3d342e;">${t.startingHtml}</p>
       ${
         input.meetingUrl
-          ? `<a href="${escapeHtml(input.meetingUrl)}" style="display:inline-block;background:#5a3f4f;color:#fdf9f1;text-decoration:none;font-size:15px;font-weight:500;padding:14px 26px;border-radius:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">Walk into the Circle →</a>`
-          : `<p style="margin:0;font-size:14px;color:#8a7c70;">Your host will share the room link shortly.</p>`
+          ? `<a href="${escapeHtml(input.meetingUrl)}" style="display:inline-block;background:#5a3f4f;color:#fdf9f1;text-decoration:none;font-size:15px;font-weight:500;padding:14px 26px;border-radius:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">${t.button}</a>`
+          : `<p style="margin:0;font-size:14px;color:#8a7c70;">${escapeHtml(t.linkSoon)}</p>`
       }
-      <p style="margin:22px 0 0 0;font-size:14px;color:#564a42;font-style:italic;">See you in the circle.</p>
+      <p style="margin:22px 0 0 0;font-size:14px;color:#564a42;font-style:italic;">${escapeHtml(t.seeYou)}</p>
       <p style="margin:16px 0 0 0;font-size:14px;color:#564a42;">— ${escapeHtml(signoff)}</p>
+      ${ukEscapeHatchHtml(lang)}
     </div>
   </body>
 </html>`.trim();
@@ -551,28 +722,53 @@ export async function sendCircleRefundEmail(input: {
   circleName: string;
   whenLabel: string;
   practitionerName: string | null;
+  language?: CircleEmailLang;
 }): Promise<void> {
+  const lang = input.language ?? "en";
   const first = input.attendeeName?.split(" ")[0] ?? null;
-  const greeting = first ? `Hi ${first},` : "Hi,";
+  const greeting = circleGreeting(first, lang);
   const signoff = input.practitionerName ?? "Svitlana";
-  const subject = `Refunded — ${input.circleName}`;
+  const t =
+    lang === "uk"
+      ? {
+          subject: `Кошти повернено — ${input.circleName}`,
+          bodyText: `Вашу оплату за ${input.circleName} (${input.whenLabel}) повернено — кошти повернуться на ваш початковий спосіб оплати протягом кількох робочих днів, а місце звільнено.`,
+          bodyHtml: `Вашу оплату за <strong>${escapeHtml(input.circleName)}</strong> <strong>повернено</strong> — кошти повернуться на ваш початковий спосіб оплати протягом кількох робочих днів, а місце звільнено.`,
+          circleWord: "Коло:",
+          reachPre:
+            "Якщо це несподівано, або ви хочете приєднатися іншого тижня — просто відповідайте або пишіть на ",
+          reachText: (email: string) =>
+            `Якщо це несподівано, або ви хочете приєднатися іншого тижня — просто відповідайте або пишіть на ${email}.`,
+        }
+      : {
+          subject: `Refunded — ${input.circleName}`,
+          bodyText: `Your payment for ${input.circleName} (${input.whenLabel}) has been refunded — it will return to your original payment method within a few business days, and your seat has been released.`,
+          bodyHtml: `Your payment for <strong>${escapeHtml(input.circleName)}</strong> has been <strong>refunded</strong> — it will return to your original payment method within a few business days, and your seat has been released.`,
+          circleWord: "Circle:",
+          reachPre:
+            "If this wasn't expected, or you'd like to join another week, just reply or reach me at ",
+          reachText: (email: string) =>
+            `If this wasn't expected, or you'd like to join another week, just reply or reach me at ${email}.`,
+        };
+  const subject = t.subject;
   const text = `${greeting}
 
-Your payment for ${input.circleName} (${input.whenLabel}) has been refunded — it will return to your original payment method within a few business days, and your seat has been released.
+${t.bodyText}
 
-If this wasn't expected, or you'd like to join another week, just reply or reach me at ${CIRCLE_CONTACT_EMAIL}.
+${t.reachText(CIRCLE_CONTACT_EMAIL)}
 
-— ${signoff}`;
+— ${signoff}${ukEscapeHatchText(lang)}`;
   const html = `
 <!doctype html>
 <html>
   <body style="margin:0;padding:0;background:#faf6f0;font-family:Georgia,'Times New Roman',serif;color:#3d342e;">
     <div style="max-width:480px;margin:48px auto;padding:36px 32px;background:#fdf9f1;border-radius:12px;border:1px solid #ead9c1;">
       <p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;color:#564a42;">${escapeHtml(greeting)}</p>
-      <p style="margin:0 0 20px 0;font-size:15px;line-height:1.6;color:#564a42;">Your payment for <strong>${escapeHtml(input.circleName)}</strong> has been <strong>refunded</strong> — it will return to your original payment method within a few business days, and your seat has been released.</p>
-      <p style="margin:0 0 8px 0;font-size:14px;color:#564a42;"><strong>Circle:</strong> ${escapeHtml(input.whenLabel)}</p>
-      <p style="margin:22px 0 0 0;font-size:14px;line-height:1.6;color:#564a42;">If this wasn't expected, or you'd like to join another week, just reply or reach me at <a href="mailto:${escapeHtml(CIRCLE_CONTACT_EMAIL)}" style="color:#5a3f4f;">${escapeHtml(CIRCLE_CONTACT_EMAIL)}</a>.</p>
+      <p style="margin:0 0 20px 0;font-size:15px;line-height:1.6;color:#564a42;">${t.bodyHtml}</p>
+      <p style="margin:0 0 8px 0;font-size:14px;color:#564a42;"><strong>${escapeHtml(t.circleWord)}</strong> ${escapeHtml(input.whenLabel)}</p>
+      <p style="margin:22px 0 0 0;font-size:14px;line-height:1.6;color:#564a42;">${escapeHtml(t.reachPre)}<a href="mailto:${escapeHtml(CIRCLE_CONTACT_EMAIL)}" style="color:#5a3f4f;">${escapeHtml(CIRCLE_CONTACT_EMAIL)}</a>.</p>
       <p style="margin:20px 0 0 0;font-size:14px;color:#564a42;font-style:italic;">— ${escapeHtml(signoff)}</p>
+      ${ukEscapeHatchHtml(lang)}
     </div>
   </body>
 </html>`.trim();
@@ -749,7 +945,28 @@ function circleEmailHtml(p: {
   closing: string;
   signoff: string;
   cancelUrl?: string | null;
+  lang?: CircleEmailLang;
 }): string {
+  const lang = p.lang ?? "en";
+  const L =
+    lang === "uk"
+      ? {
+          when: "Коли:",
+          join: "Приєднатися до Кола",
+          linkFollows:
+            "Посилання на зустріч надішлю перед тим, як ми зберемося.",
+          cancel: "Не зможете прийти? Скасувати й запросити повернення →",
+          contactPre:
+            "Питання, скасування чи повернення коштів? Просто відповідайте на цей лист або пишіть на ",
+        }
+      : {
+          when: "When:",
+          join: "Join the Circle",
+          linkFollows: "The meeting link will follow before we gather.",
+          cancel: "Can't make it? Cancel &amp; request a refund →",
+          contactPre:
+            "Questions, or need to cancel or ask about a refund? Just reply, or reach me at ",
+        };
   return `
 <!doctype html>
 <html>
@@ -757,12 +974,12 @@ function circleEmailHtml(p: {
     <div style="max-width:480px;margin:48px auto;padding:36px 32px;background:#fdf9f1;border-radius:12px;border:1px solid #ead9c1;">
       <p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;color:#564a42;">${escapeHtml(p.greeting)}</p>
       <p style="margin:0 0 20px 0;font-size:15px;line-height:1.6;color:#564a42;">${p.intro}</p>
-      <p style="margin:0 0 8px 0;font-size:14px;color:#564a42;"><strong>When:</strong> ${escapeHtml(p.whenLabel)}</p>
+      <p style="margin:0 0 8px 0;font-size:14px;color:#564a42;"><strong>${L.when}</strong> ${escapeHtml(p.whenLabel)}</p>
       ${
         p.meetingUrl
-          ? `<a href="${escapeHtml(p.meetingUrl)}" style="display:inline-block;margin:16px 0 8px 0;background:#5a3f4f;color:#fdf9f1;text-decoration:none;font-size:14px;font-weight:500;padding:12px 22px;border-radius:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">Join the Circle</a>
+          ? `<a href="${escapeHtml(p.meetingUrl)}" style="display:inline-block;margin:16px 0 8px 0;background:#5a3f4f;color:#fdf9f1;text-decoration:none;font-size:14px;font-weight:500;padding:12px 22px;border-radius:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">${L.join}</a>
       <p style="margin:8px 0 0 0;font-size:12px;color:#786b60;line-height:1.5;word-break:break-all;font-family:ui-monospace,Menlo,monospace;">${escapeHtml(p.meetingUrl)}</p>`
-          : `<p style="margin:8px 0 0 0;font-size:13px;color:#786b60;font-style:italic;">The meeting link will follow before we gather.</p>`
+          : `<p style="margin:8px 0 0 0;font-size:13px;color:#786b60;font-style:italic;">${L.linkFollows}</p>`
       }
       ${
         p.note
@@ -773,10 +990,11 @@ function circleEmailHtml(p: {
       <p style="margin:20px 0 0 0;font-size:14px;color:#564a42;font-style:italic;">— ${escapeHtml(p.signoff)}</p>
       ${
         p.cancelUrl
-          ? `<p style="margin:22px 0 0 0;font-size:13px;line-height:1.6;"><a href="${escapeHtml(p.cancelUrl)}" style="color:#8a7d71;">Can't make it? Cancel &amp; request a refund →</a></p>`
+          ? `<p style="margin:22px 0 0 0;font-size:13px;line-height:1.6;"><a href="${escapeHtml(p.cancelUrl)}" style="color:#8a7d71;">${L.cancel}</a></p>`
           : ""
       }
-      <p style="margin:${p.cancelUrl ? "12px" : "22px"} 0 0 0;padding-top:16px;border-top:1px solid #ead9c1;font-size:12px;line-height:1.6;color:#8a7d71;">Questions, or need to cancel or ask about a refund? Just reply, or reach me at <a href="mailto:${escapeHtml(CIRCLE_CONTACT_EMAIL)}" style="color:#5a3f4f;">${escapeHtml(CIRCLE_CONTACT_EMAIL)}</a>.</p>
+      <p style="margin:${p.cancelUrl ? "12px" : "22px"} 0 0 0;padding-top:16px;border-top:1px solid #ead9c1;font-size:12px;line-height:1.6;color:#8a7d71;">${L.contactPre}<a href="mailto:${escapeHtml(CIRCLE_CONTACT_EMAIL)}" style="color:#5a3f4f;">${escapeHtml(CIRCLE_CONTACT_EMAIL)}</a>.</p>
+      ${ukEscapeHatchHtml(lang)}
     </div>
   </body>
 </html>`.trim();

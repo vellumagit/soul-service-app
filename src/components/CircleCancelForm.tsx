@@ -12,15 +12,44 @@ import { requestCircleRefund } from "@/lib/group-actions";
 export function CircleCancelForm({
   token,
   paid,
+  lang = "en",
 }: {
   token: string;
   paid: boolean;
+  lang?: "en" | "uk";
 }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<
     null | "requested" | "cancelled" | "already"
   >(null);
+
+  const t =
+    lang === "uk"
+      ? {
+          saving: "Хвилинку…",
+          cancelPaid: "Так — скасувати місце й запросити повернення",
+          cancelFree: "Так — скасувати моє місце",
+          keep: "Передумали — залишити місце",
+          back: "Повернутися на сайт",
+          errGeneric: "Щось пішло не так. Напишіть мені на пошту, будь ласка.",
+          requested:
+            "Ваш запит прийнято. Світлана незабаром підтвердить повернення — щойно все буде готово, вам прийде лист.",
+          cancelled: "Ваше місце звільнено. Дякую, що попередили.",
+          already: "Усе гаразд — про це вже подбали.",
+        }
+      : {
+          saving: "One moment…",
+          cancelPaid: "Yes — cancel my seat & request a refund",
+          cancelFree: "Yes — cancel my spot",
+          keep: "Never mind — keep my seat",
+          back: "Back to the site",
+          errGeneric: "Something went off. Please email me instead.",
+          requested:
+            "Your request is in. Svitlana will confirm your refund shortly — you'll get an email the moment it's done.",
+          cancelled: "Your spot has been released. Thank you for letting me know.",
+          already: "You're all set — this was already taken care of.",
+        };
 
   async function submit() {
     setSaving(true);
@@ -33,7 +62,7 @@ export function CircleCancelForm({
       }
       setDone(res.state);
     } catch {
-      setError("Something went off. Please email me instead.");
+      setError(t.errGeneric);
     } finally {
       setSaving(false);
     }
@@ -42,10 +71,10 @@ export function CircleCancelForm({
   if (done) {
     const msg =
       done === "requested"
-        ? "Your request is in. Svitlana will confirm your refund shortly — you'll get an email the moment it's done."
+        ? t.requested
         : done === "cancelled"
-          ? "Your spot has been released. Thank you for letting me know."
-          : "You're all set — this was already taken care of.";
+          ? t.cancelled
+          : t.already;
     return (
       <div
         className="rounded-md"
@@ -74,7 +103,7 @@ export function CircleCancelForm({
             href="/"
             style={{ fontSize: 13, color: "var(--land-clay)", textDecoration: "underline" }}
           >
-            Back to the site
+            {t.back}
           </Link>
         </p>
       </div>
@@ -95,11 +124,7 @@ export function CircleCancelForm({
           opacity: saving ? 0.6 : 1,
         }}
       >
-        {saving
-          ? "One moment…"
-          : paid
-            ? "Yes — cancel my seat & request a refund"
-            : "Yes — cancel my spot"}
+        {saving ? t.saving : paid ? t.cancelPaid : t.cancelFree}
       </button>
       {error && (
         <p style={{ color: "#a3402a", fontSize: 13, marginTop: 12 }}>{error}</p>
@@ -113,7 +138,7 @@ export function CircleCancelForm({
             textDecoration: "underline",
           }}
         >
-          Never mind — keep my seat
+          {t.keep}
         </Link>
       </p>
     </div>

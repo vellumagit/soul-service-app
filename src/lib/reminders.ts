@@ -484,6 +484,7 @@ async function sendDueCircleReminders(
         scheduledAt: groupSessions.scheduledAt,
         sessionMeetUrl: groupSessions.meetUrl,
         groupName: groups.name,
+        groupLanguage: groups.language,
       })
       .from(groupAttendees)
       .innerJoin(
@@ -509,19 +510,24 @@ async function sendDueCircleReminders(
         settings.circleRoomUrl ?? null
       );
       try {
-        const { sendCircleReminderEmail } = await import("./resend");
+        const { sendCircleReminderEmail, asCircleEmailLang } = await import(
+          "./resend"
+        );
+        const lang = asCircleEmailLang(row.groupLanguage);
         await sendCircleReminderEmail({
           to: row.email,
           attendeeName: row.name,
           circleName: row.groupName,
           whenLabel: formatSessionLong(
             new Date(row.scheduledAt),
-            resolveTimeZone(settings.timezone)
+            resolveTimeZone(settings.timezone),
+            lang === "uk" ? "uk-UA" : "en-US"
           ),
           meetingUrl,
           practitionerName: settings.practitionerName ?? null,
           lead: pass.lead,
           cancelUrl: circleCancelUrl(row.attendeeId),
+          language: lang,
         });
         await db
           .update(groupAttendees)
@@ -643,7 +649,11 @@ async function sendDuePostCircleEmails(
   now: Date
 ): Promise<number> {
   const endedSessions = await db
-    .select({ sessionId: groupSessions.id, groupName: groups.name })
+    .select({
+      sessionId: groupSessions.id,
+      groupName: groups.name,
+      groupLanguage: groups.language,
+    })
     .from(groupSessions)
     .innerJoin(groups, eq(groups.id, groupSessions.groupId))
     .where(
@@ -706,13 +716,16 @@ async function sendDuePostCircleEmails(
         .returning({ id: groupAttendees.id });
       if (claimed.length === 0) continue;
       try {
-        const { sendCirclePostEmail } = await import("./resend");
+        const { sendCirclePostEmail, asCircleEmailLang } = await import(
+          "./resend"
+        );
         await sendCirclePostEmail({
           to: a.email,
           attendeeName: a.name,
           circleName: s.groupName,
           nextCircleUrl,
           practitionerName: settings.practitionerName ?? null,
+          language: asCircleEmailLang(s.groupLanguage),
         });
         count++;
       } catch (err) {
@@ -835,6 +848,7 @@ async function sendDueCircleGuestWalkInNudges(
       email: groupAttendees.email,
       sessionMeetUrl: groupSessions.meetUrl,
       groupName: groups.name,
+      groupLanguage: groups.language,
     })
     .from(groupAttendees)
     .innerJoin(
@@ -868,7 +882,9 @@ async function sendDueCircleGuestWalkInNudges(
       .returning({ id: groupAttendees.id });
     if (claimed.length === 0) continue;
     try {
-      const { sendCircleGuestWalkInEmail } = await import("./resend");
+      const { sendCircleGuestWalkInEmail, asCircleEmailLang } = await import(
+        "./resend"
+      );
       await sendCircleGuestWalkInEmail({
         to: row.email,
         attendeeName: row.name,
@@ -878,6 +894,7 @@ async function sendDueCircleGuestWalkInNudges(
           settings.circleRoomUrl ?? null
         ),
         practitionerName: settings.practitionerName ?? null,
+        language: asCircleEmailLang(row.groupLanguage),
       });
       count++;
     } catch (err) {
@@ -929,6 +946,7 @@ async function sendDueCircleDeeperInvites(
       name: groupAttendees.name,
       email: groupAttendees.email,
       groupName: groups.name,
+      groupLanguage: groups.language,
     })
     .from(groupAttendees)
     .innerJoin(
@@ -993,13 +1011,16 @@ async function sendDueCircleDeeperInvites(
       .returning({ id: groupAttendees.id });
     if (claimed.length === 0) continue;
     try {
-      const { sendCircleDeeperInviteEmail } = await import("./resend");
+      const { sendCircleDeeperInviteEmail, asCircleEmailLang } = await import(
+        "./resend"
+      );
       await sendCircleDeeperInviteEmail({
         to: row.email,
         attendeeName: row.name,
         circleName: row.groupName,
         optionsUrl,
         practitionerName: settings.practitionerName ?? null,
+        language: asCircleEmailLang(row.groupLanguage),
       });
       count++;
     } catch (err) {

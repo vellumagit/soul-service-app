@@ -57,7 +57,15 @@ function Shell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Notice({ title, body }: { title: string; body: string }) {
+function Notice({
+  title,
+  body,
+  backLabel = "Back to the site",
+}: {
+  title: string;
+  body: string;
+  backLabel?: string;
+}) {
   return (
     <div className="wrap narrow" style={{ textAlign: "center", maxWidth: 520 }}>
       <h2 style={{ marginBottom: 12 }}>{title}</h2>
@@ -67,7 +75,7 @@ function Notice({ title, body }: { title: string; body: string }) {
           href="/"
           style={{ color: "var(--land-clay)", textDecoration: "underline" }}
         >
-          Back to the site
+          {backLabel}
         </Link>
       </p>
     </div>
@@ -101,6 +109,7 @@ export default async function CircleCancelPage({
       refundRequestedAt: groupAttendees.refundRequestedAt,
       scheduledAt: groupSessions.scheduledAt,
       groupName: groups.name,
+      groupLanguage: groups.language,
       timezone: practitionerSettings.timezone,
     })
     .from(groupAttendees)
@@ -127,17 +136,33 @@ export default async function CircleCancelPage({
     );
   }
 
+  // This page speaks the CIRCLE's language, like every other attendee-facing
+  // touchpoint. The invalid-token branches above stay English — we don't know
+  // the circle yet there.
+  const uk = row.groupLanguage === "uk";
+  const backLabel = uk ? "Повернутися на сайт" : "Back to the site";
+
   const whenLabel = formatSessionLong(
     new Date(row.scheduledAt),
-    resolveTimeZone(row.timezone)
+    resolveTimeZone(row.timezone),
+    uk ? "uk-UA" : "en-US"
   );
 
   if (row.refundedAt || row.status === "cancelled") {
     return (
       <Shell>
         <Notice
-          title="Your seat's already been released."
-          body="Nothing more to do. If you were expecting a refund and haven't seen it, just reply to your email."
+          title={
+            uk
+              ? "Ваше місце вже звільнено."
+              : "Your seat's already been released."
+          }
+          body={
+            uk
+              ? "Більше нічого робити не потрібно. Якщо ви чекали на повернення коштів і його ще немає — просто відповідайте на свій лист."
+              : "Nothing more to do. If you were expecting a refund and haven't seen it, just reply to your email."
+          }
+          backLabel={backLabel}
         />
       </Shell>
     );
@@ -146,8 +171,17 @@ export default async function CircleCancelPage({
     return (
       <Shell>
         <Notice
-          title="This circle has already taken place."
-          body="This link is for cancelling an upcoming circle. Reach out if something's not right."
+          title={
+            uk
+              ? "Це Коло вже відбулося."
+              : "This circle has already taken place."
+          }
+          body={
+            uk
+              ? "Це посилання — для скасування майбутнього Кола. Напишіть, якщо щось не так."
+              : "This link is for cancelling an upcoming circle. Reach out if something's not right."
+          }
+          backLabel={backLabel}
         />
       </Shell>
     );
@@ -156,8 +190,13 @@ export default async function CircleCancelPage({
     return (
       <Shell>
         <Notice
-          title="Your request is already in."
-          body="Svitlana will confirm your refund shortly — you'll get an email the moment it's done."
+          title={uk ? "Ваш запит уже прийнято." : "Your request is already in."}
+          body={
+            uk
+              ? "Світлана незабаром підтвердить повернення — щойно все буде готово, вам прийде лист."
+              : "Svitlana will confirm your refund shortly — you'll get an email the moment it's done."
+          }
+          backLabel={backLabel}
         />
       </Shell>
     );
@@ -171,20 +210,51 @@ export default async function CircleCancelPage({
         style={{ textAlign: "center", maxWidth: 540, marginBottom: 30 }}
       >
         <span className="tag" style={{ display: "block" }}>
-          Can&apos;t make it?
+          {uk ? "Не зможете прийти?" : "Can't make it?"}
         </span>
         <h2 style={{ marginBottom: 12 }}>
-          {first ? `No worries, ${first}.` : "No worries."}
+          {uk
+            ? first
+              ? `Нічого страшного, ${first}.`
+              : "Нічого страшного."
+            : first
+              ? `No worries, ${first}.`
+              : "No worries."}
         </h2>
         <p className="p-lg">
-          You&apos;re booked into <strong>{row.groupName}</strong> —{" "}
-          {whenLabel}.
-          {row.paid
-            ? " Cancel your seat below and I'll refund you; your card is returned within a few business days."
-            : " Cancel your spot below to free it up for someone else."}
+          {uk ? (
+            <>
+              Ви записані в <strong>{row.groupName}</strong> — {whenLabel}.
+              {row.paid
+                ? " Скасуйте місце нижче — і я поверну кошти; гроші повернуться на вашу картку протягом кількох робочих днів."
+                : " Скасуйте місце нижче, щоб звільнити його для когось іншого."}
+            </>
+          ) : (
+            <>
+              You&apos;re booked into <strong>{row.groupName}</strong> —{" "}
+              {whenLabel}.
+              {row.paid
+                ? " Cancel your seat below and I'll refund you; your card is returned within a few business days."
+                : " Cancel your spot below to free it up for someone else."}
+            </>
+          )}
         </p>
       </div>
-      <CircleCancelForm token={token} paid={row.paid} />
+      <CircleCancelForm token={token} paid={row.paid} lang={uk ? "uk" : "en"} />
+      {uk && (
+        <p
+          style={{
+            textAlign: "center",
+            marginTop: 26,
+            fontSize: 12,
+            color: "var(--land-ink-soft, #786b60)",
+          }}
+        >
+          In English: this page is in Ukrainian because this Circle is held in
+          Ukrainian. If that&apos;s a surprise, reply to your confirmation
+          email in English — happy to help.
+        </p>
+      )}
     </Shell>
   );
 }

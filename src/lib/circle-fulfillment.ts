@@ -24,6 +24,7 @@ import {
   sendCircleWelcomeEmail,
   sendCircleRefundEmail,
   sendCircleReservationNotifyEmail,
+  asCircleEmailLang,
 } from "./resend";
 import { formatSessionLong, resolveTimeZone } from "./timezone";
 import { circleCancelUrl } from "./circle-cancel-token";
@@ -121,6 +122,7 @@ export async function fulfillCircleSeat(
       scheduledAt: groupSessions.scheduledAt,
       sessionMeetUrl: groupSessions.meetUrl,
       groupName: groups.name,
+      groupLanguage: groups.language,
       paymentInstructions: groups.paymentInstructions,
     })
     .from(groupAttendees)
@@ -194,6 +196,9 @@ export async function fulfillCircleSeat(
     console.error("[circle] lead conversion failed for", attendeeId, err);
   }
 
+  // The Circle's language drives the attendee email (incl. the date's locale).
+  const lang = asCircleEmailLang(row.groupLanguage);
+
   try {
     await sendCircleWelcomeEmail({
       to: row.email,
@@ -201,7 +206,8 @@ export async function fulfillCircleSeat(
       circleName: row.groupName,
       whenLabel: formatSessionLong(
         new Date(row.scheduledAt),
-        resolveTimeZone(settings?.timezone)
+        resolveTimeZone(settings?.timezone),
+        lang === "uk" ? "uk-UA" : "en-US"
       ),
       meetingUrl,
       practitionerName: settings?.practitionerName ?? null,
@@ -210,6 +216,7 @@ export async function fulfillCircleSeat(
         : null,
       // Self-serve "can't make it?" link — only meaningful for a paid seat.
       cancelUrl: row.paid ? circleCancelUrl(attendeeId) : null,
+      language: lang,
     });
 
     // Heads-up to the practitioner — best-effort, never blocks the seat. So she
@@ -273,6 +280,7 @@ export async function refundCircleSeatByPaymentIntent(
       refundedAt: groupAttendees.refundedAt,
       scheduledAt: groupSessions.scheduledAt,
       groupName: groups.name,
+      groupLanguage: groups.language,
     })
     .from(groupAttendees)
     .innerJoin(
@@ -312,15 +320,18 @@ export async function refundCircleSeatByPaymentIntent(
 
   try {
     if (row.email && row.email.includes("@")) {
+      const lang = asCircleEmailLang(row.groupLanguage);
       await sendCircleRefundEmail({
         to: row.email,
         attendeeName: row.name,
         circleName: row.groupName,
         whenLabel: formatSessionLong(
           new Date(row.scheduledAt),
-          resolveTimeZone(settings?.timezone)
+          resolveTimeZone(settings?.timezone),
+          lang === "uk" ? "uk-UA" : "en-US"
         ),
         practitionerName: settings?.practitionerName ?? null,
+        language: lang,
       });
     }
   } catch (err) {
