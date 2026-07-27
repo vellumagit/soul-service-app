@@ -222,10 +222,14 @@ export default async function StatusPage({
       }. Change in Settings → Language.`,
     },
     {
-      label: "Auto-import transcripts (Fathom · Tactiq · Otter)",
-      state: "soon",
+      // Superseded by the Recall notetaker above — this row used to promise
+      // "auto-import from Fathom/Tactiq/Otter, coming soon", which stopped
+      // being true the day the bot shipped. It's now a map of the four real
+      // ways a transcript becomes notes.
+      label: "Ways a session becomes notes",
+      state: "ok",
       detail:
-        "Coming next. For now, paste transcripts manually into the AI dialog on any session.",
+        "Four routes, all landing in the same “From the meeting” panel on the session card: (1) the notetaker bot joins your online sessions and writes them for you; (2) paste a transcript from anywhere — Fathom, Otter, Meet, Zoom — into “AI: structure from transcript”; (3) record an in-person session on your device and it transcribes itself; (4) upload a voice memo afterwards. Nothing here is waiting on a future release.",
     },
   ];
 
