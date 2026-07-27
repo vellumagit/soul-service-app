@@ -184,11 +184,16 @@ export async function removeCircleFromGoogle(
     .where(eq(groupSessions.id, groupSessionId))
     .limit(1);
   if (!row?.googleEventId) return;
+  let removed = false;
   try {
-    await deleteCalendarEvent(row.accountId, row.googleEventId);
+    removed = await deleteCalendarEvent(row.accountId, row.googleEventId);
   } catch (err) {
     console.error(`[circle-google] delete failed for ${groupSessionId}:`, err);
   }
+  // Only drop our ref once the event is verifiably gone. Nulling it on a
+  // transient failure (or while Google is disconnected) orphaned the event
+  // on her calendar — invitees still attached — with no way to retry.
+  if (!removed) return;
   await db
     .update(groupSessions)
     .set({ googleEventId: null, updatedAt: new Date() })

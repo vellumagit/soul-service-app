@@ -278,6 +278,7 @@ export async function refundCircleSeatByPaymentIntent(
       name: groupAttendees.name,
       email: groupAttendees.email,
       refundedAt: groupAttendees.refundedAt,
+      groupSessionId: groupAttendees.groupSessionId,
       scheduledAt: groupSessions.scheduledAt,
       groupName: groups.name,
       groupLanguage: groups.language,
@@ -307,6 +308,15 @@ export async function refundCircleSeatByPaymentIntent(
     )
     .returning({ id: groupAttendees.id });
   if (claimed.length === 0) return { refunded: false };
+
+  // Drop the refunded guest from the Google invite (stops Google's reminders
+  // and closes the Meet door). Best-effort.
+  try {
+    const { syncCircleToGoogle } = await import("./circle-google");
+    await syncCircleToGoogle(row.groupSessionId);
+  } catch (err) {
+    console.error("[circle] google re-sync on refund failed:", err);
+  }
 
   // Practice tz + name for the email (best-effort — never block the release).
   const [settings] = await db

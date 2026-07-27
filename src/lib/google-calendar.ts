@@ -404,7 +404,13 @@ function attendeeList(
     .map((e) => e.trim().toLowerCase())
     .filter((e) => e.includes("@"));
   const unique = [...new Set(emails)];
-  return unique.length > 0 ? unique.map((email) => ({ email })) : undefined;
+  if (unique.length > 0) return unique.map((email) => ({ email }));
+  // A Circle sync passes attendeeEmails as an ARRAY — an empty one means
+  // "clear the invite list" (the last guest cancelled). Omitting the field
+  // here would make Google KEEP the stale invitees, so the cancelled guest
+  // kept their reminders + Meet access forever. Callers that never touch
+  // attendeeEmails (1-on-1 paths using attendeeEmail) keep the no-op.
+  return input.attendeeEmails !== undefined ? [] : undefined;
 }
 
 export type CalendarEventResult = {
@@ -527,12 +533,16 @@ export async function updateCalendarEvent(
 }
 
 // Delete an event. Best-effort — swallows "already gone" errors.
+/** Returns true when the event is verifiably gone (deleted now, or already
+ *  404/410 on Google's side); false when Google isn't connected so nothing
+ *  could be checked. Callers must only clear their stored event id on true —
+ *  clearing it blind orphans a live event that no retry can ever find. */
 export async function deleteCalendarEvent(
   accountId: string,
   eventId: string
-): Promise<void> {
+): Promise<boolean> {
   const auth = await getAuthedClient(accountId);
-  if (!auth) return;
+  if (!auth) return false;
 
   const calendar = google.calendar({ version: "v3", auth });
   try {
@@ -541,8 +551,9 @@ export async function deleteCalendarEvent(
       eventId,
       sendUpdates: "all",
     });
+    return true;
   } catch (err) {
-    if (isNotFoundError(err)) return; // already gone, fine
+    if (isNotFoundError(err)) return true; // already gone, fine
     throw err;
   }
 }

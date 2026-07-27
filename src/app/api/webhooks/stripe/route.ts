@@ -18,7 +18,11 @@ import { NextResponse } from "next/server";
 import { and, eq, isNull } from "drizzle-orm";
 import type Stripe from "stripe";
 import { db } from "@/db";
-import { groupAttendees } from "@/db/schema";
+import {
+  groupAttendees,
+  groupSessions,
+  practitionerSettings,
+} from "@/db/schema";
 import { getStripe, getWebhookSecret, isStripeConfigured } from "@/lib/stripe";
 import {
   fulfillCircleSeat,
@@ -70,6 +74,38 @@ export async function POST(req: Request): Promise<Response> {
           ? session.payment_intent
           : (session.payment_intent?.id ?? null);
 
+      // The metadata names an attendee, but metadata is writable by whoever
+      // created the Checkout Session. Verify the event fired on the SAME
+      // connected account that attendee's practitioner owns — otherwise any
+      // other connected account could mark a foreign seat paid with a
+      // $0.50 session of their own.
+      const [att] = await db
+        .select({
+          id: groupAttendees.id,
+          sessionStatus: groupSessions.status,
+          stripeAccountId: practitionerSettings.stripeAccountId,
+        })
+        .from(groupAttendees)
+        .innerJoin(
+          groupSessions,
+          eq(groupSessions.id, groupAttendees.groupSessionId)
+        )
+        .leftJoin(
+          practitionerSettings,
+          eq(practitionerSettings.accountId, groupAttendees.accountId)
+        )
+        .where(eq(groupAttendees.id, attendeeId))
+        .limit(1);
+      if (!att) {
+        return NextResponse.json({ ok: true, ignored: "unknown attendee" });
+      }
+      if (event.account && event.account !== att.stripeAccountId) {
+        console.error(
+          `[stripe webhook] account mismatch for attendee ${attendeeId}: event on ${event.account}, expected ${att.stripeAccountId}`
+        );
+        return NextResponse.json({ ok: true, ignored: "account mismatch" });
+      }
+
       // Mark paid + confirmed, but only if not already paid (idempotent
       // against Stripe's retries). RETURNING tells us if we were the one
       // to flip it.
@@ -87,6 +123,47 @@ export async function POST(req: Request): Promise<Response> {
           and(eq(groupAttendees.id, attendeeId), eq(groupAttendees.paid, false))
         )
         .returning({ id: groupAttendees.id });
+
+      // Already paid (e.g. she marked the Venmo lane paid while a card
+      // checkout was in flight)? Still record the payment intent if we have
+      // none — otherwise the second charge is invisible in-app and can never
+      // be refunded from Loose Ends.
+      if (flipped.length === 0 && paymentIntentId) {
+        const stamped = await db
+          .update(groupAttendees)
+          .set({ stripePaymentIntentId: paymentIntentId, updatedAt: new Date() })
+          .where(
+            and(
+              eq(groupAttendees.id, attendeeId),
+              isNull(groupAttendees.stripePaymentIntentId)
+            )
+          )
+          .returning({ id: groupAttendees.id });
+        if (stamped.length > 0) {
+          console.error(
+            `[stripe webhook] card payment landed on an ALREADY-PAID seat (attendee ${attendeeId}) — PI stored; likely a double payment to review`
+          );
+        }
+      }
+
+      // Paid for a session that was cancelled while checkout was open:
+      // don't confirm or send a welcome for a dead session — queue the
+      // refund for her one-tap approval instead.
+      if (att.sessionStatus === "cancelled") {
+        await db
+          .update(groupAttendees)
+          .set({ refundRequestedAt: new Date(), updatedAt: new Date() })
+          .where(
+            and(
+              eq(groupAttendees.id, attendeeId),
+              isNull(groupAttendees.refundRequestedAt)
+            )
+          );
+        console.error(
+          `[stripe webhook] payment completed for a CANCELLED circle session — refund queued (attendee ${attendeeId})`
+        );
+        return NextResponse.json({ ok: true, refundQueued: true });
+      }
 
       // Whether or not we flipped it (it may already be paid from a prior
       // retry), run fulfillment — it's idempotent via welcome_sent_at and

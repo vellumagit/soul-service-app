@@ -41,6 +41,53 @@ import {
 // Practitioner — create / update groups
 // ─────────────────────────────────────────────────────────────────────
 
+// Public-action error strings in the CIRCLE's language. These render inside
+// the localized signup/checkout/cancel forms — an English error popping up
+// mid-Ukrainian flow reads as broken. Errors thrown BEFORE the circle row is
+// loaded (rate limit, missing fields) stay English; the browser's required-
+// field validation catches most of those first anyway.
+const PUB_MSG = {
+  unavailable: {
+    en: "That session isn't available.",
+    uk: "Ця зустріч недоступна.",
+  },
+  notOpen: {
+    en: "That session is no longer open.",
+    uk: "Запис на цю зустріч уже закрито.",
+  },
+  started: {
+    en: "That session has already started.",
+    uk: "Ця зустріч уже почалася.",
+  },
+  full: {
+    en: "This session is full. Reach out and I'll let you know about the next one.",
+    uk: "У цій зустрічі місць уже немає. Напишіть мені — і я повідомлю про наступну.",
+  },
+  signupsClosed: {
+    en: "Sign-ups aren't open online just yet — send a note via the contact form instead.",
+    uk: "Онлайн-запис поки не відкрито — напишіть через форму зв'язку.",
+  },
+  freeCircle: {
+    en: "This circle is free — use the regular sign-up below.",
+    uk: "Це Коло безкоштовне — скористайтеся звичайною формою запису нижче.",
+  },
+  alreadyBooked: {
+    en: "You're already booked for this circle — check your email for the details.",
+    uk: "Ви вже записані в це Коло — деталі у вашій пошті.",
+  },
+  checkoutFailed: {
+    en: "Couldn't start checkout. Try again.",
+    uk: "Не вдалося розпочати оплату. Спробуйте ще раз.",
+  },
+} as const;
+
+function pubMsg(
+  key: keyof typeof PUB_MSG,
+  lang: "en" | "uk" | null | undefined
+): string {
+  return PUB_MSG[key][lang === "uk" ? "uk" : "en"];
+}
+
 const CIRCLE_CURRENCIES = ["USD", "CAD", "EUR", "GBP"];
 function normalizeCurrency(raw: FormDataEntryValue | null): string {
   const c = String(raw ?? "USD").trim().toUpperCase();
@@ -535,20 +582,38 @@ export async function signUpForGroupSession(
     };
   }
 
-  // Verify session exists + still scheduled + not at capacity
-  const [session] = await db
-    .select()
+  // Verify session exists + published + open + still scheduled. The public
+  // page enforces all of this in the UI, but the action must too — a direct
+  // POST with a known session id previously slipped past `published` and the
+  // circleSignupsOpen master switch entirely.
+  const [srow] = await db
+    .select({
+      session: groupSessions,
+      published: groups.published,
+      language: groups.language,
+      signupsOpen: practitionerSettings.circleSignupsOpen,
+    })
     .from(groupSessions)
+    .innerJoin(groups, eq(groups.id, groupSessions.groupId))
+    .leftJoin(
+      practitionerSettings,
+      eq(practitionerSettings.accountId, groupSessions.accountId)
+    )
     .where(eq(groupSessions.id, groupSessionId))
     .limit(1);
-  if (!session) {
-    return { ok: false, error: "That session isn't available." };
+  const session = srow?.session;
+  const lang = srow?.language === "uk" ? ("uk" as const) : ("en" as const);
+  if (!session || !srow.published) {
+    return { ok: false, error: pubMsg("unavailable", lang) };
+  }
+  if (!(srow.signupsOpen ?? false)) {
+    return { ok: false, error: pubMsg("signupsClosed", lang) };
   }
   if (session.status !== "scheduled") {
-    return { ok: false, error: "That session is no longer open." };
+    return { ok: false, error: pubMsg("notOpen", lang) };
   }
   if (session.scheduledAt.getTime() < Date.now()) {
-    return { ok: false, error: "That session has already started." };
+    return { ok: false, error: pubMsg("started", lang) };
   }
 
   // Capacity check
@@ -563,10 +628,7 @@ export async function signUpForGroupSession(
     );
   const count = countRow[0]?.n ?? 0;
   if (count >= session.capacity) {
-    return {
-      ok: false,
-      error: "This session is full. Reach out and I'll let you know about the next one.",
-    };
+    return { ok: false, error: pubMsg("full", lang) };
   }
 
   // Dedup by email per session — prevent accidental double-signup
@@ -586,17 +648,41 @@ export async function signUpForGroupSession(
     return { ok: true, pending: true };
   }
 
-  await db.insert(groupAttendees).values({
-    accountId: session.accountId,
-    groupSessionId,
-    name,
-    email,
-    phone,
-    status: "pending",
-    paid: false,
-    sourceIp: ip === "unknown" ? null : ip,
-    userAgent: h.get("user-agent") ?? null,
-  });
+  const [inserted] = await db
+    .insert(groupAttendees)
+    .values({
+      accountId: session.accountId,
+      groupSessionId,
+      name,
+      email,
+      phone,
+      status: "pending",
+      paid: false,
+      sourceIp: ip === "unknown" ? null : ip,
+      userAgent: h.get("user-agent") ?? null,
+    })
+    .returning({ id: groupAttendees.id });
+
+  // Post-insert capacity re-check — the count above races a concurrent
+  // signup (no transaction on the serverless driver), so the LAST writer
+  // over capacity backs out. This closes the two-tabs-take-the-last-seat
+  // window without a DB constraint.
+  const recount = await db
+    .select({ n: sql<number>`COUNT(*)::int` })
+    .from(groupAttendees)
+    .where(
+      and(
+        eq(groupAttendees.groupSessionId, groupSessionId),
+        sql`${groupAttendees.status} <> 'cancelled'`
+      )
+    );
+  if ((recount[0]?.n ?? 0) > session.capacity) {
+    await db
+      .update(groupAttendees)
+      .set({ status: "cancelled", updatedAt: new Date() })
+      .where(eq(groupAttendees.id, inserted.id));
+    return { ok: false, error: pubMsg("full", lang) };
+  }
 
   revalidatePath("/loose-ends");
   revalidatePath("/groups");
@@ -668,6 +754,7 @@ export async function createCircleCheckout(input: {
       groupName: groups.name,
       currency: groups.defaultCurrency,
       published: groups.published,
+      language: groups.language,
       // Her connected Stripe account — payments are charged directly on it.
       stripeAccountId: practitionerSettings.stripeAccountId,
       stripeChargesEnabled: practitionerSettings.stripeChargesEnabled,
@@ -681,20 +768,18 @@ export async function createCircleCheckout(input: {
     )
     .where(eq(groupSessions.id, groupSessionId))
     .limit(1);
+  const lang = row?.language === "uk" ? ("uk" as const) : ("en" as const);
   if (!row || !row.published) {
-    return { ok: false, error: "That session isn't available." };
+    return { ok: false, error: pubMsg("unavailable", lang) };
   }
   if (row.status !== "scheduled") {
-    return { ok: false, error: "That session is no longer open." };
+    return { ok: false, error: pubMsg("notOpen", lang) };
   }
   if (row.scheduledAt.getTime() < Date.now()) {
-    return { ok: false, error: "That session has already started." };
+    return { ok: false, error: pubMsg("started", lang) };
   }
   if (row.priceCents <= 0) {
-    return {
-      ok: false,
-      error: "This circle is free — use the regular sign-up below.",
-    };
+    return { ok: false, error: pubMsg("freeCircle", lang) };
   }
 
   // The practitioner must have connected her Stripe account AND finished
@@ -719,10 +804,7 @@ export async function createCircleCheckout(input: {
       )
     );
   if ((countRow[0]?.n ?? 0) >= row.capacity) {
-    return {
-      ok: false,
-      error: "This session is full. Reach out and I'll tell you about the next one.",
-    };
+    return { ok: false, error: pubMsg("full", lang) };
   }
 
   // Already paid with this email? Don't double-charge.
@@ -738,27 +820,76 @@ export async function createCircleCheckout(input: {
     )
     .limit(1);
   if (existing) {
-    return {
-      ok: false,
-      error: "You're already booked for this circle — check your email for the details.",
-    };
+    return { ok: false, error: pubMsg("alreadyBooked", lang) };
   }
 
-  // Create a pending attendee row that holds the seat through checkout.
-  const [attendee] = await db
-    .insert(groupAttendees)
-    .values({
-      accountId: row.accountId,
-      groupSessionId,
-      name,
-      email,
-      phone,
-      status: "pending",
-      paid: false,
-      sourceIp: ip === "unknown" ? null : ip,
-      userAgent: h.get("user-agent") ?? null,
+  // A retry (second tab, "did it go through?") previously inserted a SECOND
+  // pending hold with its own live Checkout — both payable, double-charging
+  // the customer and double-holding seats. Reuse the standing pending row
+  // instead, and expire its old Checkout below so only one link can pay.
+  const [pendingRow] = await db
+    .select({
+      id: groupAttendees.id,
+      stripeCheckoutSessionId: groupAttendees.stripeCheckoutSessionId,
     })
-    .returning({ id: groupAttendees.id });
+    .from(groupAttendees)
+    .where(
+      and(
+        eq(groupAttendees.groupSessionId, groupSessionId),
+        sql`LOWER(${groupAttendees.email}) = ${email}`,
+        eq(groupAttendees.status, "pending"),
+        eq(groupAttendees.paid, false)
+      )
+    )
+    .limit(1);
+
+  let attendee: { id: string };
+  let createdFresh = false;
+  if (pendingRow) {
+    attendee = { id: pendingRow.id };
+    await db
+      .update(groupAttendees)
+      .set({ name, phone, updatedAt: new Date() })
+      .where(eq(groupAttendees.id, pendingRow.id));
+  } else {
+    createdFresh = true;
+    // Create a pending attendee row that holds the seat through checkout.
+    const [freshRow] = await db
+      .insert(groupAttendees)
+      .values({
+        accountId: row.accountId,
+        groupSessionId,
+        name,
+        email,
+        phone,
+        status: "pending",
+        paid: false,
+        sourceIp: ip === "unknown" ? null : ip,
+        userAgent: h.get("user-agent") ?? null,
+      })
+      .returning({ id: groupAttendees.id });
+    attendee = freshRow;
+
+    // Post-insert capacity re-check — closes the two-simultaneous-checkouts
+    // race (no transaction on the serverless driver): the last writer over
+    // capacity backs out before any money moves.
+    const recount = await db
+      .select({ n: sql<number>`COUNT(*)::int` })
+      .from(groupAttendees)
+      .where(
+        and(
+          eq(groupAttendees.groupSessionId, groupSessionId),
+          sql`${groupAttendees.status} <> 'cancelled'`
+        )
+      );
+    if ((recount[0]?.n ?? 0) > row.capacity) {
+      await db
+        .update(groupAttendees)
+        .set({ status: "cancelled", updatedAt: new Date() })
+        .where(eq(groupAttendees.id, attendee.id));
+      return { ok: false, error: pubMsg("full", lang) };
+    }
+  }
 
   const base =
     process.env.NEXT_PUBLIC_SITE_URL ||
@@ -766,9 +897,26 @@ export async function createCircleCheckout(input: {
 
   try {
     const stripe = getStripe();
+
+    // If we're reusing a standing hold, kill its old Checkout first so the
+    // customer can't end up with two payable links for one seat.
+    if (pendingRow?.stripeCheckoutSessionId) {
+      try {
+        await stripe.checkout.sessions.expire(
+          pendingRow.stripeCheckoutSessionId,
+          undefined,
+          { stripeAccount: connectedAccountId }
+        );
+      } catch {
+        // Already expired/completed — fine either way; the paid=false guard
+        // in the webhook keeps a straggler completion idempotent.
+      }
+    }
+
     const whenLabel = formatSessionLong(
       row.scheduledAt,
-      resolveTimeZone(row.timezone)
+      resolveTimeZone(row.timezone),
+      lang === "uk" ? "uk-UA" : "en-US"
     );
     const checkout = await stripe.checkout.sessions.create({
       mode: "payment",
@@ -807,20 +955,21 @@ export async function createCircleCheckout(input: {
       .where(eq(groupAttendees.id, attendee.id));
 
     if (!checkout.url) {
-      return { ok: false, error: "Couldn't start checkout. Try again." };
+      return { ok: false, error: pubMsg("checkoutFailed", lang) };
     }
     return { ok: true, url: checkout.url };
   } catch (err) {
-    // Roll back the held seat so a failed checkout doesn't leave a ghost.
-    await db
-      .update(groupAttendees)
-      .set({ status: "cancelled", updatedAt: new Date() })
-      .where(eq(groupAttendees.id, attendee.id));
+    // Roll back a freshly-held seat so a failed checkout doesn't leave a
+    // ghost. A reused hold keeps its seat — its previous checkout may still
+    // be live and the hourly sweep clears it if abandoned.
+    if (createdFresh) {
+      await db
+        .update(groupAttendees)
+        .set({ status: "cancelled", updatedAt: new Date() })
+        .where(eq(groupAttendees.id, attendee.id));
+    }
     console.error("[circle] checkout creation failed", err);
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : "Couldn't start checkout.",
-    };
+    return { ok: false, error: pubMsg("checkoutFailed", lang) };
   }
 }
 
@@ -991,7 +1140,7 @@ export async function markAttendeeCancelled(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
     const { accountId } = await requireSession();
-    await db
+    const [row] = await db
       .update(groupAttendees)
       .set({ status: "cancelled", updatedAt: new Date() })
       .where(
@@ -999,7 +1148,18 @@ export async function markAttendeeCancelled(
           eq(groupAttendees.accountId, accountId),
           eq(groupAttendees.id, attendeeId)
         )
-      );
+      )
+      .returning({ groupSessionId: groupAttendees.groupSessionId });
+    // Drop them from the Google invite too — otherwise they keep getting
+    // Google's reminders AND can still walk into the Meet unchallenged.
+    if (row) {
+      try {
+        const { syncCircleToGoogle } = await import("./circle-google");
+        await syncCircleToGoogle(row.groupSessionId);
+      } catch (err) {
+        console.error("[circle] google re-sync on attendee cancel failed:", err);
+      }
+    }
     revalidatePath("/loose-ends");
     revalidatePath("/groups");
     return { ok: true };
@@ -1043,6 +1203,7 @@ export async function requestCircleRefund(
     .select({
       id: groupAttendees.id,
       accountId: groupAttendees.accountId,
+      groupSessionId: groupAttendees.groupSessionId,
       name: groupAttendees.name,
       email: groupAttendees.email,
       paid: groupAttendees.paid,
@@ -1052,6 +1213,7 @@ export async function requestCircleRefund(
       stripePaymentIntentId: groupAttendees.stripePaymentIntentId,
       scheduledAt: groupSessions.scheduledAt,
       groupName: groups.name,
+      groupLanguage: groups.language,
     })
     .from(groupAttendees)
     .innerJoin(groupSessions, eq(groupSessions.id, groupAttendees.groupSessionId))
@@ -1059,11 +1221,18 @@ export async function requestCircleRefund(
     .where(eq(groupAttendees.id, attendeeId))
     .limit(1);
   if (!row) return { ok: false, error: "We couldn't find that reservation." };
+  const lang = row.groupLanguage === "uk" ? ("uk" as const) : ("en" as const);
   if (row.refundedAt || row.status === "cancelled") {
     return { ok: true, state: "already" };
   }
   if (new Date(row.scheduledAt).getTime() < Date.now()) {
-    return { ok: false, error: "This circle has already taken place." };
+    return {
+      ok: false,
+      error:
+        lang === "uk"
+          ? "Це Коло вже відбулося."
+          : "This circle has already taken place.",
+    };
   }
   if (row.refundRequestedAt) return { ok: true, state: "already" };
 
@@ -1082,11 +1251,18 @@ export async function requestCircleRefund(
         )
       );
   } else {
-    // No card charge to refund — just release the seat directly.
+    // No card charge to refund — just release the seat directly, and drop
+    // them from the Google invite so reminders stop and the Meet door closes.
     await db
       .update(groupAttendees)
       .set({ status: "cancelled", updatedAt: now })
       .where(eq(groupAttendees.id, attendeeId));
+    try {
+      const { syncCircleToGoogle } = await import("./circle-google");
+      await syncCircleToGoogle(row.groupSessionId);
+    } catch (err) {
+      console.error("[circle] google re-sync on self-cancel failed:", err);
+    }
   }
 
   // Notify the practitioner (best-effort — never fail the client's request).

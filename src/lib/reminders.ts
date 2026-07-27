@@ -335,6 +335,22 @@ async function sendDueClientReminders(
   for (const row of rows) {
     if (!row.clientEmail) continue; // can't email someone without an address
 
+    // Claim the stamp atomically BEFORE sending. The old send-then-stamp
+    // order meant a DB blip after a successful send left the stamp NULL —
+    // and the next 5-minute tick re-emailed the client, every tick, until
+    // the write healed.
+    const claimed = await db
+      .update(sessions)
+      .set({ clientReminderSentAt: now })
+      .where(
+        and(
+          eq(sessions.id, row.sessionId),
+          isNull(sessions.clientReminderSentAt)
+        )
+      )
+      .returning({ id: sessions.id });
+    if (claimed.length === 0) continue;
+
     try {
       const { sendEmail } = await import("./resend");
       // Client email → the CLIENT's local time: their zone if known, else the
@@ -362,17 +378,25 @@ async function sendDueClientReminders(
         replyTo: settings.businessEmail ?? undefined,
       });
 
-      await db
-        .update(sessions)
-        .set({ clientReminderSentAt: now })
-        .where(eq(sessions.id, row.sessionId));
-
       count++;
     } catch (err) {
       console.error(
         `[reminders] failed to send client reminder for session ${row.sessionId}:`,
         err
       );
+      // Release the claim so a later tick can retry; never let the release
+      // itself abort the rest of this account's senders.
+      try {
+        await db
+          .update(sessions)
+          .set({ clientReminderSentAt: null })
+          .where(eq(sessions.id, row.sessionId));
+      } catch (releaseErr) {
+        console.error(
+          `[reminders] failed to release client-reminder claim for ${row.sessionId}:`,
+          releaseErr
+        );
+      }
     }
   }
 
@@ -414,6 +438,19 @@ async function sendDuePractitionerReminders(
 
   let count = 0;
   for (const row of rows) {
+    // Claim before send — see sendDueClientReminders for why.
+    const claimed = await db
+      .update(sessions)
+      .set({ practitionerReminderSentAt: now })
+      .where(
+        and(
+          eq(sessions.id, row.sessionId),
+          isNull(sessions.practitionerReminderSentAt)
+        )
+      )
+      .returning({ id: sessions.id });
+    if (claimed.length === 0) continue;
+
     try {
       const { sendEmail } = await import("./resend");
       // Her own reminder → the zone she booked in, else the practice zone.
@@ -434,17 +471,23 @@ async function sendDuePractitionerReminders(
 
       await sendEmail({ to: practitionerEmail, subject, html, text });
 
-      await db
-        .update(sessions)
-        .set({ practitionerReminderSentAt: now })
-        .where(eq(sessions.id, row.sessionId));
-
       count++;
     } catch (err) {
       console.error(
         `[reminders] failed to send practitioner reminder for session ${row.sessionId}:`,
         err
       );
+      try {
+        await db
+          .update(sessions)
+          .set({ practitionerReminderSentAt: null })
+          .where(eq(sessions.id, row.sessionId));
+      } catch (releaseErr) {
+        console.error(
+          `[reminders] failed to release practitioner-reminder claim for ${row.sessionId}:`,
+          releaseErr
+        );
+      }
     }
   }
 
@@ -509,6 +552,25 @@ async function sendDueCircleReminders(
         row.sessionMeetUrl,
         settings.circleRoomUrl ?? null
       );
+      // Claim before send — see sendDueClientReminders for why.
+      const claimed = await db
+        .update(groupAttendees)
+        .set(
+          pass.lead === "24h"
+            ? { reminder24hSentAt: now }
+            : { reminder1hSentAt: now }
+        )
+        .where(
+          and(
+            eq(groupAttendees.id, row.attendeeId),
+            pass.lead === "24h"
+              ? isNull(groupAttendees.reminder24hSentAt)
+              : isNull(groupAttendees.reminder1hSentAt)
+          )
+        )
+        .returning({ id: groupAttendees.id });
+      if (claimed.length === 0) continue;
+
       try {
         const { sendCircleReminderEmail, asCircleEmailLang } = await import(
           "./resend"
@@ -529,20 +591,27 @@ async function sendDueCircleReminders(
           cancelUrl: circleCancelUrl(row.attendeeId),
           language: lang,
         });
-        await db
-          .update(groupAttendees)
-          .set(
-            pass.lead === "24h"
-              ? { reminder24hSentAt: now }
-              : { reminder1hSentAt: now }
-          )
-          .where(eq(groupAttendees.id, row.attendeeId));
         count++;
       } catch (err) {
         console.error(
           `[reminders] circle ${pass.lead} reminder failed for attendee ${row.attendeeId}:`,
           err
         );
+        try {
+          await db
+            .update(groupAttendees)
+            .set(
+              pass.lead === "24h"
+                ? { reminder24hSentAt: null }
+                : { reminder1hSentAt: null }
+            )
+            .where(eq(groupAttendees.id, row.attendeeId));
+        } catch (releaseErr) {
+          console.error(
+            `[reminders] failed to release circle-reminder claim for ${row.attendeeId}:`,
+            releaseErr
+          );
+        }
       }
     }
   }
@@ -586,6 +655,19 @@ async function sendDueCircleHostReminders(
 
   let count = 0;
   for (const row of rows) {
+    // Claim before send — see sendDueClientReminders for why.
+    const claimed = await db
+      .update(groupSessions)
+      .set({ hostRemindedAt: now })
+      .where(
+        and(
+          eq(groupSessions.id, row.sessionId),
+          isNull(groupSessions.hostRemindedAt)
+        )
+      )
+      .returning({ id: groupSessions.id });
+    if (claimed.length === 0) continue;
+
     try {
       // Who's coming (everyone not cancelled), for the roster in the email.
       const attendees = await db
@@ -620,16 +702,23 @@ async function sendDueCircleHostReminders(
         practitionerName: settings.practitionerName ?? null,
       });
 
-      await db
-        .update(groupSessions)
-        .set({ hostRemindedAt: now })
-        .where(eq(groupSessions.id, row.sessionId));
       count++;
     } catch (err) {
       console.error(
         `[reminders] circle host reminder failed for session ${row.sessionId}:`,
         err
       );
+      try {
+        await db
+          .update(groupSessions)
+          .set({ hostRemindedAt: null })
+          .where(eq(groupSessions.id, row.sessionId));
+      } catch (releaseErr) {
+        console.error(
+          `[reminders] failed to release host-reminder claim for ${row.sessionId}:`,
+          releaseErr
+        );
+      }
     }
   }
 
