@@ -723,6 +723,10 @@ export async function sendCircleRefundEmail(input: {
   whenLabel: string;
   practitionerName: string | null;
   language?: CircleEmailLang;
+  /** True when the seat was paid outside Stripe (Venmo/cash/e-transfer) —
+   *  the money comes back directly from the practitioner, not "to your
+   *  original payment method". */
+  manual?: boolean;
 }): Promise<void> {
   const lang = input.language ?? "en";
   const first = input.attendeeName?.split(" ")[0] ?? null;
@@ -732,8 +736,12 @@ export async function sendCircleRefundEmail(input: {
     lang === "uk"
       ? {
           subject: `Кошти повернено — ${input.circleName}`,
-          bodyText: `Вашу оплату за ${input.circleName} (${input.whenLabel}) повернено — кошти повернуться на ваш початковий спосіб оплати протягом кількох робочих днів, а місце звільнено.`,
-          bodyHtml: `Вашу оплату за <strong>${escapeHtml(input.circleName)}</strong> <strong>повернено</strong> — кошти повернуться на ваш початковий спосіб оплати протягом кількох робочих днів, а місце звільнено.`,
+          bodyText: input.manual
+            ? `Ваше місце в ${input.circleName} (${input.whenLabel}) звільнено, і Світлана поверне вам оплату напряму — так само, як ви платили.`
+            : `Вашу оплату за ${input.circleName} (${input.whenLabel}) повернено — кошти повернуться на ваш початковий спосіб оплати протягом кількох робочих днів, а місце звільнено.`,
+          bodyHtml: input.manual
+            ? `Ваше місце в <strong>${escapeHtml(input.circleName)}</strong> звільнено, і Світлана <strong>поверне вам оплату напряму</strong> — так само, як ви платили.`
+            : `Вашу оплату за <strong>${escapeHtml(input.circleName)}</strong> <strong>повернено</strong> — кошти повернуться на ваш початковий спосіб оплати протягом кількох робочих днів, а місце звільнено.`,
           circleWord: "Коло:",
           reachPre:
             "Якщо це несподівано, або ви хочете приєднатися іншого тижня — просто відповідайте або пишіть на ",
@@ -742,8 +750,12 @@ export async function sendCircleRefundEmail(input: {
         }
       : {
           subject: `Refunded — ${input.circleName}`,
-          bodyText: `Your payment for ${input.circleName} (${input.whenLabel}) has been refunded — it will return to your original payment method within a few business days, and your seat has been released.`,
-          bodyHtml: `Your payment for <strong>${escapeHtml(input.circleName)}</strong> has been <strong>refunded</strong> — it will return to your original payment method within a few business days, and your seat has been released.`,
+          bodyText: input.manual
+            ? `Your seat in ${input.circleName} (${input.whenLabel}) has been released, and Svitlana will return your payment directly — the same way you paid.`
+            : `Your payment for ${input.circleName} (${input.whenLabel}) has been refunded — it will return to your original payment method within a few business days, and your seat has been released.`,
+          bodyHtml: input.manual
+            ? `Your seat in <strong>${escapeHtml(input.circleName)}</strong> has been released, and Svitlana will <strong>return your payment directly</strong> — the same way you paid.`
+            : `Your payment for <strong>${escapeHtml(input.circleName)}</strong> has been <strong>refunded</strong> — it will return to your original payment method within a few business days, and your seat has been released.`,
           circleWord: "Circle:",
           reachPre:
             "If this wasn't expected, or you'd like to join another week, just reply or reach me at ",
@@ -775,6 +787,90 @@ ${t.reachText(CIRCLE_CONTACT_EMAIL)}
   await sendEmail({
     to: input.to,
     subject,
+    html,
+    text,
+    replyTo: CIRCLE_CONTACT_EMAIL,
+  });
+}
+
+/** Sent to every attendee when the practitioner CANCELS a Circle session.
+ *  Before this existed, cancelling silently stranded paid guests — the only
+ *  signal was Google Calendar's removal, which never reached guests whose
+ *  invite sync had failed. */
+export async function sendCircleCancelledEmail(input: {
+  to: string;
+  attendeeName: string | null;
+  circleName: string;
+  whenLabel: string;
+  practitionerName: string | null;
+  /** They paid (any method) — a refund is owed. */
+  wasPaid: boolean;
+  /** Paid by card — the refund arrives automatically once she approves. */
+  paidViaStripe: boolean;
+  language?: CircleEmailLang;
+}): Promise<void> {
+  const lang = input.language ?? "en";
+  const first = input.attendeeName?.split(" ")[0] ?? null;
+  const greeting = circleGreeting(first, lang);
+  const signoff = input.practitionerName ?? "Svitlana";
+  const t =
+    lang === "uk"
+      ? {
+          subject: `Скасовано — ${input.circleName}, ${input.whenLabel}`,
+          bodyText: `Мені шкода — ${input.circleName} (${input.whenLabel}) цього разу не збереться. Зустріч скасовано.`,
+          bodyHtml: `Мені шкода — <strong>${escapeHtml(input.circleName)}</strong> (${escapeHtml(input.whenLabel)}) цього разу не збереться. Зустріч <strong>скасовано</strong>.`,
+          refundStripe:
+            "Вашу оплату буде повернено — щойно повернення пройде, вам прийде окремий лист із підтвердженням.",
+          refundManual:
+            "Світлана поверне вам оплату напряму — так само, як ви платили.",
+          hope: "Сподіваюся побачити вас в іншому Колі — вони збираються щотижня.",
+        }
+      : {
+          subject: `Cancelled — ${input.circleName}, ${input.whenLabel}`,
+          bodyText: `I'm sorry — ${input.circleName} (${input.whenLabel}) can't gather this time. The session has been cancelled.`,
+          bodyHtml: `I'm sorry — <strong>${escapeHtml(input.circleName)}</strong> (${escapeHtml(input.whenLabel)}) can't gather this time. The session has been <strong>cancelled</strong>.`,
+          refundStripe:
+            "Your payment will be refunded — you'll get a separate confirmation email the moment it goes through.",
+          refundManual:
+            "Svitlana will return your payment directly — the same way you paid.",
+          hope: "I hope to see you at another Circle — they gather every week.",
+        };
+  const refundLine = input.wasPaid
+    ? input.paidViaStripe
+      ? t.refundStripe
+      : t.refundManual
+    : null;
+  const text = `${greeting}
+
+${t.bodyText}${refundLine ? `\n\n${refundLine}` : ""}
+
+${t.hope}
+
+${circleContactLineText(lang)}
+
+— ${signoff}${ukEscapeHatchText(lang)}`;
+  const html = `
+<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#faf6f0;font-family:Georgia,'Times New Roman',serif;color:#3d342e;">
+    <div style="max-width:480px;margin:48px auto;padding:36px 32px;background:#fdf9f1;border-radius:12px;border:1px solid #ead9c1;">
+      <p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;color:#564a42;">${escapeHtml(greeting)}</p>
+      <p style="margin:0 0 18px 0;font-size:15px;line-height:1.6;color:#564a42;">${t.bodyHtml}</p>
+      ${
+        refundLine
+          ? `<p style="margin:0 0 18px 0;font-size:15px;line-height:1.6;color:#564a42;">${escapeHtml(refundLine)}</p>`
+          : ""
+      }
+      <p style="margin:0 0 0 0;font-size:14px;line-height:1.6;color:#564a42;">${escapeHtml(t.hope)}</p>
+      <p style="margin:20px 0 0 0;font-size:14px;color:#564a42;font-style:italic;">— ${escapeHtml(signoff)}</p>
+      <p style="margin:22px 0 0 0;padding-top:16px;border-top:1px solid #ead9c1;font-size:12px;line-height:1.6;color:#8a7d71;">${escapeHtml(circleContactLineText(lang))}</p>
+      ${ukEscapeHatchHtml(lang)}
+    </div>
+  </body>
+</html>`.trim();
+  await sendEmail({
+    to: input.to,
+    subject: t.subject,
     html,
     text,
     replyTo: CIRCLE_CONTACT_EMAIL,

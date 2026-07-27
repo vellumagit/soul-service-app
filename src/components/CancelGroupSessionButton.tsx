@@ -2,6 +2,7 @@
 
 import { useTransition } from "react";
 import { cancelGroupSession } from "@/lib/group-actions";
+import { notify } from "./FlashNotifier";
 
 interface Props {
   sessionId: string;
@@ -16,13 +17,30 @@ export function CancelGroupSessionButton({
   function onClick() {
     if (
       !confirm(
-        `Cancel the ${scheduledAtLabel} session? Sign-ups stay on the books — you can reach out to refund.`
+        `Cancel the ${scheduledAtLabel} session? Everyone signed up is emailed, and paid seats land in Loose Ends as refund requests.`
       )
     ) {
       return;
     }
     startTransition(async () => {
-      await cancelGroupSession(sessionId);
+      const r = await cancelGroupSession(sessionId);
+      const bits: string[] = [];
+      if (r.notified > 0) {
+        bits.push(
+          `${r.notified} ${r.notified === 1 ? "guest" : "guests"} emailed`
+        );
+      }
+      if (r.refundsQueued > 0) {
+        bits.push(
+          `${r.refundsQueued} refund${r.refundsQueued === 1 ? "" : "s"} waiting in Loose Ends`
+        );
+      }
+      notify({
+        kind: "success",
+        title: "Session cancelled",
+        body: bits.length > 0 ? bits.join(" · ") : "No one was signed up.",
+        ttlMs: 5000,
+      });
     });
   }
   return (

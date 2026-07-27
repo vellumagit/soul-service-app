@@ -29,7 +29,13 @@ import {
 import { ensureRecurringCircleSessions } from "./recurring-circles";
 import { formatSessionLong, resolveTimeZone } from "./timezone";
 import { verifyCircleCancelToken } from "./circle-cancel-token";
-import { isResendConfigured, sendCircleRefundRequestedEmail } from "./resend";
+import {
+  isResendConfigured,
+  sendCircleRefundRequestedEmail,
+  sendCircleCancelledEmail,
+  sendCircleRefundEmail,
+  asCircleEmailLang,
+} from "./resend";
 
 // ─────────────────────────────────────────────────────────────────────
 // Practitioner — create / update groups
@@ -294,15 +300,37 @@ export async function scheduleGroupSession(
   return { ok: true };
 }
 
-export async function cancelGroupSession(id: string): Promise<{ ok: true }> {
+export type CancelGroupSessionResult = {
+  ok: true;
+  /** Attendees who got the cancellation email. */
+  notified: number;
+  /** Paid seats queued as refund requests in Loose Ends. */
+  refundsQueued: number;
+};
+
+export async function cancelGroupSession(
+  id: string
+): Promise<CancelGroupSessionResult> {
   const { accountId } = await requireSession();
+  const now = new Date();
+  // The status guard makes a double-click idempotent — the second call finds
+  // nothing to flip and sends nothing twice.
   const [row] = await db
     .update(groupSessions)
-    .set({ status: "cancelled", updatedAt: new Date() })
+    .set({ status: "cancelled", updatedAt: now })
     .where(
-      and(eq(groupSessions.accountId, accountId), eq(groupSessions.id, id))
+      and(
+        eq(groupSessions.accountId, accountId),
+        eq(groupSessions.id, id),
+        sql`${groupSessions.status} <> 'cancelled'`
+      )
     )
-    .returning({ groupId: groupSessions.groupId });
+    .returning({
+      groupId: groupSessions.groupId,
+      scheduledAt: groupSessions.scheduledAt,
+    });
+  let notified = 0;
+  let refundsQueued = 0;
   if (row) {
     // Pull the event off her calendar — Google tells the invitees it's off.
     try {
@@ -311,11 +339,91 @@ export async function cancelGroupSession(id: string): Promise<{ ok: true }> {
     } catch (err) {
       console.error("[circle] google delete on cancel failed:", err);
     }
+
+    // Tell the people. Before this, cancelling silently stranded paid guests:
+    // no email, no refund, and the Google removal only reached guests whose
+    // invite sync had succeeded. Only future sessions — cancelling something
+    // already past is bookkeeping, not an event change.
+    if (new Date(row.scheduledAt).getTime() > now.getTime()) {
+      const [meta] = await db
+        .select({ name: groups.name, language: groups.language })
+        .from(groups)
+        .where(eq(groups.id, row.groupId))
+        .limit(1);
+      const [settings] = await db
+        .select({
+          timezone: practitionerSettings.timezone,
+          practitionerName: practitionerSettings.practitionerName,
+        })
+        .from(practitionerSettings)
+        .where(eq(practitionerSettings.accountId, accountId))
+        .limit(1);
+      const attendees = await db
+        .select({
+          id: groupAttendees.id,
+          name: groupAttendees.name,
+          email: groupAttendees.email,
+          paid: groupAttendees.paid,
+          stripePaymentIntentId: groupAttendees.stripePaymentIntentId,
+        })
+        .from(groupAttendees)
+        .where(
+          and(
+            eq(groupAttendees.groupSessionId, id),
+            sql`${groupAttendees.status} <> 'cancelled'`
+          )
+        );
+      const lang = asCircleEmailLang(meta?.language);
+      const whenLabel = formatSessionLong(
+        new Date(row.scheduledAt),
+        resolveTimeZone(settings?.timezone),
+        lang === "uk" ? "uk-UA" : "en-US"
+      );
+      for (const a of attendees) {
+        if (a.paid) {
+          // Surface in Loose Ends → "Refund requests" for her one-tap
+          // approve — card refunds go through Stripe there; manual payments
+          // get marked settled once she's returned the money.
+          await db
+            .update(groupAttendees)
+            .set({ refundRequestedAt: now, updatedAt: now })
+            .where(
+              and(
+                eq(groupAttendees.id, a.id),
+                isNull(groupAttendees.refundRequestedAt)
+              )
+            );
+          refundsQueued++;
+        }
+        if (a.email && a.email.includes("@") && isResendConfigured()) {
+          try {
+            await sendCircleCancelledEmail({
+              to: a.email,
+              attendeeName: a.name,
+              circleName: meta?.name ?? "the Circle",
+              whenLabel,
+              practitionerName: settings?.practitionerName ?? null,
+              wasPaid: a.paid,
+              paidViaStripe: a.paid && !!a.stripePaymentIntentId,
+              language: lang,
+            });
+            notified++;
+          } catch (err) {
+            console.error(
+              `[circle] cancellation email failed for attendee ${a.id}:`,
+              err
+            );
+          }
+        }
+      }
+    }
+
     revalidatePath(`/groups/${row.groupId}`);
     revalidatePath("/calendar");
+    revalidatePath("/loose-ends");
     revalidatePath("/");
   }
-  return { ok: true };
+  return { ok: true, notified, refundsQueued };
 }
 
 export type DeleteGroupResult = { ok: true } | { ok: false; error: string };
@@ -1056,11 +1164,74 @@ export async function approveCircleRefund(
       revalidatePath("/loose-ends");
       return { ok: true }; // already refunded — idempotent
     }
-    if (!row.paid || !row.stripePaymentIntentId) {
+    if (!row.paid) {
       return {
         ok: false,
-        error: "No card payment to refund. Use Remove to release the seat.",
+        error: "No payment on this seat. Use Remove to release it.",
       };
+    }
+    if (!row.stripePaymentIntentId) {
+      // Paid outside Stripe (Venmo / cash / e-transfer): nothing to reverse
+      // via the API. Mark it settled + release the seat + tell the attendee —
+      // she returns the money out-of-band, the same way it arrived.
+      const now = new Date();
+      const claimed = await db
+        .update(groupAttendees)
+        .set({ refundedAt: now, status: "cancelled", updatedAt: now })
+        .where(
+          and(
+            eq(groupAttendees.id, row.id),
+            isNull(groupAttendees.refundedAt)
+          )
+        )
+        .returning({ id: groupAttendees.id });
+      if (claimed.length > 0) {
+        try {
+          const [d] = await db
+            .select({
+              email: groupAttendees.email,
+              name: groupAttendees.name,
+              scheduledAt: groupSessions.scheduledAt,
+              groupName: groups.name,
+              groupLanguage: groups.language,
+              timezone: practitionerSettings.timezone,
+              practitionerName: practitionerSettings.practitionerName,
+            })
+            .from(groupAttendees)
+            .innerJoin(
+              groupSessions,
+              eq(groupSessions.id, groupAttendees.groupSessionId)
+            )
+            .innerJoin(groups, eq(groups.id, groupSessions.groupId))
+            .leftJoin(
+              practitionerSettings,
+              eq(practitionerSettings.accountId, groupAttendees.accountId)
+            )
+            .where(eq(groupAttendees.id, row.id))
+            .limit(1);
+          if (d?.email && d.email.includes("@") && isResendConfigured()) {
+            const lang = asCircleEmailLang(d.groupLanguage);
+            await sendCircleRefundEmail({
+              to: d.email,
+              attendeeName: d.name,
+              circleName: d.groupName,
+              whenLabel: formatSessionLong(
+                new Date(d.scheduledAt),
+                resolveTimeZone(d.timezone),
+                lang === "uk" ? "uk-UA" : "en-US"
+              ),
+              practitionerName: d.practitionerName ?? null,
+              language: lang,
+              manual: true,
+            });
+          }
+        } catch (err) {
+          console.error("[circle] manual refund email failed", err);
+        }
+      }
+      revalidatePath("/loose-ends");
+      revalidatePath("/groups");
+      return { ok: true };
     }
     if (!isStripeConfigured() || !row.connectedAccountId) {
       return {
