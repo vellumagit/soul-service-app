@@ -24,6 +24,7 @@ import {
 } from "@/db/schema";
 import { TimeOfDayProvider } from "@/components/TimeOfDayProvider";
 import { CircleSignupForm } from "@/components/CircleSignupForm";
+import { PublicBrandLink } from "@/components/PublicBrandLink";
 import { CirclePurchaseForm } from "@/components/CirclePurchaseForm";
 import { isStripeConfigured } from "@/lib/stripe";
 import { formatSessionLong, resolveTimeZone } from "@/lib/timezone";
@@ -191,19 +192,7 @@ export default async function CircleSignupPage({
             textAlign: "center",
           }}
         >
-          <Link
-            href="/"
-            style={{
-              fontFamily: "var(--font-serif, serif)",
-              fontSize: 18,
-              fontWeight: 500,
-              letterSpacing: "0.04em",
-              color: "var(--land-clay-deep)",
-              textDecoration: "none",
-            }}
-          >
-            Svitlana
-          </Link>
+          <PublicBrandLink />
         </header>
 
         <section

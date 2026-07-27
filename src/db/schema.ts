@@ -688,6 +688,16 @@ export const practitionerSettings = pgTable("practitioner_settings", {
   // hosted URL). Editable from Settings → Landing page.
   landingPortraitUrl: text("landing_portrait_url"),
 
+  // Her brand marks, uploaded from Settings → Branding (Vercel Blob URLs, or
+  // any hosted image if she pastes a link).
+  //   logoUrl    — shown in the workspace sidebar and as the storefront /
+  //                public-page wordmark. NULL → the "Soul Service" /
+  //                "Svitlana" text wordmark, exactly as before.
+  //   faviconUrl — the browser-tab icon, wired through the root layout's
+  //                generateMetadata so a change goes live without a deploy.
+  logoUrl: text("logo_url"),
+  faviconUrl: text("favicon_url"),
+
   // Session reminder windows. The hourly cron at /api/cron/reminders looks
   // for sessions ~N hours out where the relevant `*_reminder_sent_at` is
   // still null, sends an email via Resend, then marks the timestamp.

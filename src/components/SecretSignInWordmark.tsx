@@ -12,6 +12,7 @@
 
 import { useRef } from "react";
 import { useRouter } from "next/navigation";
+import { useBrandLogo } from "./BrandProvider";
 
 const TAP_WINDOW_MS = 1200;
 const TAPS_NEEDED = 3;
@@ -19,6 +20,9 @@ const TAPS_NEEDED = 3;
 export function SecretSignInWordmark() {
   const router = useRouter();
   const taps = useRef<number[]>([]);
+  // Her uploaded logo stands in for the text wordmark — and keeps the secret
+  // door, since the taps live on the wrapper either way.
+  const logoUrl = useBrandLogo();
 
   function handleTap() {
     const now = Date.now();
@@ -39,8 +43,25 @@ export function SecretSignInWordmark() {
       // instead of selecting the wordmark text.
       style={{ userSelect: "none", WebkitUserSelect: "none" }}
     >
-      Svitlana
-      <small>Soul Services</small>
+      {logoUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={logoUrl}
+          alt="Svitlana"
+          style={{
+            maxHeight: 44,
+            maxWidth: 200,
+            objectFit: "contain",
+            display: "block",
+          }}
+          draggable={false}
+        />
+      ) : (
+        <>
+          Svitlana
+          <small>Soul Services</small>
+        </>
+      )}
     </div>
   );
 }

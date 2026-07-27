@@ -2525,6 +2525,8 @@ export async function updateSettings(formData: FormData) {
       circleRoomUrl: str(formData, "circleRoomUrl"),
       circleSignupsOpen: bool(formData, "circleSignupsOpen"),
       landingPortraitUrl: str(formData, "landingPortraitUrl"),
+      logoUrl: str(formData, "logoUrl"),
+      faviconUrl: str(formData, "faviconUrl"),
       updatedAt: new Date(),
     })
     .where(eq(practitionerSettings.accountId, accountId));

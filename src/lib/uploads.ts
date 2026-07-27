@@ -166,6 +166,115 @@ export async function removeLandingPortrait(): Promise<void> {
   revalidatePath("/settings");
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// Branding — her logo + favicon (Settings → Branding)
+// ─────────────────────────────────────────────────────────────────────
+//
+// Same shape as the portrait above: straight to Blob, URL onto her settings
+// row, previous file cleaned up. Both are optional — with neither set the app
+// looks exactly as it did before (text wordmark, default tab icon).
+
+export type BrandMark = "logo" | "favicon";
+
+const BRAND_FIELD = {
+  logo: practitionerSettings.logoUrl,
+  favicon: practitionerSettings.faviconUrl,
+} as const;
+
+/** Upload a logo or favicon. Returns the new public URL for the live preview. */
+export async function uploadBrandMark(
+  formData: FormData
+): Promise<{ url: string }> {
+  ensureBlobConfigured();
+  const { accountId } = await requireSession();
+  const kindRaw = formData.get("kind");
+  const kind: BrandMark = kindRaw === "favicon" ? "favicon" : "logo";
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0)
+    throw new Error("Choose an image first");
+  if (!file.type.startsWith("image/"))
+    throw new Error("Must be an image (PNG, SVG, or JPG)");
+  // Favicons are tiny by nature; a 2 MB ceiling still allows a 512×512 PNG
+  // many times over and catches an accidentally-picked photo.
+  const maxBytes = kind === "favicon" ? 2 * 1024 * 1024 : 5 * 1024 * 1024;
+  if (file.size > maxBytes)
+    throw new Error(
+      `${kind === "favicon" ? "Favicon" : "Logo"} must be under ${maxBytes / 1024 / 1024} MB`
+    );
+
+  const column = BRAND_FIELD[kind];
+  const [existing] = await db
+    .select({ url: column })
+    .from(practitionerSettings)
+    .where(eq(practitionerSettings.accountId, accountId))
+    .limit(1);
+  const previousUrl = existing?.url ?? null;
+
+  const ext = file.name.includes(".")
+    ? file.name.split(".").pop()!.toLowerCase().replace(/[^a-z0-9]/g, "")
+    : "png";
+  const blob = await put(`accounts/${accountId}/brand/${kind}.${ext}`, file, {
+    access: "public",
+    addRandomSuffix: true, // new object per change → dodges CDN caching
+    allowOverwrite: true,
+  });
+
+  await db
+    .update(practitionerSettings)
+    .set({ [kind === "favicon" ? "faviconUrl" : "logoUrl"]: blob.url, updatedAt: new Date() })
+    .where(eq(practitionerSettings.accountId, accountId));
+
+  if (previousUrl && previousUrl !== blob.url && isVercelBlobUrl(previousUrl)) {
+    try {
+      const { del } = await import("@vercel/blob");
+      await del(previousUrl);
+    } catch (e) {
+      console.warn(`[uploadBrandMark:${kind}] couldn't delete previous:`, e);
+    }
+  }
+
+  revalidateBrandSurfaces();
+  return { url: blob.url };
+}
+
+/** Clear a logo or favicon — back to the text wordmark / default tab icon. */
+export async function removeBrandMark(kind: BrandMark): Promise<void> {
+  const { accountId } = await requireSession();
+  const column = BRAND_FIELD[kind === "favicon" ? "favicon" : "logo"];
+  const [existing] = await db
+    .select({ url: column })
+    .from(practitionerSettings)
+    .where(eq(practitionerSettings.accountId, accountId))
+    .limit(1);
+  const previousUrl = existing?.url ?? null;
+
+  await db
+    .update(practitionerSettings)
+    .set({ [kind === "favicon" ? "faviconUrl" : "logoUrl"]: null, updatedAt: new Date() })
+    .where(eq(practitionerSettings.accountId, accountId));
+
+  if (previousUrl && isVercelBlobUrl(previousUrl)) {
+    try {
+      ensureBlobConfigured();
+      const { del } = await import("@vercel/blob");
+      await del(previousUrl);
+    } catch (e) {
+      console.warn(`[removeBrandMark:${kind}] couldn't delete previous:`, e);
+    }
+  }
+
+  revalidateBrandSurfaces();
+}
+
+/** Every surface that renders a brand mark. The favicon comes from the ROOT
+ *  layout, so the storefront + workspace + public circle pages all need to
+ *  re-render for a change to show up without a redeploy. */
+function revalidateBrandSurfaces(): void {
+  revalidatePath("/", "layout");
+  revalidatePath("/settings");
+  revalidatePath("/today");
+}
+
 // Upload a generic file attached to a client (and optionally a session).
 export async function uploadAttachment(formData: FormData) {
   ensureBlobConfigured();

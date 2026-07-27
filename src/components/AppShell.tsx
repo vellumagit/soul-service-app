@@ -11,6 +11,7 @@ import { TimeZoneProvider } from "./TimeZoneProvider";
 import { HelpBuddy } from "./HelpBuddy";
 import { FlashNotifier } from "./FlashNotifier";
 import { TimeOfDayProvider } from "./TimeOfDayProvider";
+import { useBrandLogo } from "./BrandProvider";
 import { DEFAULT_LOCALE, type Locale, type TranslationKey } from "@/lib/i18n";
 
 type NavItem = {
@@ -239,33 +240,47 @@ function Breadcrumb({
 }
 
 function SidebarBrand({ onClose }: { onClose?: () => void }) {
+  // Her uploaded logo replaces the whole default mark + wordmark. Nothing
+  // uploaded → exactly the original dot-and-text lockup.
+  const logoUrl = useBrandLogo();
   return (
     <div className="px-4 py-4 border-b border-ink-100 flex items-center justify-between">
       <Link href="/" className="flex items-center gap-2.5">
-        {/* Logo mark — a soft plum dot rising out of warm parchment, ringed in
-            honey gold. Reads more like a candle/sun than a tech logo. */}
-        <div
-          className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
-          style={{
-            background:
-              "radial-gradient(circle at 30% 30%, var(--color-parchment) 0%, var(--color-parchment-edge) 100%)",
-            boxShadow:
-              "inset 0 0 0 1px var(--color-honey-300), 0 1px 2px rgba(60, 40, 50, 0.08)",
-          }}
-        >
-          <div className="w-3 h-3 rounded-full bg-plum-500 shadow-sm" />
-        </div>
-        <div>
-          <div
-            className="text-base text-ink-900 leading-none serif"
-            style={{ fontWeight: 500, letterSpacing: "-0.01em" }}
-          >
-            Soul Service
-          </div>
-          <div className="text-[10px] text-ink-500 mt-1 italic serif-italic">
-            for Svitlana
-          </div>
-        </div>
+        {logoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={logoUrl}
+            alt="Home"
+            className="max-h-10 max-w-[168px] object-contain"
+          />
+        ) : (
+          <>
+            {/* Logo mark — a soft plum dot rising out of warm parchment, ringed
+                in honey gold. Reads more like a candle/sun than a tech logo. */}
+            <div
+              className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
+              style={{
+                background:
+                  "radial-gradient(circle at 30% 30%, var(--color-parchment) 0%, var(--color-parchment-edge) 100%)",
+                boxShadow:
+                  "inset 0 0 0 1px var(--color-honey-300), 0 1px 2px rgba(60, 40, 50, 0.08)",
+              }}
+            >
+              <div className="w-3 h-3 rounded-full bg-plum-500 shadow-sm" />
+            </div>
+            <div>
+              <div
+                className="text-base text-ink-900 leading-none serif"
+                style={{ fontWeight: 500, letterSpacing: "-0.01em" }}
+              >
+                Soul Service
+              </div>
+              <div className="text-[10px] text-ink-500 mt-1 italic serif-italic">
+                for Svitlana
+              </div>
+            </div>
+          </>
+        )}
       </Link>
       {onClose && (
         <button

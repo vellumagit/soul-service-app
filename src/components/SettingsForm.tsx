@@ -8,6 +8,7 @@ import type { PractitionerSettings } from "@/db/schema";
 import { SabbathDayPicker } from "./SabbathDayPicker";
 import { AvailabilityPanel } from "./AvailabilityPanel";
 import { LandingPortraitField } from "./LandingPortraitField";
+import { BrandMarkField } from "./BrandMarkField";
 import { LandingCopyEditor } from "./LandingCopyEditor";
 import { COMMON_TIME_ZONES } from "@/lib/timezone";
 import {
@@ -139,6 +140,30 @@ export function SettingsForm({ settings }: { settings: PractitionerSettings }) {
             </select>
           </Field>
         </div>
+      </Section>
+
+      {/* Branding — her marks, changeable any time, no developer needed */}
+      <Section
+        title="Branding"
+        subtitle="Your logo and the little icon on the browser tab. Upload once, change them whenever you like — they go live the moment you upload, everywhere at once."
+      >
+        <Field
+          label="Logo"
+          hint="Replaces the “Soul Service” wordmark in your sidebar and the “Svitlana” heading at the top of your public pages. Leave empty to keep the text as it is."
+        >
+          <BrandMarkField kind="logo" initialUrl={settings.logoUrl} />
+        </Field>
+        <Field
+          label="Favicon"
+          hint="The tiny icon browsers show on the tab and in bookmarks."
+          className="mt-5"
+        >
+          <BrandMarkField
+            kind="favicon"
+            initialUrl={settings.faviconUrl}
+            siteName={settings.practitionerName ?? "Soul Service"}
+          />
+        </Field>
       </Section>
 
       {/* Landing page copy */}

@@ -14,6 +14,7 @@ import {
 } from "@/db/schema";
 import { TimeOfDayProvider } from "@/components/TimeOfDayProvider";
 import { CircleCancelForm } from "@/components/CircleCancelForm";
+import { PublicBrandLink } from "@/components/PublicBrandLink";
 import { verifyCircleCancelToken } from "@/lib/circle-cancel-token";
 import { formatSessionLong, resolveTimeZone } from "@/lib/timezone";
 import "../../../landing.css";
@@ -35,19 +36,7 @@ function Shell({ children }: { children: React.ReactNode }) {
             textAlign: "center",
           }}
         >
-          <Link
-            href="/"
-            style={{
-              fontFamily: "var(--font-serif, serif)",
-              fontSize: 18,
-              fontWeight: 500,
-              letterSpacing: "0.04em",
-              color: "var(--land-clay-deep)",
-              textDecoration: "none",
-            }}
-          >
-            Svitlana
-          </Link>
+          <PublicBrandLink />
         </header>
         <section className="circles" style={{ padding: "56px 24px 90px" }}>
           {children}

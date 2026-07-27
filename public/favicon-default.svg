@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- The app's own mark, shrunk to tab size: a plum dot rising out of warm
+       parchment, ringed in honey gold — the same lockup as the sidebar.
+       Used until she uploads her own in Settings → Branding. -->
+  <defs>
+    <radialGradient id="p" cx="30%" cy="30%">
+      <stop offset="0%" stop-color="#fdf9f1" />
+      <stop offset="100%" stop-color="#f2e6d2" />
+    </radialGradient>
+  </defs>
+  <circle cx="32" cy="32" r="30" fill="url(#p)" stroke="#e0c9a0" stroke-width="3" />
+  <circle cx="32" cy="32" r="11" fill="#5a3f4f" />
+</svg>
