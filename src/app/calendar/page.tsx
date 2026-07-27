@@ -16,10 +16,42 @@ import { ScheduleSeriesDialog } from "@/components/ScheduleSeriesDialog";
 import { CalendarJumpToDate } from "@/components/CalendarJumpToDate";
 import { requireSession } from "@/lib/session-cookies";
 import { asLocale, t } from "@/lib/i18n";
+import {
+  resolveTimeZone,
+  zonedAddDays,
+  zonedDateKey,
+  zonedWallTimeToUtc,
+  zonedWeekRange,
+  zonedWeekday,
+  zonedYearMonthDay,
+} from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
 type CalendarView = "week" | "month";
+
+// The `start` param arrives either as a bare YYYY-MM-DD (nav links) or a full
+// ISO instant (jump-to-date's noon-UTC). A bare date means a PRACTICE-TZ
+// calendar day — resolve it to that day's noon instant so the range math
+// below can't slip a day at the zone boundary.
+function parseAnchor(raw: string | undefined, tz: string): Date {
+  if (raw) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+    if (m) {
+      return zonedWallTimeToUtc(
+        Number(m[1]),
+        Number(m[2]) - 1,
+        Number(m[3]),
+        12,
+        0,
+        tz
+      );
+    }
+    const d = new Date(raw);
+    if (!Number.isNaN(d.getTime())) return d;
+  }
+  return new Date();
+}
 
 export default async function CalendarPage({
   searchParams,
@@ -28,49 +60,48 @@ export default async function CalendarPage({
 }) {
   const { email, accountId } = await requireSession();
   const { start: startParam, view: viewParam } = await searchParams;
+  // Settings first: the fetch RANGE itself depends on the practice timezone.
+  // The server runs UTC — anchoring weeks/days with setHours(0,0,0,0) put
+  // every boundary 6-7h early, which made Saturday-evening sessions fall
+  // outside BOTH adjacent weeks' fetches (invisible in either view).
+  const settings = await getSettings(accountId);
+  const tz = resolveTimeZone(settings.timezone);
 
   const view: CalendarView = viewParam === "month" ? "month" : "week";
-  const anchor = startParam ? new Date(startParam) : new Date();
+  const anchor = parseAnchor(startParam, tz);
 
-  // Compute the date range to fetch based on view
+  // Fetch range (true instants) + display anchors (practice-tz date keys).
   let rangeStart: Date;
   let rangeEnd: Date;
-  let weekStart: Date;
-  let monthStart: Date;
+  let weekStartInstant: Date;
+  let monthStartInstant: Date;
 
   if (view === "month") {
-    monthStart = new Date(
-      anchor.getFullYear(),
-      anchor.getMonth(),
-      1,
-      0,
-      0,
-      0,
-      0
+    const ymd = zonedYearMonthDay(anchor, tz);
+    monthStartInstant = zonedWallTimeToUtc(ymd.year, ymd.month0, 1, 0, 0, tz);
+    // Grid extends ~6 weeks: from the Sunday before the 1st through 42 days.
+    rangeStart = zonedAddDays(
+      monthStartInstant,
+      -zonedWeekday(monthStartInstant, tz),
+      tz
     );
-    // Grid extends ~6 weeks: from the Sunday before the 1st through 42 days later.
-    rangeStart = new Date(monthStart);
-    rangeStart.setDate(monthStart.getDate() - monthStart.getDay());
-    rangeEnd = new Date(rangeStart);
-    rangeEnd.setDate(rangeStart.getDate() + 42);
-    // Compute week anchor for switcher links (the Sunday of monthStart's week)
-    weekStart = new Date(monthStart);
-    weekStart.setDate(monthStart.getDate() - monthStart.getDay());
+    rangeEnd = zonedAddDays(rangeStart, 42, tz);
+    weekStartInstant = rangeStart;
   } else {
-    weekStart = new Date(anchor);
-    weekStart.setHours(0, 0, 0, 0);
-    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-    rangeStart = weekStart;
-    rangeEnd = new Date(weekStart);
-    rangeEnd.setDate(rangeEnd.getDate() + 7);
-    // For month-view link, jump to the 1st of the week's month
-    monthStart = new Date(weekStart.getFullYear(), weekStart.getMonth(), 1);
+    const wr = zonedWeekRange(anchor, tz);
+    rangeStart = wr.start;
+    rangeEnd = wr.end;
+    weekStartInstant = wr.start;
+    const wymd = zonedYearMonthDay(wr.start, tz);
+    monthStartInstant = zonedWallTimeToUtc(wymd.year, wymd.month0, 1, 0, 0, tz);
   }
 
-  const [sessions, clients, settings, circleRows] = await Promise.all([
+  const weekStartKey = zonedDateKey(weekStartInstant, tz);
+  const monthStartKey = zonedDateKey(monthStartInstant, tz);
+
+  const [sessions, clients, circleRows] = await Promise.all([
     listSessionsInRange(accountId, rangeStart, rangeEnd),
     listClientsForPicker(accountId),
-    getSettings(accountId),
     // Circles were invisible on her own calendar — she could double-book
     // herself against one and nothing would flag it.
     db
@@ -120,24 +151,19 @@ export default async function CalendarPage({
     })),
   ];
 
-  // Navigation helpers
+  // Navigation helpers — every href carries a practice-tz date key.
   const prevHref =
     view === "month"
-      ? `/calendar?view=month&start=${addMonths(monthStart, -1).toISOString()}`
-      : `/calendar?view=week&start=${addDays(weekStart, -7).toISOString()}`;
+      ? `/calendar?view=month&start=${shiftMonthKey(monthStartKey, -1)}`
+      : `/calendar?view=week&start=${zonedDateKey(zonedAddDays(weekStartInstant, -7, tz), tz)}`;
   const nextHref =
     view === "month"
-      ? `/calendar?view=month&start=${addMonths(monthStart, 1).toISOString()}`
-      : `/calendar?view=week&start=${addDays(weekStart, 7).toISOString()}`;
+      ? `/calendar?view=month&start=${shiftMonthKey(monthStartKey, 1)}`
+      : `/calendar?view=week&start=${zonedDateKey(zonedAddDays(weekStartInstant, 7, tz), tz)}`;
   const todayHref = `/calendar?view=${view}`;
 
   const rangeLabel =
-    view === "month"
-      ? monthStart.toLocaleDateString(undefined, {
-          month: "long",
-          year: "numeric",
-        })
-      : formatWeekRange(weekStart);
+    view === "month" ? monthLabel(monthStartKey) : formatWeekRange(weekStartKey);
 
   return (
     <AppShell
@@ -146,10 +172,7 @@ export default async function CalendarPage({
         {
           label:
             view === "month"
-              ? monthStart.toLocaleDateString(undefined, {
-                  month: "long",
-                  year: "numeric",
-                })
+              ? monthLabel(monthStartKey)
               : t(locale, "calendar.thisWeek"),
         },
       ]}
@@ -218,7 +241,7 @@ export default async function CalendarPage({
             (or future) date without clicking Prev/Next over and over. */}
         <CalendarJumpToDate
           view={view}
-          currentStart={(view === "month" ? monthStart : weekStart).toISOString()}
+          currentStart={view === "month" ? monthStartKey : weekStartKey}
         />
 
         <div className="flex-1" />
@@ -226,14 +249,14 @@ export default async function CalendarPage({
         {/* View switcher */}
         <div className="flex items-center border border-ink-200 rounded-md overflow-hidden text-xs">
           <Link
-            href={`/calendar?view=week&start=${weekStart.toISOString()}`}
+            href={`/calendar?view=week&start=${weekStartKey}`}
             data-active={view === "week"}
             className="px-3 py-1.5 font-medium text-ink-500 data-[active=true]:bg-ink-900 data-[active=true]:text-white hover:bg-ink-50 data-[active=true]:hover:bg-ink-800"
           >
             Week
           </Link>
           <Link
-            href={`/calendar?view=month&start=${monthStart.toISOString()}`}
+            href={`/calendar?view=month&start=${monthStartKey}`}
             data-active={view === "month"}
             className="px-3 py-1.5 font-medium text-ink-500 data-[active=true]:bg-ink-900 data-[active=true]:text-white hover:bg-ink-50 data-[active=true]:hover:bg-ink-800 border-l border-ink-200"
           >
@@ -253,13 +276,13 @@ export default async function CalendarPage({
           both views render them with a soft shaded background. */}
       {view === "month" ? (
         <MonthCalendar
-          monthStart={monthStart.toISOString()}
+          monthStart={monthStartKey}
           sessions={sessionData}
           sabbathDays={(settings.sabbathDays ?? []) as string[]}
         />
       ) : (
         <WeekCalendar
-          weekStart={weekStart.toISOString()}
+          weekStart={weekStartKey}
           sessions={sessionData}
           sabbathDays={(settings.sabbathDays ?? []) as string[]}
         />
@@ -272,33 +295,35 @@ export default async function CalendarPage({
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-function addDays(d: Date, n: number): Date {
-  const out = new Date(d);
-  out.setDate(out.getDate() + n);
-  return out;
+// All helpers below work on practice-tz date KEYS ("YYYY-MM-DD") and format
+// via noon-UTC anchors with an explicit UTC timeZone — the server's own zone
+// can never shift a label or a link by a day.
+
+function shiftMonthKey(monthKey: string, delta: number): string {
+  const [y, m] = monthKey.split("-").map(Number);
+  const d = new Date(Date.UTC(y, m - 1 + delta, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-01`;
 }
 
-function addMonths(d: Date, n: number): Date {
-  const out = new Date(d);
-  out.setMonth(out.getMonth() + n);
-  return out;
+function monthLabel(monthKey: string): string {
+  return new Date(`${monthKey}T12:00:00Z`).toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  });
 }
 
-function formatWeekRange(weekStart: Date): string {
-  const end = new Date(weekStart);
-  end.setDate(end.getDate() + 6);
-  const sameMonth = weekStart.getMonth() === end.getMonth();
-  if (sameMonth) {
-    return `${weekStart.toLocaleDateString(undefined, {
+function formatWeekRange(weekStartKey: string): string {
+  const start = new Date(`${weekStartKey}T12:00:00Z`);
+  const end = new Date(start.getTime() + 6 * 24 * 60 * 60 * 1000);
+  const f = (d: Date) =>
+    d.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
-    })} – ${end.getDate()}, ${end.getFullYear()}`;
+      timeZone: "UTC",
+    });
+  if (start.getUTCMonth() === end.getUTCMonth()) {
+    return `${f(start)} – ${end.getUTCDate()}, ${end.getUTCFullYear()}`;
   }
-  return `${weekStart.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  })} – ${end.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  })}, ${end.getFullYear()}`;
+  return `${f(start)} – ${f(end)}, ${end.getUTCFullYear()}`;
 }

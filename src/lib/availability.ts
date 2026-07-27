@@ -13,8 +13,10 @@
 //   - ScheduleSessionDialog: checkConflict(at, durationMin) → busy or free
 //   - Storefront inquiry form: getAvailableWindows(...) → next N free slots
 //
-// All times are computed in UTC internally; consumers format for display
-// in whatever locale matters.
+// Working hours are wall-clock times in the PRACTICE timezone ("mon 09:00"
+// means 9 AM Edmonton). The server runs UTC, so every window must be built
+// with the zoned helpers — building from UTC midnight offered visitors
+// slots at 3 AM her time and hid her real hours.
 
 import "server-only";
 
@@ -22,6 +24,14 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { practitionerSettings } from "@/db/schema";
 import { getFreeBusy, type BusyInterval } from "./google-calendar";
+import {
+  resolveTimeZone,
+  zonedAddDays,
+  zonedClock,
+  zonedWallTimeToUtc,
+  zonedWeekday,
+  zonedYearMonthDay,
+} from "./timezone";
 
 const WEEKDAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 type WeekdayKey = (typeof WEEKDAY_KEYS)[number];
@@ -76,9 +86,10 @@ export async function getAvailableWindows(
 
   const out: AvailableWindow[] = [];
   for (let i = 0; i < lookAheadDays && out.length < limit; i++) {
-    const day = new Date(fromAt);
-    day.setDate(day.getDate() + i);
-    const slots = sliceDay(day, fromAt, duration, cfg, busy);
+    // Walk PRACTICE-TZ calendar days — each iteration hands sliceDay the
+    // midnight instant of that day in her zone.
+    const dayStart = zonedAddDays(fromAt, i, cfg.timezone);
+    const slots = sliceDay(dayStart, fromAt, duration, cfg, busy);
     for (const slot of slots) {
       out.push(slot);
       if (out.length >= limit) break;
@@ -96,8 +107,8 @@ export async function checkConflict(
   const cfg = await loadConfig(accountId);
   const endAt = new Date(startAt.getTime() + durationMinutes * 60 * 1000);
 
-  // 1) Sabbath-day check
-  const weekday = WEEKDAY_KEYS[startAt.getDay()];
+  // 1) Sabbath-day check — HER weekday, not the server's UTC one.
+  const weekday = WEEKDAY_KEYS[zonedWeekday(startAt, cfg.timezone)];
   if (cfg.sabbathDays.includes(weekday)) {
     return { status: "sabbath-day" };
   }
@@ -107,8 +118,10 @@ export async function checkConflict(
     const hours = cfg.workingHours[weekday];
     if (!hours) return { status: "outside-hours" };
     const { fromMin, toMin } = parseHours(hours);
-    const startMin = startAt.getHours() * 60 + startAt.getMinutes();
-    const endMin = endAt.getHours() * 60 + endAt.getMinutes();
+    const startClock = zonedClock(startAt, cfg.timezone);
+    const endClock = zonedClock(endAt, cfg.timezone);
+    const startMin = startClock.hour * 60 + startClock.minute;
+    const endMin = endClock.hour * 60 + endClock.minute;
     if (startMin < fromMin || endMin > toMin) {
       return { status: "outside-hours" };
     }
@@ -138,6 +151,8 @@ type Config = {
   sabbathDays: string[];
   bufferMinutes: number;
   defaultSessionMinutes: number;
+  /** Practice timezone — working hours are wall-clock in THIS zone. */
+  timezone: string;
 };
 
 async function loadConfig(accountId: string): Promise<Config> {
@@ -147,6 +162,7 @@ async function loadConfig(accountId: string): Promise<Config> {
       sabbathDays: practitionerSettings.sabbathDays,
       bufferMinutes: practitionerSettings.bufferMinutes,
       defaultSessionMinutes: practitionerSettings.defaultSessionMinutes,
+      timezone: practitionerSettings.timezone,
     })
     .from(practitionerSettings)
     .where(eq(practitionerSettings.accountId, accountId))
@@ -157,6 +173,7 @@ async function loadConfig(accountId: string): Promise<Config> {
     sabbathDays: (r?.sabbathDays as string[] | null) ?? [],
     bufferMinutes: r?.bufferMinutes ?? 15,
     defaultSessionMinutes: r?.defaultSessionMinutes ?? 60,
+    timezone: resolveTimeZone(r?.timezone),
   };
 }
 
@@ -170,13 +187,15 @@ function parseHours(h: { from: string; to: string }): {
 }
 
 function sliceDay(
-  day: Date,
+  /** Midnight instant of the target day IN THE PRACTICE TZ. */
+  dayStart: Date,
   earliestStart: Date,
   durationMinutes: number,
   cfg: Config,
   busy: BusyInterval[]
 ): AvailableWindow[] {
-  const weekday = WEEKDAY_KEYS[day.getDay()];
+  const tz = cfg.timezone;
+  const weekday = WEEKDAY_KEYS[zonedWeekday(dayStart, tz)];
   if (cfg.sabbathDays.includes(weekday)) return [];
 
   // No working hours configured for this day → not available.
@@ -184,13 +203,26 @@ function sliceDay(
   if (!hours) return [];
   const { fromMin, toMin } = parseHours(hours);
 
-  // Build the working window in local time on this day.
-  const startOfDay = new Date(day);
-  startOfDay.setHours(0, 0, 0, 0);
-  const windowStart = new Date(
-    startOfDay.getTime() + fromMin * 60 * 1000
+  // The working window as true instants: "09:00" means 9 AM wall-clock in
+  // the practice zone on THIS calendar day (DST-safe — not minutes counted
+  // from midnight, which drift an hour on transition days).
+  const ymd = zonedYearMonthDay(dayStart, tz);
+  const windowStart = zonedWallTimeToUtc(
+    ymd.year,
+    ymd.month0,
+    ymd.day,
+    Math.floor(fromMin / 60),
+    fromMin % 60,
+    tz
   );
-  const windowEnd = new Date(startOfDay.getTime() + toMin * 60 * 1000);
+  const windowEnd = zonedWallTimeToUtc(
+    ymd.year,
+    ymd.month0,
+    ymd.day,
+    Math.floor(toMin / 60),
+    toMin % 60,
+    tz
+  );
 
   // If we're looking from a time later than the window start, jump
   // forward.

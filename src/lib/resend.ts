@@ -837,9 +837,11 @@ export async function sendCircleRefundRequestedEmail(input: {
   const subject = input.paid
     ? `Refund requested — ${who}`
     : `Sign-up cancelled — ${who}`;
+  // `who` is attendee-typed (public form) — escape it; this string goes
+  // into the HTML body below.
   const lead = input.paid
-    ? `${who} can't make it and asked to cancel &amp; be refunded.`
-    : `${who} can't make it and cancelled their (unpaid) spot.`;
+    ? `${escapeHtml(who)} can't make it and asked to cancel &amp; be refunded.`
+    : `${escapeHtml(who)} can't make it and cancelled their (unpaid) spot.`;
   const leadText = input.paid
     ? `${who} can't make it and asked to cancel + be refunded.`
     : `${who} can't make it and cancelled their (unpaid) spot.`;

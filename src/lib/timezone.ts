@@ -188,6 +188,57 @@ export function zonedDateKey(date: Date, tz: string): string {
   )}`;
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// Day/week bounds in the practice timezone. The server runs UTC, so
+// `setHours(0,0,0,0)` is UTC midnight — 6-7h off Edmonton. Every fetch
+// window ("today", "this week", the calendar range, availability slots)
+// must be built from THESE, or evening sessions fall into the wrong day.
+// ─────────────────────────────────────────────────────────────────────────
+
+/** UTC instant of midnight in `tz` on the calendar day containing `date`. */
+export function zonedStartOfDay(date: Date, tz: string): Date {
+  const { year, month0, day } = zonedYearMonthDay(date, tz);
+  return zonedWallTimeToUtc(year, month0, day, 0, 0, tz);
+}
+
+/** Midnight instant in `tz` of the calendar day `days` after the one
+ *  containing `date`. DST-safe: steps calendar days, not 24h blocks. */
+export function zonedAddDays(date: Date, days: number, tz: string): Date {
+  const { year, month0, day } = zonedYearMonthDay(date, tz);
+  const stepped = new Date(Date.UTC(year, month0, day + days, 12));
+  return zonedWallTimeToUtc(
+    stepped.getUTCFullYear(),
+    stepped.getUTCMonth(),
+    stepped.getUTCDate(),
+    0,
+    0,
+    tz
+  );
+}
+
+/** Weekday (0=Sun … 6=Sat) of an instant, as seen in `tz`. */
+export function zonedWeekday(date: Date, tz: string): number {
+  const { year, month0, day } = zonedYearMonthDay(date, tz);
+  return new Date(Date.UTC(year, month0, day)).getUTCDay();
+}
+
+/** [Sunday 00:00, next Sunday 00:00) in `tz` for the week containing `date`. */
+export function zonedWeekRange(
+  date: Date,
+  tz: string
+): { start: Date; end: Date } {
+  const start = zonedAddDays(date, -zonedWeekday(date, tz), tz);
+  return { start, end: zonedAddDays(start, 7, tz) };
+}
+
+/** [00:00 today, 00:00 tomorrow) in `tz`. */
+export function zonedDayBounds(
+  date: Date,
+  tz: string
+): { start: Date; end: Date } {
+  return { start: zonedStartOfDay(date, tz), end: zonedAddDays(date, 1, tz) };
+}
+
 /** Calendar year / month (0-based) / day of an instant, as seen in `tz`. */
 export function zonedYearMonthDay(
   date: Date,

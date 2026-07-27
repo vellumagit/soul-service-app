@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Modal } from "./Modal";
 import { Field, inputCls } from "./Form";
 import { rescheduleSession } from "@/lib/actions";
@@ -25,6 +25,12 @@ export function RescheduleDialog({
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Unique per instance. Every session card renders its own (closed) copy of
+  // this dialog into the DOM, so a static form id would make the footer's
+  // `form=` attribute submit the FIRST card's form — rescheduling the wrong
+  // session. Same fix ScheduleSessionDialog already carries.
+  const formId = useId();
 
   // Prefill the picker with the session's current wall-clock time IN THE
   // PRACTICE ZONE — the same zone the picker reads back. Using the viewer's
@@ -64,7 +70,7 @@ export function RescheduleDialog({
             </button>
             <button
               type="submit"
-              form="reschedule-form"
+              form={formId}
               disabled={submitting}
               className="px-4 py-2 text-sm bg-ink-900 hover:bg-ink-800 text-white rounded-md font-medium disabled:opacity-60"
             >
@@ -74,7 +80,7 @@ export function RescheduleDialog({
         }
       >
         <form
-          id="reschedule-form"
+          id={formId}
           action={async (fd) => {
             setSubmitting(true);
             setError(null);

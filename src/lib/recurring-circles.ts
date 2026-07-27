@@ -150,6 +150,11 @@ export async function pruneEmptyCancelledCircleSessions(): Promise<number> {
       and(
         eq(groupSessions.status, "cancelled"),
         lt(groupSessions.updatedAt, cutoff),
+        // PAST occurrences only. A FUTURE cancelled session is a deliberate
+        // "skip this week" marker that ensureForGroup counts as taken —
+        // deleting it would let the recurrence top-up resurrect the very
+        // Circle she cancelled (Google event and all) on the next tick.
+        lt(groupSessions.scheduledAt, new Date()),
         sql`NOT EXISTS (
           SELECT 1 FROM ${groupAttendees}
           WHERE ${groupAttendees.groupSessionId} = ${groupSessions.id}

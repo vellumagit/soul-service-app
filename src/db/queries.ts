@@ -47,6 +47,24 @@ import {
   inArray,
   ne,
 } from "drizzle-orm";
+import {
+  resolveTimeZone,
+  zonedDayBounds,
+  zonedWeekRange,
+} from "@/lib/timezone";
+
+/** Practice timezone for an account — the anchor for every "today"/"this
+ *  week" window below. The server runs UTC; computing day bounds with
+ *  setHours(0,0,0,0) put every boundary 6-7h early for Edmonton, so evening
+ *  sessions landed in the wrong day's bucket. */
+async function practiceTimeZone(accountId: string): Promise<string> {
+  const [row] = await db
+    .select({ timezone: practitionerSettings.timezone })
+    .from(practitionerSettings)
+    .where(eq(practitionerSettings.accountId, accountId))
+    .limit(1);
+  return resolveTimeZone(row?.timezone);
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Setup status — drives the welcome checklist on Today.
@@ -727,11 +745,8 @@ export async function getClientDigest(
 
 export async function getCapacity(accountId: string) {
   const now = new Date();
-  const startOfWeek = new Date(now);
-  startOfWeek.setHours(0, 0, 0, 0);
-  startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
-  const endOfWeek = new Date(startOfWeek);
-  endOfWeek.setDate(endOfWeek.getDate() + 7);
+  const tz = await practiceTimeZone(accountId);
+  const { start: startOfWeek, end: endOfWeek } = zonedWeekRange(now, tz);
 
   const [
     activeCount,
@@ -2217,15 +2232,9 @@ export async function getYearInReview(
 
 export async function getDashboardData(accountId: string) {
   const now = new Date();
-  const startOfToday = new Date(now);
-  startOfToday.setHours(0, 0, 0, 0);
-  const endOfToday = new Date(now);
-  endOfToday.setHours(23, 59, 59, 999);
-
-  const startOfWeek = new Date(startOfToday);
-  startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
-  const endOfWeek = new Date(startOfWeek);
-  endOfWeek.setDate(endOfWeek.getDate() + 7);
+  const tz = await practiceTimeZone(accountId);
+  const { start: startOfToday, end: endOfToday } = zonedDayBounds(now, tz);
+  const { start: startOfWeek, end: endOfWeek } = zonedWeekRange(now, tz);
 
   const fourteenDaysAgo = new Date(now);
   fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
@@ -2256,7 +2265,7 @@ export async function getDashboardData(accountId: string) {
         and(
           eq(sessions.accountId, accountId),
           gte(sessions.scheduledAt, startOfToday),
-          lte(sessions.scheduledAt, endOfToday)
+          lt(sessions.scheduledAt, endOfToday)
         )
       )
       .orderBy(asc(sessions.scheduledAt)),
@@ -2267,7 +2276,7 @@ export async function getDashboardData(accountId: string) {
         and(
           eq(sessions.accountId, accountId),
           gte(sessions.scheduledAt, startOfWeek),
-          lte(sessions.scheduledAt, endOfWeek)
+          lt(sessions.scheduledAt, endOfWeek)
         )
       ),
     db
