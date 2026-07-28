@@ -1922,6 +1922,38 @@ export async function getPendingCircleApprovalsCount(
   return rows[0]?.n ?? 0;
 }
 
+/** Pending asks that came in through the client portal — someone requested a
+ *  reschedule or asked for a new session and is now waiting on her. Powers the
+ *  banner on Today, so a request can't sit unseen until she happens to open
+ *  Loose ends. */
+export async function getPendingPortalRequestsCount(
+  accountId: string
+): Promise<{ reschedules: number; bookings: number; total: number }> {
+  const [resched, booking] = await Promise.all([
+    db
+      .select({ n: sql<number>`COUNT(*)::int` })
+      .from(rescheduleRequests)
+      .where(
+        and(
+          eq(rescheduleRequests.accountId, accountId),
+          eq(rescheduleRequests.status, "pending")
+        )
+      ),
+    db
+      .select({ n: sql<number>`COUNT(*)::int` })
+      .from(clientBookingRequests)
+      .where(
+        and(
+          eq(clientBookingRequests.accountId, accountId),
+          eq(clientBookingRequests.status, "pending")
+        )
+      ),
+  ]);
+  const reschedules = resched[0]?.n ?? 0;
+  const bookings = booking[0]?.n ?? 0;
+  return { reschedules, bookings, total: reschedules + bookings };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Circles happening today — powers the "Walk into the Circle" card on Today
 // ─────────────────────────────────────────────────────────────────────────────

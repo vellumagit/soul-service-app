@@ -18,7 +18,9 @@ import { db } from "@/db";
 import { clientReflections, sessions } from "@/db/schema";
 import { requirePortalSession } from "@/lib/portal-auth";
 import { fullDate } from "@/lib/format";
+import { getPortalTimeZone } from "@/lib/portal-timezone";
 import { ReflectionEntry } from "@/components/ReflectionEntry";
+import { PortalSubmitButton } from "@/components/PortalSubmitButton";
 
 export const dynamic = "force-dynamic";
 
@@ -59,6 +61,10 @@ export default async function PortalReflectionsPage() {
   const session = await requirePortalSession();
   const firstName =
     session.clientFullName.split(" ")[0] ?? session.clientFullName;
+  const { timeZone } = await getPortalTimeZone(
+    session.accountId,
+    session.clientId
+  );
 
   // Past non-cancelled sessions for the optional "attach to" dropdown.
   // We allow attaching to ANY past session, completed or not (e.g., she
@@ -145,17 +151,17 @@ export default async function PortalReflectionsPage() {
                 <option value="">— no session, just standalone —</option>
                 {attachableSessions.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {fullDate(new Date(s.scheduledAt))} · {s.type}
+                    {fullDate(new Date(s.scheduledAt), timeZone)} · {s.type}
                   </option>
                 ))}
               </select>
             </label>
-            <button
-              type="submit"
+            <PortalSubmitButton
+              pendingLabel="Saving…"
               className="px-4 py-2 text-sm bg-plum-700 hover:bg-plum-600 text-white rounded-md font-medium transition-colors shrink-0 self-end"
             >
               Save reflection
-            </button>
+            </PortalSubmitButton>
           </div>
         </form>
       </section>
@@ -172,9 +178,10 @@ export default async function PortalReflectionsPage() {
               id={r.id}
               body={r.body}
               createdAt={new Date(r.createdAt)}
+              timeZone={timeZone}
               sessionLabel={
                 r.sessionId && r.sessionScheduledAt
-                  ? `${fullDate(new Date(r.sessionScheduledAt))} · ${r.sessionType ?? "session"}`
+                  ? `${fullDate(new Date(r.sessionScheduledAt), timeZone)} · ${r.sessionType ?? "session"}`
                   : null
               }
             />

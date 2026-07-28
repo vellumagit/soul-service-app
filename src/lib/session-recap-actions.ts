@@ -210,26 +210,7 @@ export async function removeRecapVideo(
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────
-// Signed playback URL for the session — called from server components
-// ─────────────────────────────────────────────────────────────────────
-
-/**
- * Returns a signed iframe URL for the recap on the given session. Caller
- * is responsible for auth — this fn doesn't gate by client vs practitioner.
- * Use from the practitioner's session card (after requireSession) and from
- * /portal/sessions/[id] (after requirePortalSession). Returns null if no
- * recap or Cloudflare isn't configured.
- */
-export async function getRecapPlaybackUrl(
-  recapVideoId: string | null
-): Promise<string | null> {
-  if (!recapVideoId) return null;
-  if (!Stream.isConfigured()) return null;
-  try {
-    return await Stream.getSignedPlaybackIframeUrl(recapVideoId);
-  } catch (err) {
-    console.warn("[recap] signed url mint failed", err);
-    return null;
-  }
-}
+// Signed playback URLs are minted in ./recap-playback (a plain server-only
+// module). They must NOT be exported from this file: "use server" turns every
+// export into an unauthenticated POST endpoint, and a mint that takes a raw
+// Cloudflare UID would then sign a playback URL for anyone who could guess one.

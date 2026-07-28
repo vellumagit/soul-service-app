@@ -25,6 +25,7 @@ import { getSettings } from "@/db/queries";
 import { requireSession } from "./session-cookies";
 import { isValidTimeZone, resolveTimeZone } from "./timezone";
 import { parseLandingOverridesFromForm } from "./landing-overrides";
+import { safeCurrency } from "./format";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Form helpers
@@ -358,7 +359,7 @@ export async function sendPortalInvite(
       .limit(1);
 
     const { sendPortalMagicLinkEmail } = await import("./resend");
-    await sendPortalMagicLinkEmail({
+    const { suppressed } = await sendPortalMagicLinkEmail({
       to: client.email,
       url,
       clientFirstName: client.fullName.split(" ")[0] ?? null,
@@ -366,6 +367,16 @@ export async function sendPortalInvite(
     });
 
     revalidatePath(`/clients/${clientId}`);
+    // EMAIL_RECIPIENT_ALLOWLIST is a staging guard that silently drops mail to
+    // anyone not on the list. Reporting ok:true there told her "Invite sent to
+    // <client>" when nothing left the building — and she'd wait for a sign-in
+    // that could never come. Say what actually happened.
+    if (suppressed) {
+      return {
+        ok: false,
+        error: `Nothing was sent — ${client.email} isn't on EMAIL_RECIPIENT_ALLOWLIST, so outgoing mail to them is being blocked. Ask Brian to clear that setting.`,
+      };
+    }
     return { ok: true, sentTo: client.email };
   } catch (err) {
     return {
@@ -2034,9 +2045,41 @@ export async function rescheduleSession(formData: FormData) {
   // Schedule a fresh bot for the new time (Meet URL stays the same).
   await maybeAutoAddRecallBot(accountId, id);
 
+  // Moving the session ANSWERS any open "can we move this?" ask. Without
+  // this the request stayed pending forever: her Loose Ends chip never
+  // cleared, and the client's portal kept showing "you already sent a
+  // request" with no form — locked out of ever asking again.
+  await resolvePendingRescheduleRequests(accountId, id);
+
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/calendar");
   revalidatePath("/today");
+  revalidatePath("/loose-ends");
+  revalidatePath(`/portal/sessions/${id}`);
+}
+
+/** Close out any open reschedule request on a session — used when she
+ *  reschedules or cancels it, since either action settles the question. */
+async function resolvePendingRescheduleRequests(
+  accountId: string,
+  sessionId: string
+): Promise<void> {
+  try {
+    const { rescheduleRequests } = await import("@/db/schema");
+    await db
+      .update(rescheduleRequests)
+      .set({ status: "resolved", reviewedAt: new Date() })
+      .where(
+        and(
+          eq(rescheduleRequests.accountId, accountId),
+          eq(rescheduleRequests.sessionId, sessionId),
+          eq(rescheduleRequests.status, "pending")
+        )
+      );
+  } catch (err) {
+    // Never let bookkeeping break the reschedule itself.
+    console.error("[reschedule] couldn't resolve pending requests:", err);
+  }
 }
 
 export async function cancelSession(sessionId: string, clientId: string) {
@@ -2083,9 +2126,14 @@ export async function cancelSession(sessionId: string, clientId: string) {
       );
   }
 
+  // Cancelling also settles any open "can we move this?" ask.
+  await resolvePendingRescheduleRequests(accountId, sessionId);
+
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/calendar");
   revalidatePath("/today");
+  revalidatePath("/loose-ends");
+  revalidatePath(`/portal/sessions/${sessionId}`);
 }
 
 export async function deleteSession(sessionId: string, clientId: string) {
@@ -2486,7 +2534,10 @@ export async function updateSettings(formData: FormData) {
       uiLanguage,
       defaultRateCents:
         defaultRate !== null ? Math.round(defaultRate * 100) : 13500,
-      defaultCurrency: str(formData, "defaultCurrency") ?? "USD",
+      // Whitelisted on write: this is a free-text input, and anything that
+      // isn't a valid ISO code makes Intl.NumberFormat throw on every page
+      // that prints a price — including her client's billing page.
+      defaultCurrency: safeCurrency(str(formData, "defaultCurrency")),
       paymentInstructions: str(formData, "paymentInstructions"),
       invoiceFooter: str(formData, "invoiceFooter"),
       invoicePrefix: str(formData, "invoicePrefix") ?? "INV",

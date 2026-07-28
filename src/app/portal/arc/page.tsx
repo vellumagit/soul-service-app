@@ -15,13 +15,18 @@ import { and, desc, eq, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { sessions } from "@/db/schema";
 import { requirePortalSession } from "@/lib/portal-auth";
-import { fullDate, shortTime } from "@/lib/format";
+import { fullDate, shortTime, zoneAbbrev } from "@/lib/format";
+import { getPortalTimeZone } from "@/lib/portal-timezone";
 
 export const dynamic = "force-dynamic";
 
 export default async function PortalArcPage() {
   const session = await requirePortalSession();
   const now = new Date();
+  const { timeZone } = await getPortalTimeZone(
+    session.accountId,
+    session.clientId
+  );
 
   const sessionRows = await db
     .select({
@@ -85,10 +90,11 @@ export default async function PortalArcPage() {
                       className="text-base text-ink-900 serif"
                       style={{ fontWeight: 500, letterSpacing: "-0.01em" }}
                     >
-                      {fullDate(at)}
+                      {fullDate(at, timeZone)}
                     </p>
                     <p className="text-[12px] text-ink-500">
-                      {shortTime(at)} · {s.durationMinutes} min · {s.type}
+                      {shortTime(at, timeZone)} {zoneAbbrev(at, timeZone)} ·{" "}
+                      {s.durationMinutes} min · {s.type}
                     </p>
                   </div>
                   <span

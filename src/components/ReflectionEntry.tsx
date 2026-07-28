@@ -23,16 +23,24 @@ export function ReflectionEntry({
   body,
   createdAt,
   sessionLabel,
+  timeZone,
 }: {
   id: string;
   body: string;
   createdAt: Date;
   sessionLabel: string | null;
+  /** The portal's zone. Passed explicitly so the SSR pass (UTC on Vercel) and
+   *  the hydrated render agree — otherwise the date flickers and React logs a
+   *  hydration mismatch. */
+  timeZone: string;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(body);
   const [pending, startTransition] = useTransition();
   const [removed, setRemoved] = useState(false);
+  // A failed save or delete used to do nothing at all — the button stopped
+  // spinning and the entry sat there looking saved. Show what went wrong.
+  const [error, setError] = useState<string | null>(null);
 
   if (removed) return null;
 
@@ -54,8 +62,10 @@ export function ReflectionEntry({
             disabled={pending || !draft.trim()}
             onClick={() =>
               startTransition(async () => {
+                setError(null);
                 const r = await updateClientReflection(id, draft);
                 if (r.ok) setEditing(false);
+                else setError(r.error);
               })
             }
             className="px-3 py-1.5 text-xs bg-plum-700 hover:bg-plum-600 text-white rounded-md font-medium disabled:opacity-60"
@@ -74,6 +84,9 @@ export function ReflectionEntry({
             Cancel
           </button>
         </div>
+        {error && (
+          <p className="text-[11px] text-red-700 mt-2 leading-snug">{error}</p>
+        )}
       </li>
     );
   }
@@ -85,7 +98,7 @@ export function ReflectionEntry({
       </p>
       <div className="flex items-baseline justify-between gap-3 flex-wrap mt-3">
         <p className="text-[11px] text-ink-500 italic">
-          {fullDate(createdAt)}
+          {fullDate(createdAt, timeZone)}
           {sessionLabel && (
             <span className="text-ink-400"> · about {sessionLabel}</span>
           )}
@@ -110,8 +123,10 @@ export function ReflectionEntry({
               )
                 return;
               startTransition(async () => {
+                setError(null);
                 const r = await deleteClientReflection(id);
                 if (r.ok) setRemoved(true);
+                else setError(r.error);
               });
             }}
             className="text-ink-500 hover:text-red-700 hover:underline disabled:opacity-60"
@@ -119,6 +134,11 @@ export function ReflectionEntry({
             Delete
           </button>
         </div>
+        {error && (
+          <p className="text-[11px] text-red-700 w-full leading-snug">
+            {error}
+          </p>
+        )}
       </div>
     </li>
   );

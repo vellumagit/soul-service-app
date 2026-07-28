@@ -12,6 +12,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { clientReflections } from "@/db/schema";
 import { requirePortalSession } from "./portal-auth";
+import { rethrowIfRedirect } from "./redirect-error";
 
 export type ReflectionResult = { ok: true } | { ok: false; error: string };
 
@@ -46,6 +47,11 @@ export async function updateClientReflection(
     revalidatePath(`/clients/${portal.clientId}`);
     return { ok: true };
   } catch (err) {
+    // requirePortalSession() bounces an expired session with redirect(), which
+    // throws NEXT_REDIRECT. Swallowing it turned "your session expired" into a
+    // baffling inline error reading "NEXT_REDIRECT;/portal/sign-in".
+    rethrowIfRedirect(err);
+    console.error("[portal] updateClientReflection failed:", err);
     return {
       ok: false,
       error:
@@ -76,6 +82,8 @@ export async function deleteClientReflection(
     revalidatePath(`/clients/${portal.clientId}`);
     return { ok: true };
   } catch (err) {
+    rethrowIfRedirect(err);
+    console.error("[portal] deleteClientReflection failed:", err);
     return {
       ok: false,
       error:

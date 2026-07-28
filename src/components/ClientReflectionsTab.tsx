@@ -10,6 +10,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { clientReflections, sessions } from "@/db/schema";
 import { fullDate } from "@/lib/format";
+import { resolveTimeZone, zonedYearMonthDay } from "@/lib/timezone";
 
 export async function ClientReflectionsTab({
   accountId,
@@ -43,6 +44,7 @@ export async function ClientReflectionsTab({
     .orderBy(desc(clientReflections.createdAt));
 
   const firstName = clientFullName.split(" ")[0] ?? clientFullName;
+  const tz = resolveTimeZone(timeZone);
 
   if (rows.length === 0) {
     return (
@@ -61,11 +63,14 @@ export async function ClientReflectionsTab({
     );
   }
 
-  // Group reflections by year-month label for a quiet visual rhythm.
+  // Group reflections by year-month label for a quiet visual rhythm. The month
+  // has to be read in HER zone: `getMonth()` is the server's, which is UTC on
+  // Vercel, so a reflection written at 7pm on Jul 31 in Edmonton landed under
+  // "August" — and could split one evening's writing across two headings.
   const groups = new Map<string, typeof rows>();
   for (const r of rows) {
-    const d = new Date(r.createdAt);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const { year, month0 } = zonedYearMonthDay(new Date(r.createdAt), tz);
+    const key = `${year}-${String(month0 + 1).padStart(2, "0")}`;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(r);
   }
@@ -84,13 +89,14 @@ export async function ClientReflectionsTab({
       <div className="space-y-8">
         {Array.from(groups.entries()).map(([key, items]) => {
           const [year, month] = key.split("-");
+          // Anchored in UTC and read back in UTC so the heading can't drift a
+          // month, and pinned to en-US so server + client agree.
           const label = new Date(
-            Number(year),
-            Number(month) - 1,
-            1
-          ).toLocaleDateString(undefined, {
+            Date.UTC(Number(year), Number(month) - 1, 1)
+          ).toLocaleDateString("en-US", {
             month: "long",
             year: "numeric",
+            timeZone: "UTC",
           });
           return (
             <section key={key}>

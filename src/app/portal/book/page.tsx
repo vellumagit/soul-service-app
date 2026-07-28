@@ -17,8 +17,10 @@ import { revalidatePath } from "next/cache";
 import { and, desc, eq } from "drizzle-orm";
 import Link from "next/link";
 import { db } from "@/db";
-import { clientBookingRequests } from "@/db/schema";
+import { clientBookingRequests, practitionerSettings } from "@/db/schema";
 import { requirePortalSession } from "@/lib/portal-auth";
+import { notifyPractitionerOfPortalRequest } from "@/lib/portal-notify";
+import { PortalSubmitButton } from "@/components/PortalSubmitButton";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +50,18 @@ async function submitBookingRequest(formData: FormData): Promise<void> {
     status: "pending",
   });
 
+  // "Your practitioner has been notified" — make that literally true instead
+  // of relying on her opening Loose ends. Best-effort; the row is committed.
+  await notifyPractitionerOfPortalRequest({
+    accountId: portal.accountId,
+    clientId: portal.clientId,
+    kind: "booking",
+    clientName: portal.clientFullName,
+    clientEmail: portal.clientEmail,
+    preferredTimes: preferredTimes.length > 0 ? preferredTimes : null,
+    message: reason.length > 0 ? reason : null,
+  });
+
   revalidatePath("/portal/book");
   revalidatePath("/loose-ends");
   revalidatePath(`/clients/${portal.clientId}`);
@@ -61,8 +75,18 @@ export default async function PortalBookPage({
 }) {
   const portal = await requirePortalSession();
   const { submitted } = await searchParams;
-  const firstName =
-    portal.clientFullName.split(" ")[0] ?? portal.clientFullName;
+  // Her first name — this page only ever refers to the practitioner by name.
+  // It used to use the CLIENT's own name here, so the note under a pending
+  // request read "both will be visible to <themselves>".
+  const [settingsRow] = await db
+    .select({ practitionerName: practitionerSettings.practitionerName })
+    .from(practitionerSettings)
+    .where(eq(practitionerSettings.accountId, portal.accountId))
+    .limit(1);
+  const practitionerFirstName = settingsRow?.practitionerName
+    ? (settingsRow.practitionerName.split(" ")[0] ??
+      settingsRow.practitionerName)
+    : "your practitioner";
 
   // Show their pending requests so they don't accidentally double-send.
   const pending = await db
@@ -153,7 +177,7 @@ export default async function PortalBookPage({
               </ul>
               <p className="text-[11px] text-ink-500 italic mt-3 leading-snug">
                 If you want to add to the conversation, you can send another
-                — both will be visible to {firstName}.
+                — both will be visible to {practitionerFirstName}.
               </p>
             </section>
           )}
@@ -175,6 +199,7 @@ export default async function PortalBookPage({
                 <textarea
                   name="preferredTimes"
                   rows={3}
+                  required
                   maxLength={500}
                   placeholder="Weekday evenings or Saturday afternoons…"
                   className="w-full px-3 py-2 text-sm leading-relaxed border border-ink-200 rounded-md bg-white outline-none focus:border-plum-500 focus:ring-1 focus:ring-plum-100 resize-y"
@@ -197,12 +222,9 @@ export default async function PortalBookPage({
                 />
               </label>
 
-              <button
-                type="submit"
-                className="px-4 py-2 text-sm bg-plum-700 hover:bg-plum-600 text-white rounded-md font-medium transition-colors"
-              >
+              <PortalSubmitButton pendingLabel="Sending…">
                 Send the request
-              </button>
+              </PortalSubmitButton>
             </form>
           </section>
         </>

@@ -9,10 +9,14 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { sessions, rescheduleRequests } from "@/db/schema";
 import { requirePortalSession } from "@/lib/portal-auth";
-import { fullDate, shortTime } from "@/lib/format";
+import { fullDate, shortTime, zoneAbbrev } from "@/lib/format";
+import { getPortalTimeZone } from "@/lib/portal-timezone";
+import { notifyPractitionerOfPortalRequest } from "@/lib/portal-notify";
+import { formatSessionLong } from "@/lib/timezone";
 import { revalidatePath } from "next/cache";
-import { getRecapPlaybackUrl } from "@/lib/session-recap-actions";
+import { mintRecapPlaybackUrl } from "@/lib/recap-playback";
 import { RecapPlayer } from "@/components/RecapPlayer";
+import { PortalSubmitButton } from "@/components/PortalSubmitButton";
 
 export const dynamic = "force-dynamic";
 
@@ -61,7 +65,10 @@ async function submitRescheduleRequest(formData: FormData): Promise<void> {
 
   // Verify the session belongs to this client + account before inserting.
   const owned = await db
-    .select({ id: sessions.id })
+    .select({
+      id: sessions.id,
+      scheduledAt: sessions.scheduledAt,
+    })
     .from(sessions)
     .where(
       and(
@@ -79,6 +86,25 @@ async function submitRescheduleRequest(formData: FormData): Promise<void> {
     sessionId: sessionIdRaw,
     reason: reason && reason.length > 0 ? reason : null,
     status: "pending",
+  });
+
+  // Tell her. The form promises "your practitioner has been notified" — this
+  // is what makes that true. Best-effort; the row above is the durable record.
+  const { timeZone } = await getPortalTimeZone(
+    portalSession.accountId,
+    portalSession.clientId
+  );
+  await notifyPractitionerOfPortalRequest({
+    accountId: portalSession.accountId,
+    clientId: portalSession.clientId,
+    kind: "reschedule",
+    clientName: portalSession.clientFullName,
+    clientEmail: portalSession.clientEmail,
+    sessionWhenLabel: formatSessionLong(
+      new Date(owned[0].scheduledAt),
+      timeZone
+    ),
+    message: reason && reason.length > 0 ? reason : null,
   });
 
   // Practitioner-side surfaces — make sure the chip + Loose ends update.
@@ -126,6 +152,11 @@ export default async function PortalSessionDetailPage({
   if (!session) {
     redirect("/portal");
   }
+  // A cancelled (or no-show) session used to render as "Scheduled", with a
+  // dead Meet link and a working reschedule form — this page was the only
+  // portal query without a status filter. Say the true thing instead.
+  const isCancelled =
+    session.status === "cancelled" || session.status === "no_show";
 
   // Any pending reschedule request for this session already?
   const pending = await db
@@ -149,10 +180,14 @@ export default async function PortalSessionDetailPage({
   // if a determined client copies the iframe HTML and shares it, the link
   // dies overnight. New URL is minted on every page load.
   const recapUrl = session.recapVideoId
-    ? await getRecapPlaybackUrl(session.recapVideoId)
+    ? await mintRecapPlaybackUrl(session.recapVideoId)
     : null;
 
   const scheduled = new Date(session.scheduledAt);
+  const { timeZone, hasOwnZone } = await getPortalTimeZone(
+    portalSession.accountId,
+    portalSession.clientId
+  );
 
   return (
     <div className="max-w-xl mx-auto px-4 md:px-6 py-8 md:py-12">
@@ -165,16 +200,25 @@ export default async function PortalSessionDetailPage({
 
       <section className="paper-card p-6 md:p-8 mb-6">
         <p className="text-[10px] uppercase tracking-widest text-honey-700 font-mono mb-2">
-          {session.status === "completed" ? "Session held" : "Scheduled"}
+          {isCancelled
+            ? "This session didn't happen"
+            : session.status === "completed"
+              ? "Session held"
+              : "Scheduled"}
         </p>
         <h1
           className="text-2xl text-ink-900 serif mb-1"
           style={{ fontWeight: 500, letterSpacing: "-0.01em" }}
         >
-          {fullDate(scheduled)}
+          {fullDate(scheduled, timeZone)}
         </h1>
         <p className="text-sm text-ink-600">
-          {shortTime(scheduled)} · {session.durationMinutes} min · {session.type}
+          {shortTime(scheduled, timeZone)}{" "}
+          <span className="text-ink-400">
+            {zoneAbbrev(scheduled, timeZone)}
+            {!hasOwnZone && " (her time)"}
+          </span>{" "}
+          · {session.durationMinutes} min · {session.type}
         </p>
         {session.intention && (
           <p
@@ -184,7 +228,7 @@ export default async function PortalSessionDetailPage({
             &ldquo;{session.intention}&rdquo;
           </p>
         )}
-        {session.meetUrl && session.status !== "completed" && (
+        {session.meetUrl && session.status !== "completed" && !isCancelled && (
           <a
             href={session.meetUrl}
             target="_blank"
@@ -193,6 +237,14 @@ export default async function PortalSessionDetailPage({
           >
             Open Meet link
           </a>
+        )}
+        {isCancelled && (
+          <p className="text-sm text-ink-600 leading-relaxed mt-4">
+            Nothing is booked for this time.{" "}
+            <Link href="/portal/book" className="text-plum-700 hover:underline">
+              Ask for another time →
+            </Link>
+          </p>
         )}
       </section>
 
@@ -219,7 +271,7 @@ export default async function PortalSessionDetailPage({
       {/* What you're bringing — client sets their own intention for the
           session. Only on upcoming sessions; past sessions are no longer
           a place to set intentions. */}
-      {session.status !== "completed" && (
+      {session.status !== "completed" && !isCancelled && (
         <section className="paper-card p-6 md:p-8 mb-6">
           <h2
             className="serif-italic text-xl text-plum-700 mb-1"
@@ -242,18 +294,13 @@ export default async function PortalSessionDetailPage({
               placeholder="A question, a feeling, a fragment, something you&apos;re sitting with…"
               className="w-full px-3 py-2 text-sm leading-relaxed border border-ink-200 rounded-md bg-white outline-none focus:border-plum-500 focus:ring-1 focus:ring-plum-100 resize-y"
             />
-            <button
-              type="submit"
-              className="px-4 py-2 text-sm bg-plum-700 hover:bg-plum-600 text-white rounded-md font-medium transition-colors"
-            >
-              Save
-            </button>
+            <PortalSubmitButton pendingLabel="Saving…">Save</PortalSubmitButton>
           </form>
         </section>
       )}
 
-      {/* Reschedule request form — only for upcoming sessions */}
-      {session.status !== "completed" && (
+      {/* Reschedule request form — only for live upcoming sessions */}
+      {session.status !== "completed" && !isCancelled && (
         <section className="paper-card p-6 md:p-8">
           <h2
             className="serif-italic text-xl text-plum-700 mb-1"
@@ -307,12 +354,9 @@ export default async function PortalSessionDetailPage({
                   className="mt-1.5 w-full px-3 py-2 text-sm border border-ink-200 rounded-md bg-white outline-none focus:border-plum-500 focus:ring-1 focus:ring-plum-100 resize-y leading-relaxed"
                 />
               </label>
-              <button
-                type="submit"
-                className="px-4 py-2 text-sm bg-plum-700 hover:bg-plum-600 text-white rounded-md font-medium transition-colors"
-              >
+              <PortalSubmitButton pendingLabel="Sending…">
                 Send the request
-              </button>
+              </PortalSubmitButton>
             </form>
           )}
         </section>

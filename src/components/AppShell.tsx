@@ -12,6 +12,7 @@ import { HelpBuddy } from "./HelpBuddy";
 import { FlashNotifier } from "./FlashNotifier";
 import { TimeOfDayProvider } from "./TimeOfDayProvider";
 import { useBrandLogo } from "./BrandProvider";
+import { LooseEndsBadge } from "./LooseEndsBadge";
 import { DEFAULT_LOCALE, type Locale, type TranslationKey } from "@/lib/i18n";
 
 type NavItem = {
@@ -339,6 +340,7 @@ function SidebarNav({
             />
           </svg>
           <span className="flex-1 text-left">{t(item.labelKey)}</span>
+          {item.href === "/loose-ends" && <LooseEndsBadge />}
         </Link>
       ))}
     </nav>

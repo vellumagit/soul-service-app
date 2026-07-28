@@ -99,20 +99,23 @@ function recipientAllowlist(): Set<string> | null {
   );
 }
 
-export async function sendEmail(input: SendEmailInput): Promise<{ id: string }> {
+export async function sendEmail(
+  input: SendEmailInput
+): Promise<{ id: string; suppressed?: boolean }> {
   const allowlist = recipientAllowlist();
   if (allowlist) {
     const to = input.to.trim().toLowerCase();
     if (!allowlist.has(to)) {
       // Loud log so Brian can see in Vercel what was suppressed + what
-      // it would have sent. Returns a fake id so upstream callers
-      // (magic-link flows, portal invites, reminder cron) keep
-      // their "ok" code path; we don't want a suppress to bubble up
-      // as an error.
+      // it would have sent. Doesn't throw — a suppress isn't a failure and
+      // shouldn't break the reminder cron or a fulfilment flow. But it DOES
+      // report `suppressed: true`, so a caller that shows a human "Sent to
+      // x@y" can tell the truth instead of claiming a delivery that never
+      // happened.
       console.log(
         `[email] SUPPRESSED → ${input.to} (not in EMAIL_RECIPIENT_ALLOWLIST). Allowed: ${Array.from(allowlist).join(", ")}. Subject: ${input.subject}`
       );
-      return { id: "suppressed" };
+      return { id: "suppressed", suppressed: true };
     }
   }
 
@@ -205,13 +208,16 @@ export async function sendPortalMagicLinkEmail(input: {
   url: string;
   clientFirstName: string | null;
   practitionerName: string | null;
-}): Promise<void> {
+  /** Reports whether the send was suppressed by EMAIL_RECIPIENT_ALLOWLIST, so
+   *  the "Invite sent" confirmation on her side can stay honest. */
+}): Promise<{ suppressed: boolean }> {
   const greeting = input.clientFirstName ? `Hi ${input.clientFirstName},` : "Hi,";
   const signoff = input.practitionerName ?? "Your practitioner";
   const subject = "Your space — sign in link";
   const text = `${greeting}\n\nHere's a link to sign in to your space:\n\n${input.url}\n\nIt'll expire in 30 minutes. If you didn't expect this email, you can ignore it.\n\n— ${signoff}`;
   const html = portalMagicLinkHtml(input.url, greeting, signoff);
-  await sendEmail({ to: input.to, subject, html, text });
+  const res = await sendEmail({ to: input.to, subject, html, text });
+  return { suppressed: res.suppressed === true };
 }
 
 function portalMagicLinkHtml(
@@ -1180,6 +1186,94 @@ ${input.message ? `"${input.message}"\n\n` : "(No message — just their details
     html,
     text,
     replyTo: input.fromEmail,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Portal request notification — a client asked for something from inside their
+// own space (a reschedule, or a new session). Until this existed, those
+// requests only appeared in Loose Ends, which meant she found out whenever she
+// next happened to open the app. The client, meanwhile, had been told "your
+// practitioner has been notified." Now that sentence is true.
+//
+// Best-effort: the caller swallows failures so a mail outage never loses the
+// request — the row is already committed before this is called.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function sendPortalRequestNotifyEmail(input: {
+  to: string;
+  /** "reschedule" → an existing session; "booking" → wants a new one. */
+  kind: "reschedule" | "booking";
+  clientName: string;
+  /** Set for replyTo so she can answer the client straight from her inbox. */
+  clientEmail: string | null;
+  /** For a reschedule: the session they want moved, already zone-formatted. */
+  sessionWhenLabel?: string | null;
+  /** For a booking: the times they said work for them. */
+  preferredTimes?: string | null;
+  /** Whatever they wrote in the free-text box. */
+  message: string | null;
+  /** Deep link into her workspace — the client profile or Loose Ends. */
+  link?: string | null;
+}): Promise<void> {
+  const isReschedule = input.kind === "reschedule";
+  const subject = isReschedule
+    ? `${input.clientName} asked to reschedule`
+    : `${input.clientName} asked for another session`;
+  const lead = isReschedule
+    ? `${input.clientName} sent a reschedule request from their portal.`
+    : `${input.clientName} would like to book another session.`;
+
+  const details: string[] = [];
+  if (isReschedule && input.sessionWhenLabel) {
+    details.push(`Session: ${input.sessionWhenLabel}`);
+  }
+  if (!isReschedule && input.preferredTimes) {
+    details.push(`Times that work: ${input.preferredTimes}`);
+  }
+
+  const text = `${lead}
+
+${details.length > 0 ? `${details.join("\n")}\n\n` : ""}${
+    input.message
+      ? `"${input.message}"\n\n`
+      : "(They didn't add a note.)\n\n"
+  }Nothing has changed on your calendar — this is a request, not an automatic move. Open Loose ends in your workspace to act on it${
+    input.clientEmail ? ", or just hit Reply to answer them" : ""
+  }.`;
+
+  const html = `
+<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#faf6f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1a1411;">
+    <div style="max-width:480px;margin:40px auto;padding:32px;background:#fdf9f1;border-radius:12px;border:1px solid #ead9c1;">
+      <p style="margin:0 0 16px 0;font-size:16px;font-weight:600;color:#1a1411;">${escapeHtml(lead)}</p>
+      ${details
+        .map(
+          (d) =>
+            `<p style="margin:0 0 4px 0;font-size:14px;color:#564a42;">${escapeHtml(d)}</p>`
+        )
+        .join("")}
+      ${
+        input.message
+          ? `<div style="margin:16px 0;padding:14px 16px;background:#f6e6ce;border-radius:8px;font-family:Georgia,serif;font-style:italic;font-size:15px;line-height:1.55;color:#3d342e;">&ldquo;${escapeHtml(input.message)}&rdquo;</div>`
+          : `<p style="margin:16px 0;font-size:13px;color:#786b60;font-style:italic;">They didn&rsquo;t add a note.</p>`
+      }
+      <p style="margin:20px 0 0 0;font-size:13px;color:#786b60;line-height:1.55;">Nothing has changed on your calendar — this is a request, not an automatic move.${
+        input.link
+          ? ` <a href="${escapeHtml(input.link)}" style="color:#7a4a6b;">Open it in your workspace</a>.`
+          : " Open Loose ends in your workspace to act on it."
+      }</p>
+    </div>
+  </body>
+</html>`.trim();
+
+  await sendEmail({
+    to: input.to,
+    subject,
+    html,
+    text,
+    replyTo: input.clientEmail ?? undefined,
   });
 }
 

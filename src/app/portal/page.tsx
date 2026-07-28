@@ -17,10 +17,11 @@
 import Link from "next/link";
 import { and, desc, eq, ne } from "drizzle-orm";
 import { db } from "@/db";
-import { sessions, practitionerSettings, clients } from "@/db/schema";
+import { sessions, practitionerSettings } from "@/db/schema";
 import { requirePortalSession, clearPortalSessionCookie } from "@/lib/portal-auth";
 import { PortalTimezoneCapture } from "@/components/PortalTimezoneCapture";
-import { fullDate, shortTime } from "@/lib/format";
+import { fullDate, shortTime, zoneAbbrev } from "@/lib/format";
+import { getPortalTimeZone } from "@/lib/portal-timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -74,23 +75,33 @@ export default async function PortalHomePage() {
   ]);
   const settings = settingsRows[0] ?? null;
 
-  // Whether we already know this client's timezone — drives the invisible
-  // auto-capture below (so reminder emails render in THEIR local time).
-  const [clientRow] = await db
-    .select({ timezone: clients.timezone })
-    .from(clients)
-    .where(eq(clients.id, session.clientId))
-    .limit(1);
-  const clientHasTz = !!clientRow?.timezone;
+  // The zone every date on this page renders in — theirs when we've captured
+  // it, hers otherwise. `hasOwnZone` also drives the invisible auto-capture
+  // below (so reminder emails localize to THEIR clock too).
+  const { timeZone, hasOwnZone } = await getPortalTimeZone(
+    session.accountId,
+    session.clientId
+  );
+
+  // A session stays "up next" through its whole length plus a 30-minute tail,
+  // so a client who opens the portal at 2:03 for a 2:00 session still finds
+  // the way in. Before this, the filter was `scheduledAt >= now`, which made
+  // the card — and the Join button — vanish the instant the session began,
+  // showing "nothing on the calendar" while she sat waiting in the room.
+  const stillJoinable = (s: { scheduledAt: Date; durationMinutes: number }) =>
+    now.getTime() <
+    new Date(s.scheduledAt).getTime() +
+      (s.durationMinutes + 30) * 60 * 1000;
 
   const upcoming = sessionRows
-    .filter((s) => new Date(s.scheduledAt) >= now && s.status !== "completed")
+    .filter((s) => s.status !== "completed" && stillJoinable(s))
     .sort(
       (a, b) =>
         new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime()
     );
+  // Complement of the above, so nothing can land in both lists or neither.
   const past = sessionRows
-    .filter((s) => new Date(s.scheduledAt) < now || s.status === "completed")
+    .filter((s) => s.status === "completed" || !stillJoinable(s))
     .slice(0, 6);
   const nextUp = upcoming[0] ?? null;
   // Most recent past session — used for the "Since your last session…"
@@ -106,13 +117,19 @@ export default async function PortalHomePage() {
   );
 
   const firstName = session.clientFullName.split(" ")[0] ?? session.clientFullName;
+  // Careful with the fallback: "Your practitioner".split(" ")[0] is "Your",
+  // which reads as a typo in every sentence that wants a first name ("send a
+  // note and Your will reach out"). Keep the two forms separate.
   const practitionerName = settings?.practitionerName ?? "Your practitioner";
+  const practitionerFirstName = settings?.practitionerName
+    ? (settings.practitionerName.split(" ")[0] ?? settings.practitionerName)
+    : "she";
 
   return (
     <div className="max-w-2xl mx-auto px-4 md:px-6 py-8 md:py-12">
       {/* Invisible: record the client's timezone so their emails localize
           to their own clock (no-op once we already know it). */}
-      <PortalTimezoneCapture hasTimezone={clientHasTz} />
+      <PortalTimezoneCapture hasTimezone={hasOwnZone} />
 
       {/* Header — quiet greeting */}
       <header className="mb-8 flex items-baseline justify-between gap-3 flex-wrap">
@@ -143,13 +160,19 @@ export default async function PortalHomePage() {
           <SinceLastSessionCard
             note={sinceLastNote}
             sessionAt={new Date(mostRecentPast!.scheduledAt)}
-            practitionerName={practitionerName}
+            practitionerFirstName={practitionerFirstName}
+            timeZone={timeZone}
           />
         )}
 
         {/* Next session */}
         {nextUp ? (
-          <NextSessionCard session={nextUp} now={now} />
+          <NextSessionCard
+            session={nextUp}
+            now={now}
+            timeZone={timeZone}
+            hasOwnZone={hasOwnZone}
+          />
         ) : (
           <div className="paper-card p-6 text-center">
             <p
@@ -159,7 +182,7 @@ export default async function PortalHomePage() {
               Nothing on the calendar yet.
             </p>
             <p className="text-sm text-ink-500 italic mb-4">
-              When you&apos;re ready, send a note and {practitionerName.split(" ")[0]} will reach out to find a time.
+              When you&apos;re ready, send a note and {practitionerFirstName} will reach out to find a time.
             </p>
             <Link
               href="/portal/book"
@@ -203,7 +226,7 @@ export default async function PortalHomePage() {
         <YourDetailsCard
           clientFullName={session.clientFullName}
           clientEmail={session.clientEmail}
-          practitionerName={practitionerName}
+          practitionerFirstName={practitionerFirstName}
         />
       </div>
     </div>
@@ -213,13 +236,14 @@ export default async function PortalHomePage() {
 function SinceLastSessionCard({
   note,
   sessionAt,
-  practitionerName,
+  practitionerFirstName,
+  timeZone,
 }: {
   note: string;
   sessionAt: Date;
-  practitionerName: string;
+  practitionerFirstName: string;
+  timeZone: string;
 }) {
-  const firstName = practitionerName.split(" ")[0] ?? practitionerName;
   return (
     <section
       className="rounded-md p-5 md:p-6"
@@ -238,7 +262,8 @@ function SinceLastSessionCard({
         &ldquo;{note}&rdquo;
       </p>
       <p className="text-[11px] text-ink-500 italic mt-3">
-        — {firstName}, after your session on {fullDate(sessionAt)}
+        — {practitionerFirstName}, after your session on{" "}
+        {fullDate(sessionAt, timeZone)}
       </p>
     </section>
   );
@@ -247,13 +272,12 @@ function SinceLastSessionCard({
 function YourDetailsCard({
   clientFullName,
   clientEmail,
-  practitionerName,
+  practitionerFirstName,
 }: {
   clientFullName: string;
   clientEmail: string | null;
-  practitionerName: string;
+  practitionerFirstName: string;
 }) {
-  const firstName = practitionerName.split(" ")[0] ?? practitionerName;
   return (
     <section className="paper-card p-6">
       <h2
@@ -279,7 +303,7 @@ function YourDetailsCard({
         )}
       </div>
       <p className="text-[11px] text-ink-500 italic mt-3 leading-snug">
-        Let {firstName} know if any of this changes — she keeps your file
+        Let {practitionerFirstName} know if any of this changes — she keeps your file
         directly.
       </p>
     </section>
@@ -289,6 +313,8 @@ function YourDetailsCard({
 function NextSessionCard({
   session,
   now,
+  timeZone,
+  hasOwnZone,
 }: {
   session: {
     id: string;
@@ -299,25 +325,38 @@ function NextSessionCard({
     durationMinutes: number;
   };
   now: Date;
+  timeZone: string;
+  hasOwnZone: boolean;
 }) {
   const scheduled = new Date(session.scheduledAt);
   const minutesUntil = (scheduled.getTime() - now.getTime()) / (60 * 1000);
+  // Highlighted from 30 min before the hour through the end of the session —
+  // `upcoming` now keeps in-progress sessions, so this branch is reachable
+  // for a late arrival instead of being dead code.
   const isJoinable =
-    !!session.meetUrl && minutesUntil <= 30 && minutesUntil >= -30;
+    !!session.meetUrl &&
+    minutesUntil <= 30 &&
+    minutesUntil >= -session.durationMinutes;
+  const hasStarted = minutesUntil <= 0;
 
   return (
     <section className="paper-card paper-card--feature p-6 md:p-8">
       <p className="text-[10px] uppercase tracking-widest text-honey-700 font-mono mb-2">
-        Coming up
+        {hasStarted ? "Happening now" : "Coming up"}
       </p>
       <p
         className="text-xl md:text-2xl text-ink-900 serif mb-1"
         style={{ fontWeight: 500, letterSpacing: "-0.01em" }}
       >
-        {fullDate(scheduled)}
+        {fullDate(scheduled, timeZone)}
       </p>
       <p className="text-sm text-ink-600 mb-4">
-        {shortTime(scheduled)} · {session.durationMinutes} min · {session.type}
+        {shortTime(scheduled, timeZone)}{" "}
+        <span className="text-ink-400">
+          {zoneAbbrev(scheduled, timeZone)}
+          {!hasOwnZone && " (her time)"}
+        </span>{" "}
+        · {session.durationMinutes} min · {session.type}
       </p>
       {session.intention && (
         <p
@@ -339,7 +378,11 @@ function NextSessionCard({
                 : "bg-ink-50 text-ink-700 hover:bg-ink-100 border border-ink-200"
             }`}
           >
-            {isJoinable ? "Join now →" : "Open Meet link"}
+            {isJoinable
+              ? hasStarted
+                ? "Join — she's waiting →"
+                : "Join now →"
+              : "Open Meet link"}
           </a>
         )}
         <Link

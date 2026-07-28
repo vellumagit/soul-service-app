@@ -6,18 +6,23 @@
 // what they owe and what they've already paid, instead of having to
 // remember.
 
-import { and, desc, eq, ne, sql } from "drizzle-orm";
+import { and, desc, eq, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { sessions, practitionerSettings } from "@/db/schema";
 import { requirePortalSession } from "@/lib/portal-auth";
-import { fullDate } from "@/lib/format";
+import { fullDate, plainDate, safeCurrency } from "@/lib/format";
+import { getPortalTimeZone } from "@/lib/portal-timezone";
+import { zonedYearMonthDay } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
 function formatMoney(cents: number, currency: string = "USD"): string {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency,
+    // safeCurrency, not the raw setting: default_currency is free text she
+    // types, and a malformed code makes Intl throw — which would blank this
+    // whole page for the client rather than mis-label a number.
+    currency: safeCurrency(currency),
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(cents / 100);
@@ -59,6 +64,10 @@ export default async function PortalBillingPage() {
   ]);
   const settings = settingsRows[0] ?? null;
   const currency = settings?.defaultCurrency ?? "USD";
+  const { timeZone } = await getPortalTimeZone(
+    portal.accountId,
+    portal.clientId
+  );
   const firstName =
     settings?.practitionerName?.split(" ")[0] ?? "your practitioner";
 
@@ -76,10 +85,13 @@ export default async function PortalBillingPage() {
     0
   );
 
-  // Totals for the year — useful for end-of-year accounting.
-  const thisYear = new Date().getFullYear();
+  // Totals for the year — useful for end-of-year accounting. Year is taken in
+  // the portal's zone, so a Dec 31 evening session doesn't count as next year
+  // just because the server thinks in UTC.
+  const yearIn = (d: Date) => zonedYearMonthDay(d, timeZone).year;
+  const thisYear = yearIn(new Date());
   const paidThisYearCents = paid
-    .filter((s) => new Date(s.scheduledAt).getFullYear() === thisYear)
+    .filter((s) => yearIn(new Date(s.scheduledAt)) === thisYear)
     .reduce((sum, s) => sum + (s.paymentAmountCents ?? 0), 0);
 
   return (
@@ -146,6 +158,7 @@ export default async function PortalBillingPage() {
             rows={unpaid}
             currency={currency}
             kind="outstanding"
+            timeZone={timeZone}
           />
         )}
 
@@ -156,6 +169,7 @@ export default async function PortalBillingPage() {
             rows={paid}
             currency={currency}
             kind="paid"
+            timeZone={timeZone}
             footer={
               paidThisYearCents > 0
                 ? `${formatMoney(paidThisYearCents, currency)} paid in ${thisYear} so far.`
@@ -180,6 +194,7 @@ function BillingList({
   rows,
   currency,
   kind,
+  timeZone,
   footer,
 }: {
   title: string;
@@ -193,6 +208,7 @@ function BillingList({
   }>;
   currency: string;
   kind: "paid" | "outstanding";
+  timeZone: string;
   footer?: string | null;
 }) {
   return (
@@ -213,15 +229,18 @@ function BillingList({
             >
               <div className="min-w-0 flex-1">
                 <p className="text-sm text-ink-800">
-                  {fullDate(new Date(s.scheduledAt))}
+                  {fullDate(new Date(s.scheduledAt), timeZone)}
                 </p>
                 <p className="text-[11px] text-ink-500 font-mono">
                   {s.type}
                   {kind === "paid" && s.paymentMethod && (
                     <> · {s.paymentMethod}</>
                   )}
+                  {/* paidAt is a DATE column — no time, no zone. Format the
+                      digits as-is; running it through the portal zone would
+                      slide it back a day. */}
                   {kind === "paid" && s.paidAt && (
-                    <> · paid {fullDate(new Date(s.paidAt))}</>
+                    <> · paid {plainDate(s.paidAt)}</>
                   )}
                 </p>
               </div>

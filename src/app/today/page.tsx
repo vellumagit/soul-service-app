@@ -21,6 +21,7 @@ import {
   getCirclesForToday,
   getPendingCircleApprovalsCount,
   getPendingInquiries,
+  getPendingPortalRequestsCount,
   listClientsForPicker,
 } from "@/db/queries";
 import { OnThisDayCard } from "@/components/OnThisDayCard";
@@ -41,6 +42,7 @@ export default async function HomePage() {
     todayCircles,
     pendingApprovals,
     pendingInquiries,
+    portalRequests,
   ] = await Promise.all([
     getDashboardData(accountId),
     listClientsForPicker(accountId),
@@ -51,6 +53,7 @@ export default async function HomePage() {
     getCirclesForToday(accountId),
     getPendingCircleApprovalsCount(accountId),
     getPendingInquiries(accountId),
+    getPendingPortalRequestsCount(accountId),
   ]);
 
   const locale = asLocale(settings.uiLanguage);
@@ -140,6 +143,58 @@ export default async function HomePage() {
             </div>
             <span className="text-sm font-medium text-honey-700 whitespace-nowrap">
               Read &amp; reply →
+            </span>
+          </div>
+        </Link>
+      )}
+
+      {/* A client asked for something from inside their own portal — to move a
+          session, or to book another. They were told "your practitioner has
+          been notified", so this has to actually reach her. Same honey
+          treatment: a person is waiting. */}
+      {portalRequests.total > 0 && (
+        <Link
+          href="/loose-ends"
+          className="block mb-6 rounded-lg p-4 border-l-4 no-underline hover:brightness-[0.98] transition"
+          style={{
+            background: "var(--color-honey-50, #fbf3e4)",
+            borderColor: "var(--color-honey-700, #b05c36)",
+          }}
+        >
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <div
+                className="text-base text-ink-900"
+                style={{ fontWeight: 600 }}
+              >
+                {portalRequests.total === 1
+                  ? "1 client asked for something in their portal"
+                  : `${portalRequests.total} clients asked for something in their portals`}
+              </div>
+              <div className="text-[13px] text-ink-600 mt-0.5">
+                {[
+                  portalRequests.reschedules > 0
+                    ? `${portalRequests.reschedules} reschedule ${
+                        portalRequests.reschedules === 1
+                          ? "request"
+                          : "requests"
+                      }`
+                    : null,
+                  portalRequests.bookings > 0
+                    ? `${portalRequests.bookings} ${
+                        portalRequests.bookings === 1
+                          ? "session request"
+                          : "session requests"
+                      }`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}{" "}
+                — nothing has moved on your calendar yet.
+              </div>
+            </div>
+            <span className="text-sm font-medium text-honey-700 whitespace-nowrap">
+              Open loose ends →
             </span>
           </div>
         </Link>

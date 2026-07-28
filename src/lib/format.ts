@@ -1,9 +1,25 @@
 // Tiny formatting helpers used across pages.
 
+/** Intl.NumberFormat throws a RangeError on anything that isn't a well-formed
+ *  3-letter ISO code — and `practitionerSettings.default_currency` is a free
+ *  text field she types into, so a stray "C" or "$" would take down every page
+ *  that shows a price, including her client's billing page. Fall back rather
+ *  than crash. */
+export function safeCurrency(currency: string | null | undefined): string {
+  const c = (currency ?? "").trim().toUpperCase();
+  if (!/^[A-Z]{3}$/.test(c)) return "USD";
+  try {
+    new Intl.NumberFormat("en-US", { style: "currency", currency: c });
+    return c;
+  } catch {
+    return "USD";
+  }
+}
+
 export function money(cents: number, currency = "USD") {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency,
+    currency: safeCurrency(currency),
     maximumFractionDigits: 0,
   }).format(cents / 100);
 }
@@ -11,7 +27,7 @@ export function money(cents: number, currency = "USD") {
 export function moneyExact(cents: number, currency = "USD") {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency,
+    currency: safeCurrency(currency),
   }).format(cents / 100);
 }
 
@@ -79,6 +95,23 @@ export function shortDateTime(
   if (!date) return "—";
   const d = typeof date === "string" ? new Date(date) : date;
   return shortDate(d, timeZone) + " · " + shortTime(d, timeZone);
+}
+
+/** Format a DATE-ONLY value ("2026-07-14", from a Postgres `date` column).
+ *  These carry no time and no zone. `new Date("2026-07-14")` parses as UTC
+ *  midnight, so rendering it through a timezone-aware formatter shifts it to
+ *  the previous day for anywhere west of Greenwich — "paid Jul 14" becomes
+ *  "paid Jul 13". Format the digits directly instead. */
+export function plainDate(value: string | null | undefined): string {
+  if (!value) return "—";
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (!m) return value;
+  const [, y, mo, d] = m;
+  // UTC constructor + UTC timeZone: no conversion happens either way.
+  return new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d))).toLocaleDateString(
+    "en-US",
+    { weekday: "short", month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }
+  );
 }
 
 /** Just the zone abbreviation for an instant — "MDT" / "MST" / "EST" — so a
