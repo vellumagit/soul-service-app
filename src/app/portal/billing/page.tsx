@@ -1,10 +1,12 @@
 // Billing — every session the client's had, grouped by paid / outstanding.
 //
-// Read-only. The portal doesn't take payments directly — practitioner
-// handles them outside the app (Venmo / Zelle / cash) and marks them
-// paid in her own UI. This page exists so the client has clarity on
-// what they owe and what they've already paid, instead of having to
-// remember.
+// Two lanes, and which one shows depends on her setup:
+//   - Card: when she's connected Stripe and finished activation, each
+//     outstanding session gets a Pay button (direct charge on her account).
+//   - Manual: her payment instructions (Venmo / Zelle / cash), always shown
+//     when she's written them, since some clients will still pay that way.
+// Either way she can mark a session paid by hand on her side — the card lane
+// is an addition, not a replacement.
 
 import { and, desc, eq, ne } from "drizzle-orm";
 import { db } from "@/db";
@@ -13,6 +15,8 @@ import { requirePortalSession } from "@/lib/portal-auth";
 import { fullDate, plainDate, safeCurrency } from "@/lib/format";
 import { getPortalTimeZone } from "@/lib/portal-timezone";
 import { zonedYearMonthDay } from "@/lib/timezone";
+import { isStripeConfigured } from "@/lib/stripe";
+import { PortalPayButton } from "@/components/PortalPayButton";
 
 export const dynamic = "force-dynamic";
 
@@ -28,8 +32,13 @@ function formatMoney(cents: number, currency: string = "USD"): string {
   }).format(cents / 100);
 }
 
-export default async function PortalBillingPage() {
+export default async function PortalBillingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ paid?: string; canceled?: string }>;
+}) {
   const portal = await requirePortalSession();
+  const { paid: paidFlag, canceled } = await searchParams;
 
   const [sessionRows, settingsRows] = await Promise.all([
     db
@@ -57,6 +66,8 @@ export default async function PortalBillingPage() {
         practitionerName: practitionerSettings.practitionerName,
         defaultCurrency: practitionerSettings.defaultCurrency,
         paymentInstructions: practitionerSettings.paymentInstructions,
+        stripeAccountId: practitionerSettings.stripeAccountId,
+        stripeChargesEnabled: practitionerSettings.stripeChargesEnabled,
       })
       .from(practitionerSettings)
       .where(eq(practitionerSettings.accountId, portal.accountId))
@@ -70,6 +81,13 @@ export default async function PortalBillingPage() {
   );
   const firstName =
     settings?.practitionerName?.split(" ")[0] ?? "your practitioner";
+  // The card lane needs all three: platform keys, her connected account, and
+  // Stripe having actually activated it. Missing any one and we show only the
+  // manual instructions rather than a button that can't succeed.
+  const canPayByCard =
+    isStripeConfigured() &&
+    !!settings?.stripeAccountId &&
+    settings.stripeChargesEnabled === true;
 
   const completedSessions = sessionRows.filter(
     (s) => s.status === "completed"
@@ -104,13 +122,35 @@ export default async function PortalBillingPage() {
           Billing
         </h1>
         <p className="text-sm text-ink-500 italic serif-italic">
-          What you&apos;ve paid, what&apos;s outstanding. {firstName} handles
-          payments outside this app — this is just clarity, not a
-          checkout.
+          {canPayByCard
+            ? `What you've paid, what's outstanding. You can settle up by card here, or however you and ${firstName} usually do it.`
+            : `What you've paid, what's outstanding. ${firstName} handles payments outside this app — this is just clarity, not a checkout.`}
         </p>
       </header>
 
       <div className="space-y-6">
+        {/* Return from Stripe. The webhook is what actually marks a session
+            paid, and it can land a moment after the redirect — so promise
+            nothing more specific than "it's on its way". */}
+        {paidFlag === "1" && (
+          <section
+            className="rounded-md p-4 text-sm leading-relaxed"
+            style={{
+              background: "var(--color-honey-50)",
+              border: "1px solid var(--color-honey-100)",
+              color: "var(--color-honey-700)",
+            }}
+          >
+            Thank you — your payment went through. It may take a moment to
+            show as paid below; reload if it hasn&apos;t updated.
+          </section>
+        )}
+        {canceled === "1" && (
+          <section className="paper-card p-4 text-sm text-ink-600 leading-relaxed">
+            Checkout closed — nothing was charged. You can pay whenever
+            you&apos;re ready.
+          </section>
+        )}
         {/* Outstanding card */}
         {unpaid.length > 0 ? (
           <section
@@ -159,6 +199,7 @@ export default async function PortalBillingPage() {
             currency={currency}
             kind="outstanding"
             timeZone={timeZone}
+            canPayByCard={canPayByCard}
           />
         )}
 
@@ -196,6 +237,7 @@ function BillingList({
   kind,
   timeZone,
   footer,
+  canPayByCard = false,
 }: {
   title: string;
   rows: Array<{
@@ -210,6 +252,7 @@ function BillingList({
   kind: "paid" | "outstanding";
   timeZone: string;
   footer?: string | null;
+  canPayByCard?: boolean;
 }) {
   return (
     <section className="paper-card p-5 md:p-6">
@@ -243,6 +286,12 @@ function BillingList({
                     <> · paid {plainDate(s.paidAt)}</>
                   )}
                 </p>
+                {kind === "outstanding" && canPayByCard && cents > 0 && (
+                  <PortalPayButton
+                    sessionId={s.id}
+                    amountLabel={formatMoney(cents, currency)}
+                  />
+                )}
               </div>
               <span
                 className={`text-sm font-mono shrink-0 ${

@@ -1,14 +1,21 @@
 "use client";
 
-// Small horizontal nav at the top of every portal page. Three rooms:
+// Small horizontal nav at the top of every portal page. Five rooms:
 //
 //   Today        — what's coming, what's owed, how to reach her
 //   The arc      — every session, intentions, what was shared
 //   Reflections  — their own journal, between sessions
+//   Billing      — paid / outstanding, and paying by card
+//   Book         — ask for another session
 //
-// Mobile-first, no AppShell. Quiet — three plum-tinted pill links, with
-// the active one carrying a soft fill. No sidebar, no logo (the layout
-// adds those if needed), no chrome.
+// Book used to be reachable only from a CTA on Today, which meant a client
+// sitting on Billing or The arc had no way to ask for another time without
+// backing out first.
+//
+// Mobile-first, no AppShell. Quiet — plum-tinted links, with the active one
+// carrying a soft underline. No sidebar, no logo (the layout adds those if
+// needed), no chrome. Horizontally scrollable so five tabs still work on a
+// narrow phone without wrapping into two rows.
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -18,6 +25,7 @@ const TABS = [
   { href: "/portal/arc", label: "The arc" },
   { href: "/portal/reflections", label: "Reflections" },
   { href: "/portal/billing", label: "Billing" },
+  { href: "/portal/book", label: "Book" },
 ];
 
 export function PortalNav() {
@@ -36,7 +44,7 @@ export function PortalNav() {
       className="border-b border-ink-100"
       style={{ background: "rgba(253, 249, 241, 0.6)" }}
     >
-      <div className="max-w-2xl mx-auto px-4 md:px-6 flex items-center gap-1">
+      <div className="max-w-2xl mx-auto px-4 md:px-6 flex items-center gap-1 overflow-x-auto whitespace-nowrap">
         {TABS.map((t) => {
           const active = isActive(t.href);
           return (

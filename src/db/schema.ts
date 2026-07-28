@@ -238,6 +238,12 @@ export const sessions = pgTable(
     paymentAmountCents: integer("payment_amount_cents"),
     paidAt: date("paid_at"),
     paymentNote: text("payment_note"), // optional — confirmation # or short note
+    // Set only when the client paid by card from /portal/billing. The checkout
+    // id lets us expire a stale link before minting a new one; the payment
+    // intent is what a refund would be issued against. Both stay NULL for the
+    // manual lanes (Venmo / cash / e-transfer), which remain the default.
+    stripeCheckoutSessionId: text("stripe_checkout_session_id"),
+    stripePaymentIntentId: text("stripe_payment_intent_id"),
 
     // Generated invoice PDF (Vercel Blob URL). Auto-generated on completion if enabled.
     invoiceUrl: text("invoice_url"),

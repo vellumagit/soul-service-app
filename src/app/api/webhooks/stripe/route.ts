@@ -22,6 +22,7 @@ import {
   groupAttendees,
   groupSessions,
   practitionerSettings,
+  sessions,
 } from "@/db/schema";
 import { getStripe, getWebhookSecret, isStripeConfigured } from "@/lib/stripe";
 import {
@@ -35,6 +36,85 @@ import {
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
+
+/**
+ * A client paid for a 1-on-1 session by card from /portal/billing.
+ *
+ * Same discipline as the Circle-seat path: verify the event fired on the same
+ * connected account that owns the session (metadata is writable by whoever
+ * created the Checkout, so it can't be trusted on its own), then flip to paid
+ * only if it isn't already — which makes Stripe's retries idempotent.
+ */
+async function handleSessionPayment(
+  sessionId: string | null,
+  paymentIntentId: string | null,
+  eventAccount: string | null
+): Promise<Response> {
+  if (!sessionId) {
+    return NextResponse.json({ ok: true, ignored: "no sessionId" });
+  }
+
+  const [row] = await db
+    .select({
+      id: sessions.id,
+      paid: sessions.paid,
+      stripeAccountId: practitionerSettings.stripeAccountId,
+    })
+    .from(sessions)
+    .leftJoin(
+      practitionerSettings,
+      eq(practitionerSettings.accountId, sessions.accountId)
+    )
+    .where(eq(sessions.id, sessionId))
+    .limit(1);
+
+  if (!row) {
+    return NextResponse.json({ ok: true, ignored: "unknown session" });
+  }
+  if (eventAccount && eventAccount !== row.stripeAccountId) {
+    console.error(
+      `[stripe webhook] account mismatch for session ${sessionId}: event on ${eventAccount}, expected ${row.stripeAccountId}`
+    );
+    return NextResponse.json({ ok: true, ignored: "account mismatch" });
+  }
+
+  // paid_at is a DATE column (no time, no zone) — store the calendar day the
+  // same way every other payment path in the app does.
+  const flipped = await db
+    .update(sessions)
+    .set({
+      paid: true,
+      paidAt: new Date().toISOString().slice(0, 10),
+      paymentMethod: "stripe",
+      stripePaymentIntentId: paymentIntentId,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(sessions.id, sessionId), eq(sessions.paid, false)))
+    .returning({ id: sessions.id });
+
+  // Already paid — she may have marked the Venmo lane settled while a card
+  // checkout was still open. Record the payment intent anyway so the second
+  // charge is visible in-app and can be refunded from her Stripe dashboard.
+  if (flipped.length === 0 && paymentIntentId) {
+    const stamped = await db
+      .update(sessions)
+      .set({ stripePaymentIntentId: paymentIntentId, updatedAt: new Date() })
+      .where(
+        and(
+          eq(sessions.id, sessionId),
+          isNull(sessions.stripePaymentIntentId)
+        )
+      )
+      .returning({ id: sessions.id });
+    if (stamped.length > 0) {
+      console.error(
+        `[stripe webhook] card payment landed on an ALREADY-PAID session (${sessionId}) — PI stored; likely a double payment to review`
+      );
+    }
+  }
+
+  return NextResponse.json({ ok: true, flipped: flipped.length > 0 });
+}
 
 export async function POST(req: Request): Promise<Response> {
   if (!isStripeConfigured()) {
@@ -65,14 +145,26 @@ export async function POST(req: Request): Promise<Response> {
       if (session.payment_status !== "paid") {
         return NextResponse.json({ ok: true, ignored: "not paid yet" });
       }
-      const attendeeId = session.metadata?.attendeeId;
-      if (!attendeeId) {
-        return NextResponse.json({ ok: true, ignored: "no attendeeId" });
-      }
       const paymentIntentId =
         typeof session.payment_intent === "string"
           ? session.payment_intent
           : (session.payment_intent?.id ?? null);
+
+      // A client paid for a 1-on-1 session from /portal/billing. Distinct
+      // shape from a Circle seat: no attendee row, the money settles a
+      // `sessions` row instead.
+      if (session.metadata?.kind === "session-payment") {
+        return await handleSessionPayment(
+          session.metadata?.sessionId ?? null,
+          paymentIntentId,
+          event.account ?? null
+        );
+      }
+
+      const attendeeId = session.metadata?.attendeeId;
+      if (!attendeeId) {
+        return NextResponse.json({ ok: true, ignored: "no attendeeId" });
+      }
 
       // The metadata names an attendee, but metadata is writable by whoever
       // created the Checkout Session. Verify the event fired on the SAME
@@ -175,6 +267,26 @@ export async function POST(req: Request): Promise<Response> {
 
     if (event.type === "checkout.session.expired") {
       const session = event.data.object as Stripe.Checkout.Session;
+
+      // Session payment link went stale — drop the stored checkout id so the
+      // next Pay click doesn't waste a call trying to expire a dead session.
+      if (session.metadata?.kind === "session-payment") {
+        const sid = session.metadata?.sessionId;
+        if (sid) {
+          await db
+            .update(sessions)
+            .set({ stripeCheckoutSessionId: null, updatedAt: new Date() })
+            .where(
+              and(
+                eq(sessions.id, sid),
+                eq(sessions.stripeCheckoutSessionId, session.id),
+                eq(sessions.paid, false)
+              )
+            );
+        }
+        return NextResponse.json({ ok: true, released: "session-payment" });
+      }
+
       const attendeeId = session.metadata?.attendeeId;
       if (attendeeId) {
         // Release the held seat — only if it never got paid.

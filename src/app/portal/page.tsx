@@ -17,9 +17,10 @@
 import Link from "next/link";
 import { and, desc, eq, ne } from "drizzle-orm";
 import { db } from "@/db";
-import { sessions, practitionerSettings } from "@/db/schema";
+import { sessions, practitionerSettings, clients } from "@/db/schema";
 import { requirePortalSession, clearPortalSessionCookie } from "@/lib/portal-auth";
 import { PortalTimezoneCapture } from "@/components/PortalTimezoneCapture";
+import { PortalDetailsCard } from "@/components/PortalDetailsCard";
 import { fullDate, shortTime, zoneAbbrev } from "@/lib/format";
 import { getPortalTimeZone } from "@/lib/portal-timezone";
 
@@ -38,7 +39,7 @@ export default async function PortalHomePage() {
 
   // Pull every non-cancelled session for this client + practitioner settings,
   // in parallel.
-  const [sessionRows, settingsRows] = await Promise.all([
+  const [sessionRows, settingsRows, clientRows] = await Promise.all([
     db
       .select({
         id: sessions.id,
@@ -72,8 +73,23 @@ export default async function PortalHomePage() {
       .from(practitionerSettings)
       .where(eq(practitionerSettings.accountId, session.accountId))
       .limit(1),
+    // Their own details — the card below is editable, so it needs the full
+    // set, not just the name and email carried on the portal cookie.
+    db
+      .select({
+        fullName: clients.fullName,
+        pronouns: clients.pronouns,
+        email: clients.email,
+        phone: clients.phone,
+        city: clients.city,
+        timezone: clients.timezone,
+      })
+      .from(clients)
+      .where(eq(clients.id, session.clientId))
+      .limit(1),
   ]);
   const settings = settingsRows[0] ?? null;
+  const clientDetails = clientRows[0] ?? null;
 
   // The zone every date on this page renders in — theirs when we've captured
   // it, hers otherwise. `hasOwnZone` also drives the invisible auto-capture
@@ -222,11 +238,19 @@ export default async function PortalHomePage() {
           contactPhone={settings?.contactPhone ?? null}
         />
 
-        {/* Your details — read-only profile card */}
-        <YourDetailsCard
-          clientFullName={session.clientFullName}
-          clientEmail={session.clientEmail}
-          practitionerFirstName={practitionerFirstName}
+        {/* Your details — editable, so a wrong captured timezone or a changed
+            email is something the client can fix themselves. */}
+        <PortalDetailsCard
+          details={{
+            fullName: clientDetails?.fullName ?? session.clientFullName,
+            pronouns: clientDetails?.pronouns ?? null,
+            email: clientDetails?.email ?? session.clientEmail,
+            phone: clientDetails?.phone ?? null,
+            city: clientDetails?.city ?? null,
+            timezone: clientDetails?.timezone ?? null,
+          }}
+          practitionerName={practitionerName}
+          zoneLabel={zoneAbbrev(now, timeZone)}
         />
       </div>
     </div>
@@ -264,47 +288,6 @@ function SinceLastSessionCard({
       <p className="text-[11px] text-ink-500 italic mt-3">
         — {practitionerFirstName}, after your session on{" "}
         {fullDate(sessionAt, timeZone)}
-      </p>
-    </section>
-  );
-}
-
-function YourDetailsCard({
-  clientFullName,
-  clientEmail,
-  practitionerFirstName,
-}: {
-  clientFullName: string;
-  clientEmail: string | null;
-  practitionerFirstName: string;
-}) {
-  return (
-    <section className="paper-card p-6">
-      <h2
-        className="serif-italic text-base text-plum-700 mb-3"
-        style={{ fontWeight: 400 }}
-      >
-        Your details
-      </h2>
-      <div className="space-y-1.5 text-sm">
-        <div>
-          <span className="text-ink-500 text-[11px] uppercase tracking-wider font-mono mr-2">
-            name
-          </span>
-          <span className="text-ink-700">{clientFullName}</span>
-        </div>
-        {clientEmail && (
-          <div>
-            <span className="text-ink-500 text-[11px] uppercase tracking-wider font-mono mr-2">
-              email
-            </span>
-            <span className="text-ink-700">{clientEmail}</span>
-          </div>
-        )}
-      </div>
-      <p className="text-[11px] text-ink-500 italic mt-3 leading-snug">
-        Let {practitionerFirstName} know if any of this changes — she keeps your file
-        directly.
       </p>
     </section>
   );
