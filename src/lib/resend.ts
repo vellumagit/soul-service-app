@@ -1390,6 +1390,10 @@ export async function sendSessionBookingConfirmationEmail(input: {
   /** IANA zone to render the time in — the RECIPIENT's local zone. Resolved by
    *  the caller (client zone → session zone → practice zone). */
   timeZone: string;
+  /** True when the session was MOVED rather than newly booked. Same shape,
+   *  same link, different opening line — a client who gets "You're booked"
+   *  for the second time reasonably wonders if they now have two sessions. */
+  moved?: boolean;
 }): Promise<void> {
   const first = input.clientName?.split(" ")[0] ?? null;
   const greeting = first ? `Hi ${first},` : "Hi,";
@@ -1397,13 +1401,18 @@ export async function sendSessionBookingConfirmationEmail(input: {
   const typeLabel = input.sessionType?.trim() ? input.sessionType.trim() : "session";
   const when = formatSessionLong(input.scheduledAt, input.timeZone);
   const shortDate = formatSessionShortDate(input.scheduledAt, input.timeZone);
-  const subject = `You're booked — ${shortDate}`;
+  const subject = input.moved
+    ? `Moved — our ${typeLabel.toLowerCase()} is now ${shortDate}`
+    : `You're booked — ${shortDate}`;
+  const leadText = input.moved
+    ? `Our ${typeLabel.toLowerCase()} has moved. Here's the new time — nothing else changes, and your link below is the same one.`
+    : `You're booked in for our ${typeLabel.toLowerCase()} together. 🤍`;
   const linkLine = input.meetingUrl
     ? `\n\nWhen it's time, join here:\n${input.meetingUrl}`
     : "\n\nI'll share the meeting link with you before we meet.";
   const text = `${greeting}
 
-You're booked in for our ${typeLabel.toLowerCase()} together. 🤍
+${leadText}
 
 · When: ${when}
 · Length: ${input.durationMinutes} minutes${linkLine}
@@ -1419,6 +1428,7 @@ ${signoff}`;
     durationMinutes: input.durationMinutes,
     meetingUrl: input.meetingUrl,
     signoff,
+    moved: input.moved === true,
   });
   await sendEmail({ to: input.to, subject, html, text, replyTo: input.replyTo });
 }
@@ -1430,14 +1440,19 @@ function bookingConfirmationHtml(p: {
   durationMinutes: number;
   meetingUrl: string | null;
   signoff: string;
+  moved?: boolean;
 }): string {
+  const lead = p.moved
+    ? `Our <strong>${escapeHtml(p.typeLabel.toLowerCase())}</strong> has moved. Here's the new time — nothing else changes.`
+    : `You're booked in for our <strong>${escapeHtml(p.typeLabel.toLowerCase())}</strong> together.`;
   return `
 <!doctype html>
 <html>
   <body style="margin:0;padding:0;background:#faf6f0;font-family:Georgia,'Times New Roman',serif;color:#3d342e;">
     <div style="max-width:480px;margin:48px auto;padding:36px 32px;background:#fdf9f1;border-radius:12px;border:1px solid #ead9c1;">
+      ${p.moved ? `<p style="margin:0 0 6px 0;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#b05c36;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">New time</p>` : ""}
       <p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;color:#564a42;">${escapeHtml(p.greeting)}</p>
-      <p style="margin:0 0 20px 0;font-size:15px;line-height:1.6;color:#564a42;">You're booked in for our <strong>${escapeHtml(p.typeLabel.toLowerCase())}</strong> together.</p>
+      <p style="margin:0 0 20px 0;font-size:15px;line-height:1.6;color:#564a42;">${lead}</p>
       <p style="margin:0 0 6px 0;font-size:14px;color:#564a42;"><strong>When:</strong> ${escapeHtml(p.when)}</p>
       <p style="margin:0 0 8px 0;font-size:14px;color:#564a42;"><strong>Length:</strong> ${p.durationMinutes} minutes</p>
       ${

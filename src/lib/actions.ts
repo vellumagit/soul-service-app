@@ -129,14 +129,30 @@ export async function createClient(formData: FormData) {
   if (firstSessionDateRaw) {
     const firstSessionDate = new Date(firstSessionDateRaw + "T12:00:00");
     const isPast = firstSessionDate < new Date();
-    await db.insert(sessions).values({
-      accountId,
-      clientId: created.id,
-      type: firstSessionType,
-      status: isPast ? "completed" : "scheduled",
-      scheduledAt: firstSessionDate,
-      durationMinutes: 60,
-    });
+    const [firstSession] = await db
+      .insert(sessions)
+      .values({
+        accountId,
+        clientId: created.id,
+        type: firstSessionType,
+        status: isPast ? "completed" : "scheduled",
+        scheduledAt: firstSessionDate,
+        durationMinutes: 60,
+      })
+      .returning({ id: sessions.id });
+
+    // This used to end here — a bare INSERT and nothing else. A session booked
+    // from this dialog got no Google event, no Meet link, no invite, no
+    // confirmation email and no notetaker bot, while the very same booking made
+    // from the client's profile got all five. The only reason such a session
+    // ever reached Google was if she later rescheduled it, because THAT path
+    // syncs. Run the same hooks here so where you book it stops mattering.
+    // Skipped for a back-dated first session — it already happened, so there's
+    // nothing to invite anyone to.
+    if (!isPast && firstSession) {
+      await runPostScheduleHooks(accountId, firstSession.id, false);
+    }
+
     await scheduleFirstSessionFollowups(
       accountId,
       created.id,
@@ -1283,38 +1299,11 @@ export async function scheduleSession(
       )
     );
 
-  // Best-effort: push to Google Calendar (auto-generates Meet link + invites
-  // client). Skipped for in-person sessions — there's no Meet to generate and
-  // she doesn't want a video link on it.
-  let googleWarning: string | null = null;
-  if (!isInPerson) {
-    const sync = await syncSessionToGoogle(created.id);
-    googleWarning = sync.ok === false ? sync.error : null;
-  }
-
-  // Short-notice guard: if the session is booked inside a reminder window, send
-  // the reminder(s) now so a same-day booking still gets a heads-up (the hourly
-  // cron would otherwise miss the window). Idempotent via *_reminder_sent_at.
-  try {
-    const { sendImmediateSessionReminders } = await import("./reminders");
-    await sendImmediateSessionReminders(created.id);
-  } catch (err) {
-    console.error("[schedule] immediate reminder check failed:", err);
-  }
-
-  // Best-effort: auto-schedule the Recall.ai notetaker bot.
-  // Runs AFTER syncSessionToGoogle so the Meet URL is on the row. Skipped for
-  // in-person — there's no call for a bot to join; she records in the room.
-  if (!isInPerson) {
-    await maybeAutoAddRecallBot(accountId, created.id);
-  }
-
-  // App-sent booking confirmation to the client. Runs LAST and reads the
-  // final Meet URL off the row (Google's link if sync succeeded, the manual
-  // fallback otherwise). Fully decoupled from Google — a Calendar failure
-  // never stops the client from being confirmed. Best-effort: a mail hiccup
-  // never fails the booking.
-  await maybeSendBookingConfirmation(accountId, created.id);
+  const googleWarning = await runPostScheduleHooks(
+    accountId,
+    created.id,
+    isInPerson
+  );
 
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/calendar");
@@ -1322,6 +1311,52 @@ export async function scheduleSession(
   revalidatePath("/network");
 
   return { ok: true, sessionId: created.id, googleWarning };
+}
+
+/**
+ * Everything that has to happen after a session row exists, in the order it
+ * has to happen in. Shared by every path that creates a session so none of
+ * them can quietly do less than the others — which is exactly what went wrong
+ * when the client-creation dialog grew its own inline INSERT.
+ *
+ * Order matters: Google first (it's what mints the Meet link), then the bot
+ * (needs that link on the row), then the confirmation email LAST so it quotes
+ * the final link — Google's if the sync worked, her pasted fallback if not.
+ *
+ * Every step is best-effort. A Calendar outage or a mail hiccup must never
+ * undo a booking that's already in the database.
+ *
+ * Returns a Google warning string to surface in the UI, or null.
+ */
+async function runPostScheduleHooks(
+  accountId: string,
+  sessionId: string,
+  isInPerson: boolean
+): Promise<string | null> {
+  // In-person sessions skip Google entirely: there's no Meet to generate and
+  // she doesn't want a video link on a session held in a room.
+  let googleWarning: string | null = null;
+  if (!isInPerson) {
+    const sync = await syncSessionToGoogle(sessionId);
+    googleWarning = sync.ok === false ? sync.error : null;
+  }
+
+  // Short-notice guard: a session booked inside a reminder window would
+  // otherwise wait for a cron tick that may come after it starts.
+  try {
+    const { sendImmediateSessionReminders } = await import("./reminders");
+    await sendImmediateSessionReminders(sessionId);
+  } catch (err) {
+    console.error("[schedule] immediate reminder check failed:", err);
+  }
+
+  if (!isInPerson) {
+    await maybeAutoAddRecallBot(accountId, sessionId);
+  }
+
+  await maybeSendBookingConfirmation(accountId, sessionId);
+
+  return googleWarning;
 }
 
 /** Best-effort: if Recall is configured + enabled + auto-add is on +
@@ -1395,7 +1430,9 @@ async function maybeAutoAddRecallBot(
  *  throws (a mail failure must not fail the booking). */
 async function maybeSendBookingConfirmation(
   accountId: string,
-  sessionId: string
+  sessionId: string,
+  /** Set when the session was MOVED — same email, different opening line. */
+  moved = false
 ): Promise<void> {
   try {
     const { isResendConfigured, sendSessionBookingConfirmationEmail } =
@@ -1445,6 +1482,7 @@ async function maybeSendBookingConfirmation(
       practitionerName: row.practitionerName ?? null,
       replyTo: row.businessEmail ?? undefined,
       timeZone: clientZone,
+      moved,
     });
   } catch (err) {
     console.warn("[booking confirmation] failed:", err);
@@ -2049,6 +2087,13 @@ export async function rescheduleSession(formData: FormData) {
 
   // Schedule a fresh bot for the new time (Meet URL stays the same).
   await maybeAutoAddRecallBot(accountId, id);
+
+  // Tell the client their session moved. Until now nothing here emailed them
+  // at all — the only "rescheduled" notice they could receive came from Google
+  // Calendar, so a client without a Google invite (in-person, or Google not
+  // connected) simply never found out. Runs after the sync so it quotes the
+  // final Meet link. Best-effort, like the booking confirmation.
+  await maybeSendBookingConfirmation(accountId, id, true);
 
   // Moving the session ANSWERS any open "can we move this?" ask. Without
   // this the request stayed pending forever: her Loose Ends chip never
