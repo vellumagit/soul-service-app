@@ -232,9 +232,11 @@ export async function updateClient(formData: FormData) {
           | "dormant"
           | "archived"
           | null) ?? "active",
-      // Client portal opt-in. When she flips this on, the "Send portal
-      // invite" button appears on the client overview. Off by default.
-      portalEnabled: bool(formData, "portalEnabled"),
+      // portalEnabled is deliberately NOT written here. It's owned by the
+      // Portal card on the client's profile (connect / disconnect), not by
+      // this form. Writing it from a checkbox that no longer exists would
+      // send `false` on every profile save and silently cut off a connected
+      // client's access.
       updatedAt: new Date(),
     })
     .where(and(eq(clients.accountId, accountId), eq(clients.id, id)));
@@ -323,6 +325,87 @@ export async function resolveRescheduleRequest(
 export type SendPortalInviteResult =
   | { ok: true; sentTo: string }
   | { ok: false; error: string };
+
+/**
+ * Give a client their own space, in one click.
+ *
+ * Replaces the old two-step dance (tick a checkbox buried in Edit profile →
+ * come back to the overview → find a separate "Send portal invite" link).
+ * Turning access on and sending the link are the same intention, so they're
+ * the same action now.
+ *
+ * Enabling FIRST matters: sendPortalInvite refuses a client whose access is
+ * off, so the order here is the difference between working and erroring.
+ */
+export async function connectClientPortal(
+  clientId: string
+): Promise<SendPortalInviteResult> {
+  try {
+    const { accountId } = await requireSession();
+    const [client] = await db
+      .select({ id: clients.id, email: clients.email })
+      .from(clients)
+      .where(and(eq(clients.accountId, accountId), eq(clients.id, clientId)))
+      .limit(1);
+    if (!client) return { ok: false, error: "Client not found" };
+    if (!client.email || !client.email.includes("@")) {
+      return {
+        ok: false,
+        error:
+          "This client has no email on file — add one in Edit profile first.",
+      };
+    }
+
+    await db
+      .update(clients)
+      .set({ portalEnabled: true, updatedAt: new Date() })
+      .where(and(eq(clients.accountId, accountId), eq(clients.id, clientId)));
+
+    // Delegate the link + email so there's exactly one implementation of
+    // "mint a magic link and send it", including the suppressed-send guard.
+    return await sendPortalInvite(clientId);
+  } catch (err) {
+    console.error("[portal] connect failed:", err);
+    return { ok: false, error: "Couldn't turn on portal access." };
+  }
+}
+
+/**
+ * Close a client's space. Flipping the flag is enough on its own —
+ * getPortalSession checks it on every request, so a cookie already in a
+ * browser stops working immediately — but we also expire their session rows
+ * so nothing stale lingers server-side.
+ */
+export async function disconnectClientPortal(
+  clientId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const { accountId } = await requireSession();
+    const updated = await db
+      .update(clients)
+      .set({ portalEnabled: false, updatedAt: new Date() })
+      .where(and(eq(clients.accountId, accountId), eq(clients.id, clientId)))
+      .returning({ id: clients.id });
+    if (updated.length === 0) return { ok: false, error: "Client not found" };
+
+    const { clientPortalSessions } = await import("@/db/schema");
+    await db
+      .update(clientPortalSessions)
+      .set({ expiresAt: new Date(0) })
+      .where(
+        and(
+          eq(clientPortalSessions.accountId, accountId),
+          eq(clientPortalSessions.clientId, clientId)
+        )
+      );
+
+    revalidatePath(`/clients/${clientId}`);
+    return { ok: true };
+  } catch (err) {
+    console.error("[portal] disconnect failed:", err);
+    return { ok: false, error: "Couldn't turn off portal access." };
+  }
+}
 
 export async function sendPortalInvite(
   clientId: string

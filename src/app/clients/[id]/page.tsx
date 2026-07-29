@@ -28,7 +28,7 @@ import { PrivateNotesBlock } from "@/components/PrivateNotesBlock";
 import { PeopleInLifeBlock } from "@/components/PeopleInLifeBlock";
 import { PatternsTab } from "@/components/PatternsTab";
 import { ClientHeader } from "@/components/ClientHeader";
-import { PortalAccessRow } from "@/components/PortalAccessRow";
+import { PortalConnectionCard } from "@/components/PortalConnectionCard";
 import { ClientReflectionsSection } from "@/components/ClientReflectionsSection";
 import { ClientReflectionsTab } from "@/components/ClientReflectionsTab";
 import { ClientStatStrip } from "@/components/ClientStatStrip";
@@ -133,14 +133,16 @@ export default async function ClientProfilePage({
         }
       />
 
-      {/* Portal access row — surfaces "Last signed in X ago" + a Send Portal
-          Invite button when this client has portal access enabled. Renders
-          nothing if portalEnabled is false (no clutter). */}
-      <PortalAccessRow
+      {/* Client portal — always visible, right under the header. Shows a real
+          button when they don't have a space yet, and turns into a connection
+          status once they do. Turning it on used to be a checkbox buried in
+          Edit profile, which meant it was effectively undiscoverable. */}
+      <PortalConnectionCard
         clientId={client.id}
         clientFirstName={client.fullName.split(" ")[0] ?? client.fullName}
         enabled={client.portalEnabled}
         lastVisitAt={client.lastPortalVisitAt}
+        hasEmail={!!client.email && client.email.includes("@")}
       />
 
       {/* What they've been writing to themselves between sessions. Only
