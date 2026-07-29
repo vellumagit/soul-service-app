@@ -1,12 +1,18 @@
 "use client";
 
-// Small horizontal nav at the top of every portal page. Five rooms:
+// Small horizontal nav at the top of every portal page. Seven rooms:
 //
 //   Today        — what's coming, what's owed, how to reach her
-//   The arc      — every session, intentions, what was shared
+//   Yours        — everything booked: 1-on-1 sessions AND Circle seats
+//   What's on    — upcoming Circles they could join
+//   The arc      — every past session, intentions, what was shared
 //   Reflections  — their own journal, between sessions
 //   Billing      — paid / outstanding, and paying by card
 //   Book         — ask for another session
+//
+// Yours + What's on close the gap where a client's Circle seats were invisible
+// in the portal — their calendar with her was split across two places, one of
+// which they couldn't see.
 //
 // Book used to be reachable only from a CTA on Today, which meant a client
 // sitting on Billing or The arc had no way to ask for another time without
@@ -22,6 +28,8 @@ import { usePathname } from "next/navigation";
 
 const TABS = [
   { href: "/portal", label: "Today" },
+  { href: "/portal/yours", label: "Yours" },
+  { href: "/portal/whats-on", label: "What's on" },
   { href: "/portal/arc", label: "The arc" },
   { href: "/portal/reflections", label: "Reflections" },
   { href: "/portal/billing", label: "Billing" },

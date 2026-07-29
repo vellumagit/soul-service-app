@@ -547,6 +547,47 @@ export type SignUpResult =
   | { ok: true; pending: boolean }
   | { ok: false; error: string };
 
+/**
+ * Resolve an attendee's email to an existing client on the same account.
+ *
+ * `group_attendees.client_id` has existed since the groups migration but
+ * nothing ever wrote to it, so "which Circles has this person joined?" had no
+ * answer except a fuzzy email match at read time. Every insert below now sets
+ * it, which is what lets the portal show a client their own Circles.
+ *
+ * Deliberately NOT exported — this module is "use server", so an export here
+ * would become an unauthenticated POST endpoint that leaks whether a given
+ * email is a client. Module-local keeps it internal.
+ *
+ * LOWER() on both sides: legacy client rows predate email normalization.
+ */
+async function findClientIdByEmail(
+  accountId: string,
+  email: string
+): Promise<string | null> {
+  const clean = email.trim().toLowerCase();
+  if (!clean || !clean.includes("@")) return null;
+  try {
+    const { clients } = await import("@/db/schema");
+    const [row] = await db
+      .select({ id: clients.id })
+      .from(clients)
+      .where(
+        and(
+          eq(clients.accountId, accountId),
+          sql`LOWER(${clients.email}) = ${clean}`
+        )
+      )
+      .limit(1);
+    return row?.id ?? null;
+  } catch (err) {
+    // Never let this block a signup — an unlinked attendee is recoverable,
+    // a failed signup isn't.
+    console.error("[circle] client link lookup failed:", err);
+    return null;
+  }
+}
+
 export async function signUpForGroupSession(
   _prev: SignUpResult | undefined,
   formData: FormData
@@ -656,6 +697,7 @@ export async function signUpForGroupSession(
       name,
       email,
       phone,
+      clientId: await findClientIdByEmail(session.accountId, email),
       status: "pending",
       paid: false,
       sourceIp: ip === "unknown" ? null : ip,
@@ -862,6 +904,7 @@ export async function createCircleCheckout(input: {
         name,
         email,
         phone,
+        clientId: await findClientIdByEmail(row.accountId, email),
         status: "pending",
         paid: false,
         sourceIp: ip === "unknown" ? null : ip,
@@ -1107,6 +1150,7 @@ export async function addCircleAttendee(input: {
         groupSessionId: session.id,
         name,
         email,
+        clientId: await findClientIdByEmail(accountId, email),
         status: "confirmed",
         // Gifted seats are deliberately NOT marked paid, so your numbers stay
         // honest — but they're fully confirmed and get the link.
