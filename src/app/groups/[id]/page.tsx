@@ -85,14 +85,14 @@ export default async function GroupDetailPage({
       status: groupSessions.status,
       meetUrl: groupSessions.meetUrl,
       attendeeCount: sql<number>`(
-        SELECT COUNT(*)::int FROM ${groupAttendees}
-        WHERE ${groupAttendees.groupSessionId} = ${groupSessions.id}
-          AND ${groupAttendees.status} <> 'cancelled'
+        SELECT COUNT(*)::int FROM group_attendees
+        WHERE group_attendees.group_session_id = group_sessions.id
+          AND group_attendees.status <> 'cancelled'
       )`,
       paidCount: sql<number>`(
-        SELECT COUNT(*)::int FROM ${groupAttendees}
-        WHERE ${groupAttendees.groupSessionId} = ${groupSessions.id}
-          AND ${groupAttendees.paid} = TRUE
+        SELECT COUNT(*)::int FROM group_attendees
+        WHERE group_attendees.group_session_id = group_sessions.id
+          AND group_attendees.paid = TRUE
           AND ${groupAttendees.refundedAt} IS NULL
       )`,
     })

@@ -1038,9 +1038,9 @@ async function sendDueCircleWalkInNudges(
       meetUrl: groupSessions.meetUrl,
       groupName: groups.name,
       attendeeCount: sql<number>`(
-        SELECT COUNT(*)::int FROM ${groupAttendees}
-        WHERE ${groupAttendees.groupSessionId} = ${groupSessions.id}
-          AND ${groupAttendees.status} = 'confirmed'
+        SELECT COUNT(*)::int FROM group_attendees
+        WHERE group_attendees.group_session_id = group_sessions.id
+          AND group_attendees.status = 'confirmed'
       )`,
     })
     .from(groupSessions)

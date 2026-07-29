@@ -95,9 +95,9 @@ export default async function CircleSignupPage({
       stripeChargesEnabled: practitionerSettings.stripeChargesEnabled,
       timezone: practitionerSettings.timezone,
       takenCount: sql<number>`(
-        SELECT COUNT(*)::int FROM ${groupAttendees}
-        WHERE ${groupAttendees.groupSessionId} = ${groupSessions.id}
-          AND ${groupAttendees.status} <> 'cancelled'
+        SELECT COUNT(*)::int FROM group_attendees
+        WHERE group_attendees.group_session_id = group_sessions.id
+          AND group_attendees.status <> 'cancelled'
       )`,
     })
     .from(groupSessions)
@@ -156,9 +156,9 @@ export default async function CircleSignupPage({
       scheduledAt: groupSessions.scheduledAt,
       capacity: groupSessions.capacity,
       takenCount: sql<number>`(
-        SELECT COUNT(*)::int FROM ${groupAttendees}
-        WHERE ${groupAttendees.groupSessionId} = ${groupSessions.id}
-          AND ${groupAttendees.status} <> 'cancelled'
+        SELECT COUNT(*)::int FROM group_attendees
+        WHERE group_attendees.group_session_id = group_sessions.id
+          AND group_attendees.status <> 'cancelled'
       )`,
     })
     .from(groupSessions)

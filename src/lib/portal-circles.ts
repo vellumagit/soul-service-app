@@ -59,7 +59,8 @@ export async function getBookedForClient(
   clientId: string,
   clientEmail: string | null
 ): Promise<BookedItem[]> {
-  const now = new Date();
+  // No JS `now` here on purpose — both windows below are evaluated by Postgres
+  // via now(), so the cutoff can't drift from the server's clock.
   const email = clientEmail?.trim().toLowerCase() ?? null;
 
   const [sessionRows, circleRows] = await Promise.all([
@@ -159,12 +160,14 @@ export async function getOpenCircles(
   if (!settings?.signupsOpen) return [];
 
   const email = clientEmail?.trim().toLowerCase() ?? null;
-  const mine = email
-    ? or(
-        eq(groupAttendees.clientId, clientId),
-        sql`LOWER(${groupAttendees.email}) = ${email}`
-      )
-    : eq(groupAttendees.clientId, clientId);
+  // Literal, fully-qualified SQL. Interpolating Drizzle column objects inside
+  // sql`` renders them UNQUALIFIED, so `group_attendees.group_session_id =
+  // group_sessions.id` came out as `"group_session_id" = "id"` — both binding
+  // to group_attendees, never true, every count 0. Bound values (${clientId},
+  // ${email}) are fine: those become real parameters.
+  const mineSql = email
+    ? sql`(group_attendees.client_id = ${clientId}::uuid OR LOWER(group_attendees.email) = ${email})`
+    : sql`(group_attendees.client_id = ${clientId}::uuid)`;
 
   const rows = await db
     .select({
@@ -178,15 +181,15 @@ export async function getOpenCircles(
       currency: groups.defaultCurrency,
       language: groups.language,
       taken: sql<number>`(
-        SELECT COUNT(*)::int FROM ${groupAttendees}
-        WHERE ${groupAttendees.groupSessionId} = ${groupSessions.id}
-          AND ${groupAttendees.status} <> 'cancelled'
+        SELECT COUNT(*)::int FROM group_attendees
+        WHERE group_attendees.group_session_id = group_sessions.id
+          AND group_attendees.status <> 'cancelled'
       )`,
       alreadyIn: sql<number>`(
-        SELECT COUNT(*)::int FROM ${groupAttendees}
-        WHERE ${groupAttendees.groupSessionId} = ${groupSessions.id}
-          AND ${groupAttendees.status} <> 'cancelled'
-          AND (${mine})
+        SELECT COUNT(*)::int FROM group_attendees
+        WHERE group_attendees.group_session_id = group_sessions.id
+          AND group_attendees.status <> 'cancelled'
+          AND ${mineSql}
       )`,
     })
     .from(groupSessions)

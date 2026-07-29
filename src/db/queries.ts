@@ -179,12 +179,21 @@ export async function listClients(
       tags: clients.tags,
       status: clients.status,
       createdAt: clients.createdAt,
-      sessionCount: sql<number>`(SELECT COUNT(*)::int FROM ${sessions} WHERE ${sessions.clientId} = ${clients.id} AND ${sessions.status} = 'completed')`,
-      attachmentCount: sql<number>`(SELECT COUNT(*)::int FROM ${attachments} WHERE ${attachments.clientId} = ${clients.id})`,
-      lifetimeCents: sql<number>`COALESCE((SELECT SUM(${sessions.paymentAmountCents})::int FROM ${sessions} WHERE ${sessions.clientId} = ${clients.id} AND ${sessions.paid} = true), 0)`,
-      unpaidCents: sql<number>`COALESCE((SELECT SUM(COALESCE(${sessions.paymentAmountCents}, 0))::int FROM ${sessions} WHERE ${sessions.clientId} = ${clients.id} AND ${sessions.paid} = false AND ${sessions.status} = 'completed'), 0)`,
-      lastSessionAt: sql<Date | null>`(SELECT MAX(${sessions.scheduledAt}) FROM ${sessions} WHERE ${sessions.clientId} = ${clients.id} AND ${sessions.status} = 'completed')`,
-      nextSessionAt: sql<Date | null>`(SELECT MIN(${sessions.scheduledAt}) FROM ${sessions} WHERE ${sessions.clientId} = ${clients.id} AND ${sessions.status} = 'scheduled')`,
+      // NOTE: these are written as LITERAL, fully-qualified SQL on purpose.
+      // Interpolating Drizzle column objects (${sessions.clientId}) inside a
+      // sql`` template renders them UNQUALIFIED — "client_id" = "id" — so
+      // inside `FROM sessions` both names bind to sessions' own columns and
+      // the correlation to the outer clients row is silently lost. Every
+      // count came back 0 and every MAX/MIN null. Qualify by hand here.
+      sessionCount: sql<number>`(SELECT COUNT(*)::int FROM sessions WHERE sessions.client_id = clients.id AND sessions.status = 'completed')`,
+      attachmentCount: sql<number>`(SELECT COUNT(*)::int FROM attachments WHERE attachments.client_id = clients.id)`,
+      lifetimeCents: sql<number>`COALESCE((SELECT SUM(sessions.payment_amount_cents)::int FROM sessions WHERE sessions.client_id = clients.id AND sessions.paid = true), 0)`,
+      unpaidCents: sql<number>`COALESCE((SELECT SUM(COALESCE(sessions.payment_amount_cents, 0))::int FROM sessions WHERE sessions.client_id = clients.id AND sessions.paid = false AND sessions.status = 'completed'), 0)`,
+      lastSessionAt: sql<Date | null>`(SELECT MAX(sessions.scheduled_at) FROM sessions WHERE sessions.client_id = clients.id AND sessions.status = 'completed')`,
+      // `>= now()` matters: a session left on 'scheduled' after its date has
+      // passed (never marked complete) would otherwise surface as this
+      // client's "next", showing a date in the past in the Next column.
+      nextSessionAt: sql<Date | null>`(SELECT MIN(sessions.scheduled_at) FROM sessions WHERE sessions.client_id = clients.id AND sessions.status = 'scheduled' AND sessions.scheduled_at >= now())`,
     })
     .from(clients)
     .where(and(eq(clients.accountId, accountId), eq(clients.isLead, false)))
@@ -270,12 +279,13 @@ export async function listNetwork(
       updatedAt: clients.updatedAt,
       // Light "activity" signal — how much she's written in / around them.
       // Used to surface warm leads at the top.
+      // Literal qualified SQL — see the note in listClients above.
       noteHits: sql<number>`(
-        (SELECT COUNT(*)::int FROM ${communications} WHERE ${communications.clientId} = ${clients.id})
-      + (SELECT COUNT(*)::int FROM ${observations} WHERE ${observations.clientId} = ${clients.id})
-      + (SELECT COUNT(*)::int FROM ${tasks} WHERE ${tasks.clientId} = ${clients.id})
+        (SELECT COUNT(*)::int FROM communications WHERE communications.client_id = clients.id)
+      + (SELECT COUNT(*)::int FROM observations WHERE observations.client_id = clients.id)
+      + (SELECT COUNT(*)::int FROM tasks WHERE tasks.client_id = clients.id)
       )`,
-      lastCommAt: sql<Date | null>`(SELECT MAX(${communications.occurredAt}) FROM ${communications} WHERE ${communications.clientId} = ${clients.id})`,
+      lastCommAt: sql<Date | null>`(SELECT MAX(communications.occurred_at) FROM communications WHERE communications.client_id = clients.id)`,
     })
     .from(clients)
     .leftJoin(
@@ -1419,12 +1429,14 @@ export async function getTodaysAnniversaries(
       id: clients.id,
       fullName: clients.fullName,
       dob: clients.dob,
-      // First non-cancelled session anywhere in time
+      // First non-cancelled session anywhere in time. Literal qualified SQL —
+      // interpolated columns render unqualified in a select field, which broke
+      // the correlation and made every first-session anniversary invisible.
       firstSessionAt: sql<Date | null>`(
-        SELECT MIN(${sessions.scheduledAt})
-        FROM ${sessions}
-        WHERE ${sessions.clientId} = ${clients.id}
-          AND ${sessions.status} <> 'cancelled'
+        SELECT MIN(sessions.scheduled_at)
+        FROM sessions
+        WHERE sessions.client_id = clients.id
+          AND sessions.status <> 'cancelled'
       )`,
     })
     .from(clients)
@@ -2353,7 +2365,7 @@ export async function getDashboardData(accountId: string) {
       .select({
         id: clients.id,
         fullName: clients.fullName,
-        lastSessionAt: sql<Date | null>`(SELECT MAX(${sessions.scheduledAt}) FROM ${sessions} WHERE ${sessions.clientId} = ${clients.id})`,
+        lastSessionAt: sql<Date | null>`(SELECT MAX(sessions.scheduled_at) FROM sessions WHERE sessions.client_id = clients.id)`,
       })
       .from(clients)
       .where(

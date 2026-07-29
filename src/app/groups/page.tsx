@@ -40,10 +40,10 @@ export default async function GroupsPage() {
         published: groups.published,
         language: groups.language,
         upcomingCount: sql<number>`(
-          SELECT COUNT(*)::int FROM ${groupSessions}
-          WHERE ${groupSessions.groupId} = ${groups.id}
-            AND ${groupSessions.status} = 'scheduled'
-            AND ${groupSessions.scheduledAt} >= NOW()
+          SELECT COUNT(*)::int FROM group_sessions
+          WHERE group_sessions.group_id = groups.id
+            AND group_sessions.status = 'scheduled'
+            AND group_sessions.scheduled_at >= NOW()
         )`,
       })
       .from(groups)

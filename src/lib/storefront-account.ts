@@ -45,8 +45,11 @@ export async function resolveStorefrontAccountId(): Promise<string | null> {
     .select({
       accountId: practitionerSettings.accountId,
       updatedAt: practitionerSettings.updatedAt,
-      sessionCount: sql<number>`(SELECT COUNT(*)::int FROM ${sessions} WHERE ${sessions.accountId} = ${practitionerSettings.accountId})`,
-      clientCount: sql<number>`(SELECT COUNT(*)::int FROM ${clients} WHERE ${clients.accountId} = ${practitionerSettings.accountId})`,
+      // Literal qualified SQL — interpolated Drizzle columns render
+      // unqualified inside sql``, which breaks the correlation to the outer
+      // practitioner_settings row and returns 0 for everyone.
+      sessionCount: sql<number>`(SELECT COUNT(*)::int FROM sessions WHERE sessions.account_id = practitioner_settings.account_id)`,
+      clientCount: sql<number>`(SELECT COUNT(*)::int FROM clients WHERE clients.account_id = practitioner_settings.account_id)`,
     })
     .from(practitionerSettings);
 

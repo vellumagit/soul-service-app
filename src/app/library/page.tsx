@@ -38,14 +38,14 @@ export default async function LibraryPage() {
         videoDurationSeconds: products.videoDurationSeconds,
         published: products.published,
         purchaseCount: sql<number>`(
-          SELECT COUNT(*)::int FROM ${productPurchases}
-          WHERE ${productPurchases.productId} = ${products.id}
-            AND ${productPurchases.status} = 'confirmed'
+          SELECT COUNT(*)::int FROM product_purchases
+          WHERE product_purchases.product_id = products.id
+            AND product_purchases.status = 'confirmed'
         )`,
         pendingCount: sql<number>`(
-          SELECT COUNT(*)::int FROM ${productPurchases}
-          WHERE ${productPurchases.productId} = ${products.id}
-            AND ${productPurchases.status} = 'pending'
+          SELECT COUNT(*)::int FROM product_purchases
+          WHERE product_purchases.product_id = products.id
+            AND product_purchases.status = 'pending'
         )`,
       })
       .from(products)
