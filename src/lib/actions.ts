@@ -2026,6 +2026,11 @@ export async function rescheduleSession(formData: FormData) {
     // for the new time.
     clientReminderSentAt: null,
     practitionerReminderSentAt: null,
+    // Including the T-10 nudges — a session moved to a new time deserves a
+    // fresh "we're starting" prompt, and without this the moved session would
+    // silently never get one.
+    walkInNudgeSentAt: null,
+    clientWalkInNudgeSentAt: null,
     // Clear Recall bookkeeping so maybeAutoAddRecallBot below treats this
     // as a fresh schedule.
     recallBotId: null,

@@ -600,6 +600,93 @@ ${t.noPressure}
   });
 }
 
+/** T-10 "walk in now" nudge to the practitioner, for a 1-on-1 SESSION.
+ *
+ *  The Circle version below is the same idea for groups. This one carries the
+ *  two things she actually wants in the doorway: who's coming, and what they
+ *  said they were bringing. `walkInUrl` is the Meet link when there is one,
+ *  otherwise her prep page — an in-person session still deserves the prompt,
+ *  it just points somewhere different.
+ *
+ *  English only, matching the 24h/1h session reminders. (Circle emails follow
+ *  the circle's language; 1-on-1 emails have never been localized.) */
+export async function sendSessionWalkInNudgeEmail(input: {
+  to: string;
+  clientName: string;
+  whenLabel: string;
+  walkInUrl: string;
+  isMeetLink: boolean;
+  clientStatedIntention: string | null;
+}): Promise<void> {
+  const first = input.clientName.split(" ")[0] ?? input.clientName;
+  const subject = `Starting in 10 minutes — ${first}`;
+  const bringing = input.clientStatedIntention
+    ? `\n\nThey said they're bringing:\n"${input.clientStatedIntention}"`
+    : "";
+  const text = `Your session with ${input.clientName} starts in about 10 minutes (${input.whenLabel}).${bringing}
+
+${input.isMeetLink ? `Open the room:\n${input.walkInUrl}` : `Walk in:\n${input.walkInUrl}`}
+
+Take a breath. See you in there.`;
+  const html = `
+<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#faf6f0;font-family:Georgia,'Times New Roman',serif;color:#3d342e;">
+    <div style="max-width:480px;margin:48px auto;padding:32px;background:#fdf9f1;border-radius:12px;border:1px solid #ead9c1;">
+      <p style="margin:0 0 6px 0;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#b05c36;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">Starting in 10 minutes</p>
+      <p style="margin:0 0 4px 0;font-size:20px;line-height:1.3;color:#3d342e;"><strong>${escapeHtml(input.clientName)}</strong></p>
+      <p style="margin:0 0 18px 0;font-size:14px;color:#8a7c70;">${escapeHtml(input.whenLabel)}</p>
+      ${
+        input.clientStatedIntention
+          ? `<p style="margin:0 0 18px 0;padding-left:14px;border-left:2px solid #ead9c1;font-size:15px;line-height:1.5;color:#564a42;font-style:italic;">&ldquo;${escapeHtml(input.clientStatedIntention)}&rdquo;</p>`
+          : ""
+      }
+      <a href="${escapeHtml(input.walkInUrl)}" style="display:inline-block;background:#5a3f4f;color:#fdf9f1;text-decoration:none;font-size:15px;font-weight:500;padding:14px 26px;border-radius:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">${input.isMeetLink ? "Open the room →" : "Walk in →"}</a>
+      <p style="margin:22px 0 0 0;font-size:14px;color:#564a42;font-style:italic;">Take a breath. See you in there.</p>
+    </div>
+  </body>
+</html>`.trim();
+  await sendEmail({ to: input.to, subject, html, text });
+}
+
+/** The CLIENT half of the 1-on-1 T-10 — the Meet link in their hand at the
+ *  moment the session opens. Only sent when there IS a link: for an in-person
+ *  session a "walk in →" email with nowhere to go is noise, not help. */
+export async function sendClientWalkInEmail(input: {
+  to: string;
+  clientName: string;
+  meetUrl: string;
+  practitionerName: string | null;
+}): Promise<void> {
+  const first = input.clientName.split(" ")[0] ?? input.clientName;
+  const signoff = input.practitionerName ?? "Your practitioner";
+  const subject = "We're beginning";
+  const text = `${first},
+
+Our session is beginning now.
+
+Join:
+${input.meetUrl}
+
+See you in there.
+
+— ${signoff}`;
+  const html = `
+<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#faf6f0;font-family:Georgia,'Times New Roman',serif;color:#3d342e;">
+    <div style="max-width:480px;margin:48px auto;padding:32px;background:#fdf9f1;border-radius:12px;border:1px solid #ead9c1;">
+      <p style="margin:0 0 6px 0;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#b05c36;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">We're beginning</p>
+      <p style="margin:0 0 18px 0;font-size:20px;line-height:1.3;color:#3d342e;">${escapeHtml(first)}, our session is starting now.</p>
+      <a href="${escapeHtml(input.meetUrl)}" style="display:inline-block;background:#5a3f4f;color:#fdf9f1;text-decoration:none;font-size:15px;font-weight:500;padding:14px 26px;border-radius:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">Join →</a>
+      <p style="margin:22px 0 0 0;font-size:14px;color:#564a42;font-style:italic;">See you in there.</p>
+      <p style="margin:14px 0 0 0;font-size:14px;color:#8a7c70;">— ${escapeHtml(signoff)}</p>
+    </div>
+  </body>
+</html>`.trim();
+  await sendEmail({ to: input.to, subject, html, text });
+}
+
 /** T-10 "walk in now" nudge to the practitioner. The 1h heads-up tells her a
  *  Circle is coming; this is the doorway prompt at the moment of action, with
  *  the room link as the only thing to click. Short by design — it's read on a

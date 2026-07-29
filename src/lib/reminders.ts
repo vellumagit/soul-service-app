@@ -11,7 +11,18 @@
 // own reminder-hour settings + Resend config.
 import "server-only";
 
-import { and, asc, eq, gte, gt, isNull, lte, lt, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  gte,
+  gt,
+  isNotNull,
+  isNull,
+  lte,
+  lt,
+  sql,
+} from "drizzle-orm";
 import {
   db,
   sessions,
@@ -107,6 +118,25 @@ export async function processReminders(): Promise<ReminderRunStats> {
         );
         stats.practitionerRemindersSent += sent;
       }
+
+      // T-10 "walk in now" for 1-on-1 SESSIONS — the doorway prompt, at the
+      // moment of action. Independent of practitionerReminderHours: that
+      // setting controls the hour-ahead heads-up, and someone who set it to 1h
+      // still wants the nudge at the door.
+      if (account.email) {
+        stats.practitionerRemindersSent += await sendDueSessionWalkInNudges(
+          account.id,
+          settingsRow,
+          account.email,
+          now
+        );
+      }
+      // …and the client half — only for sessions that have a Meet link.
+      stats.clientRemindersSent += await sendDueClientWalkInNudges(
+        account.id,
+        settingsRow,
+        now
+      );
 
       // CIRCLE REMINDERS — fixed 24h + 1h before each group session, to
       // every confirmed attendee. Independent of the 1-on-1 windows above.
@@ -828,6 +858,154 @@ async function sendDuePostCircleEmails(
           err
         );
       }
+    }
+  }
+  return count;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// T-10 "walk in now" nudges for 1-on-1 SESSIONS
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Circles have had this since the group work shipped; 1-on-1s didn't, so the
+// last thing either side heard was the hour-ahead heads-up. Same shape as the
+// Circle versions: a (now, now+12min] window (the cron ticks every 5 minutes
+// and can drift, so a hard 10-minute edge would be missable) plus a
+// claim-before-send stamp that keeps the wide window sending exactly once.
+
+async function sendDueSessionWalkInNudges(
+  accountId: string,
+  settings: typeof practitionerSettings.$inferSelect,
+  practitionerEmail: string,
+  now: Date
+): Promise<number> {
+  const windowEnd = new Date(now.getTime() + 12 * 60 * 1000);
+  const rows = await db
+    .select({
+      id: sessions.id,
+      scheduledAt: sessions.scheduledAt,
+      meetUrl: sessions.meetUrl,
+      sessionTimezone: sessions.timezone,
+      clientStatedIntention: sessions.clientStatedIntention,
+      clientName: clients.fullName,
+    })
+    .from(sessions)
+    .innerJoin(clients, eq(sessions.clientId, clients.id))
+    .where(
+      and(
+        eq(sessions.accountId, accountId),
+        eq(sessions.status, "scheduled"),
+        isNull(sessions.walkInNudgeSentAt),
+        gt(sessions.scheduledAt, now),
+        lte(sessions.scheduledAt, windowEnd)
+      )
+    );
+
+  const base = process.env.NEXT_PUBLIC_SITE_URL ?? "";
+  let count = 0;
+  for (const row of rows) {
+    const claimed = await db
+      .update(sessions)
+      .set({ walkInNudgeSentAt: now })
+      .where(
+        and(eq(sessions.id, row.id), isNull(sessions.walkInNudgeSentAt))
+      )
+      .returning({ id: sessions.id });
+    if (claimed.length === 0) continue;
+
+    try {
+      const { sendSessionWalkInNudgeEmail } = await import("./resend");
+      // Meet link when the session has one; otherwise her prep page, which is
+      // the useful doorway for an in-person session.
+      const walkInUrl = row.meetUrl ?? `${base}/sessions/${row.id}/prep`;
+      await sendSessionWalkInNudgeEmail({
+        to: practitionerEmail,
+        clientName: row.clientName,
+        whenLabel: formatSessionLong(
+          new Date(row.scheduledAt),
+          resolveTimeZone(row.sessionTimezone, settings.timezone)
+        ),
+        walkInUrl,
+        isMeetLink: !!row.meetUrl,
+        clientStatedIntention: row.clientStatedIntention,
+      });
+      count++;
+    } catch (err) {
+      await db
+        .update(sessions)
+        .set({ walkInNudgeSentAt: null })
+        .where(eq(sessions.id, row.id));
+      console.error(
+        `[reminders] session walk-in nudge failed for ${row.id}:`,
+        err
+      );
+    }
+  }
+  return count;
+}
+
+// The CLIENT half. Gated on a Meet URL existing — the whole point is putting
+// the link in their hand at the moment the session opens, and an in-person
+// session has no link to give.
+async function sendDueClientWalkInNudges(
+  accountId: string,
+  settings: typeof practitionerSettings.$inferSelect,
+  now: Date
+): Promise<number> {
+  const windowEnd = new Date(now.getTime() + 12 * 60 * 1000);
+  const rows = await db
+    .select({
+      id: sessions.id,
+      meetUrl: sessions.meetUrl,
+      clientName: clients.fullName,
+      clientEmail: clients.email,
+    })
+    .from(sessions)
+    .innerJoin(clients, eq(sessions.clientId, clients.id))
+    .where(
+      and(
+        eq(sessions.accountId, accountId),
+        eq(sessions.status, "scheduled"),
+        isNull(sessions.clientWalkInNudgeSentAt),
+        isNotNull(sessions.meetUrl),
+        gt(sessions.scheduledAt, now),
+        lte(sessions.scheduledAt, windowEnd)
+      )
+    );
+
+  let count = 0;
+  for (const row of rows) {
+    if (!row.clientEmail || !row.meetUrl) continue;
+    const claimed = await db
+      .update(sessions)
+      .set({ clientWalkInNudgeSentAt: now })
+      .where(
+        and(
+          eq(sessions.id, row.id),
+          isNull(sessions.clientWalkInNudgeSentAt)
+        )
+      )
+      .returning({ id: sessions.id });
+    if (claimed.length === 0) continue;
+
+    try {
+      const { sendClientWalkInEmail } = await import("./resend");
+      await sendClientWalkInEmail({
+        to: row.clientEmail,
+        clientName: row.clientName,
+        meetUrl: row.meetUrl,
+        practitionerName: settings.practitionerName ?? null,
+      });
+      count++;
+    } catch (err) {
+      await db
+        .update(sessions)
+        .set({ clientWalkInNudgeSentAt: null })
+        .where(eq(sessions.id, row.id));
+      console.error(
+        `[reminders] client walk-in nudge failed for ${row.id}:`,
+        err
+      );
     }
   }
   return count;

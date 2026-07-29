@@ -255,6 +255,12 @@ export const sessions = pgTable(
     // session gets a fresh reminder for the new time).
     clientReminderSentAt: timestamp("client_reminder_sent_at"),
     practitionerReminderSentAt: timestamp("practitioner_reminder_sent_at"),
+    // T-10 "walk in now" nudges — the prompt at the moment of action, distinct
+    // from the hour-based heads-up above. Two stamps because the two halves
+    // send independently and either can fail alone. Cleared on reschedule with
+    // the rest of the reminder bookkeeping.
+    walkInNudgeSentAt: timestamp("walk_in_nudge_sent_at"),
+    clientWalkInNudgeSentAt: timestamp("client_walk_in_nudge_sent_at"),
 
     // Recall.ai auto-notes pipeline — a meeting bot we spawned joins the
     // Meet, records, transcribes, and webhooks the transcript back. We then

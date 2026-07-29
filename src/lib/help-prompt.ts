@@ -56,6 +56,7 @@ Soul Service is built specifically for Svitlana, a sole practitioner who holds o
 
 If you ask "what's new?" / "что нового?" / "що нового?", lead with the highlights from this list. Most recent first.
 
+- **You now get a "walk in now" nudge 10 minutes before a 1-on-1, and so does your client.** Your Circles have had this for a while; ordinary sessions didn't, so the last thing either of you heard was the hour-ahead heads-up. Yours names who's coming, carries what they said they were bringing, and gives you one button — the Meet room, or your prep page for an in-person session. Theirs is just "we're beginning" with the join link, and only goes out when the session actually has a Meet link (no link, no email). Move a session and both nudges reset for the new time.
 - **Clients can now pay you by card, right from their portal.** Every outstanding session in their Billing tab gets a "Pay $X by card" button that opens Stripe Checkout — the money lands in your own Stripe account, same as Circle seats do. It marks itself paid on your side automatically, so you're not chasing anyone or ticking boxes by hand. Your written payment instructions (Venmo, cash, e-transfer) still show underneath, because some people will always pay that way. The button only appears once you've connected Stripe and finished activation — until then Billing looks exactly as it did.
 - **Clients can correct their own details.** "Your details" on their portal home has an Edit button now: name, pronouns, email, phone, city, and — the one that matters — the timezone every date in their space is shown in. That zone is guessed from their browser the first time they visit, and until now a wrong guess was something only you could fix. Changes appear on their file on your side straight away.
 - **"Book" is now a tab in the portal.** Asking for another session used to be reachable only from a button on their Today page, so a client sitting on Billing or The arc had to back out to find it. It's a permanent tab now, alongside Today · The arc · Reflections · Billing.
@@ -424,10 +425,12 @@ If you ask "what's new?" / "что нового?" / "що нового?", lead w
 - Not yet wired for recurring *series* bookings or reschedules — those still rely on the Google Calendar invite/update.
 
 ## Session reminders
-- Automatic emails to the client (default 24h before) and to your (default 1h before).
+- Automatic emails to the client (default 24h before) and to you (default 1h before).
 - Configurable per-account in Settings → Automations.
 - Set to 0 to disable that audience.
-- Sends via Resend if RESEND_API_KEY is set; cron runs hourly via GitHub Actions.
+- **Plus a T-10 "walk in now" nudge, ten minutes before**, to both of you. Yours names the client, carries what they said they were bringing, and links straight to the Meet room (or to your prep page when the session is in person). Theirs is a short "we're beginning" with the join link, and is **only sent when the session has a Meet link** — an in-person session has nothing to link to, so the client gets nothing. This nudge is NOT tied to your reminder-hours setting; it always fires. Rescheduling a session resets both nudges so the moved session gets a fresh one.
+- Sends via Resend if RESEND_API_KEY is set. The cron runs **every 5 minutes** on Vercel (\`vercel.json\` → \`/api/cron/reminders\`), which is what makes a 10-minute nudge possible at all — an hourly cron has no 4:50 run for a 5:00 session.
+- Every reminder is claimed in the database *before* it's sent, so a cron run that overlaps itself can't email the same person twice; if the send fails the claim is released and the next tick retries.
 
 ## Sign-in
 - **\`/signin\` is one smart door for everyone.** Type an email: if it's on the practitioner allowlist (ALLOWED_EMAILS env var) → you sign in with your **password** (once you've set one in Settings), or tap **"Email me a sign-in link"** as a fallback → 30-day session cookie. If the email is NOT on the allowlist → it's treated as a client, and the same form quietly starts a client-portal sign-in (magic link emailed to enrolled clients). A stranger's email shows the same neutral "check your email" card — no way to tell from the outside whether an email is enrolled.
