@@ -14,7 +14,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import Link from "next/link";
 import { db } from "@/db";
 import { clientBookingRequests, practitionerSettings } from "@/db/schema";
@@ -95,13 +95,16 @@ export default async function PortalBookPage({
       preferredTimes: clientBookingRequests.preferredTimes,
       reason: clientBookingRequests.reason,
       createdAt: clientBookingRequests.createdAt,
+      status: clientBookingRequests.status,
     })
     .from(clientBookingRequests)
     .where(
       and(
         eq(clientBookingRequests.accountId, portal.accountId),
         eq(clientBookingRequests.clientId, portal.clientId),
-        eq(clientBookingRequests.status, "pending")
+        // 'acknowledged' means she's written back — still open, but the
+        // client should see that rather than an unchanged "waiting".
+        inArray(clientBookingRequests.status, ["pending", "acknowledged"])
       )
     )
     .orderBy(desc(clientBookingRequests.createdAt));
@@ -154,7 +157,9 @@ export default async function PortalBookPage({
           {pending.length > 0 && (
             <section className="paper-card p-5 mb-6">
               <p className="text-[10px] uppercase tracking-widest text-plum-700 font-mono mb-2">
-                You&apos;ve already requested
+                {pending.some((r) => r.status === "acknowledged")
+                  ? `${practitionerFirstName} is on it`
+                  : "You've already requested"}
               </p>
               <ul className="space-y-3">
                 {pending.map((r) => (
@@ -176,8 +181,9 @@ export default async function PortalBookPage({
                 ))}
               </ul>
               <p className="text-[11px] text-ink-500 italic mt-3 leading-snug">
-                If you want to add to the conversation, you can send another
-                — both will be visible to {practitionerFirstName}.
+                {pending.some((r) => r.status === "acknowledged")
+                  ? `${practitionerFirstName} has replied — check your email. This stays here until a session is actually booked.`
+                  : `If you want to add to the conversation, you can send another — both will be visible to ${practitionerFirstName}.`}
               </p>
             </section>
           )}

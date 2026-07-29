@@ -1522,6 +1522,9 @@ export type RescheduleRequestRow = {
   sessionId: string;
   clientId: string;
   clientName: string;
+  clientEmail: string | null;
+  clientPhone: string | null;
+  status: string;
   scheduledAt: Date;
   type: string;
   reason: string | null;
@@ -1532,6 +1535,11 @@ export type BookingRequestRow = {
   requestId: string;
   clientId: string;
   clientName: string;
+  /** Needed to reply or text without a second round-trip to the client row. */
+  clientEmail: string | null;
+  clientPhone: string | null;
+  /** pending | acknowledged — "she's replied but hasn't booked it yet". */
+  status: string;
   preferredTimes: string | null;
   reason: string | null;
   requestedAt: Date;
@@ -1682,6 +1690,9 @@ export async function getLooseEnds(accountId: string): Promise<LooseEnds> {
       sessionId: rescheduleRequests.sessionId,
       clientId: rescheduleRequests.clientId,
       clientName: clients.fullName,
+      clientEmail: clients.email,
+      clientPhone: clients.phone,
+      status: rescheduleRequests.status,
       scheduledAt: sessions.scheduledAt,
       type: sessions.type,
       reason: rescheduleRequests.reason,
@@ -1693,7 +1704,7 @@ export async function getLooseEnds(accountId: string): Promise<LooseEnds> {
     .where(
       and(
         eq(rescheduleRequests.accountId, accountId),
-        eq(rescheduleRequests.status, "pending")
+        inArray(rescheduleRequests.status, ["pending", "acknowledged"])
       )
     )
     .orderBy(desc(rescheduleRequests.createdAt));
@@ -1703,6 +1714,9 @@ export async function getLooseEnds(accountId: string): Promise<LooseEnds> {
       sessionId: r.sessionId,
       clientId: r.clientId,
       clientName: r.clientName,
+      clientEmail: r.clientEmail,
+      clientPhone: r.clientPhone,
+      status: r.status,
       scheduledAt: new Date(r.scheduledAt),
       type: r.type,
       reason: r.reason,
@@ -1718,6 +1732,9 @@ export async function getLooseEnds(accountId: string): Promise<LooseEnds> {
       requestId: clientBookingRequests.id,
       clientId: clientBookingRequests.clientId,
       clientName: clients.fullName,
+      clientEmail: clients.email,
+      clientPhone: clients.phone,
+      status: clientBookingRequests.status,
       preferredTimes: clientBookingRequests.preferredTimes,
       reason: clientBookingRequests.reason,
       requestedAt: clientBookingRequests.createdAt,
@@ -1727,7 +1744,8 @@ export async function getLooseEnds(accountId: string): Promise<LooseEnds> {
     .where(
       and(
         eq(clientBookingRequests.accountId, accountId),
-        eq(clientBookingRequests.status, "pending")
+        // 'acknowledged' = she's replied but hasn't booked it yet. Still open.
+        inArray(clientBookingRequests.status, ["pending", "acknowledged"])
       )
     )
     .orderBy(desc(clientBookingRequests.createdAt));
@@ -1736,6 +1754,9 @@ export async function getLooseEnds(accountId: string): Promise<LooseEnds> {
       requestId: r.requestId,
       clientId: r.clientId,
       clientName: r.clientName,
+      clientEmail: r.clientEmail,
+      clientPhone: r.clientPhone,
+      status: r.status,
       preferredTimes: r.preferredTimes,
       reason: r.reason,
       requestedAt: new Date(r.requestedAt),

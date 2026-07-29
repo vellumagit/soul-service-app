@@ -20,7 +20,7 @@ import {
   leadForms,
   leadSubmissions,
 } from "@/db/schema";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { getSettings } from "@/db/queries";
 import { requireSession } from "./session-cookies";
 import { isValidTimeZone, resolveTimeZone } from "./timezone";
@@ -325,6 +325,118 @@ export async function resolveRescheduleRequest(
 export type SendPortalInviteResult =
   | { ok: true; sentTo: string }
   | { ok: false; error: string };
+
+export type ReplyToRequestResult =
+  | { ok: true; sentTo: string; suppressed: boolean }
+  | { ok: false; error: string };
+
+/**
+ * Answer a portal request — email the client and mark the request as
+ * acknowledged, in one action.
+ *
+ * The gap this closes: a request could only be "resolved", which meant done.
+ * There was no way to say "I've written to them, we're sorting out a time" —
+ * so the moment she replied, the request either sat looking untouched or got
+ * resolved prematurely and vanished before anything was booked. And the
+ * client's portal still read "your practitioner has been notified" with no
+ * sign anyone had actually looked.
+ *
+ * `acknowledged` keeps it on her Requests page and in the sidebar count (it
+ * IS still open work), while telling the client someone is on it.
+ */
+export async function replyToRequest(input: {
+  kind: "booking" | "reschedule";
+  requestId: string;
+  subject: string;
+  body: string;
+}): Promise<ReplyToRequestResult> {
+  try {
+    const { accountId } = await requireSession();
+    const subject = input.subject.trim().slice(0, 300);
+    const body = input.body.trim().slice(0, 8000);
+    if (!subject) return { ok: false, error: "Give the email a subject." };
+    if (!body) return { ok: false, error: "The message is empty." };
+
+    const { rescheduleRequests, clientBookingRequests } = await import(
+      "@/db/schema"
+    );
+    const table =
+      input.kind === "booking" ? clientBookingRequests : rescheduleRequests;
+
+    const [row] = await db
+      .select({
+        id: table.id,
+        clientId: table.clientId,
+        clientName: clients.fullName,
+        clientEmail: clients.email,
+      })
+      .from(table)
+      .innerJoin(clients, eq(clients.id, table.clientId))
+      .where(and(eq(table.accountId, accountId), eq(table.id, input.requestId)))
+      .limit(1);
+    if (!row) return { ok: false, error: "That request no longer exists." };
+    if (!row.clientEmail || !row.clientEmail.includes("@")) {
+      return {
+        ok: false,
+        error:
+          "This client has no email on file — add one, or reach them another way.",
+      };
+    }
+
+    const { isResendConfigured, sendEmail } = await import("./resend");
+    if (!isResendConfigured()) {
+      return { ok: false, error: "Email isn't configured yet." };
+    }
+    const settings = await getSettings(accountId);
+    const res = await sendEmail({
+      to: row.clientEmail,
+      subject,
+      html: bodyToHtml(body, settings?.businessName ?? null),
+      text: body,
+      // Reply lands in her inbox, so the thread continues naturally.
+      replyTo: settings?.businessEmail ?? undefined,
+    });
+
+    // Mark acknowledged, never downgrading something already resolved.
+    await db
+      .update(table)
+      .set({ status: "acknowledged", reviewedAt: new Date() })
+      .where(
+        and(
+          eq(table.accountId, accountId),
+          eq(table.id, input.requestId),
+          eq(table.status, "pending")
+        )
+      );
+
+    // Keep it in her communication history with the client.
+    try {
+      await db.insert(communications).values({
+        accountId,
+        clientId: row.clientId,
+        kind: "email_sent",
+        subject,
+        body,
+        occurredAt: new Date(),
+      });
+    } catch (err) {
+      console.error("[request reply] couldn't log communication:", err);
+    }
+
+    revalidatePath("/requests");
+    revalidatePath(`/clients/${row.clientId}`);
+    revalidatePath("/portal");
+    revalidatePath("/portal/book");
+    return {
+      ok: true,
+      sentTo: row.clientEmail,
+      suppressed: res.suppressed === true,
+    };
+  } catch (err) {
+    console.error("[request reply] failed:", err);
+    return { ok: false, error: "Couldn't send that. Try again." };
+  }
+}
 
 /**
  * Give a client their own space, in one click.
@@ -1387,6 +1499,28 @@ export async function scheduleSession(
     created.id,
     isInPerson
   );
+
+  // Booking this session IS the answer to "can I have another session?" —
+  // close any open request from this client so she doesn't have to remember
+  // to come back and tick it off. Mirrors what rescheduling already does for
+  // reschedule requests. Best-effort: bookkeeping must never fail a booking.
+  try {
+    const { clientBookingRequests } = await import("@/db/schema");
+    await db
+      .update(clientBookingRequests)
+      .set({ status: "resolved", reviewedAt: new Date() })
+      .where(
+        and(
+          eq(clientBookingRequests.accountId, accountId),
+          eq(clientBookingRequests.clientId, clientId),
+          inArray(clientBookingRequests.status, ["pending", "acknowledged"])
+        )
+      );
+    revalidatePath("/requests");
+    revalidatePath("/portal/book");
+  } catch (err) {
+    console.error("[schedule] couldn't close booking requests:", err);
+  }
 
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/calendar");

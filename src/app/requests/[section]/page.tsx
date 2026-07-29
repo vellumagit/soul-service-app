@@ -46,6 +46,9 @@ export default async function RequestSectionPage({
   const locale = asLocale(settings.uiLanguage);
   const tz = resolveTimeZone(settings.timezone);
   const count = meta.count(ends);
+  // Signs the pre-written reply draft on request rows.
+  const practitionerFirstName =
+    settings.practitionerName?.split(" ")[0] ?? "me";
 
   return (
     <AppShell
@@ -93,7 +96,9 @@ export default async function RequestSectionPage({
           </p>
         </div>
       ) : (
-        <div className="max-w-3xl">{renderSection(slug, ends, tz)}</div>
+        <div className="max-w-3xl">
+          {renderSection(slug, ends, tz, practitionerFirstName)}
+        </div>
       )}
     </AppShell>
   );
@@ -105,7 +110,8 @@ export default async function RequestSectionPage({
 function renderSection(
   slug: string,
   ends: Awaited<ReturnType<typeof getLooseEnds>>,
-  tz: string
+  tz: string,
+  practitionerFirstName: string
 ) {
   switch (slug) {
     case "reschedules":
@@ -113,11 +119,16 @@ function renderSection(
         <RescheduleRequestsSection
           rows={ends.rescheduleRequests}
           timeZone={tz}
+          practitionerFirstName={practitionerFirstName}
         />
       );
     case "sessions":
       return (
-        <BookingRequestsSection rows={ends.bookingRequests} timeZone={tz} />
+        <BookingRequestsSection
+          rows={ends.bookingRequests}
+          timeZone={tz}
+          practitionerFirstName={practitionerFirstName}
+        />
       );
     case "refunds":
       return (

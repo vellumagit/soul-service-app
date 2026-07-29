@@ -242,9 +242,12 @@ export function GroupSignupsSection({
 export function BookingRequestsSection({
   rows,
   timeZone,
+  practitionerFirstName,
 }: {
   rows: BookingRequestRow[];
   timeZone?: string;
+  /** Signs the pre-written reply draft. */
+  practitionerFirstName: string;
 }) {
   return (
     <section className="paper-card p-6">
@@ -301,6 +304,12 @@ export function BookingRequestsSection({
               <BookingRequestRowActions
                 requestId={r.requestId}
                 clientId={r.clientId}
+                clientName={r.clientName}
+                clientEmail={r.clientEmail}
+                clientPhone={r.clientPhone}
+                practitionerFirstName={practitionerFirstName}
+                askedFor={r.preferredTimes ?? r.reason}
+                status={r.status}
               />
             </div>
           </li>
@@ -313,9 +322,11 @@ export function BookingRequestsSection({
 export function RescheduleRequestsSection({
   rows,
   timeZone,
+  practitionerFirstName,
 }: {
   rows: RescheduleRequestRow[];
   timeZone?: string;
+  practitionerFirstName: string;
 }) {
   return (
     <section className="paper-card p-6">
@@ -369,6 +380,12 @@ export function RescheduleRequestsSection({
                 requestId={r.requestId}
                 clientId={r.clientId}
                 sessionId={r.sessionId}
+                clientName={r.clientName}
+                clientEmail={r.clientEmail}
+                clientPhone={r.clientPhone}
+                practitionerFirstName={practitionerFirstName}
+                askedFor={r.reason}
+                status={r.status}
               />
             </div>
           </li>

@@ -174,7 +174,14 @@ export default async function PortalSessionDetailPage({
     )
     .orderBy(desc(rescheduleRequests.createdAt))
     .limit(1);
-  const hasPending = pending[0]?.status === "pending";
+  // 'acknowledged' = she's written back but hasn't moved the session yet.
+  // Both states keep the form hidden (the ask is already on record), but the
+  // client should be told which one they're in rather than reading the same
+  // "has been notified" line for days.
+  const requestState = pending[0]?.status ?? null;
+  const hasPending =
+    requestState === "pending" || requestState === "acknowledged";
+  const answered = requestState === "acknowledged";
 
   // Mint a signed playback URL only when there's a recap. 24h expiry — even
   // if a determined client copies the iframe HTML and shares it, the link
@@ -333,8 +340,9 @@ export default async function PortalSessionDetailPage({
                 color: "var(--color-plum-700)",
               }}
             >
-              You already sent a request for this session. Your practitioner
-              has been notified.
+              {answered
+                ? "Your practitioner has replied — check your email. This stays here until the session is actually moved."
+                : "You already sent a request for this session. Your practitioner has been notified."}
             </div>
           ) : (
             <form
