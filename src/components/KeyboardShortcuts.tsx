@@ -28,7 +28,7 @@ const SHORTCUTS = [
   { keys: ["g", "w"], action: "Go to Network (people you've met)" },
   { keys: ["g", "k"], action: "Go to Calendar" },
   { keys: ["g", "p"], action: "Go to Payments" },
-  { keys: ["g", "l"], action: "Go to Loose ends (unfinished sessions)" },
+  { keys: ["g", "r"], action: "Go to Requests (people waiting on you)" },
   { keys: ["g", "y"], action: "Go to Your practice (year in review)" },
   { keys: ["g", "s"], action: "Go to Settings" },
   { keys: ["g", "d"], action: "Jump to a date (opens calendar picker)" },
@@ -115,7 +115,10 @@ export function KeyboardShortcuts() {
           w: "/network",
           k: "/calendar",
           p: "/payments",
-          l: "/loose-ends",
+          r: "/requests",
+          // `g l` kept alive: this section was called "Loose ends" until
+          // it was renamed, and the old key is free anyway.
+          l: "/requests",
           y: "/practice",
           s: "/settings",
           "?": "/status",

@@ -467,7 +467,7 @@ export async function cancelGroupSession(
 
     revalidatePath(`/groups/${row.groupId}`);
     revalidatePath("/calendar");
-    revalidatePath("/loose-ends");
+    revalidatePath("/requests");
     revalidatePath("/");
   }
   return { ok: true, notified, refundsQueued };
@@ -726,7 +726,7 @@ export async function signUpForGroupSession(
     return { ok: false, error: pubMsg("full", lang) };
   }
 
-  revalidatePath("/loose-ends");
+  revalidatePath("/requests");
   revalidatePath("/groups");
   revalidatePath(`/circles/${groupSessionId}`);
 
@@ -1053,7 +1053,7 @@ export async function confirmAttendee(
     } catch (err) {
       console.error("[group] fulfillment after manual confirm failed", err);
     }
-    revalidatePath("/loose-ends");
+    revalidatePath("/requests");
     revalidatePath("/groups");
     return { ok: true };
   } catch (err) {
@@ -1168,7 +1168,7 @@ export async function addCircleAttendee(input: {
     }
 
     revalidatePath(`/groups/${session.groupId}`);
-    revalidatePath("/loose-ends");
+    revalidatePath("/requests");
     revalidatePath("/today");
     return { ok: true };
   } catch (err) {
@@ -1204,7 +1204,7 @@ export async function markAttendeeCancelled(
         console.error("[circle] google re-sync on attendee cancel failed:", err);
       }
     }
-    revalidatePath("/loose-ends");
+    revalidatePath("/requests");
     revalidatePath("/groups");
     return { ok: true };
   } catch (err) {
@@ -1345,7 +1345,7 @@ export async function requestCircleRefund(
     console.error("[circle] refund-request notify failed", err);
   }
 
-  revalidatePath("/loose-ends");
+  revalidatePath("/requests");
   revalidatePath("/groups");
   return { ok: true, state: paidViaStripe ? "requested" : "cancelled" };
 }
@@ -1381,7 +1381,7 @@ export async function approveCircleRefund(
       .limit(1);
     if (!row) return { ok: false, error: "Attendee not found." };
     if (row.refundedAt) {
-      revalidatePath("/loose-ends");
+      revalidatePath("/requests");
       return { ok: true }; // already refunded — idempotent
     }
     if (!row.paid) {
@@ -1449,7 +1449,7 @@ export async function approveCircleRefund(
           console.error("[circle] manual refund email failed", err);
         }
       }
-      revalidatePath("/loose-ends");
+      revalidatePath("/requests");
       revalidatePath("/groups");
       return { ok: true };
     }
@@ -1474,7 +1474,7 @@ export async function approveCircleRefund(
       console.error("[circle] post-refund seat release failed", err);
     }
 
-    revalidatePath("/loose-ends");
+    revalidatePath("/requests");
     revalidatePath("/groups");
     return { ok: true };
   } catch (err) {
@@ -1500,7 +1500,7 @@ export async function dismissCircleRefundRequest(
           eq(groupAttendees.id, attendeeId)
         )
       );
-    revalidatePath("/loose-ends");
+    revalidatePath("/requests");
     return { ok: true };
   } catch (err) {
     return {

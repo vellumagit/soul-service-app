@@ -278,7 +278,7 @@ export default async function GroupDetailPage({
               in one pass; this is the pointer to it. */}
           {pendingTotal > 0 && (
             <Link
-              href="/loose-ends"
+              href="/requests"
               className="inline-flex items-center gap-2 mt-3 px-3 py-1.5 rounded-md no-underline hover:brightness-[0.98] transition"
               style={{
                 background: "var(--color-honey-50, #fbf3e4)",

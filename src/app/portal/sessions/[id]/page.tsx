@@ -109,7 +109,7 @@ async function submitRescheduleRequest(formData: FormData): Promise<void> {
 
   // Practitioner-side surfaces — make sure the chip + Loose ends update.
   revalidatePath(`/clients/${portalSession.clientId}`);
-  revalidatePath("/loose-ends");
+  revalidatePath("/requests");
 
   redirect(`/portal/sessions/${sessionIdRaw}?submitted=1`);
 }

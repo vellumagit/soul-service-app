@@ -275,7 +275,7 @@ export async function resolveBookingRequest(
     if (updated.length === 0) {
       return { ok: false, error: "Request not found" };
     }
-    revalidatePath("/loose-ends");
+    revalidatePath("/requests");
     revalidatePath(`/clients/${updated[0].clientId}`);
     return { ok: true };
   } catch (err) {
@@ -311,7 +311,7 @@ export async function resolveRescheduleRequest(
     if (updated.length === 0) {
       return { ok: false, error: "Request not found" };
     }
-    revalidatePath("/loose-ends");
+    revalidatePath("/requests");
     revalidatePath(`/clients/${updated[0].clientId}`);
     return { ok: true };
   } catch (err) {
@@ -2187,7 +2187,7 @@ export async function rescheduleSession(formData: FormData) {
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/calendar");
   revalidatePath("/today");
-  revalidatePath("/loose-ends");
+  revalidatePath("/requests");
   revalidatePath(`/portal/sessions/${id}`);
 }
 
@@ -2265,7 +2265,7 @@ export async function cancelSession(sessionId: string, clientId: string) {
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/calendar");
   revalidatePath("/today");
-  revalidatePath("/loose-ends");
+  revalidatePath("/requests");
   revalidatePath(`/portal/sessions/${sessionId}`);
 }
 

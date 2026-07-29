@@ -1,11 +1,12 @@
 "use client";
 
-// The little count next to "Loose ends" in the sidebar.
+// The little count next to "Requests" in the sidebar.
 //
-// Counts only the asks a *person* is waiting on — portal reschedule and
-// session requests. Deliberately not the whole Loose ends page: unwritten
-// notes and un-run bots are her own backlog, and a number that's never zero
-// stops meaning anything. This one goes away when nobody is waiting.
+// Counts every ask a *person* is waiting on: portal reschedule + session
+// requests, Circle sign-ups, refund requests, and Library purchases.
+// Deliberately NOT her own backlog (unwritten notes, missing intentions,
+// un-retried bots) — a number that never reaches zero stops meaning anything.
+// This one goes away when nobody is waiting on her.
 //
 // Refetches whenever the route changes, which covers the realistic case
 // (she acts on a request, lands back on another page, the badge clears).
@@ -14,13 +15,13 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 
-export function LooseEndsBadge() {
+export function RequestsBadge() {
   const pathname = usePathname();
   const [count, setCount] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/loose-ends/count", { cache: "no-store" })
+    fetch("/api/requests/count", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : { count: 0 }))
       .then((d) => {
         if (!cancelled) setCount(Number(d?.count) || 0);

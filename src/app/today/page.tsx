@@ -84,7 +84,7 @@ export default async function HomePage() {
           A quiet sidebar pill wasn't enough. */}
       {pendingApprovals > 0 && (
         <Link
-          href="/loose-ends"
+          href="/requests"
           className="block mb-6 rounded-lg p-4 border-l-4 no-underline hover:brightness-[0.98] transition"
           style={{
             background: "var(--color-honey-50, #fbf3e4)",
@@ -154,7 +154,7 @@ export default async function HomePage() {
           treatment: a person is waiting. */}
       {portalRequests.total > 0 && (
         <Link
-          href="/loose-ends"
+          href="/requests"
           className="block mb-6 rounded-lg p-4 border-l-4 no-underline hover:brightness-[0.98] transition"
           style={{
             background: "var(--color-honey-50, #fbf3e4)",

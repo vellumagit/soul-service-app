@@ -335,7 +335,7 @@ export async function requestProductPurchase(
     })
     .returning({ id: productPurchases.id });
 
-  revalidatePath("/loose-ends");
+  revalidatePath("/requests");
   revalidatePath(`/library/${productId}`);
 
   return { ok: true, purchaseId: inserted.id };
@@ -375,7 +375,7 @@ export async function confirmPurchase(
         accessToken: productPurchases.accessToken,
       });
     if (!row) return { ok: false, error: "Purchase not found." };
-    revalidatePath("/loose-ends");
+    revalidatePath("/requests");
     revalidatePath(`/library/${row.productId}`);
     return {
       ok: true,
@@ -408,7 +408,7 @@ export async function refundPurchase(
           eq(productPurchases.id, purchaseId)
         )
       );
-    revalidatePath("/loose-ends");
+    revalidatePath("/requests");
     return { ok: true };
   } catch (err) {
     return {

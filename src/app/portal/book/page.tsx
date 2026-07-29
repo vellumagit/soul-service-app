@@ -63,7 +63,7 @@ async function submitBookingRequest(formData: FormData): Promise<void> {
   });
 
   revalidatePath("/portal/book");
-  revalidatePath("/loose-ends");
+  revalidatePath("/requests");
   revalidatePath(`/clients/${portal.clientId}`);
   redirect("/portal/book?submitted=1");
 }
