@@ -23,6 +23,9 @@ import { NextResponse } from "next/server";
 import { getSessionEmail } from "@/lib/session-cookies";
 import { findAccountByEmail } from "@/lib/account";
 import { getLooseEnds } from "@/db/queries";
+// Same catalogue the hub cards render from, so the badge and the page can
+// never disagree about who counts as "waiting".
+import { countWaiting } from "@/lib/request-sections";
 
 export const dynamic = "force-dynamic";
 
@@ -33,13 +36,7 @@ export async function GET() {
   if (!account) return NextResponse.json({ count: 0 }, { status: 401 });
 
   try {
-    const le = await getLooseEnds(account.accountId);
-    const count =
-      le.rescheduleRequests.length +
-      le.bookingRequests.length +
-      le.groupSignups.length +
-      le.refundRequests.length +
-      le.productPurchases.length;
+    const count = countWaiting(await getLooseEnds(account.accountId));
     return NextResponse.json({ count });
   } catch (err) {
     console.error("[requests] count failed:", err);
