@@ -10,6 +10,7 @@ import { AvailabilityPanel } from "./AvailabilityPanel";
 import { LandingPortraitField } from "./LandingPortraitField";
 import { BrandMarkField } from "./BrandMarkField";
 import { LandingCopyEditor } from "./LandingCopyEditor";
+import { ReviewsManager, type ReviewItem } from "./ReviewsManager";
 import { COMMON_TIME_ZONES } from "@/lib/timezone";
 import {
   LOCALE_LABELS,
@@ -19,7 +20,15 @@ import {
   type Locale,
 } from "@/lib/i18n";
 
-export function SettingsForm({ settings }: { settings: PractitionerSettings }) {
+export function SettingsForm({
+  settings,
+  reviews,
+}: {
+  settings: PractitionerSettings;
+  /** Storefront testimonials — managed row-by-row, not part of this form's
+   *  submit, so they arrive as their own prop. */
+  reviews: ReviewItem[];
+}) {
   const [submitting, setSubmitting] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -191,6 +200,15 @@ export function SettingsForm({ settings }: { settings: PractitionerSettings }) {
           — the &ldquo;preview&rdquo; query param escapes the auto-redirect
           to /today so you can see what visitors see.
         </p>
+      </Section>
+
+      {/* Reviews — their own section, since the list is managed row-by-row
+          rather than saved with the rest of the form. */}
+      <Section
+        title="Reviews"
+        subtitle="What people say about working with you. They appear on your public page, just under “Ways to work together”."
+      >
+        <ReviewsManager initial={reviews} />
       </Section>
 
       {/* Invoicing */}

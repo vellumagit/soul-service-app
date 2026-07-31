@@ -23,6 +23,11 @@ import { listPublishedProducts } from "@/lib/product-actions";
 import { getLandingCopy } from "@/lib/landing-copy";
 import { getLandingLang } from "@/lib/landing-lang";
 import { applyLandingOverrides } from "@/lib/landing-overrides";
+import {
+  renderReviews,
+  type RenderedReview,
+} from "@/lib/landing-reviews";
+import { listLandingReviews } from "@/db/queries";
 import { resolveTimeZone } from "@/lib/timezone";
 import "./landing.css";
 
@@ -64,6 +69,10 @@ export default async function LandingPage() {
   let circleSignupsOpen = false;
   // Portrait photo for the About section. Blank → the gradient placeholder.
   let portraitUrl: string | null = null;
+  // Reviews she added in Settings, already resolved to THIS language (a blank
+  // translation falls back to the other one). Empty → the whole section is
+  // skipped, so an untended list never leaves a heading over nothing.
+  let reviews: RenderedReview[] = [];
   // Practice timezone — so every Circle time renders in HER local zone (with a
   // zone label), never the server's UTC. Falls back to the app default.
   let practiceTz: string = resolveTimeZone(null);
@@ -100,6 +109,10 @@ export default async function LandingPage() {
       practiceTz = resolveTimeZone(cfg?.timezone);
       // Her Settings copy for THIS language wins over the dictionary default.
       c = applyLandingOverrides(c, cfg?.landingCopyOverrides ?? null, lang);
+      reviews = renderReviews(
+        await listLandingReviews(storefrontAccountId, { publishedOnly: true }),
+        lang
+      );
       if (cfg?.showAvailability) {
         const windows = await getAvailableWindows(storefrontAccountId, {
           limit: 6,
@@ -376,32 +389,43 @@ export default async function LandingPage() {
         </section>
 
         {/* VOICES */}
-        <section className="voices">
-          <div className="wrap narrow rv" style={{ textAlign: "center" }}>
-            <span className="tag" style={{ display: "block" }}>
-              {c.voices.tag}
-            </span>
-            <h2>{c.voices.title}</h2>
-          </div>
-          <div className="wrap vgrid">
-            <div className="voice rv">
-              <p>&ldquo;{c.voices.v1}&rdquo;</p>
-              <div className="who">{c.voices.v1who}</div>
+        {/* REVIEWS — entirely hers, added from Settings → Reviews. The list
+            comes from the DB already resolved to this language, so a review
+            she hasn't translated yet still renders (in the other language)
+            rather than showing an empty pair of quote marks. No reviews at
+            all → no section, so the heading never sits over nothing. */}
+        {reviews.length > 0 && (
+          <section className="voices">
+            <div className="wrap narrow rv" style={{ textAlign: "center" }}>
+              <span className="tag" style={{ display: "block" }}>
+                {c.voices.tag}
+              </span>
+              <h2>{c.voices.title}</h2>
             </div>
-            <div className="voice rv">
-              <p>&ldquo;{c.voices.v2}&rdquo;</p>
-              <div className="who">{c.voices.v2who}</div>
+            <div className="wrap vgrid">
+              {reviews.map((r) => (
+                <div className="voice rv" key={r.id}>
+                  {r.photoUrl && (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      src={r.photoUrl}
+                      alt=""
+                      style={{
+                        width: 56,
+                        height: 56,
+                        borderRadius: "50%",
+                        objectFit: "cover",
+                        marginBottom: "0.9rem",
+                      }}
+                    />
+                  )}
+                  <p>&ldquo;{r.quote}&rdquo;</p>
+                  {r.author && <div className="who">{r.author}</div>}
+                </div>
+              ))}
             </div>
-            <div className="voice rv">
-              <p>&ldquo;{c.voices.v3}&rdquo;</p>
-              <div className="who">{c.voices.v3who}</div>
-            </div>
-            <div className="voice rv">
-              <p>&ldquo;{c.voices.v4}&rdquo;</p>
-              <div className="who">{c.voices.v4who}</div>
-            </div>
-          </div>
-        </section>
+          </section>
+        )}
 
         {/* UPCOMING CIRCLES — only when sign-ups are open AND there are any.
             While closed, the storefront stays info + pricing + contact; the

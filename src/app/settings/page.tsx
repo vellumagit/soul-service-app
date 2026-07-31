@@ -4,6 +4,7 @@ import {
   listClientsForPicker,
   listEmailTemplates,
   listNoteTemplates,
+  listLandingReviews,
 } from "@/db/queries";
 import { getGoogleConnectionStatus } from "@/lib/google-calendar";
 import { QuickActions } from "@/components/QuickActions";
@@ -32,15 +33,23 @@ export default async function SettingsPage({
   const { email: userEmail, accountId } = await requireSession();
   const { google, email, reason, stripe } = await searchParams;
 
-  const [settings, clientsList, emailTpls, noteTpls, googleStatus, passwordHash] =
-    await Promise.all([
-      getSettings(accountId),
-      listClientsForPicker(accountId),
-      listEmailTemplates(accountId),
-      listNoteTemplates(accountId),
-      getGoogleConnectionStatus(accountId),
-      getAccountPasswordHash(accountId),
-    ]);
+  const [
+    settings,
+    clientsList,
+    emailTpls,
+    noteTpls,
+    googleStatus,
+    passwordHash,
+    reviews,
+  ] = await Promise.all([
+    getSettings(accountId),
+    listClientsForPicker(accountId),
+    listEmailTemplates(accountId),
+    listNoteTemplates(accountId),
+    getGoogleConnectionStatus(accountId),
+    getAccountPasswordHash(accountId),
+    listLandingReviews(accountId),
+  ]);
 
   const flashStatus =
     google === "connected" ? "connected" : google === "error" ? "error" : null;
@@ -89,7 +98,7 @@ export default async function SettingsPage({
         <PasswordSettings hasPassword={!!passwordHash} />
       </div>
 
-      <SettingsForm settings={settings} />
+      <SettingsForm settings={settings} reviews={reviews} />
 
       <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-5">
         <TemplatesManager

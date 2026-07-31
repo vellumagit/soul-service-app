@@ -25,6 +25,7 @@ import {
   groupAttendees,
   products,
   productPurchases,
+  landingReviews,
   type Client,
   type PractitionerSettings,
   type LeadForm,
@@ -2488,4 +2489,41 @@ export async function getPaymentTotals(accountId: string) {
     unpaidCents: unpaidTotal[0]?.total ?? 0,
     unpaidCount: unpaidTotal[0]?.count ?? 0,
   };
+}
+
+/**
+ * Reviews for the storefront's "Voices" section.
+ *
+ * Ordered the way she arranged them in Settings; `createdAt` is the tie-break
+ * so rows that share a sort_order (possible after an interrupted reorder) still
+ * come back in a stable order rather than shuffling between renders.
+ *
+ * `publishedOnly` is what the public landing page passes — Settings wants the
+ * parked ones too.
+ */
+export async function listLandingReviews(
+  accountId: string,
+  opts: { publishedOnly?: boolean } = {}
+) {
+  const where = opts.publishedOnly
+    ? and(
+        eq(landingReviews.accountId, accountId),
+        eq(landingReviews.published, true)
+      )
+    : eq(landingReviews.accountId, accountId);
+
+  return db
+    .select({
+      id: landingReviews.id,
+      quoteEn: landingReviews.quoteEn,
+      quoteUk: landingReviews.quoteUk,
+      authorEn: landingReviews.authorEn,
+      authorUk: landingReviews.authorUk,
+      photoUrl: landingReviews.photoUrl,
+      published: landingReviews.published,
+      sortOrder: landingReviews.sortOrder,
+    })
+    .from(landingReviews)
+    .where(where)
+    .orderBy(asc(landingReviews.sortOrder), asc(landingReviews.createdAt));
 }

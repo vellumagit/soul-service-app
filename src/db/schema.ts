@@ -1352,3 +1352,45 @@ export type LeadForm = typeof leadForms.$inferSelect;
 export type NewLeadForm = typeof leadForms.$inferInsert;
 export type LeadSubmission = typeof leadSubmissions.$inferSelect;
 export type NewLeadSubmission = typeof leadSubmissions.$inferInsert;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// landing_reviews — testimonials she adds herself, rendered in the storefront's
+// "Voices" section (directly under "Ways to work together").
+//
+// One row is ONE review across BOTH languages: the photo and the position in
+// the list are shared, only the words differ per language. That's deliberate —
+// a review is the same human saying the same thing, so duplicating the row per
+// language would let the two storefronts drift out of sync.
+//
+// Blank Ukrainian text falls back to the English at render time, so she can add
+// a review in one language and translate it later without breaking the page.
+// ─────────────────────────────────────────────────────────────────────────────
+export const landingReviews = pgTable(
+  "landing_reviews",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    quoteEn: text("quote_en").notNull().default(""),
+    quoteUk: text("quote_uk").notNull().default(""),
+    /** The "who said it" line — e.g. "M., Kyiv". Free text, not a client link:
+     *  most reviews are published under an initial, and some come from people
+     *  who were never clients in the app. */
+    authorEn: text("author_en").notNull().default(""),
+    authorUk: text("author_uk").notNull().default(""),
+    photoUrl: text("photo_url"),
+    /** Unpublished reviews stay in Settings but never render publicly — the
+     *  way to park one without deleting it. */
+    published: boolean("published").notNull().default(true),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    accountIdx: index("landing_reviews_account_idx").on(t.accountId),
+  })
+);
+
+export type LandingReview = typeof landingReviews.$inferSelect;
+export type NewLandingReview = typeof landingReviews.$inferInsert;
