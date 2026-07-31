@@ -311,6 +311,7 @@ export default async function HomePage() {
                         <MarkPaidDialog
                           sessionId={s.id}
                           clientId={s.clientId}
+                          defaultAmountCents={settings.defaultRateCents}
                         />
                       }
                     />

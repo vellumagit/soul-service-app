@@ -10,10 +10,17 @@ export function MarkPaidDialog({
   sessionId,
   clientId,
   trigger,
+  defaultAmountCents = null,
 }: {
   sessionId: string;
   clientId: string;
   trigger?: (open: () => void) => React.ReactNode;
+  /** What to put in the Amount box: this session's own amount if it has one,
+   *  otherwise her Settings default rate. The box used to open EMPTY with a
+   *  hardcoded "135" placeholder, so marking a session paid recorded no
+   *  amount at all — which is why every money figure in the app read zero
+   *  despite a rate being set. A placeholder is not a value. */
+  defaultAmountCents?: number | null;
 }) {
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -96,13 +103,20 @@ export function MarkPaidDialog({
             </select>
           </Field>
 
-          <Field label="Amount ($)">
+          <Field
+            label="Amount ($)"
+            hint="Pre-filled from your default rate in Settings. Clear it to record no amount."
+          >
             <input
               name="paymentAmount"
               type="number"
               step="1"
               min={0}
-              placeholder="135"
+              defaultValue={
+                defaultAmountCents != null
+                  ? (defaultAmountCents / 100).toFixed(0)
+                  : ""
+              }
               className={inputCls}
             />
           </Field>

@@ -59,6 +59,7 @@ export function SessionsLog({
   autoUploadAiNotes,
   timeZone,
   clientPortalEnabled = false,
+  defaultRateCents = null,
 }: {
   sessions: Session[];
   /** The client these sessions belong to — passed through to SessionCard so
@@ -72,6 +73,8 @@ export function SessionsLog({
   /** Passed to SessionCard so the shared-note block can say whether the
    *  client actually has a portal to read it in. */
   clientPortalEnabled?: boolean;
+  /** Passed through to Mark paid so the amount box opens pre-filled. */
+  defaultRateCents?: number | null;
 }) {
   const groups = groupByMonth(sessions, timeZone);
 
@@ -112,6 +115,7 @@ export function SessionsLog({
                 noteTemplates={noteTemplates}
                 autoUploadAiNotes={autoUploadAiNotes}
                 clientPortalEnabled={clientPortalEnabled}
+                defaultRateCents={defaultRateCents}
               />
             ))}
           </div>

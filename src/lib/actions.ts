@@ -2519,7 +2519,12 @@ export async function markSessionPaid(formData: FormData) {
         | "paypal"
         | "stripe"
         | "other",
-      paymentAmountCents: amount !== null ? Math.round(amount * 100) : null,
+      // Leave the amount alone when the box comes back empty. It used to
+      // write NULL, which silently erased whatever the session was worth —
+      // including the amount stamped at completion.
+      ...(amount !== null
+        ? { paymentAmountCents: Math.round(amount * 100) }
+        : {}),
       paymentNote: note,
       paidAt: new Date().toISOString().slice(0, 10),
       updatedAt: new Date(),

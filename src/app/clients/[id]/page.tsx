@@ -371,6 +371,7 @@ export default async function ClientProfilePage({
               autoUploadAiNotes={settings.autoUploadAiNotes}
               timeZone={practiceTz}
               clientPortalEnabled={client.portalEnabled}
+              defaultRateCents={settings.defaultRateCents}
             />
           )}
         </div>

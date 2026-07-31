@@ -49,6 +49,7 @@ export function SessionCard({
   noteTemplates = [],
   autoUploadAiNotes = false,
   clientPortalEnabled = false,
+  defaultRateCents = null,
 }: {
   session: Session;
   /** Used to address her by name in the Closing Ritual prompts. Optional —
@@ -60,6 +61,9 @@ export function SessionCard({
   autoUploadAiNotes?: boolean;
   /** Drives the "they don't have a portal yet" hint on the shared note. */
   clientPortalEnabled?: boolean;
+  /** Her Settings rate, pre-filled into Mark paid when the session has no
+   *  amount of its own. */
+  defaultRateCents?: number | null;
 }) {
   const [open, setOpen] = useState(session.status === "scheduled");
   const [submitting, setSubmitting] = useState(false);
@@ -450,6 +454,9 @@ export function SessionCard({
                 <MarkPaidDialog
                   sessionId={session.id}
                   clientId={session.clientId}
+                  defaultAmountCents={
+                    session.paymentAmountCents ?? defaultRateCents
+                  }
                 />
               </>
             )}

@@ -160,6 +160,9 @@ export default async function PaymentsPage({
                     <MarkPaidDialog
                       sessionId={s.id}
                       clientId={s.clientId}
+                      defaultAmountCents={
+                        s.paymentAmountCents ?? settings.defaultRateCents
+                      }
                     />
                   )}
                 </div>
@@ -230,6 +233,9 @@ export default async function PaymentsPage({
                         <MarkPaidDialog
                           sessionId={s.id}
                           clientId={s.clientId}
+                          defaultAmountCents={
+                            s.paymentAmountCents ?? settings.defaultRateCents
+                          }
                         />
                       )}
                     </td>
