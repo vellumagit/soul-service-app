@@ -30,6 +30,7 @@ import { notify } from "./FlashNotifier";
 import { describeSaveError } from "@/lib/save-error";
 import { PushToGoogleButton } from "./PushToGoogleButton";
 import { ClosingRitualDialog } from "./ClosingRitualDialog";
+import { ShareNoteBlock } from "./ShareNoteBlock";
 import { WalkInButton } from "./WalkInButton";
 import { RecapUploadButton } from "./RecapUploadButton";
 import { RecordSessionDialog } from "./RecordSessionDialog";
@@ -47,6 +48,7 @@ export function SessionCard({
   clientName,
   noteTemplates = [],
   autoUploadAiNotes = false,
+  clientPortalEnabled = false,
 }: {
   session: Session;
   /** Used to address her by name in the Closing Ritual prompts. Optional —
@@ -56,6 +58,8 @@ export function SessionCard({
   /** When true, the AI-notes dialog auto-closes after a successful generation
    *  instead of showing the "Done — close to review" confirmation step. */
   autoUploadAiNotes?: boolean;
+  /** Drives the "they don't have a portal yet" hint on the shared note. */
+  clientPortalEnabled?: boolean;
 }) {
   const [open, setOpen] = useState(session.status === "scheduled");
   const [submitting, setSubmitting] = useState(false);
@@ -396,6 +400,20 @@ export function SessionCard({
           {/* Recap video — appears for completed sessions only. Upload UI
               for Svit; the playback URL lives on /portal/sessions/[id]. */}
           {isCompleted && <RecapSection session={session} />}
+
+          {/* The one thing on this card the CLIENT reads. Writes
+              client_visible_note, which the portal has always read and
+              nothing has ever written. */}
+          {isCompleted && (
+            <ShareNoteBlock
+              sessionId={session.id}
+              clientFirstName={
+                (clientName ?? "them").split(" ")[0] || "them"
+              }
+              initial={session.clientVisibleNote}
+              portalEnabled={clientPortalEnabled}
+            />
+          )}
 
           {/* Payment row */}
           <div className="border-t border-ink-100 pt-3 flex items-center gap-3 text-sm flex-wrap">

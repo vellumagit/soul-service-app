@@ -219,7 +219,7 @@ export async function POST(req: Request): Promise<Response> {
       // Already paid (e.g. she marked the Venmo lane paid while a card
       // checkout was in flight)? Still record the payment intent if we have
       // none — otherwise the second charge is invisible in-app and can never
-      // be refunded from Loose Ends.
+      // be refunded from Requests.
       if (flipped.length === 0 && paymentIntentId) {
         const stamped = await db
           .update(groupAttendees)

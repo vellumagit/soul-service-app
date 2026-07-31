@@ -1,7 +1,7 @@
 // Portal session detail — the page reached via the "Request reschedule"
 // link on the home card. Shows the session details and a small form to
 // ask for a reschedule. NOT self-serve — the practitioner gets a chip on
-// her side and a row in Loose ends; she decides what to do.
+// her side and a row in Requests; she decides what to do.
 
 import Link from "next/link";
 import { and, desc, eq } from "drizzle-orm";
@@ -107,7 +107,7 @@ async function submitRescheduleRequest(formData: FormData): Promise<void> {
     message: reason && reason.length > 0 ? reason : null,
   });
 
-  // Practitioner-side surfaces — make sure the chip + Loose ends update.
+  // Practitioner-side surfaces — make sure the chip + Requests update.
   revalidatePath(`/clients/${portalSession.clientId}`);
   revalidatePath("/requests");
 

@@ -1,6 +1,6 @@
 "use client";
 
-// Inline actions for a pending product purchase on Loose Ends. Confirm +
+// Inline actions for a pending product purchase on Requests. Confirm +
 // Mark paid generates the watch URL right there so she can copy + email.
 
 import { useState, useTransition } from "react";

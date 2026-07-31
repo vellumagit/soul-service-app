@@ -151,7 +151,12 @@ export default async function HomePage() {
       {/* A client asked for something from inside their own portal — to move a
           session, or to book another. They were told "your practitioner has
           been notified", so this has to actually reach her. Same honey
-          treatment: a person is waiting. */}
+          treatment: a person is waiting.
+
+          Deliberately PORTAL-only, not every kind of waiting: Today already
+          carries its own banner for Circle seat approvals just below, and
+          merging the two would announce the same people twice on one screen.
+          The sidebar count is the place that totals everything. */}
       {portalRequests.total > 0 && (
         <Link
           href="/requests"
@@ -194,7 +199,7 @@ export default async function HomePage() {
               </div>
             </div>
             <span className="text-sm font-medium text-honey-700 whitespace-nowrap">
-              Open loose ends →
+              Open Requests →
             </span>
           </div>
         </Link>

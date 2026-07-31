@@ -161,6 +161,21 @@ export async function createClient(formData: FormData) {
     );
   }
 
+  // Optionally open their portal and send the sign-in link, straight from the
+  // new-client dialog. Opt-in per client rather than automatic: ticking it
+  // emails a real person the moment she hits Save, and adding someone to the
+  // roster isn't always the moment she wants to invite them in.
+  if (bool(formData, "openPortal")) {
+    try {
+      const r = await connectClientPortal(created.id);
+      if (!r.ok) {
+        console.error("[new client] portal invite failed:", r.error);
+      }
+    } catch (err) {
+      console.error("[new client] portal invite threw:", err);
+    }
+  }
+
   revalidatePath("/clients");
   redirect(`/clients/${created.id}`);
 }
@@ -2235,6 +2250,36 @@ export async function updateSession(formData: FormData) {
   }
 
   if (isMarkComplete) {
+    // Stamp what the session is worth, from her Settings default rate.
+    //
+    // Settings has said "Default rate — used when no amount is set on a
+    // session" since the beginning, but only invoice generation ever read it.
+    // Nothing wrote it onto the session, so payment_amount_cents stayed NULL
+    // on every session ever completed: the Clients list showed $0 paid and $0
+    // unpaid, the client's Billing tab showed nothing owed, and the portal's
+    // card-pay button could never appear (it requires an amount > 0).
+    //
+    // Only fills a NULL — a session she priced by hand, or deliberately set to
+    // 0 for a gifted session, is never overwritten.
+    try {
+      const settings = await getSettings(accountId);
+      const rate = settings?.defaultRateCents ?? 0;
+      if (rate > 0) {
+        await db
+          .update(sessions)
+          .set({ paymentAmountCents: rate, updatedAt: new Date() })
+          .where(
+            and(
+              eq(sessions.accountId, accountId),
+              eq(sessions.id, id),
+              isNull(sessions.paymentAmountCents)
+            )
+          );
+      }
+    } catch (err) {
+      console.error("[complete] couldn't stamp the session amount:", err);
+    }
+
     await runOnSessionCompleted(id, clientId);
   }
 
@@ -3645,4 +3690,72 @@ export async function generateInvoice(sessionId: string, clientId: string) {
   await generateInvoiceForSession(sessionId);
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/payments");
+}
+
+export type ShareNoteResult =
+  | { ok: true; notified: boolean }
+  | { ok: false; error: string };
+
+/**
+ * Leave a short note the CLIENT can read, on a completed session.
+ *
+ * `sessions.client_visible_note` has existed since the portal shipped and the
+ * portal reads it in two places — the "Since your last session" card on their
+ * home, and their session page. But nothing in the app ever WROTE it: there
+ * was no field anywhere, so that card could never appear for anyone. This is
+ * the missing half.
+ *
+ * Saving also emails the client that something is waiting, because the portal
+ * is otherwise pull-only — she'd write something thoughtful and they'd never
+ * know to look. Only clients with portal access get the email.
+ */
+export async function shareSessionNote(
+  sessionId: string,
+  note: string
+): Promise<ShareNoteResult> {
+  try {
+    const { accountId } = await requireSession();
+    const clean = note.trim().slice(0, 2000);
+
+    const [row] = await db
+      .select({
+        id: sessions.id,
+        clientId: sessions.clientId,
+        existing: sessions.clientVisibleNote,
+      })
+      .from(sessions)
+      .where(and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId)))
+      .limit(1);
+    if (!row) return { ok: false, error: "Session not found." };
+
+    await db
+      .update(sessions)
+      .set({
+        clientVisibleNote: clean.length > 0 ? clean : null,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId)));
+
+    // Only ping them on a NEW note — editing a typo shouldn't email again,
+    // and clearing it certainly shouldn't.
+    let notified = false;
+    if (clean.length > 0 && !row.existing) {
+      const { notifyClientOfPortalUpdate } = await import("./portal-notify");
+      await notifyClientOfPortalUpdate({
+        accountId,
+        clientId: row.clientId,
+        sessionId,
+        kind: "note",
+      });
+      notified = true;
+    }
+
+    revalidatePath(`/clients/${row.clientId}`);
+    revalidatePath("/portal");
+    revalidatePath(`/portal/sessions/${sessionId}`);
+    return { ok: true, notified };
+  } catch (err) {
+    console.error("[share note] failed:", err);
+    return { ok: false, error: "Couldn't save that note." };
+  }
 }

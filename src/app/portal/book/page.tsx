@@ -2,7 +2,7 @@
 //
 // NOT self-serve scheduling. The practitioner controls the calendar;
 // this is just a structured message saying "I'd like another one,
-// here's when works." Lands in Loose Ends → "Session requests" on
+// here's when works." Lands in Requests → "Session requests" on
 // her side.
 //
 // Form fields:
@@ -10,7 +10,7 @@
 //   - reason: optional message
 //
 // One pending request per client at a time is allowed; sending a fresh
-// one while a pending exists is fine — both queue in Loose Ends.
+// one while a pending exists is fine — both queue in Requests.
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -51,7 +51,7 @@ async function submitBookingRequest(formData: FormData): Promise<void> {
   });
 
   // "Your practitioner has been notified" — make that literally true instead
-  // of relying on her opening Loose ends. Best-effort; the row is committed.
+  // of relying on her opening Requests. Best-effort; the row is committed.
   await notifyPractitionerOfPortalRequest({
     accountId: portal.accountId,
     clientId: portal.clientId,

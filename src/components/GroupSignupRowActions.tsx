@@ -1,7 +1,7 @@
 "use client";
 
 // Inline triage buttons for a pending or unpaid group attendee on the
-// Loose Ends page. Calls the same server actions as the group detail
+// Requests page. Calls the same server actions as the group detail
 // page — keeps the row out of the list once it's confirmed + paid.
 
 import { useState, useTransition } from "react";

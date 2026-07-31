@@ -1,6 +1,6 @@
 "use client";
 
-// One row in the Loose Ends "Refund requests" section. A paid Circle attendee
+// One row in the Requests "Refund requests" section. A paid Circle attendee
 // asked to cancel + be refunded. "Refund & release" issues the Stripe refund on
 // her connected account (which frees the seat + emails them); "Keep them in"
 // dismisses the request without refunding.

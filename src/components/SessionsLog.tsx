@@ -58,6 +58,7 @@ export function SessionsLog({
   noteTemplates,
   autoUploadAiNotes,
   timeZone,
+  clientPortalEnabled = false,
 }: {
   sessions: Session[];
   /** The client these sessions belong to — passed through to SessionCard so
@@ -68,6 +69,9 @@ export function SessionsLog({
   autoUploadAiNotes?: boolean;
   /** Practice timezone — groups sessions by HER local month. */
   timeZone?: string;
+  /** Passed to SessionCard so the shared-note block can say whether the
+   *  client actually has a portal to read it in. */
+  clientPortalEnabled?: boolean;
 }) {
   const groups = groupByMonth(sessions, timeZone);
 
@@ -107,6 +111,7 @@ export function SessionsLog({
                 clientName={clientName}
                 noteTemplates={noteTemplates}
                 autoUploadAiNotes={autoUploadAiNotes}
+                clientPortalEnabled={clientPortalEnabled}
               />
             ))}
           </div>

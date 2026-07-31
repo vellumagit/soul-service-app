@@ -314,6 +314,29 @@ export function NewClientDialog({
               />
             </Field>
           </div>
+
+          {/* Opening their portal from here. Off by default on purpose:
+              ticking it sends a real email to a real person the moment you
+              hit Save, and adding someone to your roster isn't always the
+              same moment you want to invite them in. You can always open it
+              later from the Portal card on their profile. */}
+          <div className="border-t border-ink-100 pt-4 mt-2">
+            <label className="inline-flex items-start gap-2 text-sm text-ink-700">
+              <input
+                type="checkbox"
+                name="openPortal"
+                value="true"
+                className="rounded border-ink-300 mt-0.5"
+              />
+              <span>
+                Give them their own space and email a sign-in link now
+                <span className="block text-[11px] text-ink-500 italic mt-0.5 leading-snug">
+                  Sends immediately on save. Needs an email above. Leave
+                  unticked to invite them later.
+                </span>
+              </span>
+            </label>
+          </div>
         </form>
       </Modal>
     </>

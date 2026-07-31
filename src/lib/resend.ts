@@ -1490,3 +1490,48 @@ function simpleNoteHtml(p: {
   </body>
 </html>`.trim();
 }
+
+/** "Something new is waiting in your space" — sent when she uploads a session
+ *  recap or shares a note. Deliberately contentless: it says something is
+ *  there and links to it, rather than reproducing anything private in an
+ *  inbox that may not be hers alone. */
+export async function sendPortalUpdateEmail(input: {
+  to: string;
+  clientName: string;
+  practitionerName: string | null;
+  kind: "note" | "recap";
+  link: string | null;
+}): Promise<void> {
+  const first = input.clientName.split(" ")[0] ?? input.clientName;
+  const signoff = input.practitionerName ?? "Your practitioner";
+  const what =
+    input.kind === "recap"
+      ? "a recording from our time together"
+      : "a note from after our session";
+  const subject =
+    input.kind === "recap"
+      ? "A recording from our session"
+      : "A note from after our session";
+  const text = `${first},
+
+I've left ${what} in your space.${input.link ? `\n\n${input.link}` : ""}
+
+— ${signoff}`;
+  const html = `
+<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#faf6f0;font-family:Georgia,'Times New Roman',serif;color:#3d342e;">
+    <div style="max-width:480px;margin:48px auto;padding:32px;background:#fdf9f1;border-radius:12px;border:1px solid #ead9c1;">
+      <p style="margin:0 0 6px 0;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#b05c36;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">In your space</p>
+      <p style="margin:0 0 18px 0;font-size:16px;line-height:1.6;color:#564a42;">${escapeHtml(first)}, I've left ${escapeHtml(what)} for you.</p>
+      ${
+        input.link
+          ? `<a href="${escapeHtml(input.link)}" style="display:inline-block;background:#5a3f4f;color:#fdf9f1;text-decoration:none;font-size:15px;font-weight:500;padding:14px 26px;border-radius:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">Open your space →</a>`
+          : ""
+      }
+      <p style="margin:22px 0 0 0;font-size:14px;color:#8a7c70;">— ${escapeHtml(signoff)}</p>
+    </div>
+  </body>
+</html>`.trim();
+  await sendEmail({ to: input.to, subject, html, text });
+}

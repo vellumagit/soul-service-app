@@ -54,7 +54,7 @@ const ICON: Record<string, string> = {
   // A small bound book — Year in Review feels like opening her journal
   practice:
     "M4 6a2 2 0 012-2h11a1 1 0 011 1v14a1 1 0 01-1 1H6a2 2 0 01-2-2V6zm0 0c0-1.105.895-2 2-2h11M9 8h6M9 12h4",
-  // An untied thread / loose knot — "loose ends" as a tactile metaphor.
+  // An open envelope-ish mark — things arriving that need answering.
   // Two short lines meeting at a small open circle so the glyph reads as
   // "almost finished, not yet tied off."
   // An open envelope-ish glyph: things arriving that need answering.

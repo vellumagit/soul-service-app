@@ -147,6 +147,16 @@ export async function confirmRecapUpload(
       .where(
         and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId))
       );
+    // Tell them it's there. The portal is otherwise pull-only — she'd upload
+    // a recording and the client would never know to go and look.
+    const { notifyClientOfPortalUpdate } = await import("./portal-notify");
+    await notifyClientOfPortalUpdate({
+      accountId,
+      clientId: row.clientId,
+      sessionId,
+      kind: "recap",
+    });
+
     revalidatePath(`/clients/${row.clientId}`);
     revalidatePath(`/portal/sessions/${sessionId}`);
     return {

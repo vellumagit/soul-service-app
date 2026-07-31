@@ -274,7 +274,7 @@ export default async function GroupDetailPage({
             </span>
           </div>
           {/* Anyone waiting on her, across every upcoming session — visible
-              before she scrolls. Loose Ends is the queue where they're cleared
+              before she scrolls. Requests is the queue where they're cleared
               in one pass; this is the pointer to it. */}
           {pendingTotal > 0 && (
             <Link

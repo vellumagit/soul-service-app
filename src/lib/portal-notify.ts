@@ -74,3 +74,59 @@ export async function notifyPractitionerOfPortalRequest(input: {
     console.error("[portal] request notify email failed:", err);
   }
 }
+
+/**
+ * Tell a client that something new is waiting in their portal.
+ *
+ * The portal was entirely pull until now: she could upload a session recap or
+ * write them a note and the client would only discover it by happening to
+ * visit. Nothing prompted them, so in practice most of it went unseen.
+ *
+ * Only fires for clients who actually have portal access — emailing someone a
+ * link to a space they can't sign into is worse than staying quiet.
+ * Best-effort, like every other notify path here.
+ */
+export async function notifyClientOfPortalUpdate(input: {
+  accountId: string;
+  clientId: string;
+  sessionId: string;
+  kind: "note" | "recap";
+}): Promise<void> {
+  try {
+    if (!isResendConfigured()) return;
+    const { clients, practitionerSettings } = await import("@/db/schema");
+    const { and, eq } = await import("drizzle-orm");
+
+    const [row] = await db
+      .select({
+        name: clients.fullName,
+        email: clients.email,
+        portalEnabled: clients.portalEnabled,
+      })
+      .from(clients)
+      .where(
+        and(eq(clients.id, input.clientId), eq(clients.accountId, input.accountId))
+      )
+      .limit(1);
+    if (!row?.portalEnabled) return;
+    if (!row.email || !row.email.includes("@")) return;
+
+    const [pset] = await db
+      .select({ practitionerName: practitionerSettings.practitionerName })
+      .from(practitionerSettings)
+      .where(eq(practitionerSettings.accountId, input.accountId))
+      .limit(1);
+
+    const base = workspaceBaseUrl();
+    const { sendPortalUpdateEmail } = await import("./resend");
+    await sendPortalUpdateEmail({
+      to: row.email,
+      clientName: row.name,
+      practitionerName: pset?.practitionerName ?? null,
+      kind: input.kind,
+      link: base ? `${base}/portal/sessions/${input.sessionId}` : null,
+    });
+  } catch (err) {
+    console.error("[portal] update notify failed:", err);
+  }
+}

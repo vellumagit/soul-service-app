@@ -1,6 +1,6 @@
 "use client";
 
-// Per-row action button on the Loose Ends page.
+// Per-row action button on the Requests page.
 //
 // Three flavors:
 //   - showReflectInline → button opens The Closing modal in place. Used

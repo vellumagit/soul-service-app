@@ -17,7 +17,7 @@ export function CancelGroupSessionButton({
   function onClick() {
     if (
       !confirm(
-        `Cancel the ${scheduledAtLabel} session? Everyone signed up is emailed, and paid seats land in Loose Ends as refund requests.`
+        `Cancel the ${scheduledAtLabel} session? Everyone signed up is emailed, and paid seats land in Requests as refund requests.`
       )
     ) {
       return;
@@ -32,7 +32,7 @@ export function CancelGroupSessionButton({
       }
       if (r.refundsQueued > 0) {
         bits.push(
-          `${r.refundsQueued} refund${r.refundsQueued === 1 ? "" : "s"} waiting in Loose Ends`
+          `${r.refundsQueued} refund${r.refundsQueued === 1 ? "" : "s"} waiting in Requests`
         );
       }
       notify({
