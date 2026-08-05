@@ -24,7 +24,6 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { getSettings } from "@/db/queries";
 import { requireSession } from "./session-cookies";
 import { isValidTimeZone, resolveTimeZone } from "./timezone";
-import { parseLandingOverridesFromForm } from "./landing-overrides";
 import { safeCurrency } from "./format";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2843,11 +2842,11 @@ export async function updateSettings(formData: FormData) {
       businessPhone: str(formData, "businessPhone"),
       businessAddress: str(formData, "businessAddress"),
       websiteUrl: str(formData, "websiteUrl"),
-      // Storefront copy she edits from /settings, per language. Blank fields
-      // are dropped so the hand-written default shows through. (The old
-      // landingTagline/About/HowItWorks/WhatToExpect columns are legacy and no
-      // longer rendered — we intentionally no longer write them.)
-      landingCopyOverrides: parseLandingOverridesFromForm(formData),
+      // NOTE: landingCopyOverrides is deliberately NOT written here. The
+      // storefront's words moved out of this form and into per-section dialogs
+      // (Settings → Landing page), each saved by saveSectionCopy. Rebuilding
+      // the blob from this form would now find none of those fields present
+      // and wipe every word she's written.
       uiLanguage,
       defaultRateCents:
         defaultRate !== null ? Math.round(defaultRate * 100) : 13500,

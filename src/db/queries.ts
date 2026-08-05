@@ -27,6 +27,7 @@ import {
   productPurchases,
   landingReviews,
   landingOffers,
+  landingSections,
   type Client,
   type PractitionerSettings,
   type LeadForm,
@@ -2573,4 +2574,23 @@ export async function listLandingOffers(
     .from(landingOffers)
     .where(where)
     .orderBy(asc(landingOffers.sortOrder), asc(landingOffers.createdAt));
+}
+
+/**
+ * Her arrangement of the storefront's preset sections (order + visibility).
+ *
+ * Returns raw rows — resolveSections() in lib/landing-sections merges them with
+ * the catalogue, so a slug that has no row yet still lands in its built-in
+ * position instead of disappearing.
+ */
+export async function listLandingSections(accountId: string) {
+  return db
+    .select({
+      slug: landingSections.slug,
+      sortOrder: landingSections.sortOrder,
+      visible: landingSections.visible,
+    })
+    .from(landingSections)
+    .where(eq(landingSections.accountId, accountId))
+    .orderBy(asc(landingSections.sortOrder));
 }

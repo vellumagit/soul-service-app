@@ -9,6 +9,7 @@ import {
   pgEnum,
   boolean,
   index,
+  uniqueIndex,
   jsonb,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
@@ -1451,3 +1452,38 @@ export const landingOffers = pgTable(
 
 export type LandingOffer = typeof landingOffers.$inferSelect;
 export type NewLandingOffer = typeof landingOffers.$inferInsert;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// landing_sections — her arrangement of the storefront's preset sections.
+//
+// The sections themselves are fixed (see src/lib/landing-sections.ts); this
+// table only records order and visibility. A slug with no row falls back to its
+// built-in position and shows, so adding a section in a future release doesn't
+// need a backfill to appear.
+//
+// The WORDS live in practitioner_settings.landingCopyOverrides, keyed per
+// language. Deliberately separate: order changes are one small write, copy
+// changes are a merge into a JSON blob.
+// ─────────────────────────────────────────────────────────────────────────────
+export const landingSections = pgTable(
+  "landing_sections",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    slug: text("slug").notNull(),
+    sortOrder: integer("sort_order").notNull().default(0),
+    visible: boolean("visible").notNull().default(true),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    accountSlugIdx: uniqueIndex("landing_sections_account_slug_idx").on(
+      t.accountId,
+      t.slug
+    ),
+  })
+);
+
+export type LandingSectionRow = typeof landingSections.$inferSelect;

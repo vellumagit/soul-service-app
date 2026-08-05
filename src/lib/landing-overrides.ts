@@ -11,6 +11,7 @@
 // deliberately NOT editable — they're tied to layout and real pricing.
 
 import type { LandingCopy, LandingLang } from "./landing-copy";
+import type { LandingSectionSlug } from "./landing-sections";
 
 /** Stored shape on practitioner_settings.landingCopyOverrides. */
 export type LandingCopyOverrides = Partial<
@@ -19,7 +20,9 @@ export type LandingCopyOverrides = Partial<
 
 export type LandingOverrideField = {
   key: string;
-  group: string;
+  /** Which storefront section this line belongs to. Drives which card in
+   *  Settings → Landing page opens it. */
+  section: LandingSectionSlug;
   label: string;
   hint?: string;
   /** Render as a textarea rather than a single-line input. */
@@ -38,14 +41,14 @@ export const LANDING_OVERRIDE_FIELDS: LandingOverrideField[] = [
   // ── Hero ────────────────────────────────────────────────────────────────
   {
     key: "heroEyebrow",
-    group: "Hero",
+    section: "hero",
     label: "Eyebrow (small line above the headline)",
     plain: (c) => c.hero.eyebrow,
     apply: (c, v) => ({ ...c, hero: { ...c.hero, eyebrow: v } }),
   },
   {
     key: "heroTitle",
-    group: "Hero",
+    section: "hero",
     label: "Headline",
     hint: EMPHASIS_HINT,
     multiline: true,
@@ -53,7 +56,7 @@ export const LANDING_OVERRIDE_FIELDS: LandingOverrideField[] = [
   },
   {
     key: "heroSub",
-    group: "Hero",
+    section: "hero",
     label: "Sub-headline",
     multiline: true,
     plain: (c) => c.hero.sub,
@@ -63,14 +66,14 @@ export const LANDING_OVERRIDE_FIELDS: LandingOverrideField[] = [
   // ── Who I am ────────────────────────────────────────────────────────────
   {
     key: "aboutTitle",
-    group: "Who I am",
+    section: "about",
     label: "Heading",
     plain: (c) => c.about.title,
     apply: (c, v) => ({ ...c, about: { ...c.about, title: v } }),
   },
   {
     key: "aboutP1",
-    group: "Who I am",
+    section: "about",
     label: "First paragraph",
     multiline: true,
     plain: (c) => c.about.p1,
@@ -78,7 +81,7 @@ export const LANDING_OVERRIDE_FIELDS: LandingOverrideField[] = [
   },
   {
     key: "aboutP2",
-    group: "Who I am",
+    section: "about",
     label: "Second paragraph",
     hint: EMPHASIS_HINT,
     multiline: true,
@@ -88,126 +91,86 @@ export const LANDING_OVERRIDE_FIELDS: LandingOverrideField[] = [
   // ── Section intros ──────────────────────────────────────────────────────
   {
     key: "acheBody",
-    group: "Section intros",
-    label: "“Does this feel familiar?” intro",
+    section: "ache",
+    label: "Intro",
     hint: EMPHASIS_HINT,
     multiline: true,
     apply: (c, v) => ({ ...c, ache: { ...c.ache, body: v } }),
   },
   {
     key: "reframeBody",
-    group: "Section intros",
-    label: "“There's nothing wrong with you” body",
+    section: "reframe",
+    label: "Body",
     multiline: true,
     plain: (c) => c.reframe.body,
     apply: (c, v) => ({ ...c, reframe: { ...c.reframe, body: v } }),
   },
   {
     key: "waysBody",
-    group: "Section intros",
-    label: "“Ways to work together” intro",
+    section: "ways",
+    label: "Intro above your offers",
     multiline: true,
     plain: (c) => c.ways.body,
     apply: (c, v) => ({ ...c, ways: { ...c.ways, body: v } }),
   },
   {
     key: "circlesBody",
-    group: "Section intros",
-    label: "“Upcoming Circles” intro",
+    section: "circles",
+    label: "Intro",
     multiline: true,
     plain: (c) => c.circles.body,
     apply: (c, v) => ({ ...c, circles: { ...c.circles, body: v } }),
   },
   {
     key: "contactBody",
-    group: "Section intros",
-    label: "“Send a note” intro",
+    section: "contact",
+    label: "Intro",
     multiline: true,
     plain: (c) => c.contact.body,
     apply: (c, v) => ({ ...c, contact: { ...c.contact, body: v } }),
   },
   {
     key: "finalBody",
-    group: "Section intros",
-    label: "Closing section body",
+    section: "final",
+    label: "Body",
     multiline: true,
     plain: (c) => c.final.body,
     apply: (c, v) => ({ ...c, final: { ...c.final, body: v } }),
   },
 
-  // ── Offer descriptions ──────────────────────────────────────────────────
+  // ── Reviews + Library headings ──────────────────────────────────────────
   {
-    key: "offerQuizDesc",
-    group: "Offer descriptions",
-    label: "The Quiz & Workbook",
-    multiline: true,
-    plain: (c) => c.ways.quiz.desc,
-    apply: (c, v) => ({
-      ...c,
-      ways: { ...c.ways, quiz: { ...c.ways.quiz, desc: v } },
-    }),
+    key: "voicesTag",
+    section: "voices",
+    label: "Small line above the heading",
+    plain: (c) => c.voices.tag,
+    apply: (c, v) => ({ ...c, voices: { ...c.voices, tag: v } }),
   },
   {
-    key: "offerCircleDesc",
-    group: "Offer descriptions",
-    label: "The Circle",
-    multiline: true,
-    plain: (c) => c.ways.circle.desc,
-    apply: (c, v) => ({
-      ...c,
-      ways: { ...c.ways, circle: { ...c.ways.circle, desc: v } },
-    }),
+    key: "voicesTitle",
+    section: "voices",
+    label: "Heading",
+    hint: EMPHASIS_HINT,
+    apply: (c, v) => ({ ...c, voices: { ...c.voices, title: v } }),
   },
   {
-    key: "offerSingleDesc",
-    group: "Offer descriptions",
-    label: "A Single Session",
+    key: "libraryBody",
+    section: "library",
+    label: "Intro",
     multiline: true,
-    plain: (c) => c.ways.single.desc,
-    apply: (c, v) => ({
-      ...c,
-      ways: { ...c.ways, single: { ...c.ways.single, desc: v } },
-    }),
-  },
-  {
-    key: "offerRetainerDesc",
-    group: "Offer descriptions",
-    label: "Monthly Retainer",
-    multiline: true,
-    plain: (c) => c.ways.retainer.desc,
-    apply: (c, v) => ({
-      ...c,
-      ways: { ...c.ways, retainer: { ...c.ways.retainer, desc: v } },
-    }),
-  },
-  {
-    key: "offerJourneyDesc",
-    group: "Offer descriptions",
-    label: "The 3-Month Journey",
-    multiline: true,
-    plain: (c) => c.ways.journey.desc,
-    apply: (c, v) => ({
-      ...c,
-      ways: { ...c.ways, journey: { ...c.ways.journey, desc: v } },
-    }),
-  },
-  {
-    key: "offerTalkDesc",
-    group: "Offer descriptions",
-    label: "Let's talk first",
-    multiline: true,
-    plain: (c) => c.ways.talk.desc,
-    apply: (c, v) => ({
-      ...c,
-      ways: { ...c.ways, talk: { ...c.ways.talk, desc: v } },
-    }),
+    plain: (c) => c.library.body,
+    apply: (c, v) => ({ ...c, library: { ...c.library, body: v } }),
   },
 ];
 
-/** Ordered group names, for rendering the editor. */
-export const LANDING_OVERRIDE_GROUPS: string[] = Array.from(
-  new Set(LANDING_OVERRIDE_FIELDS.map((f) => f.group))
-);
+/** The editable lines belonging to one storefront section. Sections with no
+ *  entries (the hero aside, everything is optional) render a card that says
+ *  so rather than an empty dialog. */
+export function fieldsForSection(
+  section: LandingSectionSlug
+): LandingOverrideField[] {
+  return LANDING_OVERRIDE_FIELDS.filter((f) => f.section === section);
+}
 
 /** Patch the dictionary with her saved copy for one language. Blank → default. */
 export function applyLandingOverrides(
@@ -233,19 +196,42 @@ export function landingOverrideInputName(
   return `lc_${lang}_${key}`;
 }
 
-/** Rebuild the stored JSON from a submitted Settings form. Blank fields are
- *  dropped entirely, so clearing a box restores the built-in wording. */
-export function parseLandingOverridesFromForm(
+/**
+ * Patch ONE section's copy into her stored overrides.
+ *
+ * Merging, not rebuilding: each section is now saved from its own dialog, so a
+ * form that only carries the hero's three boxes must leave every other
+ * section's wording alone. Rebuilding from the submitted form — which is what
+ * this did when all the fields lived in one giant form — would wipe the rest.
+ *
+ * Blank still means "use the built-in wording", so clearing a box deletes that
+ * key rather than storing "".
+ */
+export function mergeSectionOverrides(
+  existing: LandingCopyOverrides | null | undefined,
+  section: LandingSectionSlug,
   formData: FormData
 ): LandingCopyOverrides {
-  const out: LandingCopyOverrides = {};
+  const out: LandingCopyOverrides = {
+    en: { ...(existing?.en ?? {}) },
+    uk: { ...(existing?.uk ?? {}) },
+  };
   for (const lang of ["en", "uk"] as const) {
-    for (const f of LANDING_OVERRIDE_FIELDS) {
+    for (const f of fieldsForSection(section)) {
       const raw = String(formData.get(landingOverrideInputName(lang, f.key)) ?? "")
         .trim()
         .slice(0, 4000);
-      if (!raw) continue;
-      (out[lang] ??= {})[f.key] = raw;
+      const bucket = out[lang]!;
+      if (raw) bucket[f.key] = raw;
+      else delete bucket[f.key];
+    }
+  }
+  // Drop keys for fields that no longer exist (the offer descriptions moved to
+  // Settings → Offers) so stale entries don't linger forever.
+  const known = new Set(LANDING_OVERRIDE_FIELDS.map((f) => f.key));
+  for (const lang of ["en", "uk"] as const) {
+    for (const k of Object.keys(out[lang]!)) {
+      if (!known.has(k)) delete out[lang]![k];
     }
   }
   return out;

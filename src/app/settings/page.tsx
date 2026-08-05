@@ -6,6 +6,7 @@ import {
   listNoteTemplates,
   listLandingReviews,
   listLandingOffers,
+  listLandingSections,
 } from "@/db/queries";
 import { getGoogleConnectionStatus } from "@/lib/google-calendar";
 import { QuickActions } from "@/components/QuickActions";
@@ -18,6 +19,10 @@ import { isStripeConnectEnabled } from "@/lib/stripe";
 import { requireSession } from "@/lib/session-cookies";
 import { getAccountPasswordHash } from "@/lib/account";
 import { asLocale, t } from "@/lib/i18n";
+import { getLandingCopy } from "@/lib/landing-copy";
+import { resolveSections } from "@/lib/landing-sections";
+import { fieldsForSection } from "@/lib/landing-overrides";
+import type { SectionItem } from "@/components/LandingSectionsManager";
 import {
   SettingsTabsProvider,
   SettingsTabBar,
@@ -49,6 +54,7 @@ export default async function SettingsPage({
     passwordHash,
     reviews,
     offers,
+    sectionRows,
   ] = await Promise.all([
     getSettings(accountId),
     listClientsForPicker(accountId),
@@ -58,6 +64,7 @@ export default async function SettingsPage({
     getAccountPasswordHash(accountId),
     listLandingReviews(accountId),
     listLandingOffers(accountId),
+    listLandingSections(accountId),
   ]);
 
   const flashStatus =
@@ -67,6 +74,39 @@ export default async function SettingsPage({
   // Coming back from a Google or Stripe redirect, land on the tab that shows
   // the result — otherwise the flash message renders on a hidden panel and she
   // sees nothing at all.
+  // The section cards need the wording that's CURRENTLY on the page as
+  // placeholder text. That means the English dictionary — computed here, on the
+  // server, because landing-copy pulls in JSX and has no business in a client
+  // bundle. `plain` is absent for the styled headlines (they're ReactNode, not
+  // strings), which is exactly why the field defines it as optional.
+  const enCopy = getLandingCopy("en");
+  const overrides = settings.landingCopyOverrides ?? null;
+  const sections: SectionItem[] = resolveSections(sectionRows).map((meta) => {
+    const fields = fieldsForSection(meta.slug);
+    const placeholders: Record<string, string> = {};
+    for (const f of fields) {
+      if (f.plain) placeholders[f.key] = f.plain(enCopy);
+      else placeholders[f.key] = "";
+    }
+    const editedCount = fields.filter(
+      (f) =>
+        (overrides?.en?.[f.key] ?? "").trim() ||
+        (overrides?.uk?.[f.key] ?? "").trim()
+    ).length;
+    return {
+      slug: meta.slug,
+      label: meta.label,
+      blurb: meta.blurb,
+      canHide: meta.canHide,
+      canMove: meta.canMove,
+      visible: meta.visible,
+      conditional: meta.conditional,
+      managedAt: meta.managedAt,
+      placeholders,
+      editedCount,
+    };
+  });
+
   const initialTab = google
     ? "connections"
     : stripe
@@ -156,6 +196,7 @@ export default async function SettingsPage({
           settings={settings}
           reviews={reviews}
           offers={offers}
+          sections={sections}
         />
       </SettingsTabsProvider>
     </AppShell>

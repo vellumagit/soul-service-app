@@ -9,7 +9,10 @@ import { SabbathDayPicker } from "./SabbathDayPicker";
 import { AvailabilityPanel } from "./AvailabilityPanel";
 import { LandingPortraitField } from "./LandingPortraitField";
 import { BrandMarkField } from "./BrandMarkField";
-import { LandingCopyEditor } from "./LandingCopyEditor";
+import {
+  LandingSectionsManager,
+  type SectionItem,
+} from "./LandingSectionsManager";
 import { ReviewsManager, type ReviewItem } from "./ReviewsManager";
 import { OffersManager, type OfferItem } from "./OffersManager";
 import { SettingsPanel, useTabHasForm } from "./SettingsTabs";
@@ -26,6 +29,7 @@ export function SettingsForm({
   settings,
   reviews,
   offers,
+  sections,
 }: {
   settings: PractitionerSettings;
   /** Storefront testimonials — managed row-by-row, not part of this form's
@@ -34,6 +38,9 @@ export function SettingsForm({
   /** The "Ways to work together" ladder. Same deal: its own list, its own
    *  actions, not part of this form's Save. */
   offers: OfferItem[];
+  /** The storefront's sections in her order, with the current wording as
+   *  placeholders. Order/visibility and words both save themselves. */
+  sections: SectionItem[];
 }) {
   const [submitting, setSubmitting] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -195,9 +202,12 @@ export function SettingsForm({
       <SettingsPanel tab="page" keepMounted>
       <Section
         title="Landing page"
-        subtitle="The words on your public storefront — in English and Ukrainian. Anything you leave blank keeps the wording that's already there."
+        subtitle="Your public page, section by section. Rewrite the words in English and Ukrainian, move sections up or down, hide the ones you don't want."
       >
-        <LandingCopyEditor initial={settings.landingCopyOverrides ?? null} />
+        <LandingSectionsManager
+          initial={sections}
+          overrides={settings.landingCopyOverrides ?? null}
+        />
         <Field
           label="Portrait photo"
           hint="The photo in the “Who I am” section of your landing page. Upload one straight from your device — no need to host it anywhere. Leave blank for the soft placeholder."
