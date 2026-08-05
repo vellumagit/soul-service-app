@@ -9,6 +9,7 @@
 
 import { useRef, useState } from "react";
 import { uploadLandingPortrait, removeLandingPortrait } from "@/lib/uploads";
+import { downscaleImage } from "@/lib/downscale-image";
 import { rethrowIfRedirect } from "@/lib/redirect-error";
 import { inputCls } from "./Form";
 
@@ -26,8 +27,11 @@ export function LandingPortraitField({
   async function onFile(file: File) {
     setError(null);
     setBusy(true);
+    // Shrink first — a phone photo is far bigger than any Server Action can
+    // accept, and bigger than this ever needs to be displayed.
+    const upload = await downscaleImage(file);
     const fd = new FormData();
-    fd.append("file", file);
+    fd.append("file", upload);
     try {
       const res = await uploadLandingPortrait(fd);
       setUrl(res.url);

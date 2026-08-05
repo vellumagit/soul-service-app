@@ -24,6 +24,22 @@ import path from "node:path";
 // no-op for dev — you're on one bundle anyway).
 const nextConfig: NextConfig = {
   deploymentId: process.env.VERCEL_DEPLOYMENT_ID,
+  experimental: {
+    serverActions: {
+      // Every upload in this app (review photos, portrait, logo, favicon,
+      // client avatars, attachments, voice memos) posts through a Server
+      // Action. The default ceiling is 1MB, which a phone photo or a voice
+      // memo blows past instantly — the symptom was a bare "Body exceeded
+      // 1 MB limit" server error with nothing else to go on.
+      //
+      // 4mb, not more: Vercel's own request-body limit is ~4.5MB, so a higher
+      // number here would just move the failure one layer down and make it
+      // harder to read. Images are ALSO shrunk in the browser first (see
+      // lib/downscale-image.ts), so this is the safety net rather than the
+      // mechanism.
+      bodySizeLimit: "4mb",
+    },
+  },
   turbopack: {
     root: path.resolve(__dirname),
   },

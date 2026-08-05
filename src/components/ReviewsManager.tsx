@@ -16,6 +16,7 @@ import { useRouter } from "next/navigation";
 import { Modal } from "./Modal";
 import { Field, inputCls, labelCls } from "./Form";
 import { notify } from "./FlashNotifier";
+import { downscaleImage } from "@/lib/downscale-image";
 import {
   saveReview,
   deleteReview,
@@ -254,7 +255,15 @@ function ReviewDialog({
     setSubmitting(true);
     setError(null);
     try {
-      await saveReview(new FormData(e.currentTarget));
+      const fd = new FormData(e.currentTarget);
+      // Shrink the photo in the browser before it goes anywhere. A photo
+      // straight off a phone is several MB, which a Server Action rejects
+      // outright — that was the "server error" on this dialog.
+      const picked = fd.get("photo");
+      if (picked instanceof File && picked.size > 0) {
+        fd.set("photo", await downscaleImage(picked));
+      }
+      await saveReview(fd);
       notify({
         kind: "success",
         title: review ? "Review updated" : "Review added",
@@ -354,7 +363,8 @@ function ReviewDialog({
                 className="text-xs text-ink-600"
               />
               <div className="text-[11px] text-ink-400 mt-1">
-                JPG or PNG, under 5 MB. The same photo is used on both
+                JPG or PNG — big photos are shrunk automatically, so anything
+                straight off your phone is fine. The same photo is used on both
                 languages. Leave empty to keep the current one.
               </div>
             </div>
