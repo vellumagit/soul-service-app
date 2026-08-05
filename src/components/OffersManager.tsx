@@ -2,9 +2,10 @@
 
 // Settings → Offers — the "Ways to work together" ladder, editable.
 //
-// Grouped by the two rows the storefront actually renders ("Begin gently" /
-// "Go deeper") rather than as one flat list, because that's what she sees on
-// the page. Reordering is within a row; a card changes rows via "Move to …".
+// Grouped by ROW, and the rows are hers now: "Begin gently", "Go deeper",
+// "Events", whatever she needs. Each row can carry an optional heading that
+// shows on the public page (blank = a bare row of cards, which is how the
+// original two looked), and rows reorder independently of the cards in them.
 //
 // Same bilingual contract as ReviewsManager: one offer, both languages behind
 // an EN/УКР switch, both panels stay MOUNTED so switching tabs before saving
@@ -13,13 +14,17 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Modal } from "./Modal";
-import { Field, inputCls, labelCls } from "./Form";
+import { Field, inputCls } from "./Form";
 import { notify } from "./FlashNotifier";
 import {
   saveOffer,
   deleteOffer,
   moveOffer,
-  switchOfferLane,
+  moveOfferToRow,
+  createOfferRow,
+  renameOfferRow,
+  moveOfferRow,
+  deleteOfferRow,
 } from "@/lib/offer-actions";
 
 export type OfferItem = {
@@ -39,8 +44,15 @@ export type OfferItem = {
   linkKind: string;
   customHref: string | null;
   variant: string;
-  lane: string;
+  rowId: string | null;
   published: boolean;
+  sortOrder: number;
+};
+
+export type OfferRowItem = {
+  id: string;
+  titleEn: string;
+  titleUk: string;
   sortOrder: number;
 };
 
@@ -51,19 +63,6 @@ const LANGS: { id: Lang; label: string; full: string }[] = [
   { id: "uk", label: "УКР", full: "Ukrainian" },
 ];
 
-const LANES: { id: string; label: string; hint: string }[] = [
-  {
-    id: "entry",
-    label: "Begin gently",
-    hint: "The top row — the easy first yes.",
-  },
-  {
-    id: "deep",
-    label: "Go deeper",
-    hint: "The second row — the bigger commitments.",
-  },
-];
-
 const LINK_LABELS: Record<string, string> = {
   quiz: "The quiz",
   circle: "The next Circle",
@@ -71,13 +70,27 @@ const LINK_LABELS: Record<string, string> = {
   custom: "A link you choose",
 };
 
-export function OffersManager({ initial }: { initial: OfferItem[] }) {
+/** What a row is called in Settings when she hasn't given it a heading. */
+function rowLabel(row: OfferRowItem, index: number): string {
+  return row.titleEn || row.titleUk || `Row ${index + 1}`;
+}
+
+export function OffersManager({
+  initial,
+  rows,
+}: {
+  initial: OfferItem[];
+  rows: OfferRowItem[];
+}) {
   const router = useRouter();
   const [editing, setEditing] = useState<OfferItem | "new" | null>(null);
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const [editingRow, setEditingRow] = useState<OfferRowItem | "new" | null>(
+    null
+  );
+  const [busy, setBusy] = useState<string | null>(null);
 
   async function run(id: string, fn: () => Promise<void>, done: string) {
-    setBusyId(id);
+    setBusy(id);
     try {
       await fn();
       notify({ kind: "success", title: done });
@@ -88,17 +101,29 @@ export function OffersManager({ initial }: { initial: OfferItem[] }) {
         title: e instanceof Error ? e.message : "Something went wrong",
       });
     } finally {
-      setBusyId(null);
+      setBusy(null);
     }
   }
+
+  const ordered = [...rows].sort((a, b) => a.sortOrder - b.sortOrder);
+  // Offers whose row was removed (or which predate rows) show in the first
+  // row, matching how the public page groups them.
+  const knownRowIds = new Set(ordered.map((r) => r.id));
+  const firstRowId = ordered[0]?.id ?? null;
+  const offersFor = (rowId: string) =>
+    initial.filter((o) => {
+      const target =
+        o.rowId && knownRowIds.has(o.rowId) ? o.rowId : firstRowId;
+      return target === rowId;
+    });
 
   return (
     <div>
       <p className="text-[12px] text-ink-500 italic mb-4 leading-relaxed">
         These are the cards under &ldquo;Ways to work together&rdquo; on your
-        public page. Add what you offer, set the price and where the button
-        goes, and arrange them in the two rows visitors see. Each offer is
-        written once, in both languages.
+        public page, arranged in rows. Add as many rows as you like — one for
+        sessions, one for events, whatever fits — give each an optional
+        heading, and drag your offers between them.
       </p>
 
       {initial.length === 0 && (
@@ -115,24 +140,71 @@ export function OffersManager({ initial }: { initial: OfferItem[] }) {
         </div>
       )}
 
-      {LANES.map((lane) => {
-        const rows = initial.filter((o) => o.lane === lane.id);
+      {ordered.map((row, ri) => {
+        const rowOffers = offersFor(row.id);
         return (
-          <div key={lane.id} className="mb-5">
-            <div className="flex items-baseline gap-2 mb-2">
+          <div key={row.id} className="mb-5">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
               <span className="text-xs font-medium text-ink-700">
-                {lane.label}
+                {rowLabel(row, ri)}
               </span>
-              <span className="text-[11px] text-ink-400">{lane.hint}</span>
+              {!row.titleEn && !row.titleUk && (
+                <span className="text-[11px] text-ink-400">
+                  no heading on your page
+                </span>
+              )}
+              <span className="flex items-center gap-1 ml-auto">
+                <IconBtn
+                  label="Move row up"
+                  disabled={ri === 0 || busy === row.id}
+                  onClick={() =>
+                    run(row.id, () => moveOfferRow(row.id, "up"), "Row moved up")
+                  }
+                >
+                  ↑
+                </IconBtn>
+                <IconBtn
+                  label="Move row down"
+                  disabled={ri === ordered.length - 1 || busy === row.id}
+                  onClick={() =>
+                    run(
+                      row.id,
+                      () => moveOfferRow(row.id, "down"),
+                      "Row moved down"
+                    )
+                  }
+                >
+                  ↓
+                </IconBtn>
+                <button
+                  type="button"
+                  onClick={() => setEditingRow(row)}
+                  className="text-[11px] px-2 py-1 rounded-md text-plum-700 hover:bg-plum-50"
+                >
+                  Rename row
+                </button>
+                <button
+                  type="button"
+                  disabled={busy === row.id}
+                  onClick={() => {
+                    if (!confirm(`Delete the row "${rowLabel(row, ri)}"?`))
+                      return;
+                    run(row.id, () => deleteOfferRow(row.id), "Row deleted");
+                  }}
+                  className="text-[11px] px-2 py-1 rounded-md text-ink-500 hover:text-red-600 hover:bg-red-50 disabled:opacity-50"
+                >
+                  Delete row
+                </button>
+              </span>
             </div>
 
-            {rows.length === 0 ? (
+            {rowOffers.length === 0 ? (
               <div className="text-[11px] text-ink-400 italic border border-dashed border-ink-200 rounded-lg px-3 py-4">
-                Nothing in this row.
+                Nothing in this row yet.
               </div>
             ) : (
               <ul className="space-y-2">
-                {rows.map((o, i) => (
+                {rowOffers.map((o, i) => (
                   <li
                     key={o.id}
                     className="border border-ink-200 rounded-lg p-3"
@@ -183,7 +255,7 @@ export function OffersManager({ initial }: { initial: OfferItem[] }) {
                       <div className="flex items-center gap-1 shrink-0">
                         <IconBtn
                           label="Move up"
-                          disabled={i === 0 || busyId === o.id}
+                          disabled={i === 0 || busy === o.id}
                           onClick={() =>
                             run(o.id, () => moveOffer(o.id, "up"), "Moved up")
                           }
@@ -192,7 +264,7 @@ export function OffersManager({ initial }: { initial: OfferItem[] }) {
                         </IconBtn>
                         <IconBtn
                           label="Move down"
-                          disabled={i === rows.length - 1 || busyId === o.id}
+                          disabled={i === rowOffers.length - 1 || busy === o.id}
                           onClick={() =>
                             run(
                               o.id,
@@ -203,22 +275,27 @@ export function OffersManager({ initial }: { initial: OfferItem[] }) {
                         >
                           ↓
                         </IconBtn>
-                        <button
-                          type="button"
-                          disabled={busyId === o.id}
-                          onClick={() =>
-                            run(
-                              o.id,
-                              () => switchOfferLane(o.id),
-                              `Moved to “${
-                                o.lane === "deep" ? "Begin gently" : "Go deeper"
-                              }”`
-                            )
-                          }
-                          className="text-[11px] px-2 py-1 rounded-md text-ink-500 hover:bg-ink-100 disabled:opacity-50"
-                        >
-                          {o.lane === "deep" ? "↥ Begin gently" : "↧ Go deeper"}
-                        </button>
+                        {ordered.length > 1 && (
+                          <select
+                            aria-label="Move to row"
+                            value={row.id}
+                            disabled={busy === o.id}
+                            onChange={(e) =>
+                              run(
+                                o.id,
+                                () => moveOfferToRow(o.id, e.target.value),
+                                "Moved to another row"
+                              )
+                            }
+                            className="text-[11px] border border-ink-200 rounded-md px-1.5 py-1 text-ink-600 max-w-[130px]"
+                          >
+                            {ordered.map((r, idx) => (
+                              <option key={r.id} value={r.id}>
+                                {rowLabel(r, idx)}
+                              </option>
+                            ))}
+                          </select>
+                        )}
                         <button
                           type="button"
                           onClick={() => setEditing(o)}
@@ -228,7 +305,7 @@ export function OffersManager({ initial }: { initial: OfferItem[] }) {
                         </button>
                         <button
                           type="button"
-                          disabled={busyId === o.id}
+                          disabled={busy === o.id}
                           onClick={() => {
                             if (
                               !confirm(
@@ -236,11 +313,7 @@ export function OffersManager({ initial }: { initial: OfferItem[] }) {
                               )
                             )
                               return;
-                            run(
-                              o.id,
-                              () => deleteOffer(o.id),
-                              "Offer deleted"
-                            );
+                            run(o.id, () => deleteOffer(o.id), "Offer deleted");
                           }}
                           className="text-xs px-2 py-1 rounded-md text-ink-500 hover:text-red-600 hover:bg-red-50 disabled:opacity-50"
                         >
@@ -256,20 +329,41 @@ export function OffersManager({ initial }: { initial: OfferItem[] }) {
         );
       })}
 
-      <button
-        type="button"
-        onClick={() => setEditing("new")}
-        className="text-xs font-medium px-3 py-2 rounded-md bg-plum-700 text-white hover:bg-plum-800"
-      >
-        + Add an offer
-      </button>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setEditing("new")}
+          className="text-xs font-medium px-3 py-2 rounded-md bg-plum-700 text-white hover:bg-plum-800"
+        >
+          + Add an offer
+        </button>
+        <button
+          type="button"
+          onClick={() => setEditingRow("new")}
+          className="text-xs font-medium px-3 py-2 rounded-md border border-ink-200 text-ink-700 hover:bg-ink-50"
+        >
+          + Add a row
+        </button>
+      </div>
 
       {editing && (
         <OfferDialog
           offer={editing === "new" ? null : editing}
+          rows={ordered}
           onClose={() => setEditing(null)}
           onSaved={() => {
             setEditing(null);
+            router.refresh();
+          }}
+        />
+      )}
+
+      {editingRow && (
+        <RowDialog
+          row={editingRow === "new" ? null : editingRow}
+          onClose={() => setEditingRow(null)}
+          onSaved={() => {
+            setEditingRow(null);
             router.refresh();
           }}
         />
@@ -303,12 +397,115 @@ function IconBtn({
   );
 }
 
+/** Create or rename a row. The heading is optional and per-language. */
+function RowDialog({
+  row,
+  onClose,
+  onSaved,
+}: {
+  row: OfferRowItem | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [active, setActive] = useState<Lang>("en");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (submitting) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const fd = new FormData(e.currentTarget);
+      if (row) await renameOfferRow(fd);
+      else await createOfferRow(fd);
+      notify({ kind: "success", title: row ? "Row renamed" : "Row added" });
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't save that");
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title={row ? "Rename row" : "Add a row"}>
+      <form onSubmit={onSubmit} className="space-y-4">
+        {row && <input type="hidden" name="id" value={row.id} />}
+
+        <div className="flex items-center gap-2">
+          {LANGS.map((l) => (
+            <button
+              key={l.id}
+              type="button"
+              onClick={() => setActive(l.id)}
+              className={
+                active === l.id
+                  ? "text-xs font-medium px-3 py-1.5 rounded-md bg-plum-700 text-white"
+                  : "text-xs font-medium px-3 py-1.5 rounded-md bg-ink-100 text-ink-600 hover:bg-ink-200"
+              }
+            >
+              {l.label}
+            </button>
+          ))}
+        </div>
+
+        {LANGS.map((l) => (
+          <div
+            key={l.id}
+            style={{ display: active === l.id ? "block" : "none" }}
+          >
+            <Field
+              label={`Heading (${l.full})`}
+              hint="Optional. Leave both blank and the row shows as a plain group of cards, with no title above it."
+            >
+              <input
+                name={l.id === "en" ? "titleEn" : "titleUk"}
+                defaultValue={
+                  (l.id === "en" ? row?.titleEn : row?.titleUk) ?? ""
+                }
+                className={inputCls}
+                placeholder={l.id === "en" ? "Events" : "Події"}
+              />
+            </Field>
+          </div>
+        ))}
+
+        {error && (
+          <div className="text-xs text-red-600 bg-red-50 rounded-md px-3 py-2">
+            {error}
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2 pt-1">
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-xs px-3 py-2 rounded-md text-ink-600 hover:bg-ink-100"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={submitting}
+            className="text-xs font-medium px-4 py-2 rounded-md bg-plum-700 text-white hover:bg-plum-800 disabled:opacity-60"
+          >
+            {submitting ? "Saving…" : row ? "Save" : "Add row"}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 function OfferDialog({
   offer,
+  rows,
   onClose,
   onSaved,
 }: {
   offer: OfferItem | null;
+  rows: OfferRowItem[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -469,12 +666,15 @@ function OfferDialog({
           <div className="grid grid-cols-2 gap-3">
             <Field label="Which row">
               <select
-                name="lane"
-                defaultValue={offer?.lane ?? "entry"}
+                name="rowId"
+                defaultValue={offer?.rowId ?? rows[0]?.id ?? ""}
                 className={inputCls}
               >
-                <option value="entry">Begin gently (top row)</option>
-                <option value="deep">Go deeper (second row)</option>
+                {rows.map((r, i) => (
+                  <option key={r.id} value={r.id}>
+                    {rowLabel(r, i)}
+                  </option>
+                ))}
               </select>
             </Field>
             <Field label="Card style">

@@ -1437,8 +1437,12 @@ export const landingOffers = pgTable(
 
     /** 'plain' | 'free' | 'feature' — maps to the card classes. */
     variant: text("variant").notNull().default("plain"),
-    /** 'entry' | 'deep' — which row of the ladder it sits in. */
-    lane: text("lane").notNull().default("entry"),
+    /** Which row of the ladder it sits in. Nullable only for the brief window
+     *  between the migration and its backfill; the app treats a null row as
+     *  "first row". The old 'lane' column is retired — see migration 0051. */
+    rowId: uuid("row_id").references(() => landingOfferRows.id, {
+      onDelete: "restrict",
+    }),
 
     published: boolean("published").notNull().default(true),
     sortOrder: integer("sort_order").notNull().default(0),
@@ -1487,3 +1491,30 @@ export const landingSections = pgTable(
 );
 
 export type LandingSectionRow = typeof landingSections.$inferSelect;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// landing_offer_rows — the rows of the "Ways to work together" ladder.
+//
+// Was two hardcoded lanes; now she creates as many as she likes ("Events",
+// "Workshops", …) and orders them. The heading is optional and per-language:
+// blank renders a bare row of cards, which is how the original two looked.
+// ─────────────────────────────────────────────────────────────────────────────
+export const landingOfferRows = pgTable(
+  "landing_offer_rows",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    titleEn: text("title_en").notNull().default(""),
+    titleUk: text("title_uk").notNull().default(""),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    accountIdx: index("landing_offer_rows_account_idx").on(t.accountId),
+  })
+);
+
+export type LandingOfferRow = typeof landingOfferRows.$inferSelect;

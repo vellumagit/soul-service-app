@@ -14,7 +14,11 @@ import {
   type SectionItem,
 } from "./LandingSectionsManager";
 import { ReviewsManager, type ReviewItem } from "./ReviewsManager";
-import { OffersManager, type OfferItem } from "./OffersManager";
+import {
+  OffersManager,
+  type OfferItem,
+  type OfferRowItem,
+} from "./OffersManager";
 import { SettingsPanel, useTabHasForm } from "./SettingsTabs";
 import { COMMON_TIME_ZONES } from "@/lib/timezone";
 import {
@@ -29,6 +33,7 @@ export function SettingsForm({
   settings,
   reviews,
   offers,
+  offerRows,
   sections,
 }: {
   settings: PractitionerSettings;
@@ -38,6 +43,8 @@ export function SettingsForm({
   /** The "Ways to work together" ladder. Same deal: its own list, its own
    *  actions, not part of this form's Save. */
   offers: OfferItem[];
+  /** The rows those offers sit in — hers to name, order and add to. */
+  offerRows: OfferRowItem[];
   /** The storefront's sections in her order, with the current wording as
    *  placeholders. Order/visibility and words both save themselves. */
   sections: SectionItem[];
@@ -237,7 +244,7 @@ export function SettingsForm({
         title="Offers"
         subtitle="What you offer and what it costs — the cards under “Ways to work together” on your public page."
       >
-        <OffersManager initial={offers} />
+        <OffersManager initial={offers} rows={offerRows} />
       </Section>
       </SettingsPanel>
 

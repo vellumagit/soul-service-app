@@ -6,6 +6,7 @@ import {
   listNoteTemplates,
   listLandingReviews,
   listLandingOffers,
+  listLandingOfferRows,
   listLandingSections,
 } from "@/db/queries";
 import { getGoogleConnectionStatus } from "@/lib/google-calendar";
@@ -54,6 +55,7 @@ export default async function SettingsPage({
     passwordHash,
     reviews,
     offers,
+    offerRows,
     sectionRows,
   ] = await Promise.all([
     getSettings(accountId),
@@ -64,6 +66,7 @@ export default async function SettingsPage({
     getAccountPasswordHash(accountId),
     listLandingReviews(accountId),
     listLandingOffers(accountId),
+    listLandingOfferRows(accountId),
     listLandingSections(accountId),
   ]);
 
@@ -196,6 +199,7 @@ export default async function SettingsPage({
           settings={settings}
           reviews={reviews}
           offers={offers}
+          offerRows={offerRows}
           sections={sections}
         />
       </SettingsTabsProvider>

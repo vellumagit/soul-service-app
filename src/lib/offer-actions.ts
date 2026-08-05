@@ -11,14 +11,10 @@
 
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
-import { landingOffers } from "@/db/schema";
+import { landingOffers, landingOfferRows } from "@/db/schema";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { requireSession } from "./session-cookies";
-import {
-  OFFER_LANES,
-  OFFER_LINK_KINDS,
-  OFFER_VARIANTS,
-} from "./landing-offers";
+import { OFFER_LINK_KINDS, OFFER_VARIANTS } from "./landing-offers";
 
 const MAX_SHORT = 160;
 const MAX_LONG = 1200;
@@ -60,7 +56,51 @@ function revalidateStorefront() {
 }
 
 /**
- * Create or update an offer. `id` blank → create.
+ * Which row an offer belongs to.
+ *
+ * Validates the id belongs to THIS account — a submitted row id is user input,
+ * and an unchecked one would let an offer be parked in another practitioner's
+ * row. Anything unusable falls back to her first row (created on demand),
+ * because an offer with no row can't render.
+ */
+async function resolveRowId(
+  accountId: string,
+  submitted: string
+): Promise<string> {
+  if (submitted) {
+    const [own] = await db
+      .select({ id: landingOfferRows.id })
+      .from(landingOfferRows)
+      .where(
+        and(
+          eq(landingOfferRows.id, submitted),
+          eq(landingOfferRows.accountId, accountId)
+        )
+      )
+      .limit(1);
+    if (own) return own.id;
+  }
+  return ensureFirstRow(accountId);
+}
+
+/** Her first row, created on demand. */
+async function ensureFirstRow(accountId: string): Promise<string> {
+  const [first] = await db
+    .select({ id: landingOfferRows.id })
+    .from(landingOfferRows)
+    .where(eq(landingOfferRows.accountId, accountId))
+    .orderBy(asc(landingOfferRows.sortOrder), asc(landingOfferRows.createdAt))
+    .limit(1);
+  if (first) return first.id;
+  const [created] = await db
+    .insert(landingOfferRows)
+    .values({ accountId, sortOrder: 0 })
+    .returning({ id: landingOfferRows.id });
+  return created.id;
+}
+
+/**
+ * Create or update an offer. `id` blank -> create.
  *
  * A title in at least one language is required: the ladder is a row of named
  * cards, and an untitled one is filtered out of the render anyway.
@@ -102,7 +142,7 @@ export async function saveOffer(formData: FormData): Promise<void> {
     linkKind,
     customHref,
     variant: oneOf(str(formData, "variant", 40), OFFER_VARIANTS, "plain"),
-    lane: oneOf(str(formData, "lane", 40), OFFER_LANES, "entry"),
+    rowId: await resolveRowId(accountId, str(formData, "rowId", 100)),
     published: formData.get("published") != null,
     updatedAt: new Date(),
   };
@@ -167,7 +207,7 @@ export async function moveOffer(
   const rows = await db
     .select({
       id: landingOffers.id,
-      lane: landingOffers.lane,
+      rowId: landingOffers.rowId,
       sortOrder: landingOffers.sortOrder,
     })
     .from(landingOffers)
@@ -177,10 +217,10 @@ export async function moveOffer(
   const self = rows.find((r) => r.id === id);
   if (!self) return;
 
-  const lane = rows.filter((r) => r.lane === self.lane);
+  const lane = rows.filter((r) => r.rowId === self.rowId);
   const i = lane.findIndex((r) => r.id === id);
   const j = direction === "up" ? i - 1 : i + 1;
-  if (j < 0 || j >= lane.length) return; // already at the end of its lane
+  if (j < 0 || j >= lane.length) return; // already at the end of its row
 
   // Swap the two rows' stored sort_order values. Using the neighbour's actual
   // value (not an index) keeps the rest of the list undisturbed.
@@ -202,26 +242,142 @@ export async function moveOffer(
   revalidateStorefront();
 }
 
-/** Move an offer to the other row of the ladder (Begin gently ↔ Go deeper). */
-export async function switchOfferLane(id: string): Promise<void> {
+/** Move an offer into another of her rows. */
+export async function moveOfferToRow(
+  id: string,
+  rowId: string
+): Promise<void> {
   const { accountId } = await requireSession();
-  const [row] = await db
-    .select({ lane: landingOffers.lane })
-    .from(landingOffers)
-    .where(
-      and(eq(landingOffers.id, id), eq(landingOffers.accountId, accountId))
-    )
-    .limit(1);
-  if (!row) return;
-
+  const target = await resolveRowId(accountId, rowId);
   await db
     .update(landingOffers)
+    .set({ rowId: target, updatedAt: new Date() })
+    .where(
+      and(eq(landingOffers.id, id), eq(landingOffers.accountId, accountId))
+    );
+  revalidateStorefront();
+}
+
+// -- Rows --------------------------------------------------------------------
+
+/** Add a row at the bottom of the ladder. Heading optional, both languages. */
+export async function createOfferRow(formData: FormData): Promise<void> {
+  const { accountId } = await requireSession();
+  const [last] = await db
+    .select({ max: sql<number>`COALESCE(MAX(sort_order), -1)::int` })
+    .from(landingOfferRows)
+    .where(eq(landingOfferRows.accountId, accountId));
+
+  await db.insert(landingOfferRows).values({
+    accountId,
+    titleEn: str(formData, "titleEn", MAX_SHORT),
+    titleUk: str(formData, "titleUk", MAX_SHORT),
+    sortOrder: (last?.max ?? -1) + 1,
+  });
+  revalidateStorefront();
+}
+
+/** Rename a row, or clear both headings so it renders bare. */
+export async function renameOfferRow(formData: FormData): Promise<void> {
+  const { accountId } = await requireSession();
+  const id = str(formData, "id", 100);
+  if (!id) return;
+  await db
+    .update(landingOfferRows)
     .set({
-      lane: row.lane === "deep" ? "entry" : "deep",
+      titleEn: str(formData, "titleEn", MAX_SHORT),
+      titleUk: str(formData, "titleUk", MAX_SHORT),
       updatedAt: new Date(),
     })
     .where(
-      and(eq(landingOffers.id, id), eq(landingOffers.accountId, accountId))
+      and(
+        eq(landingOfferRows.id, id),
+        eq(landingOfferRows.accountId, accountId)
+      )
+    );
+  revalidateStorefront();
+}
+
+/** Move a whole row up or down the ladder. */
+export async function moveOfferRow(
+  id: string,
+  direction: "up" | "down"
+): Promise<void> {
+  const { accountId } = await requireSession();
+  const rows = await db
+    .select({ id: landingOfferRows.id, sortOrder: landingOfferRows.sortOrder })
+    .from(landingOfferRows)
+    .where(eq(landingOfferRows.accountId, accountId))
+    .orderBy(asc(landingOfferRows.sortOrder), asc(landingOfferRows.createdAt));
+
+  const i = rows.findIndex((r) => r.id === id);
+  if (i === -1) return;
+  const j = direction === "up" ? i - 1 : i + 1;
+  if (j < 0 || j >= rows.length) return;
+
+  // Rewrite the whole order by index — self-heals duplicate sort_order values,
+  // and it's a handful of rows, so the cost is nothing.
+  const next = [...rows];
+  const tmp = next[i];
+  next[i] = next[j];
+  next[j] = tmp;
+  for (let k = 0; k < next.length; k++) {
+    await db
+      .update(landingOfferRows)
+      .set({ sortOrder: k, updatedAt: new Date() })
+      .where(
+        and(
+          eq(landingOfferRows.id, next[k].id),
+          eq(landingOfferRows.accountId, accountId)
+        )
+      );
+  }
+  revalidateStorefront();
+}
+
+/**
+ * Delete a row.
+ *
+ * Refuses while it still holds offers. The DB enforces this too (ON DELETE
+ * RESTRICT), but checking here means she gets a sentence rather than a
+ * constraint violation. Also refuses to remove the last row, since every offer
+ * needs somewhere to live.
+ */
+export async function deleteOfferRow(id: string): Promise<void> {
+  const { accountId } = await requireSession();
+
+  const rows = await db
+    .select({ id: landingOfferRows.id })
+    .from(landingOfferRows)
+    .where(eq(landingOfferRows.accountId, accountId));
+  if (rows.length <= 1)
+    throw new Error(
+      "This is your only row — add another one before removing this."
+    );
+
+  const [held] = await db
+    .select({ n: sql<number>`COUNT(*)::int` })
+    .from(landingOffers)
+    .where(
+      and(eq(landingOffers.accountId, accountId), eq(landingOffers.rowId, id))
+    );
+  const n = held?.n ?? 0;
+  if (n > 0)
+    throw new Error(
+      "That row still has " +
+        n +
+        " offer" +
+        (n === 1 ? "" : "s") +
+        " in it. Move or delete them first."
+    );
+
+  await db
+    .delete(landingOfferRows)
+    .where(
+      and(
+        eq(landingOfferRows.id, id),
+        eq(landingOfferRows.accountId, accountId)
+      )
     );
   revalidateStorefront();
 }

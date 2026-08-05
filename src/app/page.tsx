@@ -30,12 +30,14 @@ import {
   type RenderedReview,
 } from "@/lib/landing-reviews";
 import {
-  builtInOffers,
+  builtInRows,
+  groupOffersIntoRows,
   renderOffers,
-  type RenderedOffer,
+  type RenderedRow,
 } from "@/lib/landing-offers";
 import {
   listLandingOffers,
+  listLandingOfferRows,
   listLandingReviews,
   listLandingSections,
 } from "@/db/queries";
@@ -91,6 +93,8 @@ export default async function LandingPage() {
   // Her offers, still as raw rows — they can't be rendered until circleCtaHref
   // is known below (a "next Circle" button resolves to an actual Circle).
   let offerRows: Awaited<ReturnType<typeof listLandingOffers>> = [];
+  // The rows those offers are grouped into, in her order.
+  let ladderRows: Awaited<ReturnType<typeof listLandingOfferRows>> = [];
   // Her arrangement of the sections. No rows → the built-in order, everything
   // showing, which is also what an unreachable DB degrades to.
   let sectionRows: Awaited<ReturnType<typeof listLandingSections>> = [];
@@ -137,6 +141,7 @@ export default async function LandingPage() {
       offerRows = await listLandingOffers(storefrontAccountId, {
         publishedOnly: true,
       });
+      ladderRows = await listLandingOfferRows(storefrontAccountId);
       sectionRows = await listLandingSections(storefrontAccountId);
       if (cfg?.showAvailability) {
         const windows = await getAvailableWindows(storefrontAccountId, {
@@ -198,8 +203,10 @@ export default async function LandingPage() {
   const sectionOrder = visibleSectionOrder(sectionRows);
 
   const ownOffers = renderOffers(offerRows, lang, circleCtaHref);
-  const offers: RenderedOffer[] =
-    ownOffers.length > 0 ? ownOffers : builtInOffers(c, circleCtaHref);
+  const ladder: RenderedRow[] =
+    ownOffers.length > 0
+      ? groupOffersIntoRows(ladderRows, ownOffers, lang)
+      : builtInRows(c, circleCtaHref);
 
   // Library — published video offerings. Same try/catch pattern.
   let libraryProducts: Awaited<
@@ -342,44 +349,44 @@ export default async function LandingPage() {
               <p className="p-lg">{c.ways.body}</p>
             </div>
 
-            {/* THE LADDER — her offers, from Settings → Offers. Rendered in two
-                rows exactly as before; what changed is that the cards are rows
-                in the DB rather than six hardcoded blocks. An account with no
-                offers of its own falls back to the built-in six (see
-                builtInOffers) — this section is what the page is FOR, so unlike
-                reviews it can never render empty. */}
+            {/* THE LADDER — her offers, from Settings → Offers, grouped into
+                the rows she created there. A row with a heading renders it
+                above its cards; a blank heading renders a bare row, which is
+                how the original two looked. An account with no offers of its
+                own falls back to the built-in six (see builtInRows) — this
+                section is what the page is FOR, so it can never render
+                empty. */}
             <div className="wrap ladder">
-              {(["entry", "deep"] as const).map((lane) => (
-                <div className="lane" key={lane}>
-                  {offers
-                    .filter((o) => o.lane === lane)
-                    .map((o) => (
-                      <div
-                        className={`card${
-                          o.variant === "free"
-                            ? " free"
-                            : o.variant === "feature"
-                              ? " feat"
-                              : ""
-                        } rv`}
-                        key={o.id}
-                      >
-                        {o.step && <span className="step">{o.step}</span>}
-                        <h3>{o.title}</h3>
-                        {o.price && (
-                          <div className="price">
-                            {o.price}
-                            {o.priceSuffix && <small> {o.priceSuffix}</small>}
-                          </div>
-                        )}
-                        {o.description && <p className="desc">{o.description}</p>}
-                        {o.cta && (
-                          <a href={o.href} className="cta">
-                            {o.cta}
-                          </a>
-                        )}
-                      </div>
-                    ))}
+              {ladder.map((row) => (
+                <div className="lane" key={row.id}>
+                  {row.title && <h3 className="lane-title">{row.title}</h3>}
+                  {row.offers.map((o) => (
+                    <div
+                      className={`card${
+                        o.variant === "free"
+                          ? " free"
+                          : o.variant === "feature"
+                            ? " feat"
+                            : ""
+                      } rv`}
+                      key={o.id}
+                    >
+                      {o.step && <span className="step">{o.step}</span>}
+                      <h3>{o.title}</h3>
+                      {o.price && (
+                        <div className="price">
+                          {o.price}
+                          {o.priceSuffix && <small> {o.priceSuffix}</small>}
+                        </div>
+                      )}
+                      {o.description && <p className="desc">{o.description}</p>}
+                      {o.cta && (
+                        <a href={o.href} className="cta">
+                          {o.cta}
+                        </a>
+                      )}
+                    </div>
+                  ))}
                 </div>
               ))}
               <p className="ladder-note">{c.ways.note}</p>

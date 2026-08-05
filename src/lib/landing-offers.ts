@@ -11,7 +11,6 @@ import type { LandingCopy, LandingLang } from "./landing-copy";
 
 export type OfferLinkKind = "quiz" | "circle" | "contact" | "custom";
 export type OfferVariant = "plain" | "free" | "feature";
-export type OfferLane = "entry" | "deep";
 
 export const OFFER_LINK_KINDS: OfferLinkKind[] = [
   "quiz",
@@ -20,7 +19,7 @@ export const OFFER_LINK_KINDS: OfferLinkKind[] = [
   "custom",
 ];
 export const OFFER_VARIANTS: OfferVariant[] = ["plain", "free", "feature"];
-export const OFFER_LANES: OfferLane[] = ["entry", "deep"];
+
 
 /** The stored columns any renderer needs. */
 export type OfferRow = {
@@ -40,7 +39,23 @@ export type OfferRow = {
   linkKind: string;
   customHref: string | null;
   variant: string;
-  lane: string;
+  rowId: string | null;
+};
+
+/** A row of the ladder, as stored. The heading is optional. */
+export type OfferRowGroup = {
+  id: string;
+  titleEn: string;
+  titleUk: string;
+  sortOrder: number;
+};
+
+/** A row resolved for rendering: its heading in this language (possibly
+ *  empty, which means "no heading") plus the cards that belong to it. */
+export type RenderedRow = {
+  id: string;
+  title: string;
+  offers: RenderedOffer[];
 };
 
 export type RenderedOffer = {
@@ -53,7 +68,7 @@ export type RenderedOffer = {
   cta: string;
   href: string;
   variant: OfferVariant;
-  lane: OfferLane;
+  rowId: string | null;
 };
 
 /** Pick the words for this language, falling back to the other one. */
@@ -91,10 +106,6 @@ function asVariant(v: string): OfferVariant {
     : "plain";
 }
 
-function asLane(v: string): OfferLane {
-  return v === "deep" ? "deep" : "entry";
-}
-
 export function offerForLang(
   row: OfferRow,
   lang: LandingLang,
@@ -115,7 +126,7 @@ export function offerForLang(
     cta: uk ? pick(row.ctaUk, row.ctaEn) : pick(row.ctaEn, row.ctaUk),
     href: resolveHref(row, circleHref),
     variant: asVariant(row.variant),
-    lane: asLane(row.lane),
+    rowId: row.rowId,
   };
 }
 
@@ -128,6 +139,42 @@ export function renderOffers(
   return rows
     .map((r) => offerForLang(r, lang, circleHref))
     .filter((o) => o.title);
+}
+
+/**
+ * Group offers into her rows, in her row order.
+ *
+ * An offer whose row was deleted out from under it (or which predates the
+ * backfill) lands in the FIRST row rather than vanishing — a card silently
+ * disappearing from a storefront is the worse failure. Empty rows are dropped,
+ * so a row she cleared doesn't leave a heading over nothing.
+ */
+export function groupOffersIntoRows(
+  rows: OfferRowGroup[],
+  offers: RenderedOffer[],
+  lang: LandingLang
+): RenderedRow[] {
+  const ordered = [...rows].sort((a, b) => a.sortOrder - b.sortOrder);
+  if (ordered.length === 0) {
+    return offers.length ? [{ id: "all", title: "", offers }] : [];
+  }
+  const known = new Set(ordered.map((r) => r.id));
+  const firstId = ordered[0].id;
+  const buckets = new Map<string, RenderedOffer[]>(
+    ordered.map((r) => [r.id, []])
+  );
+  for (const o of offers) {
+    const target = o.rowId && known.has(o.rowId) ? o.rowId : firstId;
+    buckets.get(target)!.push(o);
+  }
+  return ordered
+    .map((r) => ({
+      id: r.id,
+      title: (lang === "uk" ? r.titleUk : r.titleEn).trim() ||
+        (lang === "uk" ? r.titleEn : r.titleUk).trim(),
+      offers: buckets.get(r.id) ?? [],
+    }))
+    .filter((r) => r.offers.length > 0);
 }
 
 /**
@@ -152,7 +199,7 @@ export function builtInOffers(
       cta: w.quiz.cta,
       href: "/quiz",
       variant: "free",
-      lane: "entry",
+      rowId: "builtin-row-1",
     },
     {
       id: "builtin-circle",
@@ -164,7 +211,7 @@ export function builtInOffers(
       cta: w.circle.cta,
       href: circleHref,
       variant: "plain",
-      lane: "entry",
+      rowId: "builtin-row-1",
     },
     {
       id: "builtin-single",
@@ -176,7 +223,7 @@ export function builtInOffers(
       cta: w.single.cta,
       href: "#contact",
       variant: "plain",
-      lane: "entry",
+      rowId: "builtin-row-1",
     },
     {
       id: "builtin-retainer",
@@ -188,7 +235,7 @@ export function builtInOffers(
       cta: w.retainer.cta,
       href: "#contact",
       variant: "plain",
-      lane: "deep",
+      rowId: "builtin-row-2",
     },
     {
       id: "builtin-journey",
@@ -200,7 +247,7 @@ export function builtInOffers(
       cta: w.journey.cta,
       href: "#contact",
       variant: "feature",
-      lane: "deep",
+      rowId: "builtin-row-2",
     },
     {
       id: "builtin-talk",
@@ -212,7 +259,20 @@ export function builtInOffers(
       cta: w.talk.cta,
       href: "#contact",
       variant: "plain",
-      lane: "deep",
+      rowId: "builtin-row-2",
     },
+  ];
+}
+
+/** The built-in ladder as two unheaded rows — the shape the page renders when
+ *  she has no offers of her own. */
+export function builtInRows(
+  c: LandingCopy,
+  circleHref: string
+): RenderedRow[] {
+  const all = builtInOffers(c, circleHref);
+  return [
+    { id: "builtin-row-1", title: "", offers: all.filter((o) => o.rowId === "builtin-row-1") },
+    { id: "builtin-row-2", title: "", offers: all.filter((o) => o.rowId === "builtin-row-2") },
   ];
 }

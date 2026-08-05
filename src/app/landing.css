@@ -105,6 +105,20 @@
 /* Mark + words, side by side. Her logo is a round medallion with the name in
  * fine type around its rim — unreadable at nav size — so the words carry the
  * name and the mark carries the recognition. Never the mark alone. */
+/* Optional heading above a row of offer cards. Rows she leaves unnamed render
+ * with no heading at all — which is how the original two lanes looked, so
+ * migrating an existing ladder changes nothing visually. */
+.landing-root .lane-title {
+  grid-column: 1 / -1;
+  font-family: var(--font-serif);
+  font-size: 15px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--land-ink-soft);
+  margin: 0 0 2px;
+  font-weight: 600;
+}
+
 .landing-root .brand-lockup {
   display: inline-flex;
   align-items: center;

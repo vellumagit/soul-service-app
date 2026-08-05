@@ -27,6 +27,7 @@ import {
   productPurchases,
   landingReviews,
   landingOffers,
+  landingOfferRows,
   landingSections,
   type Client,
   type PractitionerSettings,
@@ -2567,7 +2568,7 @@ export async function listLandingOffers(
       linkKind: landingOffers.linkKind,
       customHref: landingOffers.customHref,
       variant: landingOffers.variant,
-      lane: landingOffers.lane,
+      rowId: landingOffers.rowId,
       published: landingOffers.published,
       sortOrder: landingOffers.sortOrder,
     })
@@ -2593,4 +2594,24 @@ export async function listLandingSections(accountId: string) {
     .from(landingSections)
     .where(eq(landingSections.accountId, accountId))
     .orderBy(asc(landingSections.sortOrder));
+}
+
+/**
+ * The rows of the offer ladder, in her order.
+ *
+ * Separate from listLandingOffers because rows are their own list she edits —
+ * and because the storefront needs them even when a row is momentarily empty,
+ * to keep the ordering stable while she rearranges.
+ */
+export async function listLandingOfferRows(accountId: string) {
+  return db
+    .select({
+      id: landingOfferRows.id,
+      titleEn: landingOfferRows.titleEn,
+      titleUk: landingOfferRows.titleUk,
+      sortOrder: landingOfferRows.sortOrder,
+    })
+    .from(landingOfferRows)
+    .where(eq(landingOfferRows.accountId, accountId))
+    .orderBy(asc(landingOfferRows.sortOrder), asc(landingOfferRows.createdAt));
 }
