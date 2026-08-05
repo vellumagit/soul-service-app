@@ -12,6 +12,7 @@ import { BrandMarkField } from "./BrandMarkField";
 import { LandingCopyEditor } from "./LandingCopyEditor";
 import { ReviewsManager, type ReviewItem } from "./ReviewsManager";
 import { OffersManager, type OfferItem } from "./OffersManager";
+import { SettingsPanel, useTabHasForm } from "./SettingsTabs";
 import { COMMON_TIME_ZONES } from "@/lib/timezone";
 import {
   LOCALE_LABELS,
@@ -38,6 +39,10 @@ export function SettingsForm({
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const locale: Locale = asLocale(settings.uiLanguage);
+  // The Save bar belongs to this form, but the tab bar can land on a group
+  // that saves itself (Connections, Templates). Showing a Save button there
+  // would imply it does something.
+  const showSave = useTabHasForm();
 
   return (
     <form
@@ -58,6 +63,7 @@ export function SettingsForm({
       className="space-y-6"
     >
       {/* Language — first so it's easy to find */}
+      <SettingsPanel tab="practice" keepMounted>
       <Section
         title={t(locale, "settings.language.section")}
         subtitle={t(locale, "settings.language.uiLanguageHint")}
@@ -80,8 +86,10 @@ export function SettingsForm({
           the app. Page reloads after Save.
         </p>
       </Section>
+      </SettingsPanel>
 
       {/* Business info */}
+      <SettingsPanel tab="practice" keepMounted>
       <Section title="Your business" subtitle="What appears on invoices and emails.">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <Field label="Your name">
@@ -155,8 +163,10 @@ export function SettingsForm({
           </Field>
         </div>
       </Section>
+      </SettingsPanel>
 
       {/* Branding — her marks, changeable any time, no developer needed */}
+      <SettingsPanel tab="page" keepMounted>
       <Section
         title="Branding"
         subtitle="Your logo and the little icon on the browser tab. Upload once, change them whenever you like — they go live the moment you upload, everywhere at once."
@@ -179,8 +189,10 @@ export function SettingsForm({
           />
         </Field>
       </Section>
+      </SettingsPanel>
 
       {/* Landing page copy */}
+      <SettingsPanel tab="page" keepMounted>
       <Section
         title="Landing page"
         subtitle="The words on your public storefront — in English and Ukrainian. Anything you leave blank keeps the wording that's already there."
@@ -206,26 +218,32 @@ export function SettingsForm({
           to /today so you can see what visitors see.
         </p>
       </Section>
+      </SettingsPanel>
 
       {/* Offers — the storefront ladder. Above Reviews because that's the
           order they appear on the public page. */}
+      <SettingsPanel tab="page" keepMounted>
       <Section
         title="Offers"
         subtitle="What you offer and what it costs — the cards under “Ways to work together” on your public page."
       >
         <OffersManager initial={offers} />
       </Section>
+      </SettingsPanel>
 
       {/* Reviews — their own section, since the list is managed row-by-row
           rather than saved with the rest of the form. */}
+      <SettingsPanel tab="page" keepMounted>
       <Section
         title="Reviews"
         subtitle="What people say about working with you. They appear on your public page, just under “Ways to work together”."
       >
         <ReviewsManager initial={reviews} />
       </Section>
+      </SettingsPanel>
 
       {/* Invoicing */}
+      <SettingsPanel tab="money" keepMounted>
       <Section
         title="Invoicing"
         subtitle="Default rate, payment instructions, and how invoices are numbered."
@@ -282,8 +300,10 @@ export function SettingsForm({
           </Field>
         </div>
       </Section>
+      </SettingsPanel>
 
       {/* Automations */}
+      <SettingsPanel tab="time" keepMounted>
       <Section
         title="Automations"
         subtitle="Things the system will do for you in the background."
@@ -464,8 +484,10 @@ export function SettingsForm({
           />
         </div>
       </Section>
+      </SettingsPanel>
 
       {/* Your data — export everything you've put into the app */}
+      <SettingsPanel tab="account" keepMounted>
       <Section
         title="Your data"
         subtitle="Everything you put into this app is yours. Download it any time."
@@ -500,8 +522,12 @@ export function SettingsForm({
           aren&apos;t included here — they&apos;re linked by URL in the JSON.
         </p>
       </Section>
+      </SettingsPanel>
 
-      <div className="sticky bottom-0 bg-white border-t border-ink-100 -mx-4 md:-mx-6 px-4 md:px-6 py-3 flex items-center justify-end gap-3">
+      <div
+        className="sticky bottom-0 bg-white border-t border-ink-100 -mx-4 md:-mx-6 px-4 md:px-6 py-3 flex items-center justify-end gap-3"
+        style={showSave ? undefined : { display: "none" }}
+      >
         {saved && (
           <span className="text-xs text-green-700">Saved.</span>
         )}

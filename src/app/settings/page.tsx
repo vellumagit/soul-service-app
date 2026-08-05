@@ -18,6 +18,11 @@ import { isStripeConnectEnabled } from "@/lib/stripe";
 import { requireSession } from "@/lib/session-cookies";
 import { getAccountPasswordHash } from "@/lib/account";
 import { asLocale, t } from "@/lib/i18n";
+import {
+  SettingsTabsProvider,
+  SettingsTabBar,
+  SettingsPanel,
+} from "@/components/SettingsTabs";
 
 export const dynamic = "force-dynamic";
 
@@ -29,10 +34,11 @@ export default async function SettingsPage({
     email?: string;
     reason?: string;
     stripe?: string;
+    tab?: string;
   }>;
 }) {
   const { email: userEmail, accountId } = await requireSession();
-  const { google, email, reason, stripe } = await searchParams;
+  const { google, email, reason, stripe, tab } = await searchParams;
 
   const [
     settings,
@@ -58,6 +64,15 @@ export default async function SettingsPage({
     google === "connected" ? "connected" : google === "error" ? "error" : null;
   const locale = asLocale(settings.uiLanguage);
 
+  // Coming back from a Google or Stripe redirect, land on the tab that shows
+  // the result — otherwise the flash message renders on a hidden panel and she
+  // sees nothing at all.
+  const initialTab = google
+    ? "connections"
+    : stripe
+      ? "money"
+      : tab;
+
   return (
     <AppShell
       breadcrumb={[{ label: t(locale, "nav.settings"), href: "/settings" }]}
@@ -75,58 +90,74 @@ export default async function SettingsPage({
         </p>
       </div>
 
-      <div className="mb-5">
-        <GoogleCalendarSection
-          connected={googleStatus.connected}
-          email={googleStatus.email}
-          connectedAt={googleStatus.connectedAt}
-          flashStatus={flashStatus}
-          flashEmail={email ?? null}
-          flashReason={reason ?? null}
-        />
-      </div>
+      <SettingsTabsProvider initial={initialTab}>
+        <SettingsTabBar />
 
-      <div className="mb-5">
-        <PaymentsSection
-          platformReady={
-            isStripeConnectEnabled() && !!process.env.STRIPE_WEBHOOK_SECRET
-          }
-          connected={!!settings.stripeAccountId}
-          chargesEnabled={!!settings.stripeChargesEnabled}
-          flash={stripe ?? null}
-        />
-      </div>
+        {/* Panels OUTSIDE the settings form. Each of these saves itself, so
+            unlike the form's sections they can unmount freely. */}
+        <SettingsPanel tab="connections">
+          <div className="mb-5">
+            <GoogleCalendarSection
+              connected={googleStatus.connected}
+              email={googleStatus.email}
+              connectedAt={googleStatus.connectedAt}
+              flashStatus={flashStatus}
+              flashEmail={email ?? null}
+              flashReason={reason ?? null}
+            />
+          </div>
+        </SettingsPanel>
 
-      <div className="mb-5">
-        <PasswordSettings hasPassword={!!passwordHash} />
-      </div>
+        <SettingsPanel tab="money">
+          <div className="mb-5">
+            <PaymentsSection
+              platformReady={
+                isStripeConnectEnabled() && !!process.env.STRIPE_WEBHOOK_SECRET
+              }
+              connected={!!settings.stripeAccountId}
+              chargesEnabled={!!settings.stripeChargesEnabled}
+              flash={stripe ?? null}
+            />
+          </div>
+        </SettingsPanel>
 
-      <SettingsForm
+        <SettingsPanel tab="account">
+          <div className="mb-5">
+            <PasswordSettings hasPassword={!!passwordHash} />
+          </div>
+        </SettingsPanel>
+
+        <SettingsPanel tab="templates">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
+            <TemplatesManager
+              kind="email"
+              templates={emailTpls.map((tpl) => ({
+                id: tpl.id,
+                name: tpl.name,
+                subject: tpl.subject,
+                body: tpl.body,
+                language: tpl.language,
+              }))}
+            />
+            <TemplatesManager
+              kind="note"
+              templates={noteTpls.map((tpl) => ({
+                id: tpl.id,
+                name: tpl.name,
+                body: tpl.body,
+              }))}
+            />
+          </div>
+        </SettingsPanel>
+
+        {/* The settings form itself. Every one of its sections stays MOUNTED
+            whichever tab is showing — see SettingsTabs.tsx for why. */}
+        <SettingsForm
           settings={settings}
           reviews={reviews}
           offers={offers}
         />
-
-      <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <TemplatesManager
-          kind="email"
-          templates={emailTpls.map((tpl) => ({
-            id: tpl.id,
-            name: tpl.name,
-            subject: tpl.subject,
-            body: tpl.body,
-            language: tpl.language,
-          }))}
-        />
-        <TemplatesManager
-          kind="note"
-          templates={noteTpls.map((tpl) => ({
-            id: tpl.id,
-            name: tpl.name,
-            body: tpl.body,
-          }))}
-        />
-      </div>
+      </SettingsTabsProvider>
     </AppShell>
   );
 }
