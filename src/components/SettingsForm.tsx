@@ -11,6 +11,7 @@ import { LandingPortraitField } from "./LandingPortraitField";
 import { BrandMarkField } from "./BrandMarkField";
 import { LandingCopyEditor } from "./LandingCopyEditor";
 import { ReviewsManager, type ReviewItem } from "./ReviewsManager";
+import { OffersManager, type OfferItem } from "./OffersManager";
 import { COMMON_TIME_ZONES } from "@/lib/timezone";
 import {
   LOCALE_LABELS,
@@ -23,11 +24,15 @@ import {
 export function SettingsForm({
   settings,
   reviews,
+  offers,
 }: {
   settings: PractitionerSettings;
   /** Storefront testimonials — managed row-by-row, not part of this form's
    *  submit, so they arrive as their own prop. */
   reviews: ReviewItem[];
+  /** The "Ways to work together" ladder. Same deal: its own list, its own
+   *  actions, not part of this form's Save. */
+  offers: OfferItem[];
 }) {
   const [submitting, setSubmitting] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -200,6 +205,15 @@ export function SettingsForm({
           — the &ldquo;preview&rdquo; query param escapes the auto-redirect
           to /today so you can see what visitors see.
         </p>
+      </Section>
+
+      {/* Offers — the storefront ladder. Above Reviews because that's the
+          order they appear on the public page. */}
+      <Section
+        title="Offers"
+        subtitle="What you offer and what it costs — the cards under “Ways to work together” on your public page."
+      >
+        <OffersManager initial={offers} />
       </Section>
 
       {/* Reviews — their own section, since the list is managed row-by-row

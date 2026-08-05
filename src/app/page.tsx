@@ -27,7 +27,12 @@ import {
   renderReviews,
   type RenderedReview,
 } from "@/lib/landing-reviews";
-import { listLandingReviews } from "@/db/queries";
+import {
+  builtInOffers,
+  renderOffers,
+  type RenderedOffer,
+} from "@/lib/landing-offers";
+import { listLandingOffers, listLandingReviews } from "@/db/queries";
 import { resolveTimeZone } from "@/lib/timezone";
 import "./landing.css";
 
@@ -73,6 +78,9 @@ export default async function LandingPage() {
   // translation falls back to the other one). Empty → the whole section is
   // skipped, so an untended list never leaves a heading over nothing.
   let reviews: RenderedReview[] = [];
+  // Her offers, still as raw rows — they can't be rendered until circleCtaHref
+  // is known below (a "next Circle" button resolves to an actual Circle).
+  let offerRows: Awaited<ReturnType<typeof listLandingOffers>> = [];
   // Practice timezone — so every Circle time renders in HER local zone (with a
   // zone label), never the server's UTC. Falls back to the app default.
   let practiceTz: string = resolveTimeZone(null);
@@ -113,6 +121,9 @@ export default async function LandingPage() {
         await listLandingReviews(storefrontAccountId, { publishedOnly: true }),
         lang
       );
+      offerRows = await listLandingOffers(storefrontAccountId, {
+        publishedOnly: true,
+      });
       if (cfg?.showAvailability) {
         const windows = await getAvailableWindows(storefrontAccountId, {
           limit: 6,
@@ -165,6 +176,13 @@ export default async function LandingPage() {
     circleSignupsOpen && upcomingCircles[0]
       ? `/circles/${upcomingCircles[0].sessionId}`
       : "#contact";
+
+  // The ladder she's arranged, in this language. Falling back to the built-in
+  // six when she has none of her own — or when everything she has is untitled
+  // and got filtered out — so the storefront always has something to book.
+  const ownOffers = renderOffers(offerRows, lang, circleCtaHref);
+  const offers: RenderedOffer[] =
+    ownOffers.length > 0 ? ownOffers : builtInOffers(c, circleCtaHref);
 
   // Library — published video offerings. Same try/catch pattern.
   let libraryProducts: Awaited<
@@ -314,76 +332,46 @@ export default async function LandingPage() {
             <p className="p-lg">{c.ways.body}</p>
           </div>
 
+          {/* THE LADDER — her offers, from Settings → Offers. Rendered in two
+              rows exactly as before; what changed is that the cards are rows
+              in the DB rather than six hardcoded blocks. An account with no
+              offers of its own falls back to the built-in six (see
+              builtInOffers) — this section is what the page is FOR, so unlike
+              reviews it can never render empty. */}
           <div className="wrap ladder">
-            {/* entry lane */}
-            <div className="lane">
-              <div className="card free rv">
-                <span className="step">{c.ways.quiz.step}</span>
-                <h3>{c.ways.quiz.title}</h3>
-                <div className="price">{c.ways.quiz.price}</div>
-                <p className="desc">{c.ways.quiz.desc}</p>
-                <a href="/quiz" className="cta">
-                  {c.ways.quiz.cta}
-                </a>
+            {(["entry", "deep"] as const).map((lane) => (
+              <div className="lane" key={lane}>
+                {offers
+                  .filter((o) => o.lane === lane)
+                  .map((o) => (
+                    <div
+                      className={`card${
+                        o.variant === "free"
+                          ? " free"
+                          : o.variant === "feature"
+                            ? " feat"
+                            : ""
+                      } rv`}
+                      key={o.id}
+                    >
+                      {o.step && <span className="step">{o.step}</span>}
+                      <h3>{o.title}</h3>
+                      {o.price && (
+                        <div className="price">
+                          {o.price}
+                          {o.priceSuffix && <small> {o.priceSuffix}</small>}
+                        </div>
+                      )}
+                      {o.description && <p className="desc">{o.description}</p>}
+                      {o.cta && (
+                        <a href={o.href} className="cta">
+                          {o.cta}
+                        </a>
+                      )}
+                    </div>
+                  ))}
               </div>
-              <div className="card rv">
-                <span className="step">{c.ways.circle.step}</span>
-                <h3>{c.ways.circle.title}</h3>
-                <div className="price">
-                  {c.ways.circle.price} <small>{c.ways.perSession}</small>
-                </div>
-                <p className="desc">{c.ways.circle.desc}</p>
-                <a href={circleCtaHref} className="cta">
-                  {c.ways.circle.cta}
-                </a>
-              </div>
-              <div className="card rv">
-                <span className="step">{c.ways.single.step}</span>
-                <h3>{c.ways.single.title}</h3>
-                <div className="price">{c.ways.single.price}</div>
-                <p className="desc">{c.ways.single.desc}</p>
-                <a href="#contact" className="cta">
-                  {c.ways.single.cta}
-                </a>
-              </div>
-            </div>
-
-            {/* deep lane */}
-            <div className="lane">
-              <div className="card rv">
-                <span className="step">{c.ways.retainer.step}</span>
-                <h3>{c.ways.retainer.title}</h3>
-                <div className="price">
-                  {c.ways.retainer.price} <small>{c.ways.perMonth}</small>
-                </div>
-                <p className="desc">{c.ways.retainer.desc}</p>
-                <a href="#contact" className="cta">
-                  {c.ways.retainer.cta}
-                </a>
-              </div>
-              <div className="card feat rv">
-                <span className="step">{c.ways.journey.step}</span>
-                <h3>{c.ways.journey.title}</h3>
-                <div className="price">
-                  {c.ways.journey.price} <small>{c.ways.per3Months}</small>
-                </div>
-                <p className="desc">{c.ways.journey.desc}</p>
-                <a href="#contact" className="cta">
-                  {c.ways.journey.cta}
-                </a>
-              </div>
-              <div className="card rv">
-                <span className="step">{c.ways.talk.step}</span>
-                <h3>{c.ways.talk.title}</h3>
-                <div className="price">
-                  {c.ways.talk.price} <small>{c.ways.aRealConversation}</small>
-                </div>
-                <p className="desc">{c.ways.talk.desc}</p>
-                <a href="#contact" className="cta">
-                  {c.ways.talk.cta}
-                </a>
-              </div>
-            </div>
+            ))}
             <p className="ladder-note">{c.ways.note}</p>
           </div>
         </section>

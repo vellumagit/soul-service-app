@@ -5,6 +5,7 @@ import {
   listEmailTemplates,
   listNoteTemplates,
   listLandingReviews,
+  listLandingOffers,
 } from "@/db/queries";
 import { getGoogleConnectionStatus } from "@/lib/google-calendar";
 import { QuickActions } from "@/components/QuickActions";
@@ -41,6 +42,7 @@ export default async function SettingsPage({
     googleStatus,
     passwordHash,
     reviews,
+    offers,
   ] = await Promise.all([
     getSettings(accountId),
     listClientsForPicker(accountId),
@@ -49,6 +51,7 @@ export default async function SettingsPage({
     getGoogleConnectionStatus(accountId),
     getAccountPasswordHash(accountId),
     listLandingReviews(accountId),
+    listLandingOffers(accountId),
   ]);
 
   const flashStatus =
@@ -98,7 +101,11 @@ export default async function SettingsPage({
         <PasswordSettings hasPassword={!!passwordHash} />
       </div>
 
-      <SettingsForm settings={settings} reviews={reviews} />
+      <SettingsForm
+          settings={settings}
+          reviews={reviews}
+          offers={offers}
+        />
 
       <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-5">
         <TemplatesManager

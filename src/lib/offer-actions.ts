@@ -1,0 +1,227 @@
+"use server";
+
+// Offers on the storefront ladder — add, edit, reorder, remove.
+//
+// Mirrors review-actions.ts deliberately: same shape, same guarantees, so
+// there's one pattern to learn for "a list she manages that renders publicly".
+//
+// NOTE: every export in a "use server" file is a public POST endpoint. Each one
+// below starts with requireSession() and scopes its writes by accountId.
+// Helpers that must NOT be callable from the browser stay module-local.
+
+import { revalidatePath } from "next/cache";
+import { db } from "@/db";
+import { landingOffers } from "@/db/schema";
+import { and, asc, eq, sql } from "drizzle-orm";
+import { requireSession } from "./session-cookies";
+import {
+  OFFER_LANES,
+  OFFER_LINK_KINDS,
+  OFFER_VARIANTS,
+} from "./landing-offers";
+
+const MAX_SHORT = 160;
+const MAX_LONG = 1200;
+
+function str(formData: FormData, key: string, max: number): string {
+  return String(formData.get(key) ?? "")
+    .trim()
+    .slice(0, max);
+}
+
+/** Whitelist on write — an unknown value here would render a broken card. */
+function oneOf(value: string, allowed: string[], fallback: string): string {
+  return allowed.includes(value) ? value : fallback;
+}
+
+/**
+ * A custom link must be a relative path or an http(s) URL.
+ *
+ * Without this a pasted `javascript:` URL would become a live anchor on the
+ * public storefront — the classic stored-XSS-via-href. Anything unparseable
+ * degrades to the contact anchor rather than being rendered as typed.
+ */
+function safeHref(raw: string): string | null {
+  const v = raw.trim();
+  if (!v) return null;
+  if (v.startsWith("/") || v.startsWith("#")) return v;
+  try {
+    const u = new URL(v);
+    if (u.protocol === "http:" || u.protocol === "https:") return u.toString();
+  } catch {
+    /* fall through */
+  }
+  return null;
+}
+
+function revalidateStorefront() {
+  revalidatePath("/");
+  revalidatePath("/settings");
+}
+
+/**
+ * Create or update an offer. `id` blank → create.
+ *
+ * A title in at least one language is required: the ladder is a row of named
+ * cards, and an untitled one is filtered out of the render anyway.
+ */
+export async function saveOffer(formData: FormData): Promise<void> {
+  const { accountId } = await requireSession();
+
+  const id = str(formData, "id", 100);
+  const titleEn = str(formData, "titleEn", MAX_SHORT);
+  const titleUk = str(formData, "titleUk", MAX_SHORT);
+  if (!titleEn && !titleUk)
+    throw new Error("Give the offer a name in at least one language.");
+
+  const linkKind = oneOf(
+    str(formData, "linkKind", 40),
+    OFFER_LINK_KINDS,
+    "contact"
+  );
+  const customHref =
+    linkKind === "custom" ? safeHref(str(formData, "customHref", 500)) : null;
+  if (linkKind === "custom" && !customHref)
+    throw new Error(
+      "That link doesn't look right. Use a full web address (https://…) or a path on your own site (/quiz)."
+    );
+
+  const values = {
+    stepEn: str(formData, "stepEn", MAX_SHORT),
+    stepUk: str(formData, "stepUk", MAX_SHORT),
+    titleEn,
+    titleUk,
+    priceEn: str(formData, "priceEn", MAX_SHORT),
+    priceUk: str(formData, "priceUk", MAX_SHORT),
+    priceSuffixEn: str(formData, "priceSuffixEn", MAX_SHORT),
+    priceSuffixUk: str(formData, "priceSuffixUk", MAX_SHORT),
+    descriptionEn: str(formData, "descriptionEn", MAX_LONG),
+    descriptionUk: str(formData, "descriptionUk", MAX_LONG),
+    ctaEn: str(formData, "ctaEn", MAX_SHORT),
+    ctaUk: str(formData, "ctaUk", MAX_SHORT),
+    linkKind,
+    customHref,
+    variant: oneOf(str(formData, "variant", 40), OFFER_VARIANTS, "plain"),
+    lane: oneOf(str(formData, "lane", 40), OFFER_LANES, "entry"),
+    published: formData.get("published") != null,
+    updatedAt: new Date(),
+  };
+
+  if (id) {
+    const [existing] = await db
+      .select({ id: landingOffers.id })
+      .from(landingOffers)
+      .where(
+        and(eq(landingOffers.id, id), eq(landingOffers.accountId, accountId))
+      )
+      .limit(1);
+    if (!existing) throw new Error("That offer no longer exists.");
+
+    await db
+      .update(landingOffers)
+      .set(values)
+      .where(
+        and(eq(landingOffers.id, id), eq(landingOffers.accountId, accountId))
+      );
+  } else {
+    const [last] = await db
+      .select({ max: sql<number>`COALESCE(MAX(sort_order), -1)::int` })
+      .from(landingOffers)
+      .where(eq(landingOffers.accountId, accountId));
+
+    await db.insert(landingOffers).values({
+      accountId,
+      ...values,
+      sortOrder: (last?.max ?? -1) + 1,
+    });
+  }
+
+  revalidateStorefront();
+}
+
+/** Delete an offer. Untick "Show on my page" to park one instead. */
+export async function deleteOffer(id: string): Promise<void> {
+  const { accountId } = await requireSession();
+  await db
+    .delete(landingOffers)
+    .where(
+      and(eq(landingOffers.id, id), eq(landingOffers.accountId, accountId))
+    );
+  revalidateStorefront();
+}
+
+/**
+ * Move an offer one place up or down WITHIN ITS LANE.
+ *
+ * Ordering across the whole list would let a card jump lanes invisibly — the
+ * ladder renders two rows, so "up" has to mean "earlier in this row". Swaps
+ * sort_order with the neighbour found by position, which also self-heals
+ * duplicate or gapped values from earlier edits.
+ */
+export async function moveOffer(
+  id: string,
+  direction: "up" | "down"
+): Promise<void> {
+  const { accountId } = await requireSession();
+
+  const rows = await db
+    .select({
+      id: landingOffers.id,
+      lane: landingOffers.lane,
+      sortOrder: landingOffers.sortOrder,
+    })
+    .from(landingOffers)
+    .where(eq(landingOffers.accountId, accountId))
+    .orderBy(asc(landingOffers.sortOrder), asc(landingOffers.createdAt));
+
+  const self = rows.find((r) => r.id === id);
+  if (!self) return;
+
+  const lane = rows.filter((r) => r.lane === self.lane);
+  const i = lane.findIndex((r) => r.id === id);
+  const j = direction === "up" ? i - 1 : i + 1;
+  if (j < 0 || j >= lane.length) return; // already at the end of its lane
+
+  // Swap the two rows' stored sort_order values. Using the neighbour's actual
+  // value (not an index) keeps the rest of the list undisturbed.
+  const a = lane[i];
+  const b = lane[j];
+  await db
+    .update(landingOffers)
+    .set({ sortOrder: b.sortOrder, updatedAt: new Date() })
+    .where(
+      and(eq(landingOffers.id, a.id), eq(landingOffers.accountId, accountId))
+    );
+  await db
+    .update(landingOffers)
+    .set({ sortOrder: a.sortOrder, updatedAt: new Date() })
+    .where(
+      and(eq(landingOffers.id, b.id), eq(landingOffers.accountId, accountId))
+    );
+
+  revalidateStorefront();
+}
+
+/** Move an offer to the other row of the ladder (Begin gently ↔ Go deeper). */
+export async function switchOfferLane(id: string): Promise<void> {
+  const { accountId } = await requireSession();
+  const [row] = await db
+    .select({ lane: landingOffers.lane })
+    .from(landingOffers)
+    .where(
+      and(eq(landingOffers.id, id), eq(landingOffers.accountId, accountId))
+    )
+    .limit(1);
+  if (!row) return;
+
+  await db
+    .update(landingOffers)
+    .set({
+      lane: row.lane === "deep" ? "entry" : "deep",
+      updatedAt: new Date(),
+    })
+    .where(
+      and(eq(landingOffers.id, id), eq(landingOffers.accountId, accountId))
+    );
+  revalidateStorefront();
+}

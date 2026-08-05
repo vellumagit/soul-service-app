@@ -26,6 +26,7 @@ import {
   products,
   productPurchases,
   landingReviews,
+  landingOffers,
   type Client,
   type PractitionerSettings,
   type LeadForm,
@@ -2526,4 +2527,50 @@ export async function listLandingReviews(
     .from(landingReviews)
     .where(where)
     .orderBy(asc(landingReviews.sortOrder), asc(landingReviews.createdAt));
+}
+
+/**
+ * Offers for the storefront's "Ways to work together" ladder.
+ *
+ * Same ordering contract as listLandingReviews: her arrangement first,
+ * createdAt as the tie-break so a shared sort_order can't shuffle between
+ * renders. The landing page passes publishedOnly; Settings wants the parked
+ * ones too.
+ */
+export async function listLandingOffers(
+  accountId: string,
+  opts: { publishedOnly?: boolean } = {}
+) {
+  const where = opts.publishedOnly
+    ? and(
+        eq(landingOffers.accountId, accountId),
+        eq(landingOffers.published, true)
+      )
+    : eq(landingOffers.accountId, accountId);
+
+  return db
+    .select({
+      id: landingOffers.id,
+      stepEn: landingOffers.stepEn,
+      stepUk: landingOffers.stepUk,
+      titleEn: landingOffers.titleEn,
+      titleUk: landingOffers.titleUk,
+      priceEn: landingOffers.priceEn,
+      priceUk: landingOffers.priceUk,
+      priceSuffixEn: landingOffers.priceSuffixEn,
+      priceSuffixUk: landingOffers.priceSuffixUk,
+      descriptionEn: landingOffers.descriptionEn,
+      descriptionUk: landingOffers.descriptionUk,
+      ctaEn: landingOffers.ctaEn,
+      ctaUk: landingOffers.ctaUk,
+      linkKind: landingOffers.linkKind,
+      customHref: landingOffers.customHref,
+      variant: landingOffers.variant,
+      lane: landingOffers.lane,
+      published: landingOffers.published,
+      sortOrder: landingOffers.sortOrder,
+    })
+    .from(landingOffers)
+    .where(where)
+    .orderBy(asc(landingOffers.sortOrder), asc(landingOffers.createdAt));
 }

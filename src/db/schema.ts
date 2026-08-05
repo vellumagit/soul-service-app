@@ -1394,3 +1394,60 @@ export const landingReviews = pgTable(
 
 export type LandingReview = typeof landingReviews.$inferSelect;
 export type NewLandingReview = typeof landingReviews.$inferInsert;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// landing_offers — the "Ways to work together" ladder on the storefront.
+//
+// One row per offer, carrying BOTH languages, exactly like landingReviews.
+// Position / lane / card style / link target are shared across languages;
+// only the words differ. Price is per-language: "$150" is the same string in
+// both, but "Free" and "Безкоштовно" are not.
+//
+// If an account has NO offers, the storefront falls back to the six built-in
+// offers from the copy dictionary rather than rendering an empty ladder. This
+// section is the commercial spine of the page — unlike reviews, it must never
+// be able to vanish.
+// ─────────────────────────────────────────────────────────────────────────────
+export const landingOffers = pgTable(
+  "landing_offers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+
+    stepEn: text("step_en").notNull().default(""),
+    stepUk: text("step_uk").notNull().default(""),
+    titleEn: text("title_en").notNull().default(""),
+    titleUk: text("title_uk").notNull().default(""),
+    priceEn: text("price_en").notNull().default(""),
+    priceUk: text("price_uk").notNull().default(""),
+    priceSuffixEn: text("price_suffix_en").notNull().default(""),
+    priceSuffixUk: text("price_suffix_uk").notNull().default(""),
+    descriptionEn: text("description_en").notNull().default(""),
+    descriptionUk: text("description_uk").notNull().default(""),
+    ctaEn: text("cta_en").notNull().default(""),
+    ctaUk: text("cta_uk").notNull().default(""),
+
+    /** 'quiz' | 'circle' | 'contact' | 'custom'. 'circle' is resolved at
+     *  render time to the soonest bookable Circle, so it can't be a URL. */
+    linkKind: text("link_kind").notNull().default("contact"),
+    customHref: text("custom_href"),
+
+    /** 'plain' | 'free' | 'feature' — maps to the card classes. */
+    variant: text("variant").notNull().default("plain"),
+    /** 'entry' | 'deep' — which row of the ladder it sits in. */
+    lane: text("lane").notNull().default("entry"),
+
+    published: boolean("published").notNull().default(true),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    accountIdx: index("landing_offers_account_idx").on(t.accountId),
+  })
+);
+
+export type LandingOffer = typeof landingOffers.$inferSelect;
+export type NewLandingOffer = typeof landingOffers.$inferInsert;
