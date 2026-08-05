@@ -242,8 +242,10 @@ function Breadcrumb({
 }
 
 function SidebarBrand({ onClose }: { onClose?: () => void }) {
-  // Her uploaded logo replaces the whole default mark + wordmark. Nothing
-  // uploaded → exactly the original dot-and-text lockup.
+  // Her uploaded logo stands in for the default dot mark — but the wordmark
+  // stays either way. Her logo is a round medallion with the name in fine type
+  // around the rim; at sidebar size that rim text can't be read, so swapping
+  // the words out for it hid the name rather than showing it.
   const logoUrl = useBrandLogo();
   return (
     <div className="px-4 py-4 border-b border-ink-100 flex items-center justify-between">
@@ -252,37 +254,37 @@ function SidebarBrand({ onClose }: { onClose?: () => void }) {
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={logoUrl}
-            alt="Home"
-            className="max-h-10 max-w-[168px] object-contain"
+            alt=""
+            aria-hidden="true"
+            className="w-9 h-9 rounded-full object-contain shrink-0"
           />
         ) : (
-          <>
-            {/* Logo mark — a soft plum dot rising out of warm parchment, ringed
-                in honey gold. Reads more like a candle/sun than a tech logo. */}
-            <div
-              className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
-              style={{
-                background:
-                  "radial-gradient(circle at 30% 30%, var(--color-parchment) 0%, var(--color-parchment-edge) 100%)",
-                boxShadow:
-                  "inset 0 0 0 1px var(--color-honey-300), 0 1px 2px rgba(60, 40, 50, 0.08)",
-              }}
-            >
-              <div className="w-3 h-3 rounded-full bg-plum-500 shadow-sm" />
-            </div>
-            <div>
-              <div
-                className="text-base text-ink-900 leading-none serif"
-                style={{ fontWeight: 500, letterSpacing: "-0.01em" }}
-              >
-                Soul Service
-              </div>
-              <div className="text-[10px] text-ink-500 mt-1 italic serif-italic">
-                for Svitlana
-              </div>
-            </div>
-          </>
+          /* Default mark — a soft plum dot rising out of warm parchment,
+             ringed in honey gold. Reads more like a candle/sun than a tech
+             logo. */
+          <div
+            className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
+            style={{
+              background:
+                "radial-gradient(circle at 30% 30%, var(--color-parchment) 0%, var(--color-parchment-edge) 100%)",
+              boxShadow:
+                "inset 0 0 0 1px var(--color-honey-300), 0 1px 2px rgba(60, 40, 50, 0.08)",
+            }}
+          >
+            <div className="w-3 h-3 rounded-full bg-plum-500 shadow-sm" />
+          </div>
         )}
+        <div>
+          <div
+            className="text-base text-ink-900 leading-none serif"
+            style={{ fontWeight: 500, letterSpacing: "-0.01em" }}
+          >
+            Soul Service
+          </div>
+          <div className="text-[10px] text-ink-500 mt-1 italic serif-italic">
+            for Svitlana
+          </div>
+        </div>
       </Link>
       {onClose && (
         <button

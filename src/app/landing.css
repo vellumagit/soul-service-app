@@ -102,6 +102,44 @@
   font-size: 20px;
   letter-spacing: 0.01em;
 }
+/* Mark + words, side by side. Her logo is a round medallion with the name in
+ * fine type around its rim — unreadable at nav size — so the words carry the
+ * name and the mark carries the recognition. Never the mark alone. */
+.landing-root .brand-lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+}
+.landing-root .brand-mark {
+  object-fit: contain;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: block;
+}
+.landing-root .brand-text {
+  display: block;
+  line-height: 1.05;
+}
+/* The footer is centred, so the lockup has to centre with it. */
+.landing-root .lfoot .brand-lockup {
+  display: inline-flex;
+  gap: 16px;
+}
+/* Phones: keep the name readable, let the medallion shrink. */
+@media (max-width: 560px) {
+  .landing-root .lnav .brand-mark {
+    height: 34px !important;
+    width: 34px !important;
+  }
+  .landing-root .lnav .brand-lockup {
+    gap: 9px;
+  }
+  .landing-root .lfoot .brand-mark {
+    height: 56px !important;
+    width: 56px !important;
+  }
+}
 .landing-root .brand small {
   font-family: var(--font-sans);
   font-size: 10px;

@@ -13,6 +13,7 @@ import {
 } from "@/components/LandingLeadForm";
 import { LandingReveal } from "@/components/LandingReveal";
 import { SecretSignInWordmark } from "@/components/SecretSignInWordmark";
+import { BrandLockup } from "@/components/BrandLockup";
 import { LandingLangToggle } from "@/components/LandingLangToggle";
 import { db } from "@/db";
 import { eq } from "drizzle-orm";
@@ -623,13 +624,17 @@ export default async function LandingPage() {
           <div className="inner">
             {/* The wordmark is also a secret door: triple-tap → /signin
                 (practitioner workspace). Invisible to visitors. */}
-            <SecretSignInWordmark />
+            <SecretSignInWordmark subtitle={c.footer.subtitle} />
             <div className="nav-actions">
               <LandingLangToggle current={lang} />
               <Link href="/signin" className="nav-signin nav-hide-narrow">
                 {c.nav.signIn}
               </Link>
-              <a href="#contact" className="nav-signin">
+              {/* Also dropped on phones: the wordmark now sits beside her
+                  logo, and that plus three actions overflowed the bar. The
+                  contact form is still one tap away via the hero's second
+                  button and the footer. */}
+              <a href="#contact" className="nav-signin nav-hide-narrow">
                 {c.nav.reachOut}
               </a>
               <a href="#ways" className="navcta">
@@ -645,20 +650,7 @@ export default async function LandingPage() {
 
         <footer className="lfoot">
           <div className="brand">
-            Svitlana
-            <small
-              style={{
-                display: "block",
-                fontSize: "10px",
-                letterSpacing: "0.28em",
-                textTransform: "uppercase",
-                color: "var(--land-ink-soft)",
-                fontWeight: 600,
-                marginTop: "2px",
-              }}
-            >
-              {c.footer.subtitle}
-            </small>
+            <BrandLockup subtitle={c.footer.subtitle} markSize={72} />
           </div>
           <p>{c.footer.body}</p>
           <Link href="/signin" className="signin-link">
