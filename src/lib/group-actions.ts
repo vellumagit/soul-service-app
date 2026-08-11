@@ -963,6 +963,13 @@ export async function createCircleCheckout(input: {
     );
     const checkout = await stripe.checkout.sessions.create({
       mode: "payment",
+      // Expire the checkout in ~60 min so it can't outlive the seat hold. The
+      // stale-hold sweep releases an abandoned pending seat after 60 min;
+      // without this, Stripe's 24h default kept the link payable long after the
+      // seat was freed (and possibly resold), so a late payment could oversell
+      // the circle. The webhook also refuses to confirm an already-released
+      // seat, as a backstop. (Stripe accepts 30 min–24h.)
+      expires_at: Math.floor(Date.now() / 1000) + 60 * 60,
       customer_email: email,
       line_items: [
         {

@@ -14,9 +14,20 @@ async function run() {
   const sql = neon(url);
 
   const dir = join(process.cwd(), "drizzle");
+  // Optional filename argument: apply ONLY that migration file. Without it,
+  // replay every file in order (the original behaviour). Applying a single new
+  // migration to an already-built DB avoids replaying history — and the replay
+  // chokes on older hand-written files that pack multiple statements into one
+  // chunk, which Neon's HTTP driver rejects ("cannot insert multiple commands
+  // into a prepared statement"). Accepts "0052_x.sql" or "drizzle/0052_x.sql".
+  const only = process.argv[2]?.replace(/^drizzle[\\/]/, "");
   const files = readdirSync(dir)
     .filter((f) => f.endsWith(".sql"))
+    .filter((f) => !only || f === only)
     .sort();
+  if (only && files.length === 0) {
+    throw new Error(`No migration file named "${only}" in ${dir}`);
+  }
 
   for (const file of files) {
     console.log(`Applying ${file}…`);

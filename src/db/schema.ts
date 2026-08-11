@@ -245,6 +245,15 @@ export const sessions = pgTable(
     // manual lanes (Venmo / cash / e-transfer), which remain the default.
     stripeCheckoutSessionId: text("stripe_checkout_session_id"),
     stripePaymentIntentId: text("stripe_payment_intent_id"),
+    // A SECOND card payment intent that arrived for a session already marked
+    // paid (she'd settled the Venmo lane, or a duplicate checkout completed).
+    // Its presence flags the row for review on /payments — the money sits in
+    // Stripe and likely needs refunding. Null in the normal single-payment case.
+    duplicateChargePaymentIntentId: text("duplicate_charge_payment_intent_id"),
+    // Set when this session's card payment was FULLY refunded from Stripe (via
+    // the charge.refunded webhook). The same event flips paid → false so revenue
+    // totals self-correct; this stamp records it was a refund, not never-paid.
+    refundedAt: timestamp("refunded_at"),
 
     // Generated invoice PDF (Vercel Blob URL). Auto-generated on completion if enabled.
     invoiceUrl: text("invoice_url"),
@@ -314,6 +323,13 @@ export const sessions = pgTable(
     statusIdx: index("sessions_status_idx").on(t.status),
     paidIdx: index("sessions_paid_idx").on(t.paid),
     recallBotIdx: index("sessions_recall_bot_idx").on(t.recallBotId),
+    // Invoice numbers are unique per account. The atomic allocator in
+    // invoices.tsx is what prevents duplicates; this index makes any remaining
+    // slip fail loudly instead of persisting silently. Partial — only invoiced
+    // rows carry a number, the rest are NULL and exempt.
+    invoiceNumberIdx: uniqueIndex("sessions_invoice_number_per_account_idx")
+      .on(t.accountId, t.invoiceNumber)
+      .where(sql`${t.invoiceNumber} IS NOT NULL`),
   })
 );
 
@@ -1238,6 +1254,9 @@ export const groupAttendees = pgTable(
     // manual (Venmo/cash) sign-ups.
     stripeCheckoutSessionId: text("stripe_checkout_session_id"),
     stripePaymentIntentId: text("stripe_payment_intent_id"),
+    // A second, distinct card payment intent for a seat already paid — flags a
+    // possible double charge for review. Null in the normal case.
+    duplicateChargePaymentIntentId: text("duplicate_charge_payment_intent_id"),
     // Fulfillment + reminder idempotency stamps. Each is set once, then the
     // cron / webhook skips anyone already stamped.
     welcomeSentAt: timestamp("welcome_sent_at"),

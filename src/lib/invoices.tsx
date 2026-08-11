@@ -293,18 +293,26 @@ export async function generateInvoiceForSession(sessionId: string) {
   const amountCents =
     session.paymentAmountCents ?? settings.defaultRateCents;
 
-  // Pick + reserve the next invoice number atomically
-  const invoiceNumber =
-    session.invoiceNumber ??
-    `${settings.invoicePrefix}-${settings.nextInvoiceNumber}`;
-  if (!session.invoiceNumber) {
-    await db
+  // Pick + reserve the next invoice number ATOMICALLY. The reserve and the read
+  // MUST be the same statement: on the neon-http driver there's no surrounding
+  // transaction, so the old read-then-increment let two concurrent completions
+  // (auto-invoice racing the manual button, or two sessions finished at once)
+  // both read the same number and both emit it. UPDATE … RETURNING hands back
+  // the post-increment value — the number we reserved is that minus one — and
+  // Postgres serializes the row update, so concurrent callers get distinct
+  // values. A partial unique index on (account_id, invoice_number) backstops it.
+  let invoiceNumber = session.invoiceNumber;
+  if (!invoiceNumber) {
+    const [reserved] = await db
       .update(practitionerSettings)
       .set({
         nextInvoiceNumber: sql`${practitionerSettings.nextInvoiceNumber} + 1`,
         updatedAt: new Date(),
       })
-      .where(eq(practitionerSettings.accountId, session.accountId));
+      .where(eq(practitionerSettings.accountId, session.accountId))
+      .returning({ next: practitionerSettings.nextInvoiceNumber });
+    const assigned = (reserved?.next ?? settings.nextInvoiceNumber + 1) - 1;
+    invoiceNumber = `${settings.invoicePrefix}-${assigned}`;
   }
 
   const issuedAt = new Date();

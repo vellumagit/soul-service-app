@@ -1045,6 +1045,10 @@ export async function listAllSessionsForPayments(accountId: string) {
       paidAt: sessions.paidAt,
       invoiceUrl: sessions.invoiceUrl,
       invoiceNumber: sessions.invoiceNumber,
+      // Non-null when a second card charge landed on an already-paid session —
+      // surfaced as a "review" flag on /payments so a double charge isn't
+      // invisible in-app.
+      duplicateChargePaymentIntentId: sessions.duplicateChargePaymentIntentId,
     })
     .from(sessions)
     .innerJoin(clients, eq(sessions.clientId, clients.id))

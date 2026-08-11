@@ -44,6 +44,46 @@ function num(form: FormData, key: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+// Money from a form field → integer cents, validated. Rejects negatives and
+// absurd values, which used to store verbatim and silently corrupt the revenue
+// / "unpaid" SUMs on /payments and the client file. Returns null when the field
+// is blank/absent (the caller decides what that means).
+const MAX_AMOUNT_CENTS = 100_000_000; // $1,000,000 — generous ceiling; blocks fat-finger / tamper
+function amountCents(form: FormData, key: string): number | null {
+  const v = num(form, key);
+  if (v === null) return null;
+  if (!(v >= 0)) throw new Error("Amount can't be negative.");
+  const cents = Math.round(v * 100);
+  if (cents > MAX_AMOUNT_CENTS) {
+    throw new Error("That amount looks too large — please double-check it.");
+  }
+  return cents;
+}
+
+// Payment method from a form field, constrained to the DB enum. An out-of-enum
+// value used to reach the pgEnum insert and surface as a raw Postgres 500; fold
+// anything unrecognized into "other" instead. Null when the field is absent.
+const PAYMENT_METHODS = [
+  "venmo",
+  "zelle",
+  "etransfer",
+  "cash",
+  "paypal",
+  "stripe",
+  "other",
+] as const;
+type PaymentMethodValue = (typeof PAYMENT_METHODS)[number];
+function paymentMethodValue(
+  form: FormData,
+  key: string
+): PaymentMethodValue | null {
+  const v = str(form, key);
+  if (v === null) return null;
+  return (PAYMENT_METHODS as readonly string[]).includes(v)
+    ? (v as PaymentMethodValue)
+    : "other";
+}
+
 function bool(form: FormData, key: string): boolean {
   const v = form.get(key);
   return v === "on" || v === "true" || v === "1";
@@ -2163,7 +2203,6 @@ export async function logPastSession(formData: FormData) {
   const scheduledAtRaw = required(str(formData, "scheduledAt"), "Date / time");
   const durationMinutes = num(formData, "durationMinutes") ?? 60;
   const paid = bool(formData, "paid");
-  const paymentAmount = num(formData, "paymentAmount");
 
   const [created] = await db
     .insert(sessions)
@@ -2179,19 +2218,8 @@ export async function logPastSession(formData: FormData) {
       leftAs: str(formData, "leftAs"),
       notes: str(formData, "notes"),
       paid,
-      paymentMethod: paid
-        ? ((str(formData, "paymentMethod") as
-            | "venmo"
-            | "zelle"
-            | "etransfer"
-            | "cash"
-            | "paypal"
-            | "stripe"
-            | "other"
-            | null) ?? null)
-        : null,
-      paymentAmountCents:
-        paid && paymentAmount !== null ? Math.round(paymentAmount * 100) : null,
+      paymentMethod: paid ? paymentMethodValue(formData, "paymentMethod") : null,
+      paymentAmountCents: paid ? amountCents(formData, "paymentAmount") : null,
       paidAt: paid ? new Date().toISOString().slice(0, 10) : null,
     })
     .returning();
@@ -2502,28 +2530,19 @@ export async function markSessionPaid(formData: FormData) {
   const { accountId } = await requireSession();
   const id = required(str(formData, "id"), "Session id");
   const clientId = required(str(formData, "clientId"), "Client id");
-  const method = str(formData, "paymentMethod") ?? "other";
-  const amount = num(formData, "paymentAmount");
+  const method = paymentMethodValue(formData, "paymentMethod") ?? "other";
+  const amount = amountCents(formData, "paymentAmount");
   const note = str(formData, "paymentNote");
 
   await db
     .update(sessions)
     .set({
       paid: true,
-      paymentMethod: method as
-        | "venmo"
-        | "zelle"
-        | "etransfer"
-        | "cash"
-        | "paypal"
-        | "stripe"
-        | "other",
+      paymentMethod: method,
       // Leave the amount alone when the box comes back empty. It used to
       // write NULL, which silently erased whatever the session was worth —
       // including the amount stamped at completion.
-      ...(amount !== null
-        ? { paymentAmountCents: Math.round(amount * 100) }
-        : {}),
+      ...(amount !== null ? { paymentAmountCents: amount } : {}),
       paymentNote: note,
       paidAt: new Date().toISOString().slice(0, 10),
       updatedAt: new Date(),
@@ -2848,8 +2867,13 @@ export async function updateSettings(formData: FormData) {
       // the blob from this form would now find none of those fields present
       // and wipe every word she's written.
       uiLanguage,
+      // Clamp rather than throw — a settings save shouldn't fail on a stray
+      // value, but a negative/absurd default rate would flow into every
+      // session's stamped amount and the revenue totals.
       defaultRateCents:
-        defaultRate !== null ? Math.round(defaultRate * 100) : 13500,
+        defaultRate !== null
+          ? Math.min(MAX_AMOUNT_CENTS, Math.max(0, Math.round(defaultRate * 100)))
+          : 13500,
       // Whitelisted on write: this is a free-text input, and anything that
       // isn't a valid ISO code makes Intl.NumberFormat throw on every page
       // that prints a price — including her client's billing page.

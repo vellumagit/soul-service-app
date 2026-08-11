@@ -58,6 +58,7 @@ async function handleSessionPayment(
     .select({
       id: sessions.id,
       paid: sessions.paid,
+      stripePaymentIntentId: sessions.stripePaymentIntentId,
       stripeAccountId: practitionerSettings.stripeAccountId,
     })
     .from(sessions)
@@ -92,23 +93,36 @@ async function handleSessionPayment(
     .where(and(eq(sessions.id, sessionId), eq(sessions.paid, false)))
     .returning({ id: sessions.id });
 
-  // Already paid — she may have marked the Venmo lane settled while a card
-  // checkout was still open. Record the payment intent anyway so the second
-  // charge is visible in-app and can be refunded from her Stripe dashboard.
-  if (flipped.length === 0 && paymentIntentId) {
-    const stamped = await db
+  // Already paid — a second completion landed on this session. If it carries a
+  // DIFFERENT payment intent than the one on file, it's a genuine second charge
+  // (she'd settled the Venmo lane, or a duplicate checkout completed): backfill
+  // the primary PI when it was empty (so a refund can target it) and flag the
+  // row for review on /payments. The SAME PI means Stripe is retrying the same
+  // event → no-op, so retries stay idempotent.
+  if (
+    flipped.length === 0 &&
+    paymentIntentId &&
+    paymentIntentId !== row.stripePaymentIntentId
+  ) {
+    const flagged = await db
       .update(sessions)
-      .set({ stripePaymentIntentId: paymentIntentId, updatedAt: new Date() })
+      .set({
+        ...(row.stripePaymentIntentId
+          ? {}
+          : { stripePaymentIntentId: paymentIntentId }),
+        duplicateChargePaymentIntentId: paymentIntentId,
+        updatedAt: new Date(),
+      })
       .where(
         and(
           eq(sessions.id, sessionId),
-          isNull(sessions.stripePaymentIntentId)
+          isNull(sessions.duplicateChargePaymentIntentId)
         )
       )
       .returning({ id: sessions.id });
-    if (stamped.length > 0) {
+    if (flagged.length > 0) {
       console.error(
-        `[stripe webhook] card payment landed on an ALREADY-PAID session (${sessionId}) — PI stored; likely a double payment to review`
+        `[stripe webhook] second card payment on ALREADY-PAID session ${sessionId} (PI ${paymentIntentId}) — flagged for review`
       );
     }
   }
@@ -174,6 +188,9 @@ export async function POST(req: Request): Promise<Response> {
       const [att] = await db
         .select({
           id: groupAttendees.id,
+          attendeeStatus: groupAttendees.status,
+          stripePaymentIntentId: groupAttendees.stripePaymentIntentId,
+          refundedAt: groupAttendees.refundedAt,
           sessionStatus: groupSessions.status,
           stripeAccountId: practitionerSettings.stripeAccountId,
         })
@@ -198,6 +215,37 @@ export async function POST(req: Request): Promise<Response> {
         return NextResponse.json({ ok: true, ignored: "account mismatch" });
       }
 
+      // The seat hold was RELEASED before this payment landed — the 60-min
+      // stale-hold sweep (or a checkout expiry) had already flipped it to
+      // cancelled, and the seat may have been resold. Don't resurrect a
+      // cancelled seat into a confirmed one: that oversells the circle. Record
+      // the intent so she can refund it and queue a refund request for her
+      // review instead. (Distinct from the group-session-cancelled branch
+      // below, which handles the whole circle being called off.)
+      if (att.attendeeStatus === "cancelled") {
+        if (!att.refundedAt) {
+          await db
+            .update(groupAttendees)
+            .set({
+              refundRequestedAt: new Date(),
+              ...(paymentIntentId && !att.stripePaymentIntentId
+                ? { stripePaymentIntentId: paymentIntentId }
+                : {}),
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(groupAttendees.id, attendeeId),
+                isNull(groupAttendees.refundRequestedAt)
+              )
+            );
+        }
+        console.error(
+          `[stripe webhook] payment completed for a RELEASED circle seat (attendee ${attendeeId}) — refund queued, not confirmed`
+        );
+        return NextResponse.json({ ok: true, refundQueued: "released seat" });
+      }
+
       // Mark paid + confirmed, but only if not already paid (idempotent
       // against Stripe's retries). RETURNING tells us if we were the one
       // to flip it.
@@ -216,24 +264,36 @@ export async function POST(req: Request): Promise<Response> {
         )
         .returning({ id: groupAttendees.id });
 
-      // Already paid (e.g. she marked the Venmo lane paid while a card
-      // checkout was in flight)? Still record the payment intent if we have
-      // none — otherwise the second charge is invisible in-app and can never
-      // be refunded from Requests.
-      if (flipped.length === 0 && paymentIntentId) {
-        const stamped = await db
+      // Already paid, and this completion carries a DIFFERENT payment intent
+      // than the one on file — a genuine second charge (she marked the Venmo
+      // lane paid while a card checkout was in flight, or a duplicate checkout
+      // completed). Backfill the primary PI when empty and flag the seat for
+      // review; the SAME PI is just a Stripe retry → no-op, so retries stay
+      // idempotent.
+      if (
+        flipped.length === 0 &&
+        paymentIntentId &&
+        paymentIntentId !== att.stripePaymentIntentId
+      ) {
+        const flagged = await db
           .update(groupAttendees)
-          .set({ stripePaymentIntentId: paymentIntentId, updatedAt: new Date() })
+          .set({
+            ...(att.stripePaymentIntentId
+              ? {}
+              : { stripePaymentIntentId: paymentIntentId }),
+            duplicateChargePaymentIntentId: paymentIntentId,
+            updatedAt: new Date(),
+          })
           .where(
             and(
               eq(groupAttendees.id, attendeeId),
-              isNull(groupAttendees.stripePaymentIntentId)
+              isNull(groupAttendees.duplicateChargePaymentIntentId)
             )
           )
           .returning({ id: groupAttendees.id });
-        if (stamped.length > 0) {
+        if (flagged.length > 0) {
           console.error(
-            `[stripe webhook] card payment landed on an ALREADY-PAID seat (attendee ${attendeeId}) — PI stored; likely a double payment to review`
+            `[stripe webhook] second card payment on ALREADY-PAID seat (attendee ${attendeeId}, PI ${paymentIntentId}) — flagged for review`
           );
         }
       }
@@ -319,6 +379,29 @@ export async function POST(req: Request): Promise<Response> {
         return NextResponse.json({ ok: true, ignored: "no payment_intent" });
       }
       const res = await refundCircleSeatByPaymentIntent(pi);
+      if (!res.refunded) {
+        // Not a circle seat — this is likely a 1-on-1 SESSION card payment.
+        // Those store their PI on sessions.stripePaymentIntentId and had NO
+        // refund path, so a dashboard refund left the session marked paid
+        // forever and kept inflating revenue. Reconcile it: flip paid → false
+        // and stamp refundedAt. The paid=true guard makes retries idempotent.
+        const cleared = await db
+          .update(sessions)
+          .set({ paid: false, refundedAt: new Date(), updatedAt: new Date() })
+          .where(
+            and(
+              eq(sessions.stripePaymentIntentId, pi),
+              eq(sessions.paid, true)
+            )
+          )
+          .returning({ id: sessions.id });
+        if (cleared.length > 0) {
+          return NextResponse.json({
+            ok: true,
+            refundedSession: cleared[0].id,
+          });
+        }
+      }
       return NextResponse.json({ ok: true, refunded: res.refunded });
     }
 

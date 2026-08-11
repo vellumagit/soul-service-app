@@ -139,6 +139,14 @@ export default async function PaymentsPage({
                       ? "UPCOMING"
                       : "UNPAID"}
                   </span>
+                  {s.duplicateChargePaymentIntentId && (
+                    <span
+                      className="chip bg-red-50 text-red-700"
+                      title={`Possible double charge — a second card payment (${s.duplicateChargePaymentIntentId}) came in on this already-paid session. Review and refund it in Stripe.`}
+                    >
+                      ⚠ REVIEW
+                    </span>
+                  )}
                 </div>
                 <div className="text-xs text-ink-500">
                   {s.type} · {fullDate(s.scheduledAt, practiceTz)}
@@ -219,6 +227,14 @@ export default async function PaymentsPage({
                           ? "UNPAID"
                           : s.status.toUpperCase()}
                       </span>
+                      {s.duplicateChargePaymentIntentId && (
+                        <span
+                          className="chip bg-red-50 text-red-700 ml-1"
+                          title={`Possible double charge — a second card payment (${s.duplicateChargePaymentIntentId}) came in on this already-paid session. Review and refund it in Stripe.`}
+                        >
+                          ⚠ REVIEW
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-2 text-xs text-ink-600">
                       {s.paid ? paymentMethodLabel(s.paymentMethod) : "—"}
