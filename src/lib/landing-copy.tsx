@@ -442,8 +442,8 @@ const EN: LandingCopy = {
     takeAgain: "Take it again",
     safetyNote: (
       <>
-        In Canada, you can call or text <strong>988</strong> any time — the
-        Suicide Crisis Helpline. If you&apos;re in immediate danger, call{" "}
+        You can call or text <strong>988</strong> any time — the Suicide Crisis
+        Helpline. If you&apos;re in immediate danger, call{" "}
         <strong>911</strong>. You&apos;re not a burden, and you don&apos;t have
         to hold this alone.
       </>
