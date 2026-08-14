@@ -134,6 +134,57 @@ export interface LandingCopy {
     video: string;
     requestAccess: string;
   };
+  // Public /offerings/[id] detail page + its purchase-request form. Reachable
+  // from the УКР Library CTA, so every string here carries a Ukrainian value.
+  offerings: {
+    tag: string;
+    notReadyTitle: string;
+    notReadyBody: string;
+    notReadyLink: string;
+    notReadyAfter: string;
+    form: {
+      thankTitle: string;
+      thankBody: string; // contains a "{name}" placeholder
+      howToPay: string;
+      amount: string;
+      nameLabel: string;
+      namePlaceholder: string;
+      emailLabel: string;
+      emailPlaceholder: string;
+      phoneLabel: string;
+      sending: string;
+      requestCta: string; // contains "{name}" and "{price}" placeholders
+      noPaymentNote: string;
+    };
+  };
+  // Public /quiz — the "Find your compass" reflection. Reachable from the УКР
+  // "Пройти тест →" CTA, so every string here carries a Ukrainian value. The
+  // questions/options/results live in quiz-content.ts (bilingual there too);
+  // this is the surrounding UI chrome the Quiz component + page render.
+  quiz: {
+    tag: string;
+    heading: string;
+    intro: string;
+    metaTitle: string;
+    metaDescription: string;
+    back: string; // "← back"
+    takeAgain: string;
+    // Safety-branch helpline note. Carries <strong> emphasis on the emergency
+    // numbers, so it's a ReactNode — English keeps Canada's 988/911; Ukrainian
+    // points to a trusted person + local services and 112 for immediate danger.
+    safetyNote: ReactNode;
+    workbook: {
+      heading: string;
+      sub: string;
+      nameLabel: string;
+      emailLabel: string;
+      submit: string;
+      sending: string;
+      errorGeneric: string;
+      doneTitle: string;
+      doneBody: string; // contains a "{email}" placeholder
+    };
+  };
   contact: { tag: string; title: ReactNode; body: string };
   final: {
     tag: string;
@@ -354,6 +405,61 @@ const EN: LandingCopy = {
     minShort: "min",
     video: "video",
     requestAccess: "Request access →",
+  },
+  offerings: {
+    tag: "An offering",
+    notReadyTitle: "Almost ready.",
+    notReadyBody:
+      "This offering is still being finalized. Check back soon, or",
+    notReadyLink: "send a note",
+    notReadyAfter: "if you'd like to hear when it's up.",
+    form: {
+      thankTitle: "Thank you for reaching out.",
+      thankBody:
+        "Svitlana will send you a private link to watch {name} once she's confirmed your payment. Check your inbox over the next day or two.",
+      howToPay: "How to pay",
+      amount: "Amount:",
+      nameLabel: "Your name",
+      namePlaceholder: "What people call you",
+      emailLabel: "Email",
+      emailPlaceholder: "So Svitlana can send your watch link",
+      phoneLabel: "Phone (optional)",
+      sending: "Sending…",
+      requestCta: "Request {name} ({price}) →",
+      noPaymentNote:
+        "No payment now — Svitlana will email instructions and your private watch link.",
+    },
+  },
+  quiz: {
+    tag: "A 2-minute reflection",
+    heading: "Which way is your compass pointing?",
+    intro:
+      "You point the way for everyone. This is a quiet moment to check in with your own direction — no wrong answers, nothing to get right.",
+    metaTitle: "Which way is your compass pointing? — a 2-minute reflection",
+    metaDescription:
+      "You point the way for everyone. Take a quiet 2-minute reflection to hear where your own compass has been pointing.",
+    back: "← back",
+    takeAgain: "Take it again",
+    safetyNote: (
+      <>
+        In Canada, you can call or text <strong>988</strong> any time — the
+        Suicide Crisis Helpline. If you&apos;re in immediate danger, call{" "}
+        <strong>911</strong>. You&apos;re not a burden, and you don&apos;t have
+        to hold this alone.
+      </>
+    ),
+    workbook: {
+      heading: "Want to sit with this a little longer?",
+      sub: "I'll send your reflection plus a gentle workbook to go deeper — no pressure, no spam.",
+      nameLabel: "Your name",
+      emailLabel: "Email",
+      submit: "Send me the workbook →",
+      sending: "Sending…",
+      errorGeneric: "Something went off. Please try again.",
+      doneTitle: "On its way. 🤍",
+      doneBody:
+        "I'll send your reflection and a gentle workbook to {email}. Check your inbox soon.",
+    },
   },
   contact: {
     tag: "Send a note",
@@ -626,6 +732,61 @@ const UK: LandingCopy = {
     minShort: "хв",
     video: "відео",
     requestAccess: "Запросити доступ →",
+  },
+  offerings: {
+    tag: "Пропозиція",
+    notReadyTitle: "Майже готово.",
+    notReadyBody:
+      "Ця пропозиція ще завершується. Завітайте трохи згодом або",
+    notReadyLink: "напишіть мені",
+    notReadyAfter: "якщо хочете дізнатися, коли вона буде готова.",
+    form: {
+      thankTitle: "Дякую, що звернулися.",
+      thankBody:
+        "Світлана надішле вам приватне посилання на перегляд «{name}», щойно підтвердить вашу оплату. Перевіряйте пошту протягом одного-двох днів.",
+      howToPay: "Як оплатити",
+      amount: "Сума:",
+      nameLabel: "Ваше ім'я",
+      namePlaceholder: "Як вас називати",
+      emailLabel: "Електронна пошта",
+      emailPlaceholder: "Щоб Світлана могла надіслати посилання на перегляд",
+      phoneLabel: "Телефон (за бажанням)",
+      sending: "Надсилаємо…",
+      requestCta: "Замовити «{name}» ({price}) →",
+      noPaymentNote:
+        "Зараз нічого платити не потрібно — Світлана надішле інструкції та приватне посилання на перегляд.",
+    },
+  },
+  quiz: {
+    tag: "Рефлексія на 2 хвилини",
+    heading: "Куди вказує ваш компас?",
+    intro:
+      "Ви вказуєте шлях усім. Це тиха мить, щоб звіритися з власним напрямком — немає хибних відповідей, немає нічого, що треба вгадати.",
+    metaTitle: "Куди вказує ваш компас? — рефлексія на 2 хвилини",
+    metaDescription:
+      "Ви вказуєте шлях усім. Приділіть тиху рефлексію на 2 хвилини, щоб почути, куди весь цей час вказував ваш власний компас.",
+    back: "← назад",
+    takeAgain: "Пройти ще раз",
+    safetyNote: (
+      <>
+        Будь ласка, зверніться до когось, кому ви довіряєте — близької людини,
+        сімейного лікаря чи місцевої служби підтримки. Якщо вам загрожує
+        безпосередня небезпека, телефонуйте <strong>112</strong>. Ви не тягар, і
+        вам не треба нести це наодинці.
+      </>
+    ),
+    workbook: {
+      heading: "Хочете побути з цим трохи довше?",
+      sub: "Я надішлю ваше відображення та лагідний робочий зошит, щоб зануритися глибше — без тиску, без спаму.",
+      nameLabel: "Ваше ім’я",
+      emailLabel: "Електронна пошта",
+      submit: "Надішліть мені зошит →",
+      sending: "Надсилаю…",
+      errorGeneric: "Щось пішло не так. Спробуйте ще раз, будь ласка.",
+      doneTitle: "Уже в дорозі. 🤍",
+      doneBody:
+        "Я надішлю ваше відображення та лагідний робочий зошит на {email}. Незабаром перевірте пошту.",
+    },
   },
   contact: {
     tag: "Напишіть",

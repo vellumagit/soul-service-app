@@ -5,6 +5,7 @@
 // The quiz content itself is always-visible (no `.rv` reveal classes), so it
 // can never render blank the way the scroll-reveal pages could.
 
+import type { Metadata } from "next";
 import Link from "next/link";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
@@ -13,17 +14,26 @@ import { TimeOfDayProvider } from "@/components/TimeOfDayProvider";
 import { Quiz } from "@/components/Quiz";
 import { resolveStorefrontAccountId } from "@/lib/storefront-account";
 import { listUpcomingPublicGroupSessions } from "@/lib/group-actions";
+import { getLandingLang } from "@/lib/landing-lang";
+import { getLandingCopy } from "@/lib/landing-copy";
 import "../landing.css";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = {
-  title: "Which way is your compass pointing? — a 2-minute reflection",
-  description:
-    "You point the way for everyone. Take a quiet 2-minute reflection to hear where your own compass has been pointing.",
-};
+// Bilingual: title + description follow the visitor's language cookie, so a
+// Ukrainian visitor's browser tab and shared-link preview read in Ukrainian too.
+export async function generateMetadata(): Promise<Metadata> {
+  const c = getLandingCopy(await getLandingLang());
+  return {
+    title: c.quiz.metaTitle,
+    description: c.quiz.metaDescription,
+  };
+}
 
 export default async function QuizPage() {
+  const lang = await getLandingLang();
+  const c = getLandingCopy(lang);
+
   // Resolve the "keeper → Circle" door to the soonest bookable Circle when
   // sign-ups are open; otherwise fall back to the contact form.
   let circleHref = "/#contact";
@@ -77,18 +87,13 @@ export default async function QuizPage() {
             style={{ textAlign: "center", marginBottom: 34 }}
           >
             <span className="tag" style={{ display: "block" }}>
-              A 2-minute reflection
+              {c.quiz.tag}
             </span>
-            <h2 style={{ marginBottom: 12 }}>
-              Which way is your compass pointing?
-            </h2>
-            <p className="p-lg">
-              You point the way for everyone. This is a quiet moment to check in
-              with your own direction — no wrong answers, nothing to get right.
-            </p>
+            <h2 style={{ marginBottom: 12 }}>{c.quiz.heading}</h2>
+            <p className="p-lg">{c.quiz.intro}</p>
           </div>
 
-          <Quiz circleHref={circleHref} />
+          <Quiz circleHref={circleHref} lang={lang} copy={c.quiz} />
         </section>
       </main>
     </>

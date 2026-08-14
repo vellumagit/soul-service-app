@@ -260,34 +260,55 @@ export async function sendImmediateSessionReminders(
     row.clientEmail &&
     scheduledMs <= now.getTime() + clientHours * 60 * 60 * 1000
   ) {
-    try {
-      const timeZone = resolveTimeZone(
-        row.clientTimezone,
-        row.sessionTimezone,
-        settings.timezone
-      );
-      const { html, text, subject } = buildClientReminderEmail({
-        clientName: row.clientName,
-        sessionType: row.sessionType,
-        scheduledAt: row.scheduledAt,
-        durationMinutes: row.durationMinutes,
-        meetUrl: row.meetUrl,
-        practitionerName: settings.practitionerName ?? "your practitioner",
-        timeZone,
-      });
-      await sendEmail({
-        to: row.clientEmail,
-        subject,
-        html,
-        text,
-        replyTo: settings.businessEmail ?? undefined,
-      });
-      await db
-        .update(sessions)
-        .set({ clientReminderSentAt: now })
-        .where(eq(sessions.id, sessionId));
-    } catch (err) {
-      console.error("[reminders] immediate client reminder failed:", err);
+    // Claim the stamp atomically BEFORE sending, exactly like the cron sender.
+    // This booking-time path and a concurrent 5-minute cron tick can otherwise
+    // both read clientReminderSentAt as null and both email the client; the
+    // isNull guard means only one of them wins the claim.
+    const claimed = await db
+      .update(sessions)
+      .set({ clientReminderSentAt: now })
+      .where(
+        and(eq(sessions.id, sessionId), isNull(sessions.clientReminderSentAt))
+      )
+      .returning({ id: sessions.id });
+    if (claimed.length > 0) {
+      try {
+        const timeZone = resolveTimeZone(
+          row.clientTimezone,
+          row.sessionTimezone,
+          settings.timezone
+        );
+        const { html, text, subject } = buildClientReminderEmail({
+          clientName: row.clientName,
+          sessionType: row.sessionType,
+          scheduledAt: row.scheduledAt,
+          durationMinutes: row.durationMinutes,
+          meetUrl: row.meetUrl,
+          practitionerName: settings.practitionerName ?? "your practitioner",
+          timeZone,
+        });
+        await sendEmail({
+          to: row.clientEmail,
+          subject,
+          html,
+          text,
+          replyTo: settings.businessEmail ?? undefined,
+        });
+      } catch (err) {
+        console.error("[reminders] immediate client reminder failed:", err);
+        // Release the claim so a later cron tick can retry.
+        try {
+          await db
+            .update(sessions)
+            .set({ clientReminderSentAt: null })
+            .where(eq(sessions.id, sessionId));
+        } catch (releaseErr) {
+          console.error(
+            "[reminders] failed to release immediate client-reminder claim:",
+            releaseErr
+          );
+        }
+      }
     }
   }
 
@@ -299,25 +320,50 @@ export async function sendImmediateSessionReminders(
     account?.email &&
     scheduledMs <= now.getTime() + practHours * 60 * 60 * 1000
   ) {
-    try {
-      const timeZone = resolveTimeZone(row.sessionTimezone, settings.timezone);
-      const { html, text, subject } = buildPractitionerReminderEmail({
-        clientName: row.clientName,
-        sessionType: row.sessionType,
-        scheduledAt: row.scheduledAt,
-        durationMinutes: row.durationMinutes,
-        meetUrl: row.meetUrl,
-        intention: row.intention,
-        practitionerName: settings.practitionerName ?? "you",
-        timeZone,
-      });
-      await sendEmail({ to: account.email, subject, html, text });
-      await db
-        .update(sessions)
-        .set({ practitionerReminderSentAt: now })
-        .where(eq(sessions.id, sessionId));
-    } catch (err) {
-      console.error("[reminders] immediate practitioner reminder failed:", err);
+    // Claim before send (see the client block above) so this path and the cron
+    // can't both send her the same heads-up.
+    const claimed = await db
+      .update(sessions)
+      .set({ practitionerReminderSentAt: now })
+      .where(
+        and(
+          eq(sessions.id, sessionId),
+          isNull(sessions.practitionerReminderSentAt)
+        )
+      )
+      .returning({ id: sessions.id });
+    if (claimed.length > 0) {
+      try {
+        const timeZone = resolveTimeZone(row.sessionTimezone, settings.timezone);
+        const { html, text, subject } = buildPractitionerReminderEmail({
+          clientName: row.clientName,
+          sessionType: row.sessionType,
+          scheduledAt: row.scheduledAt,
+          durationMinutes: row.durationMinutes,
+          meetUrl: row.meetUrl,
+          intention: row.intention,
+          practitionerName: settings.practitionerName ?? "you",
+          timeZone,
+        });
+        await sendEmail({ to: account.email, subject, html, text });
+      } catch (err) {
+        console.error(
+          "[reminders] immediate practitioner reminder failed:",
+          err
+        );
+        // Release the claim so a later cron tick can retry.
+        try {
+          await db
+            .update(sessions)
+            .set({ practitionerReminderSentAt: null })
+            .where(eq(sessions.id, sessionId));
+        } catch (releaseErr) {
+          console.error(
+            "[reminders] failed to release immediate practitioner-reminder claim:",
+            releaseErr
+          );
+        }
+      }
     }
   }
 }

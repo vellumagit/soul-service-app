@@ -10,12 +10,14 @@ import { db } from "@/db";
 import { products } from "@/db/schema";
 import { TimeOfDayProvider } from "@/components/TimeOfDayProvider";
 import { PurchaseRequestForm } from "@/components/PurchaseRequestForm";
+import { getLandingLang } from "@/lib/landing-lang";
+import { getLandingCopy } from "@/lib/landing-copy";
 import "../../landing.css";
 
 export const dynamic = "force-dynamic";
 
-function formatMoney(cents: number, currency: string): string {
-  return new Intl.NumberFormat("en-US", {
+function formatMoney(cents: number, currency: string, locale: string): string {
+  return new Intl.NumberFormat(locale, {
     style: "currency",
     currency,
     minimumFractionDigits: 0,
@@ -29,6 +31,8 @@ export default async function OfferingPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const lang = await getLandingLang();
+  const c = getLandingCopy(lang);
 
   const rows = await db
     .select()
@@ -45,7 +49,11 @@ export default async function OfferingPage({
   if (!product) notFound();
 
   const ready = !!product.videoUploadedAt;
-  const priceLabel = formatMoney(product.priceCents, product.currency);
+  const priceLabel = formatMoney(
+    product.priceCents,
+    product.currency,
+    c.circles.dateLocale
+  );
 
   return (
     <>
@@ -83,7 +91,7 @@ export default async function OfferingPage({
             style={{ textAlign: "center" }}
           >
             <span className="tag" style={{ display: "block" }}>
-              An offering
+              {c.offerings.tag}
             </span>
             <h2 style={{ marginBottom: 12 }}>{product.name}</h2>
             <p
@@ -129,6 +137,7 @@ export default async function OfferingPage({
                 productName={product.name}
                 priceLabel={priceLabel}
                 paymentInstructions={product.paymentInstructions}
+                copy={c.offerings.form}
               />
             ) : (
               <div
@@ -148,10 +157,10 @@ export default async function OfferingPage({
                     marginBottom: 8,
                   }}
                 >
-                  Almost ready.
+                  {c.offerings.notReadyTitle}
                 </p>
                 <p style={{ fontSize: 13 }}>
-                  This offering is still being finalized. Check back soon, or{" "}
+                  {c.offerings.notReadyBody}{" "}
                   <Link
                     href="/#contact"
                     style={{
@@ -159,9 +168,9 @@ export default async function OfferingPage({
                       textDecoration: "underline",
                     }}
                   >
-                    send a note
+                    {c.offerings.notReadyLink}
                   </Link>{" "}
-                  if you&apos;d like to hear when it&apos;s up.
+                  {c.offerings.notReadyAfter}
                 </p>
               </div>
             )}

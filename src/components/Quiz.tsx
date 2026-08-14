@@ -4,17 +4,25 @@
 // scores into a result (mirror + one door), then offers the workbook by email.
 // Styled with the storefront (landing.css) palette; rendered inside
 // <main className="landing-root">.
+//
+// Bilingual: the page resolves the visitor's language (cookie) and hands down
+// `lang` (for the questions/results, via getQuizContent) and `copy` (the UI
+// chrome, from the landing-copy `quiz` section). No visible string is authored
+// here — they all come from those two sources so EN and УКР stay in step.
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  QUIZ_QUESTIONS,
-  QUIZ_RESULTS,
+  getQuizContent,
   scoreQuiz,
   type QuizDoorKind,
+  type QuizResult,
   type QuizResultKey,
 } from "@/lib/quiz-content";
+import type { LandingCopy, LandingLang } from "@/lib/landing-copy";
 import { submitQuizLead } from "@/lib/quiz-actions";
+
+type QuizCopy = LandingCopy["quiz"];
 
 function doorHref(kind: QuizDoorKind, circleHref: string): string {
   if (kind === "circle") return circleHref;
@@ -27,8 +35,17 @@ const clayDeep = "var(--land-clay-deep, #7c3f26)";
 const inkSoft = "var(--land-ink-soft, #786b60)";
 const serif = "var(--font-serif, Georgia, serif)";
 
-export function Quiz({ circleHref }: { circleHref: string }) {
-  const total = QUIZ_QUESTIONS.length;
+export function Quiz({
+  circleHref,
+  lang,
+  copy,
+}: {
+  circleHref: string;
+  lang: LandingLang;
+  copy: QuizCopy;
+}) {
+  const { questions, results } = useMemo(() => getQuizContent(lang), [lang]);
+  const total = questions.length;
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<(number | null)[]>(
     Array(total).fill(null)
@@ -55,14 +72,16 @@ export function Quiz({ circleHref }: { circleHref: string }) {
   if (result) {
     return (
       <ResultView
+        result={results[result]}
         resultKey={result}
         circleHref={circleHref}
+        copy={copy}
         onRestart={restart}
       />
     );
   }
 
-  const q = QUIZ_QUESTIONS[step];
+  const q = questions[step];
   const pct = Math.round((step / total) * 100);
 
   return (
@@ -96,7 +115,7 @@ export function Quiz({ circleHref }: { circleHref: string }) {
               letterSpacing: "0.04em",
             }}
           >
-            ← back
+            {copy.back}
           </button>
         )}
       </div>
@@ -166,15 +185,19 @@ export function Quiz({ circleHref }: { circleHref: string }) {
 }
 
 function ResultView({
+  result,
   resultKey,
   circleHref,
+  copy,
   onRestart,
 }: {
+  result: QuizResult;
   resultKey: QuizResultKey;
   circleHref: string;
+  copy: QuizCopy;
   onRestart: () => void;
 }) {
-  const r = QUIZ_RESULTS[resultKey];
+  const r = result;
 
   return (
     <div style={{ maxWidth: 600, margin: "0 auto", textAlign: "center" }}>
@@ -226,10 +249,7 @@ function ResultView({
             color: "var(--land-ink, #3d342e)",
           }}
         >
-          In Canada, you can call or text{" "}
-          <strong>988</strong> any time — the Suicide Crisis Helpline. If
-          you&apos;re in immediate danger, call <strong>911</strong>.
-          You&apos;re not a burden, and you don&apos;t have to hold this alone.
+          {copy.safetyNote}
         </div>
       )}
 
@@ -260,7 +280,9 @@ function ResultView({
       )}
 
       {/* Workbook opt-in (result is already shown for free). */}
-      {r.showWorkbook && <WorkbookForm resultKey={resultKey} />}
+      {r.showWorkbook && (
+        <WorkbookForm resultKey={resultKey} copy={copy.workbook} />
+      )}
 
       <button
         type="button"
@@ -275,13 +297,19 @@ function ResultView({
           textDecoration: "underline",
         }}
       >
-        Take it again
+        {copy.takeAgain}
       </button>
     </div>
   );
 }
 
-function WorkbookForm({ resultKey }: { resultKey: QuizResultKey }) {
+function WorkbookForm({
+  resultKey,
+  copy,
+}: {
+  resultKey: QuizResultKey;
+  copy: QuizCopy["workbook"];
+}) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [hp, setHp] = useState("");
@@ -301,13 +329,16 @@ function WorkbookForm({ resultKey }: { resultKey: QuizResultKey }) {
       }
       setDone(true);
     } catch {
-      setError("Something went off. Please try again.");
+      setError(copy.errorGeneric);
     } finally {
       setSaving(false);
     }
   }
 
   if (done) {
+    // The confirmation line embeds the visitor's own email; split on the
+    // placeholder so the translation can put it anywhere and still emphasize it.
+    const [donePre, donePost] = copy.doneBody.split("{email}");
     return (
       <div
         style={{
@@ -328,11 +359,12 @@ function WorkbookForm({ resultKey }: { resultKey: QuizResultKey }) {
             margin: "0 0 8px 0",
           }}
         >
-          On its way. 🤍
+          {copy.doneTitle}
         </p>
         <p style={{ fontSize: 14, lineHeight: 1.6, margin: 0 }}>
-          I&apos;ll send your reflection and a gentle workbook to <strong>{email}</strong>.
-          Check your inbox soon.
+          {donePre}
+          <strong>{email}</strong>
+          {donePost}
         </p>
       </div>
     );
@@ -354,7 +386,7 @@ function WorkbookForm({ resultKey }: { resultKey: QuizResultKey }) {
           textAlign: "center",
         }}
       >
-        Want to sit with this a little longer?
+        {copy.heading}
       </p>
       <p
         style={{
@@ -365,8 +397,7 @@ function WorkbookForm({ resultKey }: { resultKey: QuizResultKey }) {
           textAlign: "center",
         }}
       >
-        I&apos;ll send your reflection plus a gentle workbook to go deeper — no
-        pressure, no spam.
+        {copy.sub}
       </p>
       {/* honeypot */}
       <input
@@ -378,7 +409,7 @@ function WorkbookForm({ resultKey }: { resultKey: QuizResultKey }) {
         aria-hidden="true"
         style={{ position: "absolute", left: "-9999px", width: 1, height: 1 }}
       />
-      <label style={labelStyle}>Your name</label>
+      <label style={labelStyle}>{copy.nameLabel}</label>
       <input
         type="text"
         value={name}
@@ -387,7 +418,7 @@ function WorkbookForm({ resultKey }: { resultKey: QuizResultKey }) {
         disabled={saving}
         style={inputStyle}
       />
-      <label style={labelStyle}>Email</label>
+      <label style={labelStyle}>{copy.emailLabel}</label>
       <input
         type="email"
         value={email}
@@ -415,7 +446,7 @@ function WorkbookForm({ resultKey }: { resultKey: QuizResultKey }) {
           opacity: saving ? 0.6 : 1,
         }}
       >
-        {saving ? "Sending…" : "Send me the workbook →"}
+        {saving ? copy.sending : copy.submit}
       </button>
     </form>
   );

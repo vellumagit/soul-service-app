@@ -2070,7 +2070,14 @@ export async function scheduleSessionSeries(
       occurrenceIndex: i + 1,
     }));
 
-    await db.insert(sessions).values(sessionRows);
+    const inserted = await db
+      .insert(sessions)
+      .values(sessionRows)
+      .returning({
+        id: sessions.id,
+        scheduledAt: sessions.scheduledAt,
+        status: sessions.status,
+      });
 
     // Same auto-promote logic as the single-session case — if this client
     // was still in the network, kicking off a series moves them out.
@@ -2084,6 +2091,59 @@ export async function scheduleSessionSeries(
           eq(clients.isLead, true)
         )
       );
+
+    // Fulfillment for the FUTURE occurrences. This used to be missing entirely:
+    // a series was a bare INSERT, so every session came out online with no Meet
+    // link, no Google event, no calendar invite — and, with no Meet link, no
+    // notetaker bot, so AI notes silently never generated for series clients.
+    // Sync each future session to Google (event + Meet link, which also invites
+    // the client) and schedule a bot, exactly like a standalone booking. Past-
+    // dated rows are back-fill — already happened, nothing to invite anyone to —
+    // so they're skipped. Best-effort per session: a Calendar or Recall hiccup
+    // must never undo the series that's already saved, and any session left
+    // unsynced is caught later by "Sync all to Google" / the self-heal path.
+    const nowMs = Date.now();
+    const future = inserted
+      .filter(
+        (s) => s.status === "scheduled" && new Date(s.scheduledAt).getTime() > nowMs
+      )
+      .sort(
+        (a, b) =>
+          new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime()
+      );
+    for (const s of future) {
+      try {
+        const sync = await syncSessionToGoogle(s.id);
+        if (sync.ok === false) {
+          console.error(
+            `[scheduleSessionSeries] Google sync failed for ${s.id}: ${sync.error}`
+          );
+        }
+      } catch (err) {
+        console.error("[scheduleSessionSeries] Google sync threw:", err);
+      }
+      // Online series sessions default to a Meet link from the sync above, so
+      // the bot can attach. In-person series aren't offered by the dialog.
+      await maybeAutoAddRecallBot(accountId, s.id);
+    }
+
+    // ONE confirmation for the whole series — the client would otherwise get an
+    // app email per occurrence. Send it for the first upcoming session (Google
+    // has already invited them to each). Also run the short-notice reminder
+    // check for that first session in case the series starts inside a reminder
+    // window.
+    if (future.length > 0) {
+      await maybeSendBookingConfirmation(accountId, future[0].id);
+      try {
+        const { sendImmediateSessionReminders } = await import("./reminders");
+        await sendImmediateSessionReminders(future[0].id);
+      } catch (err) {
+        console.error(
+          "[scheduleSessionSeries] immediate reminder check failed:",
+          err
+        );
+      }
+    }
 
     revalidatePath(`/clients/${clientId}`);
     revalidatePath("/calendar");

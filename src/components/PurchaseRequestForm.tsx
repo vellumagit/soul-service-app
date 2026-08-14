@@ -9,6 +9,7 @@ import {
   requestProductPurchase,
   type PurchaseRequestResult,
 } from "@/lib/product-actions";
+import type { LandingCopy } from "@/lib/landing-copy";
 
 const initialState: PurchaseRequestResult | undefined = undefined;
 
@@ -17,6 +18,7 @@ interface Props {
   productName: string;
   priceLabel: string;
   paymentInstructions: string | null;
+  copy: LandingCopy["offerings"]["form"];
 }
 
 export function PurchaseRequestForm({
@@ -24,11 +26,16 @@ export function PurchaseRequestForm({
   productName,
   priceLabel,
   paymentInstructions,
+  copy,
 }: Props) {
   const [state, action, pending] = useActionState(
     requestProductPurchase,
     initialState
   );
+  // The thank-you line embeds the (single-language, practitioner-authored)
+  // product name; split on the placeholder so it can sit anywhere the
+  // translation puts it and still render emphasized.
+  const [thankPre, thankPost] = copy.thankBody.split("{name}");
 
   if (state?.ok) {
     return (
@@ -43,12 +50,12 @@ export function PurchaseRequestForm({
           className="serif-italic text-lg text-plum-700 mb-2"
           style={{ fontWeight: 400 }}
         >
-          Thank you for reaching out.
+          {copy.thankTitle}
         </p>
         <p className="text-sm text-ink-600 leading-relaxed">
-          Svitlana will send you a private link to watch <em>{productName}</em>
-          {" "}once she&apos;s confirmed your payment. Check your inbox over the
-          next day or two.
+          {thankPre}
+          <em>{productName}</em>
+          {thankPost}
         </p>
         {paymentInstructions && (
           <div
@@ -62,13 +69,13 @@ export function PurchaseRequestForm({
               className="text-[10px] uppercase tracking-wider font-mono mb-2"
               style={{ color: "var(--land-clay, #b05c36)" }}
             >
-              How to pay
+              {copy.howToPay}
             </div>
             <p className="text-sm text-ink-700 whitespace-pre-wrap leading-relaxed">
               {paymentInstructions}
             </p>
             <p className="text-[11px] text-ink-500 italic mt-3">
-              Amount: {priceLabel}
+              {copy.amount} {priceLabel}
             </p>
           </div>
         )}
@@ -98,7 +105,7 @@ export function PurchaseRequestForm({
 
       <label className="block">
         <span className="text-xs uppercase tracking-wider text-ink-500 font-mono">
-          Your name
+          {copy.nameLabel}
         </span>
         <input
           type="text"
@@ -106,14 +113,14 @@ export function PurchaseRequestForm({
           required
           maxLength={200}
           autoComplete="name"
-          placeholder="What people call you"
+          placeholder={copy.namePlaceholder}
           className="mt-1.5 w-full px-3 py-2.5 text-sm border border-ink-200 rounded-md bg-white outline-none focus:border-plum-500 focus:ring-1 focus:ring-plum-100"
         />
       </label>
 
       <label className="block">
         <span className="text-xs uppercase tracking-wider text-ink-500 font-mono">
-          Email
+          {copy.emailLabel}
         </span>
         <input
           type="email"
@@ -121,14 +128,14 @@ export function PurchaseRequestForm({
           required
           maxLength={200}
           autoComplete="email"
-          placeholder="So Svitlana can send your watch link"
+          placeholder={copy.emailPlaceholder}
           className="mt-1.5 w-full px-3 py-2.5 text-sm border border-ink-200 rounded-md bg-white outline-none focus:border-plum-500 focus:ring-1 focus:ring-plum-100"
         />
       </label>
 
       <label className="block">
         <span className="text-xs uppercase tracking-wider text-ink-500 font-mono">
-          Phone (optional)
+          {copy.phoneLabel}
         </span>
         <input
           type="tel"
@@ -154,12 +161,15 @@ export function PurchaseRequestForm({
           letterSpacing: "0.02em",
         }}
       >
-        {pending ? "Sending…" : `Request ${productName} (${priceLabel}) →`}
+        {pending
+          ? copy.sending
+          : copy.requestCta
+              .replace("{name}", productName)
+              .replace("{price}", priceLabel)}
       </button>
 
       <p className="text-[11px] italic text-center text-ink-500 serif-italic mt-3">
-        No payment now — Svitlana will email instructions and your private
-        watch link.
+        {copy.noPaymentNote}
       </p>
     </form>
   );
