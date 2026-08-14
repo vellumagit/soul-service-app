@@ -35,6 +35,7 @@ import {
   renderOffers,
   type RenderedRow,
 } from "@/lib/landing-offers";
+import { QUIZ_PAUSED } from "@/lib/quiz-status";
 import {
   listLandingOffers,
   listLandingOfferRows,
@@ -203,10 +204,21 @@ export default async function LandingPage() {
   const sectionOrder = visibleSectionOrder(sectionRows);
 
   const ownOffers = renderOffers(offerRows, lang, circleCtaHref);
-  const ladder: RenderedRow[] =
+  const rawLadder: RenderedRow[] =
     ownOffers.length > 0
       ? groupOffersIntoRows(ladderRows, ownOffers, lang)
       : builtInRows(c, circleCtaHref);
+  // Quiz is paused (see quiz-status.ts): drop any card that links to /quiz so
+  // the storefront doesn't advertise a page that's on hold, and remove a row
+  // left empty by that. Reverses cleanly when QUIZ_PAUSED flips back to false.
+  const ladder: RenderedRow[] = QUIZ_PAUSED
+    ? rawLadder
+        .map((row) => ({
+          ...row,
+          offers: row.offers.filter((o) => o.href !== "/quiz"),
+        }))
+        .filter((row) => row.offers.length > 0)
+    : rawLadder;
 
   // Library — published video offerings. Same try/catch pattern.
   let libraryProducts: Awaited<

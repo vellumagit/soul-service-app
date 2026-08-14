@@ -16,6 +16,7 @@ import { resolveStorefrontAccountId } from "@/lib/storefront-account";
 import { listUpcomingPublicGroupSessions } from "@/lib/group-actions";
 import { getLandingLang } from "@/lib/landing-lang";
 import { getLandingCopy } from "@/lib/landing-copy";
+import { QUIZ_PAUSED } from "@/lib/quiz-status";
 import "../landing.css";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +24,13 @@ export const dynamic = "force-dynamic";
 // Bilingual: title + description follow the visitor's language cookie, so a
 // Ukrainian visitor's browser tab and shared-link preview read in Ukrainian too.
 export async function generateMetadata(): Promise<Metadata> {
-  const c = getLandingCopy(await getLandingLang());
+  const lang = await getLandingLang();
+  // Paused: don't let a shared /quiz link preview as the live quiz — give it a
+  // neutral title. Reverses when QUIZ_PAUSED flips back to false.
+  if (QUIZ_PAUSED) {
+    return { title: lang === "uk" ? "Невеличка пауза" : "A short pause" };
+  }
+  const c = getLandingCopy(lang);
   return {
     title: c.quiz.metaTitle,
     description: c.quiz.metaDescription,
@@ -33,6 +40,71 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function QuizPage() {
   const lang = await getLandingLang();
   const c = getLandingCopy(lang);
+
+  // Paused (see quiz-status.ts): show a gentle bilingual note instead of the
+  // quiz so direct links / shared posts land somewhere graceful. Temporary —
+  // this whole branch comes out when QUIZ_PAUSED flips back to false.
+  if (QUIZ_PAUSED) {
+    const paused =
+      lang === "uk"
+        ? {
+            title: "Ця рефлексія зараз на короткій паузі.",
+            body: "Незабаром вона повернеться. А поки що — щиро запрошую завітати на головну сторінку.",
+            back: "← На головну",
+          }
+        : {
+            title: "This reflection is taking a short pause.",
+            body: "It'll be back before long. In the meantime, you're warmly welcome to look around.",
+            back: "← Back to the main page",
+          };
+    return (
+      <>
+        <TimeOfDayProvider />
+        <main className="landing-root">
+          <header
+            style={{
+              padding: "32px 24px 0",
+              maxWidth: 720,
+              margin: "0 auto",
+              textAlign: "center",
+            }}
+          >
+            <Link
+              href="/"
+              style={{
+                fontFamily: "var(--font-serif, serif)",
+                fontSize: 18,
+                fontWeight: 500,
+                letterSpacing: "0.04em",
+                color: "var(--land-clay-deep)",
+                textDecoration: "none",
+              }}
+            >
+              Svitlana
+            </Link>
+          </header>
+          <section className="circles" style={{ padding: "64px 24px 96px" }}>
+            <div className="wrap narrow" style={{ textAlign: "center" }}>
+              <h2 style={{ marginBottom: 14 }}>{paused.title}</h2>
+              <p className="p-lg" style={{ marginBottom: 28 }}>
+                {paused.body}
+              </p>
+              <Link
+                href="/"
+                style={{
+                  color: "var(--land-clay)",
+                  textDecoration: "underline",
+                  fontSize: 14,
+                }}
+              >
+                {paused.back}
+              </Link>
+            </div>
+          </section>
+        </main>
+      </>
+    );
+  }
 
   // Resolve the "keeper → Circle" door to the soonest bookable Circle when
   // sign-ups are open; otherwise fall back to the contact form.
