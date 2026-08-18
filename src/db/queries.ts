@@ -854,8 +854,28 @@ export async function getClientActivity(
   const [client, sessionsList, attachmentsList, tasksList, comms] =
     await Promise.all([
       getClientById(accountId, clientId),
+      // Explicit projection: the activity timeline reads only these columns.
+      // A bare select() dragged the big text fields (transcript, ai_summary,
+      // ai_summary_tldr) out of Postgres for every session on each profile
+      // open — pure egress + awake-time with nothing rendering them.
       db
-        .select()
+        .select({
+          id: sessions.id,
+          type: sessions.type,
+          intention: sessions.intention,
+          status: sessions.status,
+          notes: sessions.notes,
+          scheduledAt: sessions.scheduledAt,
+          createdAt: sessions.createdAt,
+          updatedAt: sessions.updatedAt,
+          paid: sessions.paid,
+          paidAt: sessions.paidAt,
+          paymentMethod: sessions.paymentMethod,
+          paymentAmountCents: sessions.paymentAmountCents,
+          invoiceUrl: sessions.invoiceUrl,
+          invoiceGeneratedAt: sessions.invoiceGeneratedAt,
+          invoiceNumber: sessions.invoiceNumber,
+        })
         .from(sessions)
         .where(
           and(

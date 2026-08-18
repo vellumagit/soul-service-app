@@ -38,6 +38,7 @@ const PUBLIC_PREFIXES = [
 const PUBLIC_PATHS = new Set<string>([
   "/", // marketing homepage — ALWAYS public
   "/quiz", // public self-selection quiz (lead magnet) — no auth
+  "/api/health", // DB-free liveness probe — point uptime monitors here
   "/favicon.ico",
   "/robots.txt",
   "/sitemap.xml",

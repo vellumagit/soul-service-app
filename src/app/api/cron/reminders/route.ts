@@ -32,20 +32,25 @@ export async function GET(request: Request) {
 
   // Top up recurring weekly Circles so the storefront always has the next few
   // weeks of open seats. Idempotent + deduped, so running hourly is safe.
+  // The recurring-Circle top-up and the empty-cancelled prune are maintenance,
+  // NOT time-sensitive like reminders — running them every hourly tick is just
+  // redundant DB work (and write churn, which costs on usage-based billing).
+  // Run them at most once a day. Both are idempotent, so a skipped day (a
+  // delayed/missed cron run) self-heals on the next daily pass.
+  const runDailyMaintenance = new Date().getUTCHours() === 4;
   let recurringCircles = { groups: 0, created: 0 };
-  try {
-    recurringCircles = await ensureRecurringCircleSessions();
-  } catch (err) {
-    console.error("[cron] recurring circles top-up failed", err);
-  }
-
-  // Sweep away cancelled Circle sessions nobody joined — they carry no history
-  // and otherwise accumulate silently, burying the sessions that matter.
   let prunedCircles = 0;
-  try {
-    prunedCircles = await pruneEmptyCancelledCircleSessions();
-  } catch (err) {
-    console.error("[cron] empty-cancelled circle prune failed", err);
+  if (runDailyMaintenance) {
+    try {
+      recurringCircles = await ensureRecurringCircleSessions();
+    } catch (err) {
+      console.error("[cron] recurring circles top-up failed", err);
+    }
+    try {
+      prunedCircles = await pruneEmptyCancelledCircleSessions();
+    } catch (err) {
+      console.error("[cron] empty-cancelled circle prune failed", err);
+    }
   }
 
   return NextResponse.json({
