@@ -33,11 +33,15 @@ export async function GET(request: Request) {
   // Top up recurring weekly Circles so the storefront always has the next few
   // weeks of open seats. Idempotent + deduped, so running hourly is safe.
   // The recurring-Circle top-up and the empty-cancelled prune are maintenance,
-  // NOT time-sensitive like reminders — running them every hourly tick is just
+  // NOT time-sensitive like reminders — running them on every tick is just
   // redundant DB work (and write churn, which costs on usage-based billing).
-  // Run them at most once a day. Both are idempotent, so a skipped day (a
-  // delayed/missed cron run) self-heals on the next daily pass.
-  const runDailyMaintenance = new Date().getUTCHours() === 4;
+  // Run them at most once a day, at the ~04:00 UTC tick. The minute guard
+  // matters because the cron fires every 10 min, so hour-only would run this
+  // six times during hour 4. Both are idempotent, so a skipped day (a delayed
+  // or missed cron run) self-heals on the next daily pass.
+  const nowUtc = new Date();
+  const runDailyMaintenance =
+    nowUtc.getUTCHours() === 4 && nowUtc.getUTCMinutes() < 10;
   let recurringCircles = { groups: 0, created: 0 };
   let prunedCircles = 0;
   if (runDailyMaintenance) {
