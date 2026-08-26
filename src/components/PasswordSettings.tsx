@@ -26,20 +26,23 @@ export function PasswordSettings({ hasPassword }: { hasPassword: boolean }) {
       </h2>
       <p className="text-xs text-ink-500 mb-4 leading-relaxed">
         {hasPassword
-          ? "Change the password you use to sign in to this workspace from any device. (This is separate from your Google / email password.)"
+          ? "Change — or reset — the password you use to sign in from any device. Forgotten the current one? Leave that box blank (you're already signed in). Separate from your Google / email password."
           : "Set a password so you can sign in from anywhere with your email + password. You can always fall back to an emailed one-time link. (Separate from your Google / email password.)"}
       </p>
 
       <form action={action} className="space-y-3 max-w-sm">
         {hasPassword && (
-          <Field label="Current password" required>
+          <Field label="Current password">
             <input
               name="currentPassword"
               type="password"
               autoComplete="current-password"
-              required
               className={inputCls}
             />
+            <p className="text-[11px] text-ink-400 mt-1 leading-relaxed">
+              Forgotten it? Leave this blank to reset — you&apos;re already
+              signed in.
+            </p>
           </Field>
         )}
         <Field label={hasPassword ? "New password" : "Password"} required>

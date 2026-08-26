@@ -132,7 +132,7 @@ function AppShellInner({
       {/* Sidebar — pulled toward parchment cream so the chrome shares a warm
           family with the cards instead of looking like a clinical white rail. */}
       <aside
-        className="hidden md:flex w-56 border-r flex-col shrink-0"
+        className="hidden md:flex md:sticky md:top-0 md:h-screen w-56 border-r flex-col shrink-0"
         style={{
           background:
             "linear-gradient(180deg, var(--color-parchment) 0%, var(--color-app-bg) 100%)",
@@ -320,7 +320,7 @@ function SidebarNav({
 }) {
   const t = useT();
   return (
-    <nav className="flex-1 py-2 text-sm">
+    <nav className="flex-1 min-h-0 overflow-y-auto py-2 text-sm">
       {NAV.map((item) => (
         <Link
           key={item.href}

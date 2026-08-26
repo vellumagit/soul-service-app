@@ -215,10 +215,18 @@ export async function setPractitionerPassword(
   const confirm = String(formData.get("confirmPassword") ?? "");
 
   const existing = await getAccountPasswordHash(accountId);
-  if (existing) {
+  // If she typed her current password, it must match. But she can also leave it
+  // BLANK to reset a forgotten one — she's already signed in (via password or an
+  // emailed sign-in link), which is proof enough. This is the in-app recovery
+  // path, so a forgotten password never means being locked out.
+  if (existing && current.trim().length > 0) {
     const good = await verifyPassword(current, existing);
     if (!good) {
-      return { ok: false, message: "Your current password isn’t right." };
+      return {
+        ok: false,
+        message:
+          "That current password isn’t right. Leave it blank to reset it — you’re already signed in.",
+      };
     }
   }
   if (next.length < MIN_PASSWORD_LENGTH) {
