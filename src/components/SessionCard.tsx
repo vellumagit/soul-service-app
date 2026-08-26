@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import {
   updateSession,
   cancelSession,
+  cancelSessionSeries,
   deleteSession,
   markSessionUnpaid,
 } from "@/lib/actions";
@@ -484,6 +485,11 @@ export function SessionCard({
           <div className="border-t border-ink-100 pt-3 flex items-center gap-2 flex-wrap">
             {isScheduled && (
               <>
+                {session.seriesId && (
+                  <span className="text-[11px] text-ink-400 w-full">
+                    Part of a recurring series.
+                  </span>
+                )}
                 <WalkInButton sessionId={session.id} />
                 <RescheduleDialog
                   sessionId={session.id}
@@ -495,15 +501,34 @@ export function SessionCard({
                   destructive={false}
                   label={
                     <span className="text-xs text-ink-500 hover:text-amber-700">
-                      Cancel session
+                      {session.seriesId ? "Cancel this one" : "Cancel session"}
                     </span>
                   }
-                  message="Cancel this scheduled session? If Google Calendar is connected, the event will be deleted and your client will be notified."
+                  message={
+                    session.seriesId
+                      ? "Cancel just this session? The rest of the recurring series stays on the calendar. If Google Calendar is connected, this event is removed and your client is emailed."
+                      : "Cancel this scheduled session? If Google Calendar is connected, the event will be deleted and your client will be notified."
+                  }
                   confirmLabel="Yes, cancel it"
                   onConfirm={() =>
                     cancelSession(session.id, session.clientId)
                   }
                 />
+                {session.seriesId && (
+                  <ConfirmButton
+                    destructive={false}
+                    label={
+                      <span className="text-xs text-ink-500 hover:text-amber-700">
+                        Cancel whole series
+                      </span>
+                    }
+                    message="Cancel this and ALL future sessions in this recurring series? Past sessions are kept. Any Google Calendar events for the future sessions are removed, and your client is emailed."
+                    confirmLabel="Yes, cancel the series"
+                    onConfirm={() =>
+                      cancelSessionSeries(session.seriesId!, session.clientId)
+                    }
+                  />
+                )}
               </>
             )}
             {session.locationType === "in_person" ? (

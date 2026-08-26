@@ -2218,6 +2218,15 @@ export async function cancelSessionSeries(
     }
   }
 
+  // Tell the client the recurring sessions are off — BEFORE we delete the rows
+  // (the email reads the client + type off a session). One note for the whole
+  // series, not one per occurrence.
+  if (futureRows[0]) {
+    await maybeSendCancellationEmail(accountId, futureRows[0].id, {
+      series: true,
+    });
+  }
+
   // Delete the future scheduled sessions.
   await db.execute(
     sql`DELETE FROM sessions
@@ -2528,11 +2537,69 @@ export async function cancelSession(sessionId: string, clientId: string) {
   // Cancelling also settles any open "can we move this?" ask.
   await resolvePendingRescheduleRequests(accountId, sessionId);
 
+  // Email the client that it's off. Google only notifies calendar invitees, so
+  // an in-person or no-Google client would otherwise never hear.
+  await maybeSendCancellationEmail(accountId, sessionId, { series: false });
+
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/calendar");
   revalidatePath("/today");
   revalidatePath("/requests");
   revalidatePath(`/portal/sessions/${sessionId}`);
+}
+
+/** Best-effort: email the client that a session (or the whole recurring series)
+ *  was cancelled. Independent of Google Calendar, so a no-Google/in-person
+ *  client still hears. Never throws — a mail hiccup must not fail the cancel. */
+async function maybeSendCancellationEmail(
+  accountId: string,
+  sessionId: string,
+  opts: { series?: boolean } = {}
+): Promise<void> {
+  try {
+    const { isResendConfigured, sendSessionCancelledEmail } = await import(
+      "./resend"
+    );
+    if (!isResendConfigured()) return;
+    const [row] = await db
+      .select({
+        clientName: clients.fullName,
+        clientEmail: clients.email,
+        clientTimezone: clients.timezone,
+        scheduledAt: sessions.scheduledAt,
+        sessionType: sessions.type,
+        sessionTimezone: sessions.timezone,
+        practitionerName: practitionerSettings.practitionerName,
+        businessEmail: practitionerSettings.businessEmail,
+        practiceTimezone: practitionerSettings.timezone,
+      })
+      .from(sessions)
+      .innerJoin(clients, eq(clients.id, sessions.clientId))
+      .leftJoin(
+        practitionerSettings,
+        eq(practitionerSettings.accountId, sessions.accountId)
+      )
+      .where(and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId)))
+      .limit(1);
+    if (!row?.clientEmail) return;
+    const clientZone = resolveTimeZone(
+      row.clientTimezone,
+      row.sessionTimezone,
+      row.practiceTimezone
+    );
+    await sendSessionCancelledEmail({
+      to: row.clientEmail,
+      clientName: row.clientName,
+      sessionType: row.sessionType,
+      scheduledAt: new Date(row.scheduledAt),
+      practitionerName: row.practitionerName ?? null,
+      replyTo: row.businessEmail ?? undefined,
+      timeZone: clientZone,
+      series: opts.series === true,
+    });
+  } catch (err) {
+    console.warn("[cancellation email] failed:", err);
+  }
 }
 
 export async function deleteSession(sessionId: string, clientId: string) {

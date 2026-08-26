@@ -1433,6 +1433,63 @@ ${signoff}`;
   await sendEmail({ to: input.to, subject, html, text, replyTo: input.replyTo });
 }
 
+/** Tell the client a session — or a whole recurring series — was cancelled.
+ *  Independent of Google Calendar, so a client without a Google invite (in
+ *  person, or Google not connected) still finds out. Never throws. */
+export async function sendSessionCancelledEmail(input: {
+  to: string;
+  clientName: string | null;
+  sessionType: string;
+  scheduledAt: Date;
+  practitionerName: string | null;
+  replyTo?: string;
+  /** RECIPIENT's local zone (client → session → practice). */
+  timeZone: string;
+  /** True = the whole recurring series was called off, not just one occurrence. */
+  series?: boolean;
+}): Promise<void> {
+  const first = input.clientName?.split(" ")[0] ?? null;
+  const greeting = first ? `Hi ${first},` : "Hi,";
+  const signoff = input.practitionerName ?? "Svitlana";
+  const typeLabel = input.sessionType?.trim()
+    ? input.sessionType.trim()
+    : "session";
+  const when = formatSessionLong(input.scheduledAt, input.timeZone);
+  const shortDate = formatSessionShortDate(input.scheduledAt, input.timeZone);
+
+  const subject = input.series
+    ? `Cancelled — our recurring ${typeLabel.toLowerCase()} sessions`
+    : `Cancelled — our ${typeLabel.toLowerCase()} on ${shortDate}`;
+  const lead = input.series
+    ? `I've cancelled our recurring ${typeLabel.toLowerCase()} sessions — nothing further is on the calendar for now.`
+    : `I've had to cancel our ${typeLabel.toLowerCase()} on ${when}.`;
+
+  const text = `${greeting}
+
+${lead}
+
+I'm here whenever you'd like to find another time — just reply to this email.
+
+Warmly,
+${signoff}`;
+
+  const html = `
+<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#faf6f0;font-family:Georgia,'Times New Roman',serif;color:#3d342e;">
+    <div style="max-width:480px;margin:48px auto;padding:36px 32px;background:#fdf9f1;border-radius:12px;border:1px solid #ead9c1;">
+      <p style="margin:0 0 6px 0;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#b05c36;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">Cancelled</p>
+      <p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;color:#564a42;">${escapeHtml(greeting)}</p>
+      <p style="margin:0 0 20px 0;font-size:15px;line-height:1.6;color:#564a42;">${escapeHtml(lead)}</p>
+      <p style="margin:24px 0 0 0;font-size:15px;line-height:1.6;color:#564a42;">I'm here whenever you'd like to find another time — just reply.</p>
+      <p style="margin:16px 0 0 0;font-size:15px;line-height:1.6;color:#564a42;">Warmly,<br>${escapeHtml(signoff)}</p>
+    </div>
+  </body>
+</html>`;
+
+  await sendEmail({ to: input.to, subject, html, text, replyTo: input.replyTo });
+}
+
 function bookingConfirmationHtml(p: {
   greeting: string;
   typeLabel: string;
