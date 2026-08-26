@@ -2590,6 +2590,28 @@ export async function markSessionPaid(formData: FormData) {
   const { accountId } = await requireSession();
   const id = required(str(formData, "id"), "Session id");
   const clientId = required(str(formData, "clientId"), "Client id");
+
+  // "This one's on me" — a gift / comp. Recorded as gifted (paid=false, amount
+  // 0) so it drops out of the unpaid nags + revenue totals without being faked
+  // as a real payment. Mirrors gifted Circle seats.
+  if (bool(formData, "noCharge")) {
+    await db
+      .update(sessions)
+      .set({
+        paid: false,
+        paymentMethod: "gifted",
+        paymentAmountCents: 0,
+        paymentNote: str(formData, "paymentNote"),
+        paidAt: null,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(sessions.accountId, accountId), eq(sessions.id, id)));
+    revalidatePath(`/clients/${clientId}`);
+    revalidatePath("/payments");
+    revalidatePath("/today");
+    return;
+  }
+
   const method = paymentMethodValue(formData, "paymentMethod") ?? "other";
   const amount = amountCents(formData, "paymentAmount");
   const note = str(formData, "paymentNote");

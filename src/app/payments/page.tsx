@@ -38,7 +38,9 @@ export default async function PaymentsPage({
 
   const filtered = sessions.filter((s) => {
     if (filter === "unpaid")
-      return s.status === "completed" && !s.paid;
+      return (
+        s.status === "completed" && !s.paid && s.paymentMethod !== "gifted"
+      );
     if (filter === "paid") return s.paid;
     if (filter === "scheduled") return s.status === "scheduled";
     return true;
@@ -128,6 +130,8 @@ export default async function PaymentsPage({
                     className={`chip ${
                       s.paid
                         ? "bg-green-50 text-green-700"
+                        : s.paymentMethod === "gifted"
+                        ? "bg-ink-100 text-ink-600"
                         : s.status === "scheduled"
                         ? "bg-plum-100 text-plum-700"
                         : "bg-amber-50 text-amber-700"
@@ -135,6 +139,8 @@ export default async function PaymentsPage({
                   >
                     {s.paid
                       ? "PAID"
+                      : s.paymentMethod === "gifted"
+                      ? "FREE"
                       : s.status === "scheduled"
                       ? "UPCOMING"
                       : "UNPAID"}
@@ -153,7 +159,9 @@ export default async function PaymentsPage({
                 </div>
                 <div className="mt-2 flex items-center justify-between">
                   <span className="text-sm text-ink-700 font-medium">
-                    {s.paymentAmountCents
+                    {s.paymentMethod === "gifted"
+                      ? "Free"
+                      : s.paymentAmountCents
                       ? money(s.paymentAmountCents)
                       : s.paid
                       ? "—"
@@ -164,15 +172,17 @@ export default async function PaymentsPage({
                       </span>
                     )}
                   </span>
-                  {!s.paid && s.status === "completed" && (
-                    <MarkPaidDialog
-                      sessionId={s.id}
-                      clientId={s.clientId}
-                      defaultAmountCents={
-                        s.paymentAmountCents ?? settings.defaultRateCents
-                      }
-                    />
-                  )}
+                  {!s.paid &&
+                    s.status === "completed" &&
+                    s.paymentMethod !== "gifted" && (
+                      <MarkPaidDialog
+                        sessionId={s.id}
+                        clientId={s.clientId}
+                        defaultAmountCents={
+                          s.paymentAmountCents ?? settings.defaultRateCents
+                        }
+                      />
+                    )}
                 </div>
               </div>
             ))}
@@ -212,6 +222,8 @@ export default async function PaymentsPage({
                         className={`chip ${
                           s.paid
                             ? "bg-green-50 text-green-700"
+                            : s.paymentMethod === "gifted"
+                            ? "bg-ink-100 text-ink-600"
                             : s.status === "scheduled"
                             ? "bg-plum-100 text-plum-700"
                             : s.status === "completed"
@@ -221,6 +233,8 @@ export default async function PaymentsPage({
                       >
                         {s.paid
                           ? "PAID"
+                          : s.paymentMethod === "gifted"
+                          ? "FREE"
                           : s.status === "scheduled"
                           ? "UPCOMING"
                           : s.status === "completed"
@@ -237,23 +251,29 @@ export default async function PaymentsPage({
                       )}
                     </td>
                     <td className="px-4 py-2 text-xs text-ink-600">
-                      {s.paid ? paymentMethodLabel(s.paymentMethod) : "—"}
+                      {s.paid || s.paymentMethod === "gifted"
+                        ? paymentMethodLabel(s.paymentMethod)
+                        : "—"}
                     </td>
                     <td className="px-4 py-2 font-mono text-xs text-ink-900 font-medium">
-                      {s.paymentAmountCents
+                      {s.paymentMethod === "gifted"
+                        ? "Free"
+                        : s.paymentAmountCents
                         ? money(s.paymentAmountCents)
                         : "—"}
                     </td>
                     <td className="px-4 py-2 text-right">
-                      {!s.paid && s.status === "completed" && (
-                        <MarkPaidDialog
-                          sessionId={s.id}
-                          clientId={s.clientId}
-                          defaultAmountCents={
-                            s.paymentAmountCents ?? settings.defaultRateCents
-                          }
-                        />
-                      )}
+                      {!s.paid &&
+                        s.status === "completed" &&
+                        s.paymentMethod !== "gifted" && (
+                          <MarkPaidDialog
+                            sessionId={s.id}
+                            clientId={s.clientId}
+                            defaultAmountCents={
+                              s.paymentAmountCents ?? settings.defaultRateCents
+                            }
+                          />
+                        )}
                     </td>
                   </tr>
                 ))}

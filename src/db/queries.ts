@@ -192,7 +192,7 @@ export async function listClients(
       sessionCount: sql<number>`(SELECT COUNT(*)::int FROM sessions WHERE sessions.client_id = clients.id AND sessions.status = 'completed')`,
       attachmentCount: sql<number>`(SELECT COUNT(*)::int FROM attachments WHERE attachments.client_id = clients.id)`,
       lifetimeCents: sql<number>`COALESCE((SELECT SUM(sessions.payment_amount_cents)::int FROM sessions WHERE sessions.client_id = clients.id AND sessions.paid = true), 0)`,
-      unpaidCents: sql<number>`COALESCE((SELECT SUM(COALESCE(sessions.payment_amount_cents, 0))::int FROM sessions WHERE sessions.client_id = clients.id AND sessions.paid = false AND sessions.status = 'completed'), 0)`,
+      unpaidCents: sql<number>`COALESCE((SELECT SUM(COALESCE(sessions.payment_amount_cents, 0))::int FROM sessions WHERE sessions.client_id = clients.id AND sessions.paid = false AND sessions.status = 'completed' AND sessions.payment_method::text IS DISTINCT FROM 'gifted'), 0)`,
       lastSessionAt: sql<Date | null>`(SELECT MAX(sessions.scheduled_at) FROM sessions WHERE sessions.client_id = clients.id AND sessions.status = 'completed')`,
       // `>= now()` matters: a session left on 'scheduled' after its date has
       // passed (never marked complete) would otherwise surface as this
@@ -2386,7 +2386,8 @@ export async function getDashboardData(accountId: string) {
         and(
           eq(sessions.accountId, accountId),
           eq(sessions.status, "completed"),
-          eq(sessions.paid, false)
+          eq(sessions.paid, false),
+          sql`${sessions.paymentMethod}::text IS DISTINCT FROM 'gifted'`
         )
       )
       .orderBy(desc(sessions.scheduledAt))
@@ -2505,7 +2506,8 @@ export async function getPaymentTotals(accountId: string) {
         and(
           eq(sessions.accountId, accountId),
           eq(sessions.paid, false),
-          eq(sessions.status, "completed")
+          eq(sessions.status, "completed"),
+          sql`${sessions.paymentMethod}::text IS DISTINCT FROM 'gifted'`
         )
       ),
   ]);

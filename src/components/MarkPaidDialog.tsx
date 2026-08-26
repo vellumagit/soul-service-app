@@ -25,6 +25,8 @@ export function MarkPaidDialog({
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // "This one's on me" — records the session as free/gifted instead of paid.
+  const [noCharge, setNoCharge] = useState(false);
 
   return (
     <>
@@ -42,7 +44,7 @@ export function MarkPaidDialog({
         open={open}
         onClose={() => setOpen(false)}
         locked={submitting}
-        title="Mark this session paid"
+        title="Mark this session"
         size="sm"
         footer={
           <>
@@ -59,7 +61,7 @@ export function MarkPaidDialog({
               disabled={submitting}
               className="px-4 py-2 text-sm bg-green-600 hover:bg-green-700 text-white rounded-md font-medium disabled:opacity-60"
             >
-              {submitting ? "Saving…" : "Mark paid"}
+              {submitting ? "Saving…" : noCharge ? "Mark free" : "Mark paid"}
             </button>
           </>
         }
@@ -92,7 +94,28 @@ export function MarkPaidDialog({
             </div>
           )}
 
-          <Field label="Method">
+          <label className="flex items-start gap-2 text-sm cursor-pointer select-none">
+            <input
+              type="checkbox"
+              name="noCharge"
+              checked={noCharge}
+              onChange={(e) => setNoCharge(e.target.checked)}
+              className="mt-1"
+            />
+            <span>
+              <span className="font-medium text-ink-800">
+                This one&apos;s on me — no charge
+              </span>
+              <span className="block text-xs text-ink-500">
+                A gift or comp. Clears it from your unpaid list without counting
+                as income.
+              </span>
+            </span>
+          </label>
+
+          {!noCharge && (
+            <>
+              <Field label="Method">
             <select name="paymentMethod" defaultValue="venmo" className={inputCls}>
               <option value="venmo">Venmo</option>
               <option value="zelle">Zelle</option>
@@ -120,6 +143,8 @@ export function MarkPaidDialog({
               className={inputCls}
             />
           </Field>
+            </>
+          )}
 
           <Field label="Note (optional)" hint="e.g. confirmation # or 'paid in cash'">
             <input name="paymentNote" className={inputCls} />

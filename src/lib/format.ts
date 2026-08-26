@@ -181,6 +181,7 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
   paypal: "PayPal",
   stripe: "Stripe",
   other: "Other",
+  gifted: "Free",
 };
 export function paymentMethodLabel(method: string | null): string {
   if (!method) return "—";

@@ -40,6 +40,10 @@ export const paymentMethodEnum = pgEnum("payment_method", [
   "paypal",
   "stripe",
   "other",
+  // A completed session she gave for free (a gift, a comp, a first-one's-on-me).
+  // Stored with paid=false + amount 0, and excluded from every "unpaid" nag and
+  // total — the same way gifted Circle seats work.
+  "gifted",
 ]);
 
 export const attachmentKindEnum = pgEnum("attachment_kind", [
