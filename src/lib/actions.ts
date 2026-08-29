@@ -977,16 +977,47 @@ export async function acceptLeadSubmission(
       "whatBringsYou",
       "message",
     ]);
-    const otherFields = Object.entries(fields).filter(
-      ([k]) => !matched.has(k)
-    );
-    const privateNotes =
-      otherFields.length > 0
-        ? `Submitted via ${form?.name ?? "form"} on ${sub.createdAt.toISOString().slice(0, 10)}:\n\n` +
-          otherFields
-            .map(([k, v]) => `- ${k}: ${formatFieldValue(v)}`)
-            .join("\n")
-        : null;
+    const dateStr = sub.createdAt.toISOString().slice(0, 10);
+
+    // First-party submissions (our own lead magnets + the compass quiz) carry
+    // internal plumbing in `fields` (magnetId, followupsSent, kind…) that would
+    // land in her notes as a JSON dump. Give those a clean one-line summary
+    // instead; external forms keep the full field context so nothing custom is
+    // ever lost.
+    let privateNotes: string | null;
+    if (fields.kind === "lead-magnet") {
+      const title =
+        typeof fields.magnetTitle === "string" && fields.magnetTitle.trim()
+          ? fields.magnetTitle.trim()
+          : "a free resource";
+      privateNotes = `Downloaded “${title}” (free resource) on ${dateStr}.`;
+    } else if (
+      fields.source === "compass-quiz" ||
+      typeof fields.quizResultLabel === "string"
+    ) {
+      const label =
+        typeof fields.quizResultLabel === "string" &&
+        fields.quizResultLabel.trim()
+          ? fields.quizResultLabel.trim()
+          : null;
+      const base = label
+        ? `Took the compass quiz → ${label}`
+        : "Took the compass quiz";
+      privateNotes = `${base}${
+        fields.wantsWorkbook ? " · asked for the workbook" : ""
+      } on ${dateStr}.`;
+    } else {
+      const otherFields = Object.entries(fields).filter(
+        ([k]) => !matched.has(k)
+      );
+      privateNotes =
+        otherFields.length > 0
+          ? `Submitted via ${form?.name ?? "form"} on ${dateStr}:\n\n` +
+            otherFields
+              .map(([k, v]) => `- ${k}: ${formatFieldValue(v)}`)
+              .join("\n")
+          : null;
+    }
 
     // Dedup against existing clients with the same email. Otherwise the
     // same person submitting via two different forms (or the same form on

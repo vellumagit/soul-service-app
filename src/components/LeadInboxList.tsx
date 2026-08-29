@@ -49,6 +49,18 @@ function SubmissionRow({
   const fields = (s.fields ?? {}) as Record<string, unknown>;
   const fieldEntries = Object.entries(fields);
 
+  // Our own first-party submissions (lead magnets + the compass quiz) carry
+  // internal plumbing in `fields` — magnetId, followupsSent, kind, source… —
+  // that means nothing to her. For those, hide the plumbing keys and show a
+  // plain-language summary instead. External form submissions are left exactly
+  // as they arrive, so a real custom field is never swallowed.
+  const isFirstParty =
+    fields.kind === "lead-magnet" || fields.source === "compass-quiz";
+  const visibleEntries = isFirstParty
+    ? fieldEntries.filter(([k]) => !INTERNAL_FIELD_KEYS.has(k))
+    : fieldEntries;
+  const summary = humanSummary(fields);
+
   if (hidden) return null;
 
   const intentPreview =
@@ -115,19 +127,28 @@ function SubmissionRow({
               )}
             </div>
           )}
-          {intentPreview && (
-            <div className="text-sm text-ink-700 italic mt-2 border-l-2 border-plum-300 pl-2 leading-snug">
-              &ldquo;{intentPreview}&rdquo;
+          {summary ? (
+            <div className="text-sm text-ink-700 mt-2 flex items-start gap-1.5">
+              <span aria-hidden className="text-plum-400 leading-snug">
+                ↳
+              </span>
+              <span className="leading-snug">{summary}</span>
             </div>
+          ) : (
+            intentPreview && (
+              <div className="text-sm text-ink-700 italic mt-2 border-l-2 border-plum-300 pl-2 leading-snug">
+                &ldquo;{intentPreview}&rdquo;
+              </div>
+            )
           )}
-          {fieldEntries.length > 0 && (
+          {visibleEntries.length > 0 && (
             <details className="mt-2 text-xs">
               <summary className="text-ink-500 cursor-pointer hover:text-ink-900">
-                {fieldEntries.length} field
-                {fieldEntries.length === 1 ? "" : "s"}
+                {visibleEntries.length} field
+                {visibleEntries.length === 1 ? "" : "s"}
               </summary>
               <dl className="mt-1.5 grid grid-cols-[max-content_1fr] gap-x-3 gap-y-0.5">
-                {fieldEntries.map(([k, v]) => (
+                {visibleEntries.map(([k, v]) => (
                   <ContextRow key={k} fieldKey={k} value={v} />
                 ))}
               </dl>
@@ -146,13 +167,15 @@ function SubmissionRow({
           )}
           <div className="text-[11px] text-ink-400 mt-2 font-mono">
             {relativeTime(s.createdAt)}
-            {s.sourceIp && (
+            {/* IP + referer are spam-triage forensics for external forms; for
+                first-party sign-ups (lead magnets, quiz) they're just noise. */}
+            {!isFirstParty && s.sourceIp && (
               <>
                 {" · "}
                 <span title="Source IP">{s.sourceIp}</span>
               </>
             )}
-            {s.referer && (
+            {!isFirstParty && s.referer && (
               <>
                 {" · ref: "}
                 <span className="truncate inline-block max-w-[200px] align-bottom">
@@ -312,6 +335,50 @@ function pickStringField(
   for (const k of keys) {
     const v = obj[k];
     if (typeof v === "string" && v.trim().length > 0) return v.trim();
+  }
+  return null;
+}
+
+// Internal plumbing keys carried on our own lead-magnet + quiz submissions.
+// Hidden from the field dump because they mean nothing to her (the useful bits
+// go into humanSummary instead). Only applied to first-party submissions, so an
+// external form that happens to send a "source" field keeps showing it.
+const INTERNAL_FIELD_KEYS = new Set([
+  "kind",
+  "source",
+  "lang",
+  "magnetId",
+  "magnetSlug",
+  "magnetTitle",
+  "followupsSent",
+  "quizResult",
+  "quizResultLabel",
+  "wantsWorkbook",
+]);
+
+/** A plain-language line for our own submissions — what this person actually
+ *  did — so she reads "Downloaded …" instead of a JSON blob. Returns null for
+ *  external forms (they fall back to the message/intent preview). */
+function humanSummary(fields: Record<string, unknown>): string | null {
+  if (fields.kind === "lead-magnet") {
+    const title =
+      typeof fields.magnetTitle === "string" && fields.magnetTitle.trim()
+        ? fields.magnetTitle.trim()
+        : "a free resource";
+    return `Downloaded “${title}”`;
+  }
+  if (
+    fields.source === "compass-quiz" ||
+    typeof fields.quizResultLabel === "string"
+  ) {
+    const label =
+      typeof fields.quizResultLabel === "string" && fields.quizResultLabel.trim()
+        ? fields.quizResultLabel.trim()
+        : null;
+    const base = label
+      ? `Took the compass quiz → ${label}`
+      : "Took the compass quiz";
+    return fields.wantsWorkbook ? `${base} · asked for the workbook` : base;
   }
   return null;
 }
