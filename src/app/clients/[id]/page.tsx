@@ -27,6 +27,7 @@ import { SensitivityFlags } from "@/components/SensitivityFlags";
 import { PrivateNotesBlock } from "@/components/PrivateNotesBlock";
 import { PeopleInLifeBlock } from "@/components/PeopleInLifeBlock";
 import { PatternsTab } from "@/components/PatternsTab";
+import { ClientMoreTabs } from "@/components/ClientMoreTabs";
 import { ClientHeader } from "@/components/ClientHeader";
 import { PortalConnectionCard } from "@/components/PortalConnectionCard";
 import { ClientReflectionsSection } from "@/components/ClientReflectionsSection";
@@ -36,16 +37,10 @@ import { RecentActivityMini } from "@/components/RecentActivityMini";
 import { requireSession } from "@/lib/session-cookies";
 import { asLocale, t } from "@/lib/i18n";
 
-const TABS = [
-  { key: "overview", label: "Overview" },
-  { key: "activity", label: "Activity" },
-  { key: "sessions", label: "Sessions" },
-  { key: "reflections", label: "Reflections" },
-  { key: "patterns", label: "Patterns" },
-  { key: "tasks", label: "Tasks" },
-  { key: "files", label: "Files" },
-  { key: "intake", label: "Intake notes" },
-] as const;
+// Overview + Sessions lead the tab row (the two she opens every visit); the
+// other six live behind "More" (see ClientMoreTabs) so they're reachable but
+// not competing for the top. `tab` still accepts any of the old keys, so every
+// deep link (?tab=patterns, ?tab=files…) keeps working.
 
 export const dynamic = "force-dynamic";
 
@@ -155,35 +150,37 @@ export default async function ClientProfilePage({
         timeZone={practiceTz}
       />
 
-      {/* Tabs — folder-divider style, visually sit on the content below */}
+      {/* Tabs — Overview + Sessions lead; the rest live under "More". Folder-
+          divider style, visually sitting on the content below. */}
       <div className="folder-tabs">
-        {TABS.map((t) => {
-          const count =
-            t.key === "tasks"
-              ? openTasks.length
-              : t.key === "sessions"
-              ? file.sessions.length
-              : t.key === "files"
-              ? file.attachments.length
-              : t.key === "activity"
-              ? activity.length
-              : null;
-          return (
-            <Link
-              key={t.key}
-              href={`/clients/${client.id}?tab=${t.key}`}
-              data-active={tab === t.key}
-              className="folder-tab"
-            >
-              {t.label}
-              {count !== null && count > 0 && (
-                <span className="text-[10px] font-mono text-ink-400">
-                  {count}
-                </span>
-              )}
-            </Link>
-          );
-        })}
+        <Link
+          href={`/clients/${client.id}?tab=overview`}
+          data-active={tab === "overview"}
+          className="folder-tab"
+        >
+          Overview
+        </Link>
+        <Link
+          href={`/clients/${client.id}?tab=sessions`}
+          data-active={tab === "sessions"}
+          className="folder-tab"
+        >
+          Sessions
+          {file.sessions.length > 0 && (
+            <span className="text-[10px] font-mono text-ink-400">
+              {file.sessions.length}
+            </span>
+          )}
+        </Link>
+        <ClientMoreTabs
+          clientId={client.id}
+          activeTab={tab}
+          counts={{
+            tasks: openTasks.length,
+            files: file.attachments.length,
+            activity: activity.length,
+          }}
+        />
       </div>
 
       {/* OVERVIEW — the dashboard */}
@@ -310,6 +307,16 @@ export default async function ClientProfilePage({
                 clientId={client.id}
                 limit={6}
               />
+              {activity.length > 0 && (
+                <div className="text-right mt-2">
+                  <Link
+                    href={`/clients/${client.id}?tab=activity`}
+                    className="text-xs text-plum-700 hover:underline"
+                  >
+                    Open Activity →
+                  </Link>
+                </div>
+              )}
             </ScanCard>
 
             <ScanCard title="Open tasks for her">
@@ -318,6 +325,80 @@ export default async function ClientProfilePage({
                 tasks={file.tasks}
                 emptyText="Nothing on the list."
               />
+              <div className="text-right mt-2">
+                <Link
+                  href={`/clients/${client.id}?tab=tasks`}
+                  className="text-xs text-plum-700 hover:underline"
+                >
+                  All tasks →
+                </Link>
+              </div>
+            </ScanCard>
+          </div>
+
+          {/* Files + Intake — the two reference views that don't otherwise
+              surface on Overview, kept reachable here so nothing lives ONLY in
+              the "More" menu. */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <ScanCard title="Files">
+              {file.attachments.length === 0 ? (
+                <div className="text-xs text-ink-400 italic">
+                  No files yet.{" "}
+                  <Link
+                    href={`/clients/${client.id}?tab=files`}
+                    className="text-plum-700 hover:underline"
+                  >
+                    Open Files →
+                  </Link>
+                </div>
+              ) : (
+                <div className="text-sm text-ink-700">
+                  <span className="text-2xl serif text-ink-900 mr-1">
+                    {file.attachments.length}
+                  </span>
+                  file{file.attachments.length === 1 ? "" : "s"} attached.
+                  <div className="text-right mt-2">
+                    <Link
+                      href={`/clients/${client.id}?tab=files`}
+                      className="text-xs text-plum-700 hover:underline"
+                    >
+                      Open Files →
+                    </Link>
+                  </div>
+                </div>
+              )}
+            </ScanCard>
+
+            <ScanCard title="Intake notes">
+              {client.intakeNotes && client.intakeNotes.trim().length > 0 ? (
+                <div className="text-sm text-ink-700">
+                  <p className="text-xs text-ink-600 leading-relaxed">
+                    {client.intakeNotes
+                      .replace(/[#*_>`~-]/g, "")
+                      .trim()
+                      .slice(0, 160)}
+                    {client.intakeNotes.length > 160 ? "…" : ""}
+                  </p>
+                  <div className="text-right mt-2">
+                    <Link
+                      href={`/clients/${client.id}?tab=intake`}
+                      className="text-xs text-plum-700 hover:underline"
+                    >
+                      Open intake →
+                    </Link>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-xs text-ink-400 italic">
+                  Nothing yet.{" "}
+                  <Link
+                    href={`/clients/${client.id}?tab=intake`}
+                    className="text-plum-700 hover:underline"
+                  >
+                    Open intake →
+                  </Link>
+                </div>
+              )}
             </ScanCard>
           </div>
 

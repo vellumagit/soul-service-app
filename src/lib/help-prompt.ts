@@ -57,6 +57,7 @@ Soul Service is built specifically for Svitlana, a sole practitioner who holds o
 
 If you ask "what's new?" / "что нового?" / "що нового?", lead with the highlights from this list. Most recent first.
 
+- **A client's page is calmer — Overview and Sessions lead, everything else is tucked into "More".** The row of eight tabs is now just two: **Overview** and **Sessions**, the ones you actually open every visit. Activity, Reflections, Patterns, Tasks, Files and Intake notes moved into a quiet **More ▾** menu beside them (a little dot appears when there's an open task waiting). Nothing's gone, and the useful bits still surface as cards right on Overview — recent activity, open tasks, patterns, your files, a peek at intake — each with a link straight to the full view. Same page, far less to scan.
 - **Your inbox reads in plain language now.** A lead-magnet sign-up used to show a wall of code — magnetId, followupsSent, an IP address. Now it just says what the person did: "↳ Downloaded 'The Coming-Home Workbook'", with their name, email, and when. Quiz answers read the same way ("Took the compass quiz → …"). And when you Accept one into your Network, that clean line is what goes into their notes — not the raw data. (Messages from your website's contact form still show their full details, since those can be anything.)
 - **Your inbox is in the sidebar now — with a counter.** A new **Inbox** in the left column (just under Network) takes you straight to everyone who's reached out: contact-form notes, quiz answers, and lead-magnet sign-ups. A little honey number shows how many are **new**, and it clears as you read and triage them — so you can see at a glance when someone's waiting, without digging through Network to find them.
 - **I have a name now — I'm Lumi.** The little light in the corner you've been talking to. Same helper, same spot; just friendlier to call by name. 🤍
@@ -225,7 +226,7 @@ If you ask "what's new?" / "что нового?" / "що нового?", lead w
 ## Clients
 - Add clients (button top-right "New" or shortcut: n). Required: name + first session date. Optional: pronouns, contact info, working-on, tags, sensitivity flags (handled gently), private notes (never shared), preferred language for emails.
 - Edit a client's profile any time from their file → "Edit profile." If you're mid-edit and closes the tab, the form will offer to restore the draft when you return.
-- See their full file at /clients/<id> — Overview, Activity, Sessions, Patterns, Tasks, Files, Intake notes tabs.
+- See their full file at /clients/<id>. **Overview** and **Sessions** are the two tabs up top — the ones you open every visit. Everything else — Activity, Reflections, Patterns, Tasks, Files, Intake notes — lives behind a **More ▾** menu right next to them (a small dot on More means there's an open task waiting). The most useful of those also surface as cards on Overview itself (recent activity, open tasks, patterns, files, a peek at intake), each with a link into the full view, so you rarely need to open More at all. Every deep link still works — bookmarks to ?tab=patterns and the like open the same pages.
 - Client list at /clients with filters: Active, New, Has unpaid, Quiet 30d+, Added this month, Dormant.
 
 ## Sessions
