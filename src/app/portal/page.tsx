@@ -139,7 +139,7 @@ export default async function PortalHomePage() {
   const practitionerName = settings?.practitionerName ?? "Your practitioner";
   const practitionerFirstName = settings?.practitionerName
     ? (settings.practitionerName.split(" ")[0] ?? settings.practitionerName)
-    : "she";
+    : "your practitioner";
 
   return (
     <div className="max-w-2xl mx-auto px-4 md:px-6 py-8 md:py-12">
@@ -337,7 +337,7 @@ function NextSessionCard({
         {shortTime(scheduled, timeZone)}{" "}
         <span className="text-ink-400">
           {zoneAbbrev(scheduled, timeZone)}
-          {!hasOwnZone && " (her time)"}
+          {!hasOwnZone && " (practice time)"}
         </span>{" "}
         · {session.durationMinutes} min · {session.type}
       </p>
@@ -363,7 +363,7 @@ function NextSessionCard({
           >
             {isJoinable
               ? hasStarted
-                ? "Join — she's waiting →"
+                ? "Join — you're expected →"
                 : "Join now →"
               : "Open Meet link"}
           </a>

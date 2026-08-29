@@ -216,11 +216,11 @@ export default async function ClientProfilePage({
 
           {/* Three-column scan grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <ScanCard title="Where her work is now">
+            <ScanCard title="Where their work is now">
               <GoalsBlock clientId={client.id} goals={file.goals} />
             </ScanCard>
 
-            <ScanCard title="People in her life">
+            <ScanCard title="People in their life">
               <PeopleInLifeBlock
                 clientId={client.id}
                 people={file.importantPeople}
@@ -319,7 +319,7 @@ export default async function ClientProfilePage({
               )}
             </ScanCard>
 
-            <ScanCard title="Open tasks for her">
+            <ScanCard title="Open tasks">
               <TasksBlock
                 clientId={client.id}
                 tasks={file.tasks}

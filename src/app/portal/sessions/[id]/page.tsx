@@ -223,7 +223,7 @@ export default async function PortalSessionDetailPage({
           {shortTime(scheduled, timeZone)}{" "}
           <span className="text-ink-400">
             {zoneAbbrev(scheduled, timeZone)}
-            {!hasOwnZone && " (her time)"}
+            {!hasOwnZone && " (practice time)"}
           </span>{" "}
           · {session.durationMinutes} min · {session.type}
         </p>
@@ -352,7 +352,7 @@ export default async function PortalSessionDetailPage({
               <input type="hidden" name="sessionId" value={session.id} />
               <label className="block">
                 <span className="text-xs uppercase tracking-wider text-ink-500 font-mono">
-                  Anything you'd like her to know? (optional)
+                  Anything you'd like to share? (optional)
                 </span>
                 <textarea
                   name="reason"

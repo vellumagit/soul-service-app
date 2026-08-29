@@ -50,7 +50,7 @@ export default async function PortalWhatsOnPage() {
             <>
               {" "}
               All times {zone}
-              {!hasOwnZone && " (her time)"}.
+              {!hasOwnZone && " (practice time)"}.
             </>
           )}
         </p>

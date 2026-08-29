@@ -51,7 +51,7 @@ export const LANDING_SECTIONS: LandingSectionMeta[] = [
   {
     slug: "ache",
     label: "Does this feel familiar?",
-    blurb: "The three quiet lines that name what she's carrying.",
+    blurb: "The three quiet lines that name what they're carrying.",
     canHide: true,
     canMove: true,
   },

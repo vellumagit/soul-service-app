@@ -43,7 +43,7 @@ export default async function PortalYoursPage() {
             <>
               {" "}
               All times {zone}
-              {!hasOwnZone && " (her time)"}.
+              {!hasOwnZone && " (practice time)"}.
             </>
           )}
         </p>
@@ -139,7 +139,7 @@ export default async function PortalYoursPage() {
                     >
                       {joinable
                         ? hasStarted
-                          ? "Join — she's waiting →"
+                          ? "Join — you're expected →"
                           : "Join now →"
                         : "Open the link"}
                     </a>

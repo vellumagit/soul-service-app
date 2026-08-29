@@ -371,9 +371,9 @@ const EN: LandingCopy = {
       </>
     ),
     v1: "I knew it was it — and now you said it.",
-    v1who: "— in her own words",
+    v1who: "— in their own words",
     v2: "You said what was the truth for me.",
-    v2who: "— in her own words",
+    v2who: "— in their own words",
     v3: "I felt lighter, moved, touched — more connected to myself than I've been in years.",
     v3who: "— someone Svitlana worked with",
     v4: "I came in feeling like a burden. I left with a smile, lighter — I'd heard the truth.",
@@ -416,7 +416,7 @@ const EN: LandingCopy = {
     form: {
       thankTitle: "Thank you for reaching out.",
       thankBody:
-        "Svitlana will send you a private link to watch {name} once she's confirmed your payment. Check your inbox over the next day or two.",
+        "Svitlana will send you a private link to watch {name} once your payment's confirmed. Check your inbox over the next day or two.",
       howToPay: "How to pay",
       amount: "Amount:",
       nameLabel: "Your name",
@@ -490,9 +490,9 @@ const EN: LandingCopy = {
   form: {
     nameLabel: "Your name",
     emailLabel: "Email",
-    windowsLabel: "Times she has open soon (optional)",
+    windowsLabel: "Times open soon (optional)",
     windowsHint:
-      "Tap one to attach it to your note — she'll confirm with you either way.",
+      "Tap one to attach it to your note — you'll hear back either way.",
     messageLabel: "What brings you here? (optional)",
     messagePlaceholder:
       "A few words is enough — whatever you're carrying, however unformed.",
@@ -698,9 +698,9 @@ const UK: LandingCopy = {
       </>
     ),
     v1: "Я знала, що це воно — а тепер ви це сказали.",
-    v1who: "— її словами",
+    v1who: "— своїми словами",
     v2: "Ви сказали те, що було правдою для мене.",
-    v2who: "— її словами",
+    v2who: "— своїми словами",
     v3: "Я відчула легкість, зворушення, дотик — більше зв’язку із собою, ніж за багато років.",
     v3who: "— людина, з якою працювала Світлана",
     v4: "Я прийшла з відчуттям тягаря. Пішла з усмішкою, легша — я почула правду.",
