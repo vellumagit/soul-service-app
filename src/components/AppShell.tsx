@@ -22,19 +22,63 @@ type NavItem = {
   icon: string;
 };
 
-const NAV: NavItem[] = [
-  { href: "/today", labelKey: "nav.today", icon: "today" },
-  { href: "/clients", labelKey: "nav.clients", icon: "clients" },
-  { href: "/groups", labelKey: "nav.groups", icon: "groups" },
-  { href: "/library", labelKey: "nav.library", icon: "library" },
-  { href: "/lead-magnets", labelKey: "nav.leadMagnets", icon: "leadMagnets" },
-  { href: "/network", labelKey: "nav.network", icon: "network" },
-  { href: "/network/inbox", labelKey: "nav.inbox", icon: "inbox" },
-  { href: "/calendar", labelKey: "nav.calendar", icon: "calendar" },
-  { href: "/payments", labelKey: "nav.payments", icon: "payments" },
-  { href: "/requests", labelKey: "nav.requests", icon: "requests" },
+type NavSection = {
+  key: string;
+  label?: TranslationKey;
+  items: NavItem[];
+};
+
+// The sidebar, grouped by priority. Daily work up top, the storefront/growth
+// tools under "Grow", and the meta pages (Year-in-review + Settings) pinned
+// dimmed at the very bottom (NAV_BOTTOM). Order = how she moves through a day.
+const NAV_SECTIONS: NavSection[] = [
+  {
+    key: "day",
+    label: "nav.section.day",
+    items: [
+      { href: "/today", labelKey: "nav.today", icon: "today" },
+      { href: "/calendar", labelKey: "nav.calendar", icon: "calendar" },
+      { href: "/clients", labelKey: "nav.clients", icon: "clients" },
+      { href: "/groups", labelKey: "nav.groups", icon: "groups" },
+    ],
+  },
+  {
+    key: "waiting",
+    label: "nav.section.waiting",
+    items: [
+      { href: "/network/inbox", labelKey: "nav.inbox", icon: "inbox" },
+      { href: "/requests", labelKey: "nav.requests", icon: "requests" },
+    ],
+  },
+  {
+    key: "money",
+    label: "nav.section.money",
+    items: [
+      { href: "/payments", labelKey: "nav.payments", icon: "payments" },
+    ],
+  },
+  {
+    key: "grow",
+    label: "nav.section.grow",
+    items: [
+      { href: "/network", labelKey: "nav.network", icon: "network" },
+      { href: "/lead-magnets", labelKey: "nav.leadMagnets", icon: "leadMagnets" },
+      { href: "/library", labelKey: "nav.library", icon: "library" },
+    ],
+  },
+];
+
+// Pinned, dimmed, at the bottom of the rail — reflective + config, rarely opened
+// mid-task.
+const NAV_BOTTOM: NavItem[] = [
   { href: "/practice", labelKey: "nav.practice", icon: "practice" },
   { href: "/settings", labelKey: "nav.settings", icon: "settings" },
+];
+
+// Flat list of every nav item — used only by isActive's longest-prefix match.
+const NAV: NavItem[] = [
+  ...NAV_SECTIONS.flatMap((s) => s.items),
+  ...NAV_BOTTOM,
 ];
 
 const ICON: Record<string, string> = {
@@ -331,6 +375,43 @@ function SidebarBrand({ onClose }: { onClose?: () => void }) {
   );
 }
 
+function NavItemLink({
+  item,
+  isActive,
+  onNavigate,
+  dimmed,
+}: {
+  item: NavItem;
+  isActive: (href: string) => boolean;
+  onNavigate?: () => void;
+  dimmed?: boolean;
+}) {
+  const t = useT();
+  return (
+    <Link
+      href={item.href}
+      onClick={onNavigate}
+      data-active={isActive(item.href)}
+      className={`nav-item w-full flex items-center gap-3 pl-4 pr-3 py-2 hover:bg-ink-50 ${
+        dimmed ? "text-ink-400" : "text-ink-600"
+      }`}
+    >
+      <svg
+        className="w-4 h-4 shrink-0"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+        strokeWidth={1.8}
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" d={ICON[item.icon]} />
+      </svg>
+      <span className="flex-1 text-left">{t(item.labelKey)}</span>
+      {item.href === "/requests" && <RequestsBadge />}
+      {item.href === "/network/inbox" && <InboxBadge />}
+    </Link>
+  );
+}
+
 function SidebarNav({
   isActive,
   onNavigate,
@@ -340,33 +421,39 @@ function SidebarNav({
 }) {
   const t = useT();
   return (
-    <nav className="flex-1 min-h-0 overflow-y-auto py-2 text-sm">
-      {NAV.map((item) => (
-        <Link
-          key={item.href}
-          href={item.href}
-          onClick={onNavigate}
-          data-active={isActive(item.href)}
-          className="nav-item w-full flex items-center gap-3 pl-4 pr-3 py-2 text-ink-600 hover:bg-ink-50"
-        >
-          <svg
-            className="w-4 h-4 shrink-0"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            strokeWidth={1.8}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d={ICON[item.icon]}
-            />
-          </svg>
-          <span className="flex-1 text-left">{t(item.labelKey)}</span>
-          {item.href === "/requests" && <RequestsBadge />}
-          {item.href === "/network/inbox" && <InboxBadge />}
-        </Link>
-      ))}
+    <nav className="flex-1 min-h-0 flex flex-col text-sm">
+      {/* Priority-grouped, scrollable */}
+      <div className="flex-1 min-h-0 overflow-y-auto py-2">
+        {NAV_SECTIONS.map((section) => (
+          <div key={section.key} className="mb-0.5">
+            {section.label && (
+              <div className="px-4 pt-3 pb-1 text-[10px] uppercase tracking-[0.09em] text-ink-400 select-none">
+                {t(section.label)}
+              </div>
+            )}
+            {section.items.map((item) => (
+              <NavItemLink
+                key={item.href}
+                item={item}
+                isActive={isActive}
+                onNavigate={onNavigate}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+      {/* Pinned + dimmed at the bottom */}
+      <div className="border-t border-ink-100 py-1.5 shrink-0">
+        {NAV_BOTTOM.map((item) => (
+          <NavItemLink
+            key={item.href}
+            item={item}
+            isActive={isActive}
+            onNavigate={onNavigate}
+            dimmed
+          />
+        ))}
+      </div>
     </nav>
   );
 }

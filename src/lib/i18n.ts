@@ -53,6 +53,10 @@ export type TranslationKey =
   | "nav.requests"
   | "nav.practice"
   | "nav.settings"
+  | "nav.section.day"
+  | "nav.section.waiting"
+  | "nav.section.money"
+  | "nav.section.grow"
   // Sidebar footer
   | "sidebar.yourSpace"
   | "sidebar.signOut"
@@ -134,6 +138,10 @@ const en: Record<TranslationKey, string> = {
   "nav.requests": "Requests",
   "nav.practice": "Your practice",
   "nav.settings": "Settings",
+  "nav.section.day": "Your day",
+  "nav.section.waiting": "Waiting on you",
+  "nav.section.money": "Money",
+  "nav.section.grow": "Grow",
   // Sidebar footer
   "sidebar.yourSpace": "your space",
   "sidebar.signOut": "Sign out",
@@ -218,6 +226,10 @@ const ru: Record<TranslationKey, string> = {
   "nav.requests": "Запросы",
   "nav.practice": "Ваша практика",
   "nav.settings": "Настройки",
+  "nav.section.day": "Ваш день",
+  "nav.section.waiting": "Ждут вас",
+  "nav.section.money": "Деньги",
+  "nav.section.grow": "Рост",
   // Sidebar footer
   "sidebar.yourSpace": "ваше пространство",
   "sidebar.signOut": "Выйти",
@@ -302,6 +314,10 @@ const uk: Record<TranslationKey, string> = {
   "nav.requests": "Запити",
   "nav.practice": "Ваша практика",
   "nav.settings": "Налаштування",
+  "nav.section.day": "Ваш день",
+  "nav.section.waiting": "Очікують на вас",
+  "nav.section.money": "Гроші",
+  "nav.section.grow": "Розвиток",
   // Sidebar footer
   "sidebar.yourSpace": "ваш простір",
   "sidebar.signOut": "Вийти",
