@@ -13,6 +13,7 @@ import { FlashNotifier } from "./FlashNotifier";
 import { TimeOfDayProvider } from "./TimeOfDayProvider";
 import { useBrandLogo } from "./BrandProvider";
 import { RequestsBadge } from "./RequestsBadge";
+import { InboxBadge } from "./InboxBadge";
 import { DEFAULT_LOCALE, type Locale, type TranslationKey } from "@/lib/i18n";
 
 type NavItem = {
@@ -28,6 +29,7 @@ const NAV: NavItem[] = [
   { href: "/library", labelKey: "nav.library", icon: "library" },
   { href: "/lead-magnets", labelKey: "nav.leadMagnets", icon: "leadMagnets" },
   { href: "/network", labelKey: "nav.network", icon: "network" },
+  { href: "/network/inbox", labelKey: "nav.inbox", icon: "inbox" },
   { href: "/calendar", labelKey: "nav.calendar", icon: "calendar" },
   { href: "/payments", labelKey: "nav.payments", icon: "payments" },
   { href: "/requests", labelKey: "nav.requests", icon: "requests" },
@@ -55,6 +57,9 @@ const ICON: Record<string, string> = {
   // that doesn't yell CRM.
   network:
     "M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-5.13a4 4 0 11-8 0 4 4 0 018 0zm6 3a3 3 0 11-6 0 3 3 0 016 0z",
+  // An inbox tray — inbound messages arriving to be read.
+  inbox:
+    "M2.25 13.5h3.86a2.25 2.25 0 012.012 1.244l.256.512a2.25 2.25 0 002.013 1.244h3.218a2.25 2.25 0 002.013-1.244l.256-.512a2.25 2.25 0 012.013-1.244h3.859M4.76 5.338A2.25 2.25 0 016.91 3.75h10.18a2.25 2.25 0 012.15 1.588l2.31 7.5c.066.214.1.437.1.661V18a2.25 2.25 0 01-2.25 2.25H4.5A2.25 2.25 0 012.25 18v-4.5c0-.224.034-.447.1-.661l2.41-7.5z",
   // A small bound book — Year in Review feels like opening her journal
   practice:
     "M4 6a2 2 0 012-2h11a1 1 0 011 1v14a1 1 0 01-1 1H6a2 2 0 01-2-2V6zm0 0c0-1.105.895-2 2-2h11M9 8h6M9 12h4",
@@ -116,10 +121,21 @@ function AppShellInner({
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const isActive = (href: string) =>
-    href === "/today"
-      ? pathname === "/today" || pathname === "/"
-      : pathname.startsWith(href);
+  // A nav item matches if the path is it or sits under it. When two items both
+  // match (e.g. /network and its child /network/inbox), the LONGEST href wins,
+  // so a nested item lights up alone instead of also lighting its parent.
+  const isActive = (href: string) => {
+    const matches = (h: string) =>
+      h === "/today"
+        ? pathname === "/today" || pathname === "/"
+        : pathname === h || pathname.startsWith(h + "/");
+    if (!matches(href)) return false;
+    const best = NAV.reduce(
+      (acc, n) => (matches(n.href) && n.href.length > acc.length ? n.href : acc),
+      ""
+    );
+    return href === best;
+  };
 
   return (
     <>
@@ -348,6 +364,7 @@ function SidebarNav({
           </svg>
           <span className="flex-1 text-left">{t(item.labelKey)}</span>
           {item.href === "/requests" && <RequestsBadge />}
+          {item.href === "/network/inbox" && <InboxBadge />}
         </Link>
       ))}
     </nav>

@@ -1,6 +1,8 @@
 "use client";
 
-// Floating Help Buddy — an in-app AI chat with a "Navi-from-Zelda" quality.
+// Floating helper "Lumi" — an in-app AI chat with a "Navi-from-Zelda" quality.
+// ("Lumi" is the name she sees; this component + its CSS classes stay HelpBuddy
+// / help-buddy internally, so renaming the display name never touched them.)
 // The button is a small honey-glowing presence in the bottom-right corner of
 // every page. It gently calls to the practitioner without being annoying:
 //
@@ -58,7 +60,7 @@ type ChatMessage = {
 
 // Greeting only shown when the panel is empty.
 const GREETING =
-  "Hi — I live here, in the corner of your workspace, and I know every inch of it. Ask me anything: where something is, how to do it, what's new. I'll keep it short.";
+  "Hi, I'm Lumi — I live here, in the corner of your workspace, and I know every inch of it. Ask me anything: where something is, how to do it, what's new. I'll keep it short.";
 
 export function HelpBuddy() {
   const [open, setOpen] = useState(false);
@@ -303,7 +305,7 @@ export function HelpBuddy() {
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
-          aria-label={open ? "Close help buddy" : "Open help buddy"}
+          aria-label={open ? "Close Lumi" : "Open Lumi, your helper"}
           className={`relative flex items-center justify-center rounded-full shadow-lg transition-all
             ${
               open
@@ -355,7 +357,7 @@ export function HelpBuddy() {
       {/* Panel — slides up from the right */}
       <div
         role="dialog"
-        aria-label="Help buddy"
+        aria-label="Lumi"
         aria-hidden={!open}
         className={`fixed bottom-20 right-5 z-40 w-[360px] max-w-[calc(100vw-2rem)] h-[520px] max-h-[calc(100vh-7rem)]
           bg-white border border-ink-200 rounded-lg shadow-2xl flex flex-col
@@ -373,10 +375,10 @@ export function HelpBuddy() {
           </div>
           <div className="flex-1 min-w-0">
             <div className="text-sm font-semibold text-ink-900 leading-tight">
-              Help buddy
+              Lumi
             </div>
             <div className="text-[10px] text-ink-400 leading-tight">
-              Knows this app inside out
+              Your helper — knows this app inside out
             </div>
           </div>
           {messages.length > 0 && (

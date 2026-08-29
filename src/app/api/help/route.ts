@@ -72,7 +72,7 @@ export async function POST(request: Request) {
   });
   if (!rl.ok) {
     return NextResponse.json(
-      { error: "Slow down — too many Help Buddy turns this minute." },
+      { error: "Slow down — too many questions this minute." },
       {
         status: 429,
         headers: { "Retry-After": String(rl.retryAfterSeconds) },

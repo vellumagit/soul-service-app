@@ -49,6 +49,7 @@ export type TranslationKey =
   | "nav.calendar"
   | "nav.payments"
   | "nav.network"
+  | "nav.inbox"
   | "nav.requests"
   | "nav.practice"
   | "nav.settings"
@@ -129,6 +130,7 @@ const en: Record<TranslationKey, string> = {
   "nav.calendar": "Calendar",
   "nav.payments": "Payments",
   "nav.network": "Network",
+  "nav.inbox": "Inbox",
   "nav.requests": "Requests",
   "nav.practice": "Your practice",
   "nav.settings": "Settings",
@@ -212,6 +214,7 @@ const ru: Record<TranslationKey, string> = {
   "nav.calendar": "Календарь",
   "nav.payments": "Платежи",
   "nav.network": "Сеть",
+  "nav.inbox": "Входящие",
   "nav.requests": "Запросы",
   "nav.practice": "Ваша практика",
   "nav.settings": "Настройки",
@@ -295,6 +298,7 @@ const uk: Record<TranslationKey, string> = {
   "nav.calendar": "Календар",
   "nav.payments": "Платежі",
   "nav.network": "Мережа",
+  "nav.inbox": "Вхідні",
   "nav.requests": "Запити",
   "nav.practice": "Ваша практика",
   "nav.settings": "Налаштування",

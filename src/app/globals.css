@@ -628,8 +628,10 @@ body {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   Help Buddy — the "Navi" launcher. A small glowing presence in the bottom
-   right that gently calls out when idle. Three layered animations:
+   Lumi (the help-buddy launcher) — the "Navi" presence. A small glowing light
+   in the bottom right that gently calls out when idle. The classes keep the
+   help-buddy- prefix internally even though she sees the name "Lumi". Three
+   layered animations:
 
      • `.help-buddy-glow`         — always-on slow ambient halo (~4s cycle)
      • `.help-buddy-pulse`        — periodic outward ring when she's been
