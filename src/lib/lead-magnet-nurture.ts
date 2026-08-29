@@ -12,7 +12,7 @@ import "server-only";
 // extra table. We send at most ONE follow-up per person per tick, so a cron
 // that was delayed can't dump several emails on someone at once.
 
-import { and, eq, gt, sql } from "drizzle-orm";
+import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   accounts,
@@ -50,9 +50,18 @@ export async function processLeadMagnetFollowups(): Promise<NurtureStats> {
       id: leadMagnets.id,
       accountId: leadMagnets.accountId,
       followups: leadMagnets.followups,
+      followupsSetAt: leadMagnets.followupsSetAt,
     })
     .from(leadMagnets)
-    .where(sql`jsonb_array_length(${leadMagnets.followups}) > 0`);
+    .where(
+      and(
+        sql`jsonb_array_length(${leadMagnets.followups}) > 0`,
+        // Unpublished / archived magnets stop nurturing, matching delivery + the
+        // public page — unpublishing is how she halts a flow.
+        eq(leadMagnets.published, true),
+        isNull(leadMagnets.archivedAt)
+      )
+    );
   if (magnets.length === 0) return { candidates: 0, sent: 0 };
 
   const byId = new Map(magnets.map((m) => [m.id, m]));
@@ -127,26 +136,34 @@ export async function processLeadMagnetFollowups(): Promise<NurtureStats> {
     const magnet = fields.magnetId ? byId.get(fields.magnetId) : undefined;
     if (!magnet || !sub.email) continue;
 
+    // A flow only applies to opt-ins captured at/after it was set up — adding a
+    // flow never retroactively emails people who signed up before it existed.
+    if (magnet.followupsSetAt && sub.createdAt < magnet.followupsSetAt) continue;
+
     const followups = magnet.followups as LeadMagnetFollowup[];
+    // Track sent follow-ups by their DELAY, not array position, so reordering or
+    // removing one in the editor can't skip a survivor or re-send at a reused
+    // index. (Two follow-ups sharing a delay would collapse — but that's a
+    // nonsensical config anyway.)
     const already = Array.isArray(fields.followupsSent)
       ? fields.followupsSent
       : [];
     const lang: "en" | "uk" = fields.lang === "uk" ? "uk" : "en";
 
     // First un-sent follow-up whose delay has elapsed. One per tick.
-    let idx = -1;
-    for (let i = 0; i < followups.length; i++) {
-      if (already.includes(i)) continue;
-      const dueAt =
-        sub.createdAt.getTime() + (followups[i].delayHours ?? 0) * 3_600_000;
+    let fu: LeadMagnetFollowup | null = null;
+    for (const candidate of followups) {
+      const delay = candidate.delayHours ?? 0;
+      if (already.includes(delay)) continue;
+      const dueAt = sub.createdAt.getTime() + delay * 3_600_000;
       if (now >= dueAt) {
-        idx = i;
+        fu = candidate;
         break;
       }
     }
-    if (idx === -1) continue;
+    if (!fu) continue;
 
-    const fu = followups[idx];
+    const delay = fu.delayHours ?? 0;
     const subject = applyVars(
       pickLang(fu.subjectEn, fu.subjectUk, lang),
       sub.name
@@ -154,7 +171,7 @@ export async function processLeadMagnetFollowups(): Promise<NurtureStats> {
     const body = applyVars(pickLang(fu.bodyEn, fu.bodyUk, lang), sub.name);
     if (!subject || !body) {
       // Nothing to send for this one — mark it done so we don't retry forever.
-      await markSent(sub.id, fields, already, idx);
+      await markSent(sub.id, fields, already, delay);
       continue;
     }
 
@@ -168,7 +185,7 @@ export async function processLeadMagnetFollowups(): Promise<NurtureStats> {
         practitionerName,
         replyTo,
       });
-      await markSent(sub.id, fields, already, idx);
+      await markSent(sub.id, fields, already, delay);
       sent++;
     } catch (err) {
       console.error("[lead-magnet-nurture] send failed:", err);
@@ -179,15 +196,16 @@ export async function processLeadMagnetFollowups(): Promise<NurtureStats> {
   return { candidates: subs.length, sent };
 }
 
-/** Append the sent index to the opt-in's followupsSent bookkeeping. */
+/** Record a sent follow-up (by its delayHours) in the opt-in's followupsSent
+ *  bookkeeping, preserving every other key on the JSONB. */
 async function markSent(
   submissionId: string,
   fields: Record<string, unknown>,
   already: number[],
-  idx: number
+  delay: number
 ): Promise<void> {
   await db
     .update(leadSubmissions)
-    .set({ fields: { ...fields, followupsSent: [...already, idx] } })
+    .set({ fields: { ...fields, followupsSent: [...already, delay] } })
     .where(eq(leadSubmissions.id, submissionId));
 }

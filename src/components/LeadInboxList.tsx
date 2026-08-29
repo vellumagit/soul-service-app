@@ -367,10 +367,9 @@ function humanSummary(fields: Record<string, unknown>): string | null {
         : "a free resource";
     return `Downloaded “${title}”`;
   }
-  if (
-    fields.source === "compass-quiz" ||
-    typeof fields.quizResultLabel === "string"
-  ) {
+  // Match isFirstParty exactly (source === "compass-quiz"); keying off a stray
+  // quizResultLabel field would let an external form get mislabeled as the quiz.
+  if (fields.source === "compass-quiz") {
     const label =
       typeof fields.quizResultLabel === "string" && fields.quizResultLabel.trim()
         ? fields.quizResultLabel.trim()

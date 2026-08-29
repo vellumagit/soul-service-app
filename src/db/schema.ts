@@ -1606,6 +1606,10 @@ export const leadMagnets = pgTable(
       .$type<LeadMagnetFollowup[]>()
       .notNull()
       .default([]),
+    /** When the flow first became non-empty. The nurture cron only sends
+     *  follow-ups to opt-ins captured at/after this, so adding a flow never
+     *  retroactively emails people who signed up before it existed. */
+    followupsSetAt: timestamp("followups_set_at"),
 
     published: boolean("published").notNull().default(false),
     /** Denormalized opt-in counter, like leadForms.submissionCount. */

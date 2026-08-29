@@ -126,10 +126,14 @@ export async function saveLeadMagnet(
 
   // Resolve the asset. PDFs/images are uploaded to Blob directly from the
   // browser (bypassing the 4 MB server-action limit), so the form carries the
-  // resulting URL, not the bytes. A video is just the pasted link. On edit with
-  // nothing changed, the hidden field already holds the existing URL.
-  let assetUrl: string | null = existing?.assetUrl ?? null;
-  let assetName: string | null = existing?.assetName ?? null;
+  // resulting URL, not the bytes. A video is just the pasted link. Only keep the
+  // existing asset when the KIND is unchanged — a video→pdf or pdf→image switch
+  // must bring its own asset, or we'd serve the old file under the wrong type.
+  const kindUnchanged = existing ? existing.assetKind === assetKind : false;
+  let assetUrl: string | null = kindUnchanged ? existing?.assetUrl ?? null : null;
+  let assetName: string | null = kindUnchanged
+    ? existing?.assetName ?? null
+    : null;
 
   if (assetKind === "video_link") {
     const url = str(formData.get("assetVideoUrl"), 1000);
@@ -180,6 +184,14 @@ export async function saveLeadMagnet(
     });
   }
 
+  // Anchor the flow the first time it becomes non-empty. The nurture cron only
+  // emails opt-ins captured at/after this, so adding a flow never retroactively
+  // blasts everyone who signed up before it existed. Preserved once set.
+  const followupsSetAt =
+    followups.length > 0
+      ? existing?.followupsSetAt ?? new Date()
+      : existing?.followupsSetAt ?? null;
+
   const values = {
     accountId,
     slug,
@@ -200,6 +212,7 @@ export async function saveLeadMagnet(
     ctaLabelUk: str(formData.get("ctaLabelUk"), 120),
     ctaHref: str(formData.get("ctaHref"), 1000) || null,
     followups,
+    followupsSetAt,
     published: str(formData.get("published")) === "on",
     updatedAt: new Date(),
   };
@@ -380,31 +393,51 @@ export async function submitLeadMagnetOptin(input: {
     formId = inserted[0].id;
   }
 
-  await db.insert(leadSubmissions).values({
-    accountId,
-    formId,
-    name,
-    email,
-    fields: {
-      kind: "lead-magnet",
-      magnetId: magnet.id,
-      magnetSlug: magnet.slug,
-      magnetTitle: title,
-      lang,
-      // Nurture bookkeeping for the cron (Step 2): which follow-ups have sent.
-      followupsSent: [] as number[],
-      source: "lead-magnet",
-    },
-    sourceIp: ip === "unknown" ? null : ip,
-    userAgent: h.get("user-agent") ?? null,
-    referer: h.get("referer") ?? null,
-    status: "pending",
-  });
+  // Dedup: a refresh or double-submit shouldn't create a second lead, inflate
+  // the count, or (worst of all) start a second follow-up sequence. If this
+  // email already opted in to THIS magnet, skip the write — we still re-deliver
+  // the asset below, since they may just be after another copy.
+  const priorOptin = await db
+    .select({ id: leadSubmissions.id })
+    .from(leadSubmissions)
+    .where(
+      and(
+        eq(leadSubmissions.accountId, accountId),
+        eq(leadSubmissions.formId, formId),
+        eq(leadSubmissions.email, email),
+        sql`${leadSubmissions.fields}->>'magnetId' = ${magnet.id}`
+      )
+    )
+    .limit(1);
+  const isRepeat = priorOptin.length > 0;
 
-  await db
-    .update(leadMagnets)
-    .set({ optinCount: sql`${leadMagnets.optinCount} + 1` })
-    .where(eq(leadMagnets.id, magnet.id));
+  if (!isRepeat) {
+    await db.insert(leadSubmissions).values({
+      accountId,
+      formId,
+      name,
+      email,
+      fields: {
+        kind: "lead-magnet",
+        magnetId: magnet.id,
+        magnetSlug: magnet.slug,
+        magnetTitle: title,
+        lang,
+        // Nurture bookkeeping: which follow-ups (by delayHours) have sent.
+        followupsSent: [] as number[],
+        source: "lead-magnet",
+      },
+      sourceIp: ip === "unknown" ? null : ip,
+      userAgent: h.get("user-agent") ?? null,
+      referer: h.get("referer") ?? null,
+      status: "pending",
+    });
+
+    await db
+      .update(leadMagnets)
+      .set({ optinCount: sql`${leadMagnets.optinCount} + 1` })
+      .where(eq(leadMagnets.id, magnet.id));
+  }
 
   // Deliver the asset + notify her. Best-effort — the lead is already saved,
   // so a mail hiccup must never fail the opt-in or hide it from her inbox.
@@ -445,7 +478,7 @@ export async function submitLeadMagnetOptin(input: {
         console.error("[lead-magnet] delivery email failed:", err);
       }
 
-      if (notifyTo) {
+      if (notifyTo && !isRepeat) {
         try {
           await sendLandingInquiryNotifyEmail({
             to: notifyTo,

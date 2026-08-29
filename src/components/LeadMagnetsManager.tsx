@@ -492,7 +492,24 @@ function LeadMagnetDialog({
             <select
               name="assetKind"
               value={kind}
-              onChange={(e) => setKind(e.target.value)}
+              onChange={(e) => {
+                const k = e.target.value;
+                setKind(k);
+                // The seeded asset belongs to the original kind. When she
+                // switches to a different kind, drop it so we never submit, say,
+                // a PDF's URL as an "image"; restore it if she switches back.
+                if (magnet && k === magnet.assetKind) {
+                  setAssetUrl(
+                    magnet.assetKind !== "video_link"
+                      ? magnet.assetUrl ?? ""
+                      : ""
+                  );
+                  setAssetName(magnet.assetName ?? "");
+                } else {
+                  setAssetUrl("");
+                  setAssetName("");
+                }
+              }}
               className={inputCls}
             >
               <option value="pdf">A PDF (workbook, guide…)</option>

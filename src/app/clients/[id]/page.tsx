@@ -92,6 +92,11 @@ export default async function ClientProfilePage({
   const openTasks = file.tasks.filter((t) => !t.completedAt);
   const locale = asLocale(settings.uiLanguage);
   const practiceTz = resolveTimeZone(settings.timezone);
+  // Markdown-stripped intake preview — the "…" is decided on the STRIPPED length
+  // so a mostly-markdown note doesn't show its full text with a false ellipsis.
+  const intakePeek = (client.intakeNotes ?? "")
+    .replace(/[#*_>`~-]/g, "")
+    .trim();
 
   return (
     <AppShell
@@ -373,11 +378,8 @@ export default async function ClientProfilePage({
               {client.intakeNotes && client.intakeNotes.trim().length > 0 ? (
                 <div className="text-sm text-ink-700">
                   <p className="text-xs text-ink-600 leading-relaxed">
-                    {client.intakeNotes
-                      .replace(/[#*_>`~-]/g, "")
-                      .trim()
-                      .slice(0, 160)}
-                    {client.intakeNotes.length > 160 ? "…" : ""}
+                    {intakePeek.slice(0, 160)}
+                    {intakePeek.length > 160 ? "…" : ""}
                   </p>
                   <div className="text-right mt-2">
                     <Link

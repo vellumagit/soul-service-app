@@ -10,6 +10,7 @@
 import { NextResponse } from "next/server";
 import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { getSessionEmail } from "@/lib/session-cookies";
+import { findAccountByEmail } from "@/lib/account";
 
 export async function POST(request: Request): Promise<NextResponse> {
   const body = (await request.json()) as HandleUploadBody;
@@ -17,9 +18,17 @@ export async function POST(request: Request): Promise<NextResponse> {
     const json = await handleUpload({
       body,
       request,
-      onBeforeGenerateToken: async () => {
+      onBeforeGenerateToken: async (pathname) => {
         const email = await getSessionEmail();
         if (!email) throw new Error("Not signed in.");
+        const account = await findAccountByEmail(email);
+        if (!account) throw new Error("No account for this session.");
+        // Scope the token to this account's own prefix, so a signed-in
+        // practitioner can't mint an upload token for another account's blob
+        // path (the DB is multi-tenant even if the deploy is single-practice).
+        if (!pathname.startsWith(`accounts/${account.accountId}/`)) {
+          throw new Error("Upload path not allowed.");
+        }
         return {
           allowedContentTypes: [
             "application/pdf",
