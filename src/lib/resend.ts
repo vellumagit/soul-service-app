@@ -1277,6 +1277,98 @@ ${input.message ? `"${input.message}"\n\n` : "(No message — just their details
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Lead-magnet delivery — the "instant download" email sent the moment someone
+// opts in on a /free/<slug> page. Bilingual: sent in the visitor's own language
+// (blank copy already fell back to the other language before it reached here).
+// The button points straight at the asset — a Blob download for a pdf/image, or
+// the external URL for a pasted video link.
+// ─────────────────────────────────────────────────────────────────────────────
+export async function sendLeadMagnetDeliveryEmail(input: {
+  to: string;
+  name: string | null;
+  lang: "en" | "uk";
+  title: string;
+  assetUrl: string;
+  assetLabel: string;
+  practitionerName: string | null;
+  ctaLabel?: string | null;
+  ctaHref?: string | null;
+  replyTo?: string;
+}): Promise<void> {
+  const first = input.name?.split(" ")[0]?.trim() || null;
+  const uk = input.lang === "uk";
+  const signoff = input.practitionerName ?? "Svitlana";
+
+  const greeting = uk
+    ? first
+      ? `Вітаю, ${first},`
+      : "Вітаю,"
+    : first
+    ? `Hi ${first},`
+    : "Hi,";
+  const subject = uk
+    ? "Готово — ваш матеріал уже тут"
+    : `Your ${input.title} is ready`;
+  const intro = uk
+    ? `Ось «${input.title}», який ви просили — він ваш назавжди. Знайдіть кілька тихих хвилин для нього, коли зможете.`
+    : `Here's the ${input.title} you asked for — it's yours to keep. Find a quiet few minutes for it when you can.`;
+  const closing = uk ? "Рада, що ви тут." : "I'm glad you're here.";
+  const orCopy = uk
+    ? "Або скопіюйте це посилання:"
+    : "Or copy and paste this link:";
+  const nextIntro = uk ? "Коли відчуєте, що час:" : "When the time feels right:";
+
+  const text = `${greeting}
+
+${intro}
+
+${input.assetLabel}: ${input.assetUrl}
+${input.ctaLabel && input.ctaHref ? `\n${input.ctaLabel}: ${input.ctaHref}\n` : ""}
+${closing}
+
+— ${signoff}`;
+
+  const html = `
+<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#faf6f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1a1411;">
+    <div style="max-width:480px;margin:40px auto;padding:32px;background:#fdf9f1;border-radius:12px;border:1px solid #ead9c1;">
+      <p style="margin:0 0 16px 0;font-size:15px;color:#1a1411;">${escapeHtml(greeting)}</p>
+      <p style="margin:0 0 24px 0;font-size:15px;line-height:1.6;color:#3d342e;">${escapeHtml(intro)}</p>
+      <a href="${escapeHtml(input.assetUrl)}"
+         style="display:inline-block;background:#6b5192;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:13px 22px;border-radius:9px;">
+        ${escapeHtml(input.assetLabel)}
+      </a>
+      <p style="margin:18px 0 0 0;font-size:12px;color:#9a8b7c;line-height:1.55;">${escapeHtml(
+        orCopy
+      )}<br><span style="word-break:break-all;color:#6b5192;">${escapeHtml(
+    input.assetUrl
+  )}</span></p>
+      ${
+        input.ctaLabel && input.ctaHref
+          ? `<hr style="border:none;border-top:1px solid #ead9c1;margin:28px 0;"><p style="margin:0 0 12px 0;font-size:14px;color:#3d342e;">${escapeHtml(
+              nextIntro
+            )}</p><a href="${escapeHtml(
+              input.ctaHref
+            )}" style="display:inline-block;background:#ffffff;border:1px solid #c9a24b;color:#8a6d24;text-decoration:none;font-size:14px;font-weight:600;padding:11px 18px;border-radius:9px;">${escapeHtml(
+              input.ctaLabel
+            )}</a>`
+          : ""
+      }
+      <p style="margin:28px 0 0 0;font-size:15px;line-height:1.6;color:#3d342e;">${escapeHtml(
+        closing
+      )}</p>
+      <p style="margin:10px 0 0 0;font-size:15px;color:#1a1411;">— ${escapeHtml(
+        signoff
+      )}</p>
+    </div>
+  </body>
+</html>`.trim();
+
+  await sendEmail({ to: input.to, subject, html, text, replyTo: input.replyTo });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Portal request notification — a client asked for something from inside their
 // own space (a reschedule, or a new session). Until this existed, those
 // requests only appeared in Loose Ends, which meant she found out whenever she

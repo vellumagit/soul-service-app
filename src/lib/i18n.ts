@@ -45,6 +45,7 @@ export type TranslationKey =
   | "nav.clients"
   | "nav.groups"
   | "nav.library"
+  | "nav.leadMagnets"
   | "nav.calendar"
   | "nav.payments"
   | "nav.network"
@@ -124,6 +125,7 @@ const en: Record<TranslationKey, string> = {
   "nav.clients": "Clients",
   "nav.groups": "Circles",
   "nav.library": "Library",
+  "nav.leadMagnets": "Lead magnets",
   "nav.calendar": "Calendar",
   "nav.payments": "Payments",
   "nav.network": "Network",
@@ -206,6 +208,7 @@ const ru: Record<TranslationKey, string> = {
   "nav.clients": "Клиенты",
   "nav.groups": "Круги",
   "nav.library": "Библиотека",
+  "nav.leadMagnets": "Материалы",
   "nav.calendar": "Календарь",
   "nav.payments": "Платежи",
   "nav.network": "Сеть",
@@ -288,6 +291,7 @@ const uk: Record<TranslationKey, string> = {
   "nav.clients": "Клієнти",
   "nav.groups": "Кола",
   "nav.library": "Бібліотека",
+  "nav.leadMagnets": "Матеріали",
   "nav.calendar": "Календар",
   "nav.payments": "Платежі",
   "nav.network": "Мережа",

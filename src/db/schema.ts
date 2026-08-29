@@ -1541,3 +1541,86 @@ export const landingOfferRows = pgTable(
 );
 
 export type LandingOfferRow = typeof landingOfferRows.$inferSelect;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// lead_magnets — free, email-gated resources she creates to grow her list:
+// a PDF, an image, or a pasted video link. The public page is /free/<slug>;
+// a visitor enters name + email, the asset is delivered instantly by email, and
+// the opt-in is written as a lead_submission so it lands in /network/inbox and
+// can be promoted to a client — a lead magnet makes leads. Optional follow-up
+// emails ("the flow") live in `followups` and are sent later by the reminders
+// cron. Bilingual like the rest of the storefront: every visitor-facing string
+// has an _en and _uk value, and a blank one falls back to the other language.
+// ─────────────────────────────────────────────────────────────────────────────
+export type LeadMagnetFollowup = {
+  /** Hours after opt-in to send this email. */
+  delayHours: number;
+  subjectEn: string;
+  subjectUk: string;
+  bodyEn: string;
+  bodyUk: string;
+};
+
+export const leadMagnets = pgTable(
+  "lead_magnets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+
+    /** URL slug — the public page is /free/<slug>. Unique per account. */
+    slug: text("slug").notNull(),
+
+    // Visitor-facing copy (bilingual; a blank value falls back at render time).
+    titleEn: text("title_en").notNull().default(""),
+    titleUk: text("title_uk").notNull().default(""),
+    subtitleEn: text("subtitle_en").notNull().default(""),
+    subtitleUk: text("subtitle_uk").notNull().default(""),
+    descriptionEn: text("description_en").notNull().default(""),
+    descriptionUk: text("description_uk").notNull().default(""),
+    buttonEn: text("button_en").notNull().default(""),
+    buttonUk: text("button_uk").notNull().default(""),
+
+    // The gated asset. assetKind is 'pdf' | 'image' | 'video_link' (plain text
+    // rather than a pg enum so new kinds don't need a type migration).
+    assetKind: text("asset_kind").notNull().default("pdf"),
+    /** Blob URL for pdf/image; the external URL for video_link. */
+    assetUrl: text("asset_url"),
+    /** Original filename / display name for the download. */
+    assetName: text("asset_name"),
+    // Delivery button label (bilingual), e.g. "Download the workbook".
+    assetLabelEn: text("asset_label_en").notNull().default(""),
+    assetLabelUk: text("asset_label_uk").notNull().default(""),
+
+    // Optional next-step CTA shown after opt-in (bilingual). Blank → hidden.
+    ctaLabelEn: text("cta_label_en").notNull().default(""),
+    ctaLabelUk: text("cta_label_uk").notNull().default(""),
+    ctaHref: text("cta_href"),
+
+    /**
+     * Follow-up "flow": ordered emails sent after the opt-in, each shaped like
+     * LeadMagnetFollowup. Empty array = deliver-only. Sent by the reminders cron.
+     */
+    followups: jsonb("followups")
+      .$type<LeadMagnetFollowup[]>()
+      .notNull()
+      .default([]),
+
+    published: boolean("published").notNull().default(false),
+    /** Denormalized opt-in counter, like leadForms.submissionCount. */
+    optinCount: integer("optin_count").notNull().default(0),
+    archivedAt: timestamp("archived_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    accountIdx: index("lead_magnets_account_idx").on(t.accountId),
+    slugIdx: uniqueIndex("lead_magnets_account_slug_idx").on(
+      t.accountId,
+      t.slug
+    ),
+  })
+);
+
+export type LeadMagnet = typeof leadMagnets.$inferSelect;
