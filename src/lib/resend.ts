@@ -1368,6 +1368,62 @@ ${closing}
   await sendEmail({ to: input.to, subject, html, text, replyTo: input.replyTo });
 }
 
+/** Escape a run of her free text, keep line breaks, and turn bare http(s) URLs
+ *  into links — so a link she pastes into a follow-up body is clickable. */
+function escapeAndLinkify(s: string): string {
+  const escaped = escapeHtml(s).replace(/\n/g, "<br>");
+  return escaped.replace(
+    /(https?:\/\/[^\s<]+)/g,
+    (url) => `<a href="${url}" style="color:#6b5192;">${url}</a>`
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Lead-magnet follow-up — a nurture email she scheduled to go out some days
+// after someone downloaded a lead magnet ("the flow"). The subject + body are
+// her own words, in the visitor's language, with {first}/{name} already
+// substituted by the caller. Signed with her name automatically, like the
+// delivery email.
+// ─────────────────────────────────────────────────────────────────────────────
+export async function sendLeadMagnetFollowupEmail(input: {
+  to: string;
+  lang: "en" | "uk";
+  subject: string;
+  body: string;
+  practitionerName: string | null;
+  replyTo?: string;
+}): Promise<void> {
+  const signoff = input.practitionerName ?? "Svitlana";
+  const paragraphs = input.body
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  const htmlBody = paragraphs
+    .map(
+      (p) =>
+        `<p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;color:#3d342e;">${escapeAndLinkify(
+          p
+        )}</p>`
+    )
+    .join("");
+
+  const text = `${input.body}\n\n— ${signoff}`;
+  const html = `
+<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#faf6f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1a1411;">
+    <div style="max-width:480px;margin:40px auto;padding:32px;background:#fdf9f1;border-radius:12px;border:1px solid #ead9c1;">
+      ${htmlBody}
+      <p style="margin:24px 0 0 0;font-size:15px;color:#1a1411;">— ${escapeHtml(
+        signoff
+      )}</p>
+    </div>
+  </body>
+</html>`.trim();
+
+  await sendEmail({ to: input.to, subject: input.subject, html, text, replyTo: input.replyTo });
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Portal request notification — a client asked for something from inside their
 // own space (a reschedule, or a new session). Until this existed, those

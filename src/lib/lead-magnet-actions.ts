@@ -16,6 +16,7 @@ import {
   leadMagnets,
   leadSubmissions,
   practitionerSettings,
+  type LeadMagnetFollowup,
 } from "@/db/schema";
 import { requireSession } from "./session-cookies";
 import { resolveStorefrontAccountId } from "./storefront-account";
@@ -157,6 +158,28 @@ export async function saveLeadMagnet(
     }
   }
 
+  // Follow-up "flow": up to 2 nurture emails. A slot with no subject/body in
+  // either language is treated as empty and dropped. Delay is entered in days.
+  const followups: LeadMagnetFollowup[] = [];
+  for (const i of [1, 2]) {
+    const subjectEn = str(formData.get(`fuSubjectEn${i}`), 300);
+    const subjectUk = str(formData.get(`fuSubjectUk${i}`), 300);
+    const bodyEn = str(formData.get(`fuBodyEn${i}`), 6000);
+    const bodyUk = str(formData.get(`fuBodyUk${i}`), 6000);
+    if (!subjectEn && !subjectUk && !bodyEn && !bodyUk) continue;
+    const daysRaw = Number.parseInt(str(formData.get(`fuDelayDays${i}`)), 10);
+    const days = Number.isFinite(daysRaw)
+      ? Math.min(365, Math.max(0, daysRaw))
+      : 2;
+    followups.push({
+      delayHours: days * 24,
+      subjectEn,
+      subjectUk,
+      bodyEn,
+      bodyUk,
+    });
+  }
+
   const values = {
     accountId,
     slug,
@@ -176,6 +199,7 @@ export async function saveLeadMagnet(
     ctaLabelEn: str(formData.get("ctaLabelEn"), 120),
     ctaLabelUk: str(formData.get("ctaLabelUk"), 120),
     ctaHref: str(formData.get("ctaHref"), 1000) || null,
+    followups,
     published: str(formData.get("published")) === "on",
     updatedAt: new Date(),
   };

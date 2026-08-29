@@ -43,8 +43,17 @@ export type LeadMagnetRow = {
   ctaLabelEn: string;
   ctaLabelUk: string;
   ctaHref: string | null;
+  followups: LeadMagnetFollowupInput[];
   published: boolean;
   optinCount: number;
+};
+
+export type LeadMagnetFollowupInput = {
+  delayHours: number;
+  subjectEn: string;
+  subjectUk: string;
+  bodyEn: string;
+  bodyUk: string;
 };
 
 type Lang = "en" | "uk";
@@ -255,6 +264,8 @@ function LeadMagnetDialog({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [kind, setKind] = useState<string>(magnet?.assetKind ?? "pdf");
+  const fu1 = magnet?.followups?.[0];
+  const fu2 = magnet?.followups?.[1];
 
   // Asset state. For pdf/image the URL comes from a browser-direct Blob upload;
   // for video_link she pastes it. Prefill from the existing magnet on edit.
@@ -423,6 +434,43 @@ function LeadMagnetDialog({
                   }
                 />
               </Field>
+
+              <div className="border-t border-ink-100 pt-3 mt-1 space-y-3">
+                <p className="text-[11px] font-medium text-ink-500 uppercase tracking-wide">
+                  Follow-up emails ({l.full})
+                </p>
+                <Field label="Follow-up 1 — subject">
+                  <input
+                    name={en ? "fuSubjectEn1" : "fuSubjectUk1"}
+                    defaultValue={(en ? fu1?.subjectEn : fu1?.subjectUk) ?? ""}
+                    className={inputCls}
+                    placeholder={en ? "How is it landing?" : "Як воно відгукується?"}
+                  />
+                </Field>
+                <Field label="Follow-up 1 — message" hint="Use {first} for their first name.">
+                  <textarea
+                    name={en ? "fuBodyEn1" : "fuBodyUk1"}
+                    rows={3}
+                    defaultValue={(en ? fu1?.bodyEn : fu1?.bodyUk) ?? ""}
+                    className={inputCls}
+                  />
+                </Field>
+                <Field label="Follow-up 2 — subject">
+                  <input
+                    name={en ? "fuSubjectEn2" : "fuSubjectUk2"}
+                    defaultValue={(en ? fu2?.subjectEn : fu2?.subjectUk) ?? ""}
+                    className={inputCls}
+                  />
+                </Field>
+                <Field label="Follow-up 2 — message" hint="Use {first} for their first name.">
+                  <textarea
+                    name={en ? "fuBodyEn2" : "fuBodyUk2"}
+                    rows={3}
+                    defaultValue={(en ? fu2?.bodyEn : fu2?.bodyUk) ?? ""}
+                    className={inputCls}
+                  />
+                </Field>
+              </div>
             </div>
           );
         })}
@@ -513,6 +561,47 @@ function LeadMagnetDialog({
               placeholder="/#contact"
             />
           </Field>
+
+          <div className="border-t border-ink-100 pt-3 space-y-2">
+            <p className="text-xs font-medium text-ink-700">
+              Follow-up flow (optional)
+            </p>
+            <p className="text-[11px] text-ink-400 leading-relaxed">
+              Automatic nurture emails sent after someone signs up. Write each
+              one&apos;s subject + message in both languages above, and set when
+              it goes out here — leave a follow-up blank for none. Type{" "}
+              <code className="text-ink-500">{"{first}"}</code> to drop in their
+              first name; they&apos;re signed with your name automatically.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Follow-up 1 — days after sign-up">
+                <input
+                  name="fuDelayDays1"
+                  type="number"
+                  min={0}
+                  max={365}
+                  defaultValue={
+                    fu1 ? String(Math.round(fu1.delayHours / 24)) : ""
+                  }
+                  className={inputCls}
+                  placeholder="2"
+                />
+              </Field>
+              <Field label="Follow-up 2 — days after sign-up">
+                <input
+                  name="fuDelayDays2"
+                  type="number"
+                  min={0}
+                  max={365}
+                  defaultValue={
+                    fu2 ? String(Math.round(fu2.delayHours / 24)) : ""
+                  }
+                  className={inputCls}
+                  placeholder="5"
+                />
+              </Field>
+            </div>
+          </div>
         </div>
 
         <label className="flex items-center gap-2 text-sm text-ink-700">

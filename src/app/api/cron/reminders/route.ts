@@ -5,6 +5,7 @@
 // requests. Anyone else hitting this endpoint gets 401.
 import { NextResponse } from "next/server";
 import { processReminders } from "@/lib/reminders";
+import { processLeadMagnetFollowups } from "@/lib/lead-magnet-nurture";
 import {
   ensureRecurringCircleSessions,
   pruneEmptyCancelledCircleSessions,
@@ -29,6 +30,16 @@ export async function GET(request: Request) {
   }
 
   const stats = await processReminders();
+
+  // Lead-magnet follow-up "flow" — nurture emails due since the last tick.
+  // Cheap when nobody has set one up (early-returns after one small query), so
+  // it rides every tick without adding Neon wake cost. Best-effort.
+  let leadMagnetFollowups = { candidates: 0, sent: 0 };
+  try {
+    leadMagnetFollowups = await processLeadMagnetFollowups();
+  } catch (err) {
+    console.error("[cron] lead-magnet follow-ups failed", err);
+  }
 
   // Top up recurring weekly Circles so the storefront always has the next few
   // weeks of open seats. Idempotent + deduped, so running hourly is safe.
@@ -60,6 +71,7 @@ export async function GET(request: Request) {
   return NextResponse.json({
     ok: true,
     ...stats,
+    leadMagnetFollowups,
     recurringCircles,
     prunedCircles,
   });

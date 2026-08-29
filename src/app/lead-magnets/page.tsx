@@ -42,6 +42,7 @@ export default async function LeadMagnetsPage() {
         ctaLabelEn: leadMagnets.ctaLabelEn,
         ctaLabelUk: leadMagnets.ctaLabelUk,
         ctaHref: leadMagnets.ctaHref,
+        followups: leadMagnets.followups,
         published: leadMagnets.published,
         optinCount: leadMagnets.optinCount,
       })
