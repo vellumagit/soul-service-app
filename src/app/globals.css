@@ -96,33 +96,33 @@ body {
 }
 
 html[data-time-of-day="dawn"] {
-  --color-app-bg: #edeef3;        /* cool pre-dawn blue-gray */
-  --color-parchment: #f6f1eb;     /* parchment with a peach hint */
-  --color-parchment-edge: #dccbb6;
+  --color-app-bg: #e2e6f2;        /* cool pre-dawn blue, sun not yet up */
+  --color-parchment: #eef0f8;
+  --color-parchment-edge: #d0cfe2;
 }
 
 html[data-time-of-day="morning"] {
-  --color-app-bg: #f4f3ec;
-  --color-parchment: #fcfaf3;
-  --color-parchment-edge: #e6dccb;
+  --color-app-bg: #f2f4ee;        /* fresh, faintly cool linen */
+  --color-parchment: #fbfcf5;
+  --color-parchment-edge: #e6ddcd;
 }
 
 html[data-time-of-day="dusk"] {
-  --color-app-bg: #f6e6ce;        /* warm gold cream */
-  --color-parchment: #fbeed5;
-  --color-parchment-edge: #e3c089;
+  --color-app-bg: #f9e0b6;        /* golden hour, sun on the horizon */
+  --color-parchment: #fdecca;
+  --color-parchment-edge: #e9ba7c;
 }
 
 html[data-time-of-day="evening"] {
-  --color-app-bg: #efdac4;        /* deeper rose-cream, sun nearly gone */
-  --color-parchment: #f8e3c5;
-  --color-parchment-edge: #d9b285;
+  --color-app-bg: #ecd0c6;        /* rose afterglow, sun just gone */
+  --color-parchment: #f6dbd1;
+  --color-parchment-edge: #dba795;
 }
 
 html[data-time-of-day="night"] {
-  --color-app-bg: #e8d3b6;        /* deepest warm parchment, lamplight */
-  --color-parchment: #f4dcb9;
-  --color-parchment-edge: #ccaa78;
+  --color-app-bg: #dfe2f0;        /* cool twilight blue — a starlit night */
+  --color-parchment: #eceef7;
+  --color-parchment-edge: #cacee2;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -192,8 +192,11 @@ html[data-time-of-day="night"] {
   50%      { filter: brightness(1.12); }
 }
 
+html[data-time-of-day="dusk"] .atmosphere-starfield {
+  opacity: 0.14;         /* the very first stars, low in the darkening sky */
+}
 html[data-time-of-day="evening"] .atmosphere-starfield {
-  opacity: 0.40;
+  opacity: 0.58;
 }
 html[data-time-of-day="night"] .atmosphere-starfield {
   opacity: 1;
@@ -204,40 +207,50 @@ html[data-time-of-day="night"] .atmosphere-starfield {
    viewport for dawn (sunrise) or the bottom for dusk/evening (sunset).
    The color shifts feel like the sun actually being there. */
 html[data-time-of-day="dawn"] .atmosphere-horizon {
+  /* Sunrise — a warm band lifting off the top of the screen, peach into gold
+     into a soft pink, the sky still cool-blue above it. */
   opacity: 1;
   background: radial-gradient(
-    ellipse 90vw 38vh at 50% 0%,
-    rgba(255, 175, 130, 0.42) 0%,
-    rgba(255, 200, 160, 0.18) 35%,
-    transparent 70%
+    ellipse 105vw 48vh at 50% 0%,
+    rgba(255, 158, 112, 0.62) 0%,
+    rgba(255, 190, 140, 0.34) 26%,
+    rgba(255, 214, 178, 0.16) 48%,
+    transparent 72%
   );
 }
 html[data-time-of-day="dusk"] .atmosphere-horizon {
+  /* Sunset — the loud one. A deep ember at the base blooming up through
+     orange into gold. */
   opacity: 1;
   background: radial-gradient(
-    ellipse 100vw 42vh at 50% 100%,
-    rgba(230, 120, 70, 0.45) 0%,
-    rgba(240, 160, 100, 0.22) 35%,
-    transparent 70%
+    ellipse 120vw 52vh at 50% 100%,
+    rgba(228, 96, 48, 0.66) 0%,
+    rgba(242, 138, 68, 0.38) 26%,
+    rgba(255, 186, 112, 0.18) 48%,
+    transparent 74%
   );
 }
 html[data-time-of-day="evening"] .atmosphere-horizon {
+  /* Afterglow — the ember cooling to rose and mauve, first stars above. */
   opacity: 1;
   background: radial-gradient(
-    ellipse 110vw 38vh at 50% 100%,
-    rgba(160, 80, 100, 0.38) 0%,
-    rgba(190, 110, 130, 0.18) 40%,
-    transparent 75%
+    ellipse 118vw 46vh at 50% 100%,
+    rgba(150, 62, 96, 0.52) 0%,
+    rgba(184, 96, 126, 0.28) 34%,
+    rgba(120, 78, 132, 0.12) 58%,
+    transparent 80%
   );
 }
 html[data-time-of-day="night"] .atmosphere-horizon {
-  /* Faint deep-indigo wash at the bottom — the horizon line still hints
-     at where the sun went down hours ago. */
+  /* Deep twilight — an indigo-blue wash rising from the horizon under the
+     full starfield. */
   opacity: 1;
   background: radial-gradient(
-    ellipse 120vw 30vh at 50% 100%,
-    rgba(60, 50, 90, 0.25) 0%,
-    transparent 75%
+    ellipse 130vw 42vh at 50% 100%,
+    rgba(40, 44, 92, 0.48) 0%,
+    rgba(64, 70, 124, 0.22) 40%,
+    rgba(80, 88, 140, 0.08) 66%,
+    transparent 82%
   );
 }
 
