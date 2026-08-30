@@ -229,13 +229,18 @@ export function SearchPalette() {
           />
         </svg>
       </button>
+      {/* Center explicitly. A modal <dialog> is centered by the UA default
+          (margin:auto), but the app's CSS reset zeroes that — which is why the
+          palette fell to the LEFT. Re-declare centering like the shared Modal
+          (fixed inset-0 + auto side/bottom margins) and offset from the top with
+          mt so it sits high, not vertically centered. */}
       <dialog
         ref={dialogRef}
         onClose={() => setOpen(false)}
         onClick={(e) => {
           if (e.target === dialogRef.current) setOpen(false);
         }}
-        className="rounded-lg border border-ink-200 shadow-2xl backdrop:bg-ink-900/40 max-w-xl w-full p-0 mt-[10vh]"
+        className="rounded-lg border border-ink-200 shadow-2xl backdrop:bg-ink-900/40 max-w-xl w-full p-0 fixed inset-0 mx-auto mb-auto mt-[10vh]"
       >
         <div className="flex items-center gap-2 px-4 py-3 border-b border-ink-100">
           <svg

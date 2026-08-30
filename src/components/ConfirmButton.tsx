@@ -48,9 +48,12 @@ export function ConfirmButton({
       >
         {label}
       </button>
+      {/* Center explicitly (fixed inset-0 + m-auto). Tailwind v4's reset zeroes
+          the UA margin:auto that centers a modal <dialog>, so without this it
+          drifts to the top-left — the same bug the search palette had. */}
       <dialog
         ref={dialogRef}
-        className="rounded-md border border-ink-200 shadow-2xl p-0 backdrop:bg-ink-900/40 max-w-sm w-full"
+        className="rounded-md border border-ink-200 shadow-2xl p-0 backdrop:bg-ink-900/40 max-w-sm w-full fixed inset-0 m-auto"
       >
         <div className="p-5">
           <div className="text-sm text-ink-900 font-medium mb-2">
