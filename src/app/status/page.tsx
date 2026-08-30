@@ -113,21 +113,6 @@ export default async function StatusPage({
       ) : null,
     },
     {
-      label: "Video hosting (Cloudflare Stream)",
-      state:
-        process.env.CLOUDFLARE_ACCOUNT_ID &&
-        process.env.CLOUDFLARE_STREAM_API_TOKEN &&
-        process.env.CLOUDFLARE_STREAM_CUSTOMER_CODE
-          ? "ok"
-          : "warn",
-      detail:
-        process.env.CLOUDFLARE_ACCOUNT_ID &&
-        process.env.CLOUDFLARE_STREAM_API_TOKEN &&
-        process.env.CLOUDFLARE_STREAM_CUSTOMER_CODE
-          ? "Cloudflare Stream connected. Upload session recaps from the session card and storefront video offerings from /library. Signed URLs expire every 24h so leaked iframe links die overnight."
-          : "Set CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_STREAM_API_TOKEN (with Stream:Edit scope) + CLOUDFLARE_STREAM_CUSTOMER_CODE (the customer-XXXX subdomain prefix) in Vercel env vars to enable session recap videos and the storefront Library.",
-    },
-    {
       label: "Auto-notes — meeting notetaker bot (Recall.ai)",
       state:
         process.env.RECALL_API_KEY &&

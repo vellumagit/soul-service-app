@@ -16,7 +16,6 @@ export type LandingSectionSlug =
   | "ways"
   | "voices"
   | "circles"
-  | "library"
   | "contact"
   | "final";
 
@@ -100,14 +99,6 @@ export const LANDING_SECTIONS: LandingSectionMeta[] = [
     canMove: true,
     conditional:
       "Only shows when Circle sign-ups are open AND there's an upcoming Circle.",
-  },
-  {
-    slug: "library",
-    label: "Library",
-    blurb: "Your recorded workshops and replays.",
-    canHide: true,
-    canMove: true,
-    conditional: "Only shows when you have a published offering.",
   },
   {
     slug: "contact",

@@ -63,7 +63,6 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/network", labelKey: "nav.network", icon: "network" },
       { href: "/lead-magnets", labelKey: "nav.leadMagnets", icon: "leadMagnets" },
-      { href: "/library", labelKey: "nav.library", icon: "library" },
     ],
   },
 ];

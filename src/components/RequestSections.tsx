@@ -15,7 +15,6 @@ import {
   type BookingRequestRow,
   type GroupSignupRow,
   type CircleRefundRequestRow as CircleRefundRequestData,
-  type PendingProductPurchaseRow,
 } from "@/db/queries";
 import { fullDate, shortTime } from "@/lib/format";
 import { LooseEndRowActions } from "@/components/LooseEndRowActions";
@@ -23,91 +22,6 @@ import { RescheduleRequestRowActions } from "@/components/RescheduleRequestRowAc
 import { BookingRequestRowActions } from "@/components/BookingRequestRowActions";
 import { GroupSignupRowActions } from "@/components/GroupSignupRowActions";
 import { CircleRefundRequestRow } from "@/components/CircleRefundRequestRow";
-import { ProductPurchaseLooseEndRow } from "@/components/ProductPurchaseLooseEndRow";
-
-export function ProductPurchasesSection({
-  rows,
-  timeZone,
-}: {
-  rows: PendingProductPurchaseRow[];
-  timeZone?: string;
-}) {
-  return (
-    <section className="paper-card p-6">
-      <div className="flex items-baseline justify-between mb-1 flex-wrap gap-2">
-        <h2
-          className="serif-italic text-xl text-plum-700"
-          style={{ fontWeight: 400 }}
-        >
-          Library purchases
-        </h2>
-        <span
-          className="text-[10px] uppercase tracking-wider font-mono px-2 py-0.5 rounded"
-          style={{
-            background: "var(--color-honey-50)",
-            color: "var(--color-honey-700)",
-          }}
-        >
-          {rows.length}
-        </span>
-      </div>
-      <p className="text-[13px] text-ink-500 italic mb-4 leading-relaxed">
-        People who requested a recorded offering and are waiting on you to
-        confirm + mark paid. Once payment arrives, hit{" "}
-        <strong>Mark paid + Confirm</strong> — you&apos;ll get a private watch
-        URL to email them.
-      </p>
-      <ul className="space-y-3">
-        {rows.map((r) => {
-          const price = new Intl.NumberFormat("en-US", {
-            style: "currency",
-            currency: r.currency,
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 2,
-          }).format(r.priceCents / 100);
-          return (
-            <li
-              key={r.purchaseId}
-              className="border-l-2 border-honey-300 pl-4 py-2"
-            >
-              <div className="flex items-baseline justify-between gap-3 flex-wrap mb-1">
-                <div>
-                  <span className="text-sm font-medium text-ink-900">
-                    {r.purchaserName}
-                  </span>
-                  <span className="text-[12px] text-ink-500 ml-2 break-all">
-                    {r.purchaserEmail}
-                  </span>
-                </div>
-                <span className="text-[11px] text-ink-400 font-mono">
-                  {fullDate(r.requestedAt, timeZone)}
-                </span>
-              </div>
-              <div className="text-[12px] text-ink-600 mt-0.5">
-                <Link
-                  href={`/library/${r.productId}`}
-                  className="text-plum-700 hover:underline"
-                >
-                  {r.productName}
-                </Link>{" "}
-                · {price}
-              </div>
-              <div className="mt-2">
-                <ProductPurchaseLooseEndRow
-                  purchaseId={r.purchaseId}
-                  productId={r.productId}
-                  productName={r.productName}
-                  purchaserName={r.purchaserName}
-                  purchaserEmail={r.purchaserEmail}
-                />
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-    </section>
-  );
-}
 
 export function RefundRequestsSection({
   rows,

@@ -153,14 +153,6 @@ export const LANDING_OVERRIDE_FIELDS: LandingOverrideField[] = [
     hint: EMPHASIS_HINT,
     apply: (c, v) => ({ ...c, voices: { ...c.voices, title: v } }),
   },
-  {
-    key: "libraryBody",
-    section: "library",
-    label: "Intro",
-    multiline: true,
-    plain: (c) => c.library.body,
-    apply: (c, v) => ({ ...c, library: { ...c.library, body: v } }),
-  },
 ];
 
 /** The editable lines belonging to one storefront section. Sections with no

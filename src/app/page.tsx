@@ -21,7 +21,6 @@ import { practitionerSettings } from "@/db/schema";
 import { getAvailableWindows } from "@/lib/availability";
 import { resolveStorefrontAccountId } from "@/lib/storefront-account";
 import { listUpcomingPublicGroupSessions } from "@/lib/group-actions";
-import { listPublishedProducts } from "@/lib/product-actions";
 import { getLandingCopy } from "@/lib/landing-copy";
 import { getLandingLang } from "@/lib/landing-lang";
 import { applyLandingOverrides } from "@/lib/landing-overrides";
@@ -219,19 +218,6 @@ export default async function LandingPage() {
         }))
         .filter((row) => row.offers.length > 0)
     : rawLadder;
-
-  // Library — published video offerings. Same try/catch pattern.
-  let libraryProducts: Awaited<
-    ReturnType<typeof listPublishedProducts>
-  > = [];
-  try {
-    libraryProducts = await listPublishedProducts(
-      6,
-      storefrontAccountId ?? undefined
-    );
-  } catch (err) {
-    console.warn("[landing] library fetch failed:", err);
-  }
 
   // Each storefront section as a named block. Rendered below in HER order
   // (Settings → Landing page), so moving or hiding one is a data change
@@ -543,50 +529,6 @@ export default async function LandingPage() {
                           {c.circles.fullNextSoon}
                         </span>
                       )}
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-          )}
-      </>
-    ),
-    library: (
-      <>
-          {/* LIBRARY — only renders if there are any */}
-          {libraryProducts.length > 0 && (
-            <section className="circles" id="library">
-              <div className="wrap narrow rv" style={{ textAlign: "center" }}>
-                <span className="tag" style={{ display: "block" }}>
-                  {c.library.tag}
-                </span>
-                <h2>{c.library.title}</h2>
-                <p className="p-lg">{c.library.body}</p>
-              </div>
-              <div className="wrap circles-grid">
-                {libraryProducts.map((p) => {
-                  const price = new Intl.NumberFormat(c.circles.dateLocale, {
-                    style: "currency",
-                    currency: p.currency,
-                    minimumFractionDigits: 0,
-                    maximumFractionDigits: 2,
-                  }).format(p.priceCents / 100);
-                  const minutes = p.videoDurationSeconds
-                    ? Math.round(p.videoDurationSeconds / 60)
-                    : null;
-                  return (
-                    <div className="circle-card rv" key={p.id}>
-                      <h3>{p.name}</h3>
-                      <div className="meta">
-                        {minutes !== null
-                          ? `${minutes}${c.library.minShort}`
-                          : c.library.video}
-                      </div>
-                      {p.description && <p className="desc">{p.description}</p>}
-                      <div className="price">{price}</div>
-                      <Link href={`/offerings/${p.id}`} className="cta">
-                        {c.library.requestAccess}
-                      </Link>
                     </div>
                   );
                 })}

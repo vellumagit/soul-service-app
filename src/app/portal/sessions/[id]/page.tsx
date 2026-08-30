@@ -14,8 +14,6 @@ import { getPortalTimeZone } from "@/lib/portal-timezone";
 import { notifyPractitionerOfPortalRequest } from "@/lib/portal-notify";
 import { formatSessionLong } from "@/lib/timezone";
 import { revalidatePath } from "next/cache";
-import { mintRecapPlaybackUrl } from "@/lib/recap-playback";
-import { RecapPlayer } from "@/components/RecapPlayer";
 import { PortalSubmitButton } from "@/components/PortalSubmitButton";
 
 export const dynamic = "force-dynamic";
@@ -135,9 +133,6 @@ export default async function PortalSessionDetailPage({
       meetUrl: sessions.meetUrl,
       intention: sessions.intention,
       clientStatedIntention: sessions.clientStatedIntention,
-      recapVideoId: sessions.recapVideoId,
-      recapVideoUploadedAt: sessions.recapVideoUploadedAt,
-      recapVideoDurationSeconds: sessions.recapVideoDurationSeconds,
     })
     .from(sessions)
     .where(
@@ -182,13 +177,6 @@ export default async function PortalSessionDetailPage({
   const hasPending =
     requestState === "pending" || requestState === "acknowledged";
   const answered = requestState === "acknowledged";
-
-  // Mint a signed playback URL only when there's a recap. 24h expiry — even
-  // if a determined client copies the iframe HTML and shares it, the link
-  // dies overnight. New URL is minted on every page load.
-  const recapUrl = session.recapVideoId
-    ? await mintRecapPlaybackUrl(session.recapVideoId)
-    : null;
 
   const scheduled = new Date(session.scheduledAt);
   const { timeZone, hasOwnZone } = await getPortalTimeZone(
@@ -254,26 +242,6 @@ export default async function PortalSessionDetailPage({
           </p>
         )}
       </section>
-
-      {/* Session recap video — only shown when she's uploaded one. */}
-      {recapUrl && (
-        <section className="paper-card p-6 md:p-8 mb-6">
-          <p className="text-[10px] uppercase tracking-widest text-honey-700 font-mono mb-2">
-            Recap
-          </p>
-          <h2
-            className="serif-italic text-xl text-plum-700 mb-3"
-            style={{ fontWeight: 400 }}
-          >
-            From our time together
-          </h2>
-          <RecapPlayer signedUrl={recapUrl} title="Session recap" />
-          <p className="text-[11px] text-ink-500 italic mt-3 leading-relaxed">
-            This recording is private to you. The link expires every 24
-            hours — reload this page if it stops playing.
-          </p>
-        </section>
-      )}
 
       {/* What you're bringing — client sets their own intention for the
           session. Only on upcoming sessions; past sessions are no longer

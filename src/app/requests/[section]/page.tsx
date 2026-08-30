@@ -18,7 +18,6 @@ import { resolveTimeZone } from "@/lib/timezone";
 import { asLocale } from "@/lib/i18n";
 import { findRequestSection } from "@/lib/request-sections";
 import {
-  ProductPurchasesSection,
   RefundRequestsSection,
   GroupSignupsSection,
   BookingRequestsSection,
@@ -136,10 +135,6 @@ function renderSection(
       );
     case "circle-signups":
       return <GroupSignupsSection rows={ends.groupSignups} timeZone={tz} />;
-    case "purchases":
-      return (
-        <ProductPurchasesSection rows={ends.productPurchases} timeZone={tz} />
-      );
     case "notetaker":
       return (
         <Section

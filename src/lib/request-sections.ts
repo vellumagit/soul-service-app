@@ -54,13 +54,6 @@ export const REQUEST_SECTIONS: RequestSection[] = [
     group: "waiting",
     count: (e) => e.groupSignups.length,
   },
-  {
-    slug: "purchases",
-    title: "Library purchases",
-    blurb: "Someone asked for a recorded offering and is waiting for access.",
-    group: "waiting",
-    count: (e) => e.productPurchases.length,
-  },
 
   // ── Her own threads. Nobody is blocked; these are for a quiet moment. ──
   {
