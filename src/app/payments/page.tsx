@@ -113,12 +113,9 @@ export default async function PaymentsPage({
       ) : (
         <>
           {/* Mobile */}
-          <div className="md:hidden space-y-2">
+          <div className="md:hidden paper-card overflow-hidden divide-y divide-ink-100">
             {filtered.map((s) => (
-              <div
-                key={s.id}
-                className="border border-ink-200 rounded-md p-3 bg-white"
-              >
+              <div key={s.id} className="p-3">
                 <div className="flex items-center gap-2 mb-1">
                   <Link
                     href={`/clients/${s.clientId}`}
@@ -189,7 +186,7 @@ export default async function PaymentsPage({
           </div>
 
           {/* Desktop */}
-          <div className="hidden md:block border border-ink-200 rounded-md overflow-hidden bg-white">
+          <div className="hidden md:block paper-card overflow-hidden">
             <table className="w-full text-sm">
               <thead className="text-[10px] uppercase tracking-wider text-ink-500 bg-ink-50/60 border-b border-ink-100">
                 <tr>

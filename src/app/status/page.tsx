@@ -3,6 +3,7 @@
 // sees their own Google connection status, etc.).
 import { AppShell } from "@/components/AppShell";
 import { QuickActions } from "@/components/QuickActions";
+import { Section } from "@/components/Section";
 import { requireSession } from "@/lib/session-cookies";
 import {
   getSettings,
@@ -272,15 +273,15 @@ export default async function StatusPage({
       )}
 
       {/* Setup progress */}
-      <section className="border border-ink-200 rounded-md bg-white p-5 mb-5">
-        <div className="flex items-baseline justify-between mb-3">
-          <h2 className="text-sm font-semibold text-ink-900">
-            Your setup progress
-          </h2>
+      <Section
+        title="Your setup progress"
+        action={
           <div className="text-[11px] text-ink-500 font-mono">
             {setupDone} / {setupItems.length}
           </div>
-        </div>
+        }
+        className="mb-5"
+      >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {setupItems.map((item) => (
             <div
@@ -314,13 +315,10 @@ export default async function StatusPage({
             </div>
           ))}
         </div>
-      </section>
+      </Section>
 
       {/* Capability rows */}
-      <section className="border border-ink-200 rounded-md bg-white overflow-hidden">
-        <h2 className="text-sm font-semibold text-ink-900 px-5 pt-5 pb-3 border-b border-ink-100">
-          What&apos;s set up
-        </h2>
+      <Section title="What's set up" pad="none" className="overflow-hidden">
         <ul className="divide-y divide-ink-100">
           {rows.map((row) => (
             <li key={row.label} className="px-5 py-3 flex items-start gap-3">
@@ -337,7 +335,7 @@ export default async function StatusPage({
             </li>
           ))}
         </ul>
-      </section>
+      </Section>
 
       <p className="text-[11px] text-ink-400 mt-4 leading-relaxed">
         Something not working? Check your Vercel env vars (Settings → Environment

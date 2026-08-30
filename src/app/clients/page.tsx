@@ -99,12 +99,12 @@ export default async function ClientsPage({
       ) : (
         <>
           {/* Mobile: card list */}
-          <div className="md:hidden space-y-2">
+          <div className="md:hidden paper-card overflow-hidden divide-y divide-ink-100">
             {clients.map((c) => (
               <Link
                 key={c.id}
                 href={`/clients/${c.id}`}
-                className="block border border-ink-200 rounded-md p-3 bg-white hover:bg-ink-50"
+                className="block p-3 hover:bg-ink-50"
               >
                 <div className="flex items-center gap-3">
                   <Avatar
@@ -139,7 +139,7 @@ export default async function ClientsPage({
           </div>
 
           {/* Desktop: table */}
-          <div className="hidden md:block border border-ink-200 rounded-md overflow-hidden bg-white">
+          <div className="hidden md:block paper-card overflow-hidden">
             <table className="w-full text-sm">
               <thead className="text-[10px] uppercase tracking-wider text-ink-500 bg-ink-50/60 border-b border-ink-100">
                 <tr>

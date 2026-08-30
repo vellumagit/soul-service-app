@@ -7,6 +7,7 @@ import { and, eq, desc } from "drizzle-orm";
 import { headers } from "next/headers";
 import { AppShell } from "@/components/AppShell";
 import { QuickActions } from "@/components/QuickActions";
+import { Section } from "@/components/Section";
 import { requireSession } from "@/lib/session-cookies";
 import { db } from "@/db";
 import { products, productPurchases } from "@/db/schema";
@@ -128,16 +129,16 @@ export default async function ProductDetailPage({
       </header>
 
       {/* Video upload + status */}
-      <section className="paper-card p-5 mb-6 max-w-2xl">
-        <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
-          <div className="text-[10px] uppercase tracking-wider font-mono text-ink-500">
-            Video
-          </div>
+      <Section
+        title="Video"
+        action={
           <ProductVideoUploadButton
             productId={product.id}
             hasExisting={hasVideo}
           />
-        </div>
+        }
+        className="mb-6 max-w-2xl"
+      >
         {hasVideo && (
           <p className="text-xs text-ink-600">
             Uploaded {new Date(product.videoUploadedAt!).toLocaleString()}.
@@ -155,16 +156,10 @@ export default async function ProductDetailPage({
             you upload one.
           </p>
         )}
-      </section>
+      </Section>
 
       {/* Edit basics */}
-      <section className="paper-card p-5 mb-6 max-w-2xl">
-        <h2
-          className="serif text-lg text-ink-900 mb-3"
-          style={{ fontWeight: 500 }}
-        >
-          Details
-        </h2>
+      <Section title="Details" className="mb-6 max-w-2xl">
         <form action={updateProduct} className="space-y-3">
           <input type="hidden" name="id" value={product.id} />
           <label className="block">
@@ -242,13 +237,10 @@ export default async function ProductDetailPage({
             </button>
           </div>
         </form>
-      </section>
+      </Section>
 
       {/* Storefront link + archive */}
-      <section className="paper-card p-5 mb-7 max-w-2xl">
-        <div className="text-[10px] uppercase tracking-wider font-mono text-ink-500 mb-1">
-          Public offering URL
-        </div>
+      <Section title="Public offering URL" className="mb-7 max-w-2xl">
         <Link
           href={`/offerings/${product.id}`}
           target="_blank"
@@ -265,16 +257,10 @@ export default async function ProductDetailPage({
             Archive offering (deletes the video too)
           </button>
         </form>
-      </section>
+      </Section>
 
       {/* Purchases */}
-      <section className="max-w-3xl">
-        <h2
-          className="serif text-xl text-ink-900 mb-3"
-          style={{ fontWeight: 500 }}
-        >
-          Purchases
-        </h2>
+      <Section title="Purchases" className="max-w-3xl">
         {purchases.length === 0 ? (
           <p className="text-sm text-ink-500 italic">
             No purchases yet. Once buyers request this offering, they&apos;ll
@@ -356,7 +342,7 @@ export default async function ProductDetailPage({
             )}
           </div>
         )}
-      </section>
+      </Section>
     </AppShell>
   );
 }

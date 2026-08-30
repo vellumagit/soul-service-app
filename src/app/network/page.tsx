@@ -193,11 +193,11 @@ export default async function NetworkPage({
           )}
         </div>
       ) : (
-        <ul className="space-y-2">
+        <ul className="paper-card overflow-hidden divide-y divide-ink-100">
           {network.map((p) => (
             <li
               key={p.id}
-              className="paper-card p-3.5 md:p-4 flex items-start gap-3.5"
+              className="p-3.5 md:p-4 flex items-start gap-3.5"
             >
               <Avatar
                 fullName={p.fullName}
