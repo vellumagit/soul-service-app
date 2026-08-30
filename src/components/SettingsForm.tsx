@@ -542,20 +542,18 @@ export function SettingsForm({
       </SettingsPanel>
 
       <div
-        className="sticky bottom-0 bg-white border-t border-ink-100 -mx-4 md:-mx-6 px-4 md:px-6 py-3 flex items-center justify-end gap-3"
+        className="mt-8 pt-2 flex flex-col items-center gap-2"
         style={showSave ? undefined : { display: "none" }}
       >
-        {saved && (
-          <span className="text-xs text-green-700">Saved.</span>
-        )}
-        {error && <span className="text-xs text-red-700">{error}</span>}
         <button
           type="submit"
           disabled={submitting}
-          className="px-4 py-2 text-sm bg-ink-900 hover:bg-ink-800 text-white rounded-md font-medium disabled:opacity-60"
+          className="px-6 py-2.5 text-sm bg-ink-900 hover:bg-ink-800 text-white rounded-md font-medium disabled:opacity-60"
         >
           {submitting ? "Saving…" : "Save changes"}
         </button>
+        {saved && <span className="text-xs text-green-700">Saved.</span>}
+        {error && <span className="text-xs text-red-700">{error}</span>}
       </div>
     </form>
   );

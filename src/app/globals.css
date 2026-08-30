@@ -722,8 +722,11 @@ body {
   line-height: 1.35;
   padding: 7px 11px;
   border-radius: 8px;
-  white-space: nowrap;
-  max-width: 280px;
+  /* Wrap inside the bubble instead of running off-screen. `nowrap` was
+     overriding max-width, so a long tip trailed past the edge. */
+  white-space: normal;
+  max-width: 240px;
+  overflow-wrap: break-word;
   opacity: 0;
   transform: translateY(4px);
   transition: opacity 180ms ease, transform 180ms ease;
