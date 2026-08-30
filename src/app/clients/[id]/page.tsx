@@ -28,6 +28,7 @@ import { PrivateNotesBlock } from "@/components/PrivateNotesBlock";
 import { PeopleInLifeBlock } from "@/components/PeopleInLifeBlock";
 import { PatternsTab } from "@/components/PatternsTab";
 import { ClientMoreTabs } from "@/components/ClientMoreTabs";
+import { Section as ScanCard } from "@/components/Section";
 import { ClientHeader } from "@/components/ClientHeader";
 import { PortalConnectionCard } from "@/components/PortalConnectionCard";
 import { ClientReflectionsSection } from "@/components/ClientReflectionsSection";
@@ -519,22 +520,3 @@ export default async function ClientProfilePage({
   );
 }
 
-function ScanCard({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="paper-card p-6">
-      <div
-        className="serif-italic text-base text-plum-700 mb-3"
-        style={{ fontWeight: 400, letterSpacing: "-0.005em" }}
-      >
-        {title}
-      </div>
-      {children}
-    </div>
-  );
-}

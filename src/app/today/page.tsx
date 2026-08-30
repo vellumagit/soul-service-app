@@ -254,12 +254,12 @@ export default async function HomePage() {
               empty={t(locale, "home.emptyToday")}
             >
               {upcomingToday.length > 0 && (
-                <div className="border border-ink-200 rounded-md overflow-hidden bg-white divide-y divide-ink-100">
+                <div className="-mx-5 -mb-5 overflow-hidden divide-y divide-ink-100">
                   {upcomingToday.map((s) => (
                     <Link
                       key={s.id}
                       href={`/clients/${s.clientId}`}
-                      className="flex items-center gap-3 px-4 py-3 hover:bg-ink-50"
+                      className="flex items-center gap-3 px-5 py-3 hover:bg-ink-50"
                     >
                       <div className="font-mono text-sm text-plum-700 font-medium w-20 shrink-0">
                         {shortTime(s.scheduledAt, practiceTz)}
@@ -285,7 +285,7 @@ export default async function HomePage() {
               data.missingNotes.length > 0 ||
               data.dormantClients.length > 0) && (
               <Section title={t(locale, "home.sectionNeedsAttention")}>
-                <div className="space-y-2">
+                <div className="-mx-5 -mb-5 divide-y divide-ink-100">
                   {data.unpaidSessions.map((s) => (
                     <NeedsRow
                       key={`unpaid-${s.id}`}
@@ -430,9 +430,9 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section>
+    <section className="paper-card p-5">
       <div className="flex items-center gap-2 mb-3">
-        <h2 className="text-xs font-semibold text-ink-700 uppercase tracking-wider">
+        <h2 className="text-sm font-medium text-ink-800 tracking-tight">
           {title}
         </h2>
         {count !== undefined && count > 0 && (
@@ -460,7 +460,7 @@ function NeedsRow({
   action: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-3 px-4 py-2.5 border border-ink-200 rounded-md bg-white">
+    <div className="flex items-center gap-3 px-5 py-2.5 hover:bg-ink-50">
       <span className={`chip ${chipCls} shrink-0`}>{chip}</span>
       <div className="flex-1 min-w-0 text-sm">{text}</div>
       <div className="shrink-0">{action}</div>
