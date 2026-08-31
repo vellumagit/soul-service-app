@@ -1,25 +1,30 @@
-// Lead magnets admin — create/manage free, email-gated resources. Sidebar nav
-// "Lead magnets." Each magnet has a public page at /free/<slug>; sign-ups are
-// delivered the asset by email and land in Network → Inbox.
+// Edit a lead magnet — the full editor page (replaces the old cramped modal).
 
+import Link from "next/link";
 import { headers } from "next/headers";
-import { and, desc, eq } from "drizzle-orm";
+import { notFound } from "next/navigation";
+import { and, eq } from "drizzle-orm";
 import { AppShell } from "@/components/AppShell";
 import { QuickActions } from "@/components/QuickActions";
+import {
+  LeadMagnetEditor,
+} from "@/components/LeadMagnetEditor";
+import type { LeadMagnetRow } from "@/components/LeadMagnetsManager";
 import { requireSession } from "@/lib/session-cookies";
 import { db } from "@/db";
 import { leadMagnets } from "@/db/schema";
 import { getSettings, listClientsForPicker } from "@/db/queries";
 import { asLocale } from "@/lib/i18n";
-import {
-  LeadMagnetsManager,
-  type LeadMagnetRow,
-} from "@/components/LeadMagnetsManager";
 
 export const dynamic = "force-dynamic";
 
-export default async function LeadMagnetsPage() {
+export default async function EditLeadMagnetPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const { email, accountId } = await requireSession();
+  const { id } = await params;
 
   const [rows, settings, clientsList] = await Promise.all([
     db
@@ -47,14 +52,16 @@ export default async function LeadMagnetsPage() {
         optinCount: leadMagnets.optinCount,
       })
       .from(leadMagnets)
-      .where(eq(leadMagnets.accountId, accountId))
-      .orderBy(desc(leadMagnets.updatedAt)),
+      .where(and(eq(leadMagnets.id, id), eq(leadMagnets.accountId, accountId)))
+      .limit(1),
     getSettings(accountId),
     listClientsForPicker(accountId),
   ]);
 
-  const locale = asLocale(settings.uiLanguage);
+  const magnet = rows[0] as LeadMagnetRow | undefined;
+  if (!magnet) notFound();
 
+  const locale = asLocale(settings.uiLanguage);
   const h = await headers();
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "app.svit.live";
   const proto = h.get("x-forwarded-proto") ?? "https";
@@ -62,31 +69,28 @@ export default async function LeadMagnetsPage() {
 
   return (
     <AppShell
-      breadcrumb={[{ label: "Lead magnets" }]}
+      breadcrumb={[
+        { label: "Lead magnets", href: "/lead-magnets" },
+        { label: magnet.titleEn || magnet.titleUk || "Untitled" },
+      ]}
       rightAction={<QuickActions clients={clientsList} />}
       userEmail={email}
       locale={locale}
       timeZone={settings.timezone}
     >
-      <header className="mb-7">
+      <header className="mb-6 flex items-baseline justify-between gap-3 flex-wrap">
         <h1
-          className="text-3xl md:text-4xl text-ink-900 serif mb-1"
+          className="text-3xl text-ink-900 serif"
           style={{ fontWeight: 500, letterSpacing: "-0.015em" }}
         >
-          Lead magnets
+          Edit lead magnet
         </h1>
-        <p className="text-sm text-ink-500 italic serif-italic">
-          Free resources that grow your list — a PDF, an image, or a video,
-          gated behind an email.
-        </p>
+        <Link href="/lead-magnets" className="text-sm text-ink-500 hover:text-ink-900">
+          ← All lead magnets
+        </Link>
       </header>
 
-      <div className="max-w-3xl">
-        <LeadMagnetsManager
-          initial={rows as LeadMagnetRow[]}
-          origin={origin}
-        />
-      </div>
+      <LeadMagnetEditor magnet={magnet} accountId={accountId} origin={origin} />
     </AppShell>
   );
 }
