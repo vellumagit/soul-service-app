@@ -722,10 +722,18 @@ body {
   line-height: 1.35;
   padding: 7px 11px;
   border-radius: 8px;
-  /* Wrap inside the bubble instead of running off-screen. `nowrap` was
-     overriding max-width, so a long tip trailed past the edge. */
+  /* Size the bubble to its text, then cap it so long tips wrap instead of
+     trailing off-screen. `width: max-content` is load-bearing: this hint is
+     absolutely positioned inside a shrink-to-fit fixed wrapper (~48px, just the
+     button), so a plain `auto` width collapses to that width and stacks the tip
+     one word per line. max-content sizes to the text regardless of the wrapper;
+     max-width then wraps only the genuinely long tips. */
+  width: max-content;
+  max-width: min(240px, calc(100vw - 2.5rem));
+  /* border-box so the viewport clamp above counts padding — otherwise a long
+     tip can still nudge off a narrow phone's edge. */
+  box-sizing: border-box;
   white-space: normal;
-  max-width: 240px;
   overflow-wrap: break-word;
   opacity: 0;
   transform: translateY(4px);
