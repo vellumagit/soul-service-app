@@ -27,6 +27,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { MarkdownRender } from "./NotesEditor";
+import { LUMI_OPEN_EVENT, type LumiOpenDetail } from "@/lib/ask-lumi";
 
 // Rotating hover hints — change every couple of hours by index. Keep them
 // short, specific, and useful (no "Hi there!" filler). Each one points to a
@@ -219,6 +220,24 @@ export function HelpBuddy() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
+
+  // Let any part of the app open Lumi via `askLumi(prompt)` (e.g. an "Ask Lumi"
+  // button on the lead-magnet editor). Opens the panel and seeds her input with
+  // the question — but never clobbers something she's already half-typed.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    function onOpenRequest(e: Event) {
+      const detail = (e as CustomEvent<LumiOpenDetail>).detail;
+      setOpen(true);
+      const seed = detail?.prompt?.trim();
+      if (seed) {
+        setInput((cur) => (cur.trim() ? cur : seed));
+        requestAnimationFrame(() => inputRef.current?.focus());
+      }
+    }
+    window.addEventListener(LUMI_OPEN_EVENT, onOpenRequest);
+    return () => window.removeEventListener(LUMI_OPEN_EVENT, onOpenRequest);
+  }, []);
 
   async function send() {
     const text = input.trim();
