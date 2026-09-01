@@ -910,17 +910,27 @@ export async function archiveLeadForm(
   }
 }
 
-/** Accept a pending submission → create a Network entry (clients row with
- *  is_lead=true) using the canonical fields + the form's defaultIntent as
- *  howTheyFoundMe (or a custom intent the practitioner passed). */
+/** Accept a pending submission → create a person (clients row) using the
+ *  canonical fields + the form's defaultIntent as howTheyFoundMe (or a custom
+ *  intent the practitioner passed).
+ *
+ *  She picks the LANE at accept time:
+ *   - "network" (default) → a contact in her orbit (is_lead = true) — someone
+ *     important to her world, not necessarily someone she's working with.
+ *   - "client" → someone she's actually working with (is_lead = false).
+ *
+ *  Accepting NEVER sends a portal invite or any email — portal access is always
+ *  a deliberate, separate step (the "Give them their own space" button on a
+ *  profile), because a network contact should never be auto-onboarded. */
 export type AcceptSubmissionResult =
-  | { ok: true; clientId: string; portalInvited?: boolean }
+  | { ok: true; clientId: string; lane: "network" | "client" }
   | { ok: false; error: string };
 
 export async function acceptLeadSubmission(
   submissionId: string,
-  options?: { sourceOverride?: string }
+  options?: { as?: "network" | "client"; sourceOverride?: string }
 ): Promise<AcceptSubmissionResult> {
+  const lane: "network" | "client" = options?.as === "client" ? "client" : "network";
   try {
     const { accountId } = await requireSession();
     const [row] = await db
@@ -1051,14 +1061,20 @@ export async function acceptLeadSubmission(
         existingClientId = existing.id;
         // Append the new submission's context to whatever's already in
         // private notes — we don't want to lose context but also don't
-        // want to overwrite hand-written notes.
+        // want to overwrite hand-written notes. When she accepts into the
+        // CLIENT lane, promote an existing network contact (is_lead → false);
+        // the network lane never demotes someone who's already a client.
+        const update: Partial<typeof clients.$inferInsert> = {};
         if (privateNotes) {
-          const appended = existing.privateNotes
+          update.privateNotes = existing.privateNotes
             ? `${existing.privateNotes}\n\n---\n\n${privateNotes}`
             : privateNotes;
+        }
+        if (lane === "client") update.isLead = false;
+        if (Object.keys(update).length > 0) {
           await db
             .update(clients)
-            .set({ privateNotes: appended, updatedAt: new Date() })
+            .set({ ...update, updatedAt: new Date() })
             .where(
               and(
                 eq(clients.accountId, accountId),
@@ -1080,11 +1096,11 @@ export async function acceptLeadSubmission(
           fullName: name,
           email: sub.email,
           phone: sub.phone,
-          isLead: true,
+          isLead: lane === "network",
           howTheyFoundMe: source,
           workingOn,
           privateNotes,
-          status: "new",
+          status: lane === "client" ? "active" : "new",
         })
         .returning({ id: clients.id });
       clientId = client.id;
@@ -1097,8 +1113,8 @@ export async function acceptLeadSubmission(
         promotedClientId: clientId,
         reviewedAt: new Date(),
         reviewedAction: existingClientId
-          ? "accepted (merged into existing client)"
-          : "accepted",
+          ? `accepted → ${lane} (merged into existing person)`
+          : `accepted → ${lane}`,
       })
       .where(
         and(
@@ -1107,55 +1123,17 @@ export async function acceptLeadSubmission(
         )
       );
 
-    // Auto-onboard to the client portal. When the practitioner has the
-    // "invite on accept" automation on (default), accepting a lead turns on
-    // their portal access AND emails them a sign-in link in one move —
-    // collapsing the old two-step (toggle → invite) flow. Only fires when
-    // the client has a usable email. Non-fatal: a send failure never fails
-    // the accept itself; she can always invite by hand from the overview.
-    let portalInvited = false;
-    try {
-      const settings = await getSettings(accountId);
-      if (settings.autoPortalInviteOnAccept) {
-        const [c] = await db
-          .select({
-            email: clients.email,
-            portalEnabled: clients.portalEnabled,
-          })
-          .from(clients)
-          .where(and(eq(clients.accountId, accountId), eq(clients.id, clientId)))
-          .limit(1);
-        if (c?.email && c.email.includes("@")) {
-          if (!c.portalEnabled) {
-            await db
-              .update(clients)
-              .set({ portalEnabled: true, updatedAt: new Date() })
-              .where(
-                and(eq(clients.accountId, accountId), eq(clients.id, clientId))
-              );
-          }
-          const { headers } = await import("next/headers");
-          const h = await headers();
-          const base =
-            process.env.NEXT_PUBLIC_SITE_URL ||
-            `${h.get("x-forwarded-proto") ?? "https"}://${h.get("host") ?? "localhost"}`;
-          const { startPortalSignInByEmail } = await import("./portal-signin");
-          await startPortalSignInByEmail(c.email, base, {
-            ip: null,
-            userAgent: h.get("user-agent"),
-          });
-          portalInvited = true;
-        }
-      }
-    } catch (err) {
-      console.error("[accept] auto portal onboarding failed:", err);
-    }
+    // NOTE: accepting deliberately sends NO email and does NOT touch portal
+    // access. Portal onboarding is always a separate, manual step (the "Give
+    // them their own space" button on a profile) — a network contact must
+    // never be auto-onboarded, and even a new client is invited by hand.
 
     revalidatePath("/network");
     revalidatePath("/network/inbox");
     revalidatePath("/network/forms");
+    revalidatePath("/clients");
     revalidatePath(`/clients/${clientId}`);
-    return { ok: true, clientId, portalInvited };
+    return { ok: true, clientId, lane };
   } catch (err) {
     return {
       ok: false,
@@ -3063,7 +3041,6 @@ export async function updateSettings(formData: FormData) {
       invoicePrefix: str(formData, "invoicePrefix") ?? "INV",
       autoInvoiceOnComplete: bool(formData, "autoInvoiceOnComplete"),
       autoUploadAiNotes: bool(formData, "autoUploadAiNotes"),
-      autoPortalInviteOnAccept: bool(formData, "autoPortalInviteOnAccept"),
       recallEnabled: bool(formData, "recallEnabled"),
       recallAutoAdd: bool(formData, "recallAutoAdd"),
       recallBotName: str(formData, "recallBotName") ?? "Notetaker",

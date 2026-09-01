@@ -43,8 +43,32 @@ function SubmissionRow({
 }) {
   const [pending, startTransition] = useTransition();
   const [busy, setBusy] = useState<
-    "accept" | "reject" | "delete" | "notspam" | null
+    "network" | "client" | "reject" | "delete" | "notspam" | null
   >(null);
+
+  // Add the person to Network (a contact) or Clients (someone she's working
+  // with). Accepting never emails them or touches portal access.
+  function accept(as: "network" | "client") {
+    startTransition(async () => {
+      setBusy(as);
+      const r = await acceptLeadSubmission(s.id, { as });
+      setBusy(null);
+      if (!r.ok) {
+        notify({ kind: "warning", title: "Couldn’t add them", body: r.error });
+        return;
+      }
+      setHidden(true);
+      notify({
+        kind: "success",
+        title: as === "client" ? "Added to your clients" : "Added to your network",
+        body:
+          as === "client"
+            ? "Open their profile to add sessions, notes, or portal access."
+            : "Open their profile to add notes or details.",
+        ttlMs: 3500,
+      });
+    });
+  }
   const [hidden, setHidden] = useState(false);
   const fields = (s.fields ?? {}) as Record<string, unknown>;
   const fieldEntries = Object.entries(fields);
@@ -60,6 +84,7 @@ function SubmissionRow({
     ? fieldEntries.filter(([k]) => !INTERNAL_FIELD_KEYS.has(k))
     : fieldEntries;
   const summary = humanSummary(fields);
+  const source = sourceLabel(fields, s.formName);
 
   if (hidden) return null;
 
@@ -106,8 +131,12 @@ function SubmissionRow({
             <span className="font-medium text-ink-900">
               {s.name ?? s.email ?? "Unnamed lead"}
             </span>
-            <span className="chip bg-plum-50 text-plum-700">
-              {s.formName}
+            <span className="text-[11px] text-ink-400">from</span>
+            <span
+              className="chip bg-plum-50 text-plum-700"
+              title="Where this person came in — the form, quiz, or lead magnet they used"
+            >
+              {source}
             </span>
             {statusChip}
           </div>
@@ -161,7 +190,7 @@ function SubmissionRow({
                 href={`/clients/${s.promotedClientId}`}
                 className="hover:underline"
               >
-                Open the Network entry
+                Open their profile
               </Link>
             </div>
           )}
@@ -185,40 +214,32 @@ function SubmissionRow({
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
           {s.status === "pending" && (
             <>
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() =>
-                  startTransition(async () => {
-                    setBusy("accept");
-                    const r = await acceptLeadSubmission(s.id);
-                    setBusy(null);
-                    if (!r.ok) {
-                      notify({
-                        kind: "warning",
-                        title: "Accept failed",
-                        body: r.error,
-                      });
-                      return;
-                    }
-                    setHidden(true);
-                    notify({
-                      kind: "success",
-                      title: "Added to your network",
-                      body: r.portalInvited
-                        ? "Portal access turned on and a sign-in link emailed to them."
-                        : "Open the entry to fill in more.",
-                      ttlMs: 3500,
-                    });
-                  })
-                }
-                className="px-3 py-1.5 text-xs font-medium bg-ink-900 hover:bg-ink-800 text-white rounded-md disabled:opacity-50"
-              >
-                {busy === "accept" ? "Accepting…" : "Accept"}
-              </button>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-ink-400 hidden sm:inline">
+                  Add to
+                </span>
+                <button
+                  type="button"
+                  disabled={pending}
+                  title="A contact in your orbit — someone important to your world, not necessarily someone you're working with."
+                  onClick={() => accept("network")}
+                  className="px-3 py-1.5 text-xs font-medium bg-plum-100 hover:bg-plum-200 text-plum-800 rounded-md disabled:opacity-50"
+                >
+                  {busy === "network" ? "Adding…" : "Network"}
+                </button>
+                <button
+                  type="button"
+                  disabled={pending}
+                  title="Someone you're actually working with — they show up in Clients, ready for sessions."
+                  onClick={() => accept("client")}
+                  className="px-3 py-1.5 text-xs font-medium bg-ink-900 hover:bg-ink-800 text-white rounded-md disabled:opacity-50"
+                >
+                  {busy === "client" ? "Adding…" : "Client"}
+                </button>
+              </div>
               <button
                 type="button"
                 disabled={pending}
@@ -326,6 +347,19 @@ function ContextRow({
       <dd className="text-ink-700 truncate">{display}</dd>
     </>
   );
+}
+
+/** A short, human "where did this person come in" label for the source chip.
+ *  Our own first-party sources get a friendly name; external forms fall back to
+ *  the form's own name (with the landing contact form spelled out clearly). */
+function sourceLabel(
+  fields: Record<string, unknown>,
+  formName: string | null | undefined
+): string {
+  if (fields.kind === "lead-magnet") return "Lead magnet";
+  if (fields.source === "compass-quiz") return "Compass quiz";
+  if (formName && /landing|contact/i.test(formName)) return "Website contact form";
+  return formName || "Form";
 }
 
 function pickStringField(

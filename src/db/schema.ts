@@ -694,11 +694,12 @@ export const practitionerSettings = pgTable("practitioner_settings", {
   // run a transcript and walk away.
   autoUploadAiNotes: boolean("auto_upload_ai_notes").default(false).notNull(),
 
-  // When true, accepting a lead/inquiry as a client (from /network/inbox)
-  // automatically turns on their portal access AND emails them a sign-in
-  // link — collapsing the two manual steps (toggle + invite) into the
-  // accept action. Off → she enables + invites by hand as before. Only
-  // fires when the accepted client has a valid email on file.
+  // DORMANT (kept only to avoid a destructive migration). This used to make
+  // accepting an inbox lead auto-enable portal access and email a sign-in link.
+  // That was removed: accepting now never emails anyone, and portal access is
+  // always a deliberate, manual step (the "Give them their own space" button on
+  // a profile) — a network contact must never be auto-onboarded. Nothing reads
+  // this column anymore.
   autoPortalInviteOnAccept: boolean("auto_portal_invite_on_accept")
     .default(true)
     .notNull(),
