@@ -38,7 +38,9 @@ export function LeadMagnetOptin({
     lang === "uk"
       ? {
           nameLabel: "Ваше ім'я",
+          namePlaceholder: "Достатньо імені",
           emailLabel: "Електронна пошта",
+          emailPlaceholder: "you@email.com",
           sending: "Надсилаю…",
           errGeneric: "Щось пішло не так. Спробуйте ще раз.",
           doneTitle: "Готово — воно ваше.",
@@ -48,7 +50,9 @@ export function LeadMagnetOptin({
         }
       : {
           nameLabel: "Your name",
+          namePlaceholder: "First name is fine",
           emailLabel: "Email",
+          emailPlaceholder: "you@email.com",
           sending: "Sending…",
           errGeneric: "Something went off — please try again.",
           doneTitle: "Done — it's yours.",
@@ -168,6 +172,8 @@ export function LeadMagnetOptin({
         type="text"
         value={name}
         onChange={(e) => setName(e.target.value)}
+        placeholder={t.namePlaceholder}
+        autoComplete="name"
         required
         disabled={saving}
         style={inputStyle}
@@ -177,6 +183,8 @@ export function LeadMagnetOptin({
         type="email"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
+        placeholder={t.emailPlaceholder}
+        autoComplete="email"
         required
         disabled={saving}
         style={inputStyle}
