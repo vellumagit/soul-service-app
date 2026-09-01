@@ -179,7 +179,11 @@ export function LeadMagnetEditor({
       }
       notify({
         kind: "success",
-        title: isEdit ? "Lead magnet updated" : "Lead magnet created",
+        title: published
+          ? isEdit
+            ? "Lead magnet updated"
+            : "Lead magnet published"
+          : "Draft saved",
       });
       router.push("/lead-magnets");
       router.refresh();
@@ -629,7 +633,15 @@ export function LeadMagnetEditor({
                 disabled={submitting || uploading}
                 className="px-5 py-2 text-sm font-medium bg-plum-700 hover:bg-plum-800 text-white rounded-md disabled:opacity-60"
               >
-                {uploading ? "Uploading…" : submitting ? "Saving…" : isEdit ? "Save changes" : "Create"}
+                {uploading
+                  ? "Uploading…"
+                  : submitting
+                    ? "Saving…"
+                    : published
+                      ? isEdit
+                        ? "Save changes"
+                        : "Publish"
+                      : "Save draft"}
               </button>
               <button
                 type="button"

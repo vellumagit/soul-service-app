@@ -109,6 +109,11 @@ export async function saveLeadMagnet(
     return { ok: false, error: "Give it a title (English or Ukrainian)." };
   }
 
+  // Publishing now (checkbox on) vs saving a draft. A draft can be saved with
+  // whatever's filled in so far — only publishing requires the full set (a
+  // resource + valid links), because that's when the /free page goes live.
+  const willPublish = str(formData.get("published")) === "on";
+
   // Load the existing row (edit) so we can keep the asset if none is re-uploaded.
   let existing: typeof leadMagnets.$inferSelect | null = null;
   if (id) {
@@ -137,14 +142,17 @@ export async function saveLeadMagnet(
 
   if (assetKind === "video_link") {
     const url = str(formData.get("assetVideoUrl"), 1000);
-    if (!url) {
-      return { ok: false, error: "Paste the video link (YouTube, Vimeo, Loom…)." };
+    if (url) {
+      if (!isHttpUrl(url)) {
+        return { ok: false, error: "That video link doesn't look like a URL." };
+      }
+      assetUrl = url;
+      assetName = null;
+    } else if (!kindUnchanged) {
+      // Switched to a video and none pasted yet — clear any inherited asset.
+      assetUrl = null;
+      assetName = null;
     }
-    if (!isHttpUrl(url)) {
-      return { ok: false, error: "That video link doesn't look like a URL." };
-    }
-    assetUrl = url;
-    assetName = null;
   } else {
     const url = str(formData.get("assetUrl"), 1000);
     if (url) {
@@ -154,12 +162,21 @@ export async function saveLeadMagnet(
       assetUrl = url;
       assetName = str(formData.get("assetName"), 300) || null;
     }
-    if (!assetUrl) {
-      return {
-        ok: false,
-        error: assetKind === "pdf" ? "Attach a PDF." : "Attach an image.",
-      };
-    }
+  }
+
+  // The resource is only REQUIRED to publish — a draft can be saved without one
+  // and finished later. (The /free page needs something to hand over, so we
+  // can't publish an empty one.)
+  if (willPublish && !assetUrl) {
+    return {
+      ok: false,
+      error:
+        assetKind === "video_link"
+          ? "Paste the video link before publishing — you can save it as a draft for now."
+          : assetKind === "pdf"
+            ? "Attach a PDF before publishing — you can save it as a draft for now."
+            : "Attach an image before publishing — you can save it as a draft for now.",
+    };
   }
 
   // Follow-up "flow": up to 2 nurture emails. A slot with no subject/body in
@@ -225,7 +242,7 @@ export async function saveLeadMagnet(
     ctaHref: str(formData.get("ctaHref"), 1000) || null,
     followups,
     followupsSetAt,
-    published: str(formData.get("published")) === "on",
+    published: willPublish,
     updatedAt: new Date(),
   };
 
