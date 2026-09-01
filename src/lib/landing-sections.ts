@@ -14,6 +14,7 @@ export type LandingSectionSlug =
   | "reframe"
   | "about"
   | "ways"
+  | "freebie"
   | "voices"
   | "circles"
   | "contact"
@@ -77,6 +78,19 @@ export const LANDING_SECTIONS: LandingSectionMeta[] = [
     managedAt: {
       label: "Offers",
       note: "The cards themselves live in Settings → Offers.",
+    },
+  },
+  {
+    slug: "freebie",
+    label: "Free resource",
+    blurb: "A featured lead magnet — its title, a line, and a button to grab it.",
+    canHide: true,
+    canMove: true,
+    conditional:
+      "Only shows when you've featured a published lead magnet (Lead magnets → Feature on landing page).",
+    managedAt: {
+      label: "Lead magnets",
+      note: "Choose which one to feature with “Feature on landing page” on the Lead magnets page.",
     },
   },
   {

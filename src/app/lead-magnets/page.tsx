@@ -85,6 +85,7 @@ export default async function LeadMagnetsPage() {
         <LeadMagnetsManager
           initial={rows as LeadMagnetRow[]}
           origin={origin}
+          featuredId={settings.featuredLeadMagnetId ?? null}
         />
       </div>
     </AppShell>

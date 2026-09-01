@@ -16,8 +16,8 @@ import { SecretSignInWordmark } from "@/components/SecretSignInWordmark";
 import { BrandLockup } from "@/components/BrandLockup";
 import { LandingLangToggle } from "@/components/LandingLangToggle";
 import { db } from "@/db";
-import { eq } from "drizzle-orm";
-import { practitionerSettings } from "@/db/schema";
+import { and, eq, isNull } from "drizzle-orm";
+import { practitionerSettings, leadMagnets } from "@/db/schema";
 import { getAvailableWindows } from "@/lib/availability";
 import { resolveStorefrontAccountId } from "@/lib/storefront-account";
 import { listUpcomingPublicGroupSessions } from "@/lib/group-actions";
@@ -98,6 +98,10 @@ export default async function LandingPage() {
   // Her arrangement of the sections. No rows → the built-in order, everything
   // showing, which is also what an unreachable DB degrades to.
   let sectionRows: Awaited<ReturnType<typeof listLandingSections>> = [];
+  // The featured lead magnet for the "Free resource" (freebie) section, already
+  // resolved to THIS language. Null → the section renders nothing and is
+  // skipped (she hasn't featured one, or it's unpublished/archived/deleted).
+  let freebie: { title: string; blurb: string; href: string } | null = null;
   // Practice timezone — so every Circle time renders in HER local zone (with a
   // zone label), never the server's UTC. Falls back to the app default.
   let practiceTz: string = resolveTimeZone(null);
@@ -124,6 +128,7 @@ export default async function LandingPage() {
           landingPortraitUrl: practitionerSettings.landingPortraitUrl,
           timezone: practitionerSettings.timezone,
           landingCopyOverrides: practitionerSettings.landingCopyOverrides,
+          featuredLeadMagnetId: practitionerSettings.featuredLeadMagnetId,
         })
         .from(practitionerSettings)
         .where(eq(practitionerSettings.accountId, storefrontAccountId))
@@ -143,6 +148,41 @@ export default async function LandingPage() {
       });
       ladderRows = await listLandingOfferRows(storefrontAccountId);
       sectionRows = await listLandingSections(storefrontAccountId);
+      // Featured lead magnet → the "Free resource" (freebie) section. Only when
+      // she's picked one AND it's still published and not archived; a stale
+      // pointer (unpublished/deleted) simply renders nothing.
+      if (cfg?.featuredLeadMagnetId) {
+        const [m] = await db
+          .select({
+            slug: leadMagnets.slug,
+            titleEn: leadMagnets.titleEn,
+            titleUk: leadMagnets.titleUk,
+            subtitleEn: leadMagnets.subtitleEn,
+            subtitleUk: leadMagnets.subtitleUk,
+            descriptionEn: leadMagnets.descriptionEn,
+            descriptionUk: leadMagnets.descriptionUk,
+          })
+          .from(leadMagnets)
+          .where(
+            and(
+              eq(leadMagnets.id, cfg.featuredLeadMagnetId),
+              eq(leadMagnets.accountId, storefrontAccountId),
+              eq(leadMagnets.published, true),
+              isNull(leadMagnets.archivedAt)
+            )
+          )
+          .limit(1);
+        if (m) {
+          const pickLM = (en: string, uk: string) =>
+            (lang === "uk" ? uk : en).trim() || (lang === "uk" ? en : uk).trim();
+          const title = pickLM(m.titleEn, m.titleUk);
+          const blurb =
+            pickLM(m.subtitleEn, m.subtitleUk) ||
+            pickLM(m.descriptionEn, m.descriptionUk).split(/\n{2,}/)[0]?.trim() ||
+            "";
+          if (title) freebie = { title, blurb, href: `/free/${m.slug}` };
+        }
+      }
       if (cfg?.showAvailability) {
         const windows = await getAvailableWindows(storefrontAccountId, {
           limit: 6,
@@ -392,6 +432,32 @@ export default async function LandingPage() {
           </section>
       </>
     ),
+    // FREE RESOURCE — a featured lead magnet. Null (and skipped) unless she's
+    // featured a published one; content comes from that magnet + c.freebie.
+    freebie: freebie ? (
+      <>
+          {/* FREE RESOURCE */}
+          <section className="ways" id="freebie">
+            <div
+              className="wrap narrow rv"
+              style={{ textAlign: "center" }}
+            >
+              <span className="tag" style={{ display: "block" }}>
+                {c.freebie.tag}
+              </span>
+              <h2>{freebie.title}</h2>
+              {freebie.blurb && <p className="p-lg">{freebie.blurb}</p>}
+              <a
+                href={freebie.href}
+                className="btn btn-pri"
+                style={{ marginTop: "1.5rem" }}
+              >
+                {c.freebie.cta}
+              </a>
+            </div>
+          </section>
+      </>
+    ) : null,
     voices: (
       <>
           {/* VOICES */}

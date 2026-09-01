@@ -13,6 +13,7 @@ import { notify } from "./FlashNotifier";
 import {
   setLeadMagnetPublished,
   deleteLeadMagnet,
+  setFeaturedLeadMagnet,
 } from "@/lib/lead-magnet-actions";
 
 export type LeadMagnetRow = {
@@ -59,9 +60,12 @@ const KIND_LABEL: Record<string, string> = {
 export function LeadMagnetsManager({
   initial,
   origin,
+  featuredId,
 }: {
   initial: LeadMagnetRow[];
   origin: string;
+  /** The magnet currently featured on the landing page, if any. */
+  featuredId: string | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
@@ -136,6 +140,11 @@ export function LeadMagnetsManager({
                         Draft
                       </span>
                     )}
+                    {featuredId === m.id && m.published && (
+                      <span className="text-[11px] px-1.5 py-0.5 rounded bg-plum-100 text-plum-700">
+                        On landing page
+                      </span>
+                    )}
                     {(!m.titleEn || !m.titleUk) && (
                       <span className="text-[11px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700">
                         {m.titleEn ? "No Ukrainian yet" : "No English yet"}
@@ -179,6 +188,38 @@ export function LeadMagnetsManager({
                     className="text-xs px-2 py-1 rounded-md text-ink-600 hover:bg-ink-100 disabled:opacity-50"
                   >
                     {m.published ? "Unpublish" : "Publish"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy === m.id}
+                    onClick={() =>
+                      run(
+                        m.id,
+                        async () => {
+                          const r = await setFeaturedLeadMagnet(
+                            featuredId === m.id ? null : m.id
+                          );
+                          if (!r.ok) throw new Error(r.error);
+                        },
+                        featuredId === m.id
+                          ? "Removed from your landing page"
+                          : "Featured on your landing page"
+                      )
+                    }
+                    title={
+                      featuredId === m.id
+                        ? "Stop featuring this on your landing page"
+                        : m.published
+                          ? "Show this on your landing page as a free-resource block (replaces any other featured one)"
+                          : "You can feature it now, but it only appears on the landing page once published"
+                    }
+                    className={
+                      featuredId === m.id
+                        ? "text-xs px-2 py-1 rounded-md text-plum-700 bg-plum-50 hover:bg-plum-100 disabled:opacity-50"
+                        : "text-xs px-2 py-1 rounded-md text-ink-600 hover:bg-ink-100 disabled:opacity-50"
+                    }
+                  >
+                    {featuredId === m.id ? "★ Featured" : "Feature"}
                   </button>
                   <Link
                     href={`/lead-magnets/${m.id}`}

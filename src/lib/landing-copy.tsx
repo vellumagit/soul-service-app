@@ -186,6 +186,10 @@ export interface LandingCopy {
     };
   };
   contact: { tag: string; title: ReactNode; body: string };
+  // Static labels for the "Free resource" section (the freebie block). The
+  // title/subtitle come from the featured lead magnet itself; only the eyebrow
+  // and the button word live here.
+  freebie: { tag: string; cta: string };
   final: {
     tag: string;
     title: ReactNode;
@@ -470,6 +474,7 @@ const EN: LandingCopy = {
     ),
     body: "A few words is enough. I read every note myself and reply within a few days, usually sooner.",
   },
+  freebie: { tag: "A gift for you", cta: "Get it free →" },
   final: {
     tag: "It's your turn now",
     title: (
@@ -797,6 +802,7 @@ const UK: LandingCopy = {
     ),
     body: "Кількох слів достатньо. Я читаю кожну записку сама й відповідаю протягом кількох днів, зазвичай швидше.",
   },
+  freebie: { tag: "Подарунок для вас", cta: "Отримати безкоштовно →" },
   final: {
     tag: "Тепер ваша черга",
     title: (

@@ -284,6 +284,44 @@ export async function deleteLeadMagnet(id: string): Promise<void> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Feature a lead magnet on the landing page (the "Free resource" / freebie
+// section). One at a time: this is a single pointer on settings, so featuring
+// another simply replaces it. Pass null to un-feature. The section still only
+// renders when the pointed-at magnet is published + not archived.
+// ─────────────────────────────────────────────────────────────────────────────
+export async function setFeaturedLeadMagnet(
+  id: string | null
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const { accountId } = await requireSession();
+    if (id) {
+      const [m] = await db
+        .select({ id: leadMagnets.id })
+        .from(leadMagnets)
+        .where(and(eq(leadMagnets.id, id), eq(leadMagnets.accountId, accountId)))
+        .limit(1);
+      if (!m) return { ok: false, error: "That lead magnet no longer exists." };
+    }
+    // accountId is unique on practitioner_settings, so upsert on it.
+    await db
+      .insert(practitionerSettings)
+      .values({ accountId, featuredLeadMagnetId: id })
+      .onConflictDoUpdate({
+        target: practitionerSettings.accountId,
+        set: { featuredLeadMagnetId: id },
+      });
+    revalidatePath("/lead-magnets");
+    revalidatePath("/");
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Couldn't update that.",
+    };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // PUBLIC: someone opted in on /free/<slug>. Capture the lead + deliver the
 // asset by email. No auth. Anti-abuse mirrors submitQuizLead.
 // ─────────────────────────────────────────────────────────────────────────────

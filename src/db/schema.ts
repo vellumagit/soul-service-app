@@ -722,6 +722,13 @@ export const practitionerSettings = pgTable("practitioner_settings", {
   // hosted URL). Editable from Settings → Landing page.
   landingPortraitUrl: text("landing_portrait_url"),
 
+  // The lead magnet featured on the landing page's "Free resource" section
+  // (the `freebie` slug). NULL → the section shows nothing and is skipped. Set
+  // from the Lead magnets page ("Feature on landing page"); one at a time, so
+  // featuring another simply overwrites this. The section still only renders
+  // when the referenced magnet is published + not archived.
+  featuredLeadMagnetId: uuid("featured_lead_magnet_id"),
+
   // Her brand marks, uploaded from Settings → Branding (Vercel Blob URLs, or
   // any hosted image if she pastes a link).
   //   logoUrl    — shown in the workspace sidebar and as the storefront /
