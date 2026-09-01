@@ -175,12 +175,22 @@ export async function saveLeadMagnet(
     const days = Number.isFinite(daysRaw)
       ? Math.min(365, Math.max(0, daysRaw))
       : 2;
+    // Optional CTA button: bilingual label + one link. Only kept when there's
+    // both a label (either language) and a valid http(s) link — otherwise the
+    // email just renders subject + body with no button.
+    const ctaLabelEn = str(formData.get(`fuCtaLabelEn${i}`), 80);
+    const ctaLabelUk = str(formData.get(`fuCtaLabelUk${i}`), 80);
+    const ctaHrefRaw = str(formData.get(`fuCtaHref${i}`), 1000);
+    const hasCta = (ctaLabelEn || ctaLabelUk) && isHttpUrl(ctaHrefRaw);
     followups.push({
       delayHours: days * 24,
       subjectEn,
       subjectUk,
       bodyEn,
       bodyUk,
+      ...(hasCta
+        ? { ctaLabelEn, ctaLabelUk, ctaHref: ctaHrefRaw }
+        : {}),
     });
   }
 

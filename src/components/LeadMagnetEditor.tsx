@@ -31,6 +31,9 @@ type FU = {
   subjectUk: string;
   bodyEn: string;
   bodyUk: string;
+  ctaLabelEn: string;
+  ctaLabelUk: string;
+  ctaHref: string;
 };
 
 const inCls =
@@ -97,6 +100,9 @@ export function LeadMagnetEditor({
       subjectUk: f.subjectUk,
       bodyEn: f.bodyEn,
       bodyUk: f.bodyUk,
+      ctaLabelEn: f.ctaLabelEn ?? "",
+      ctaLabelUk: f.ctaLabelUk ?? "",
+      ctaHref: f.ctaHref ?? "",
     }))
   );
 
@@ -111,7 +117,16 @@ export function LeadMagnetEditor({
     if (fus.length >= 2) return;
     setFus((prev) => [
       ...prev,
-      { delayDays: prev.length === 0 ? "2" : "5", subjectEn: "", subjectUk: "", bodyEn: "", bodyUk: "" },
+      {
+        delayDays: prev.length === 0 ? "2" : "5",
+        subjectEn: "",
+        subjectUk: "",
+        bodyEn: "",
+        bodyUk: "",
+        ctaLabelEn: "",
+        ctaLabelUk: "",
+        ctaHref: "",
+      },
     ]);
   }
   function removeFu(i: number) {
@@ -516,6 +531,35 @@ export function LeadMagnetEditor({
                     multiline
                     tight
                   />
+                  {/* Optional CTA button — name it + give it a link. Only shows
+                      in the email when both a label and a link are filled in. */}
+                  <div className="pt-1 mt-1 border-t border-[rgba(176,92,54,0.15)]">
+                    <BiField
+                      label="Button (optional)"
+                      hint="A next step at the end — book a Circle, read more, reply."
+                      en={f.ctaLabelEn}
+                      uk={f.ctaLabelUk}
+                      setEn={(v) => setFu(i, "ctaLabelEn", v)}
+                      setUk={(v) => setFu(i, "ctaLabelUk", v)}
+                      nameEn={`fuCtaLabelEn${i + 1}`}
+                      nameUk={`fuCtaLabelUk${i + 1}`}
+                      phEn="Come to a Circle →"
+                      phUk="Завітайте до Кола →"
+                      tight
+                    />
+                    <label className="block">
+                      <span className="text-[11px] text-ink-500">
+                        Button link — where it takes them
+                      </span>
+                      <input
+                        name={`fuCtaHref${i + 1}`}
+                        value={f.ctaHref}
+                        onChange={(e) => setFu(i, "ctaHref", e.target.value)}
+                        className={inCls}
+                        placeholder="https://…  or  /#contact"
+                      />
+                    </label>
+                  </div>
                 </div>
               ))}
               {fus.length > 0 && fus.length < 2 && (

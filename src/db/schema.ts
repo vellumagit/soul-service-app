@@ -1560,6 +1560,12 @@ export type LeadMagnetFollowup = {
   subjectUk: string;
   bodyEn: string;
   bodyUk: string;
+  /** Optional call-to-action button at the end of the email. Bilingual label +
+   *  a single shared link. Blank label or blank href → no button rendered.
+   *  Optional so existing stored followups (which lack these keys) stay valid. */
+  ctaLabelEn?: string;
+  ctaLabelUk?: string;
+  ctaHref?: string;
 };
 
 export const leadMagnets = pgTable(

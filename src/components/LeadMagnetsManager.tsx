@@ -45,6 +45,9 @@ export type LeadMagnetFollowupInput = {
   subjectUk: string;
   bodyEn: string;
   bodyUk: string;
+  ctaLabelEn?: string;
+  ctaLabelUk?: string;
+  ctaHref?: string;
 };
 
 const KIND_LABEL: Record<string, string> = {

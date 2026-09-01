@@ -1392,6 +1392,9 @@ export async function sendLeadMagnetFollowupEmail(input: {
   body: string;
   practitionerName: string | null;
   replyTo?: string;
+  /** Optional call-to-action button (label + link) rendered under the body. */
+  ctaLabel?: string;
+  ctaHref?: string;
 }): Promise<void> {
   const signoff = input.practitionerName ?? "Svitlana";
   const paragraphs = input.body
@@ -1407,13 +1410,27 @@ export async function sendLeadMagnetFollowupEmail(input: {
     )
     .join("");
 
-  const text = `${input.body}\n\n— ${signoff}`;
+  // Optional CTA button — only when both a label and a link are given. Filled
+  // plum, matching the delivery email's asset button.
+  const hasCta = Boolean(input.ctaLabel && input.ctaHref);
+  const ctaHtml = hasCta
+    ? `<p style="margin:24px 0 0 0;"><a href="${escapeHtml(
+        input.ctaHref!
+      )}" style="display:inline-block;background:#6b5192;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:12px 20px;border-radius:9px;">${escapeHtml(
+        input.ctaLabel!
+      )}</a></p>`
+    : "";
+
+  const text = `${input.body}${
+    hasCta ? `\n\n${input.ctaLabel}: ${input.ctaHref}` : ""
+  }\n\n— ${signoff}`;
   const html = `
 <!doctype html>
 <html>
   <body style="margin:0;padding:0;background:#faf6f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1a1411;">
     <div style="max-width:480px;margin:40px auto;padding:32px;background:#fdf9f1;border-radius:12px;border:1px solid #ead9c1;">
       ${htmlBody}
+      ${ctaHtml}
       <p style="margin:24px 0 0 0;font-size:15px;color:#1a1411;">— ${escapeHtml(
         signoff
       )}</p>

@@ -175,6 +175,15 @@ export async function processLeadMagnetFollowups(): Promise<NurtureStats> {
       continue;
     }
 
+    // Optional CTA button: language-picked label + shared link. Only carried
+    // through when both are present (the label may use {first}/{name} too).
+    const ctaLabel = applyVars(
+      pickLang(fu.ctaLabelEn ?? "", fu.ctaLabelUk ?? "", lang),
+      sub.name
+    );
+    const ctaHref = (fu.ctaHref ?? "").trim();
+    const cta = ctaLabel && ctaHref ? { ctaLabel, ctaHref } : {};
+
     const { practitionerName, replyTo } = await acctInfo(sub.accountId);
     try {
       await sendLeadMagnetFollowupEmail({
@@ -184,6 +193,7 @@ export async function processLeadMagnetFollowups(): Promise<NurtureStats> {
         body,
         practitionerName,
         replyTo,
+        ...cta,
       });
       await markSent(sub.id, fields, already, delay);
       sent++;
