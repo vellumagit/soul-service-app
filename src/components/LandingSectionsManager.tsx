@@ -114,9 +114,15 @@ export function LandingSectionsManager({
                   >
                     {s.label}
                   </span>
-                  {!s.visible && (
-                    <span className="text-[11px] px-1.5 py-0.5 rounded bg-ink-100 text-ink-600">
-                      Hidden
+                  {s.canHide && (
+                    <span
+                      className={
+                        s.visible
+                          ? "text-[11px] px-1.5 py-0.5 rounded bg-sage-50 text-sage-700"
+                          : "text-[11px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700"
+                      }
+                    >
+                      {s.visible ? "● On the page" : "○ Hidden"}
                     </span>
                   )}
                   {!s.canMove && (
