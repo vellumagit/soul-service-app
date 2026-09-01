@@ -153,6 +153,25 @@ export const LANDING_OVERRIDE_FIELDS: LandingOverrideField[] = [
     hint: EMPHASIS_HINT,
     apply: (c, v) => ({ ...c, voices: { ...c.voices, title: v } }),
   },
+
+  // ── Free resource (the featured lead magnet) ──────────────────────────────
+  // The title, description and link come from the lead magnet itself (edited on
+  // the Lead magnets page); only the framing around it lives here.
+  {
+    key: "freebieTag",
+    section: "freebie",
+    label: "Small line above the title",
+    hint: "The title, description and button link come from the lead magnet itself — pick and edit it on the Lead magnets page.",
+    plain: (c) => c.freebie.tag,
+    apply: (c, v) => ({ ...c, freebie: { ...c.freebie, tag: v } }),
+  },
+  {
+    key: "freebieCta",
+    section: "freebie",
+    label: "Button label",
+    plain: (c) => c.freebie.cta,
+    apply: (c, v) => ({ ...c, freebie: { ...c.freebie, cta: v } }),
+  },
 ];
 
 /** The editable lines belonging to one storefront section. Sections with no

@@ -140,11 +140,16 @@ export function LeadMagnetsManager({
                         Draft
                       </span>
                     )}
-                    {featuredId === m.id && m.published && (
-                      <span className="text-[11px] px-1.5 py-0.5 rounded bg-plum-100 text-plum-700">
-                        On landing page
-                      </span>
-                    )}
+                    {featuredId === m.id &&
+                      (m.published ? (
+                        <span className="text-[11px] px-1.5 py-0.5 rounded bg-plum-100 text-plum-700">
+                          On landing page
+                        </span>
+                      ) : (
+                        <span className="text-[11px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700">
+                          Featured · publish to show it
+                        </span>
+                      ))}
                     {(!m.titleEn || !m.titleUk) && (
                       <span className="text-[11px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700">
                         {m.titleEn ? "No Ukrainian yet" : "No English yet"}
@@ -203,7 +208,9 @@ export function LeadMagnetsManager({
                         },
                         featuredId === m.id
                           ? "Removed from your landing page"
-                          : "Featured on your landing page"
+                          : m.published
+                            ? "Featured on your landing page"
+                            : "Featured — it'll appear once you publish this magnet"
                       )
                     }
                     title={
