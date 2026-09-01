@@ -489,8 +489,8 @@ export function LeadMagnetEditor({
                     border: "1px solid rgba(176,92,54,0.2)",
                   }}
                 >
-                  <div className="flex items-center justify-between gap-2 mb-2">
-                    <div className="flex items-center gap-2 text-sm font-medium text-ink-800">
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                    <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-ink-800">
                       Follow-up {i + 1}
                       <span className="text-xs text-ink-500">· send after</span>
                       <input
@@ -871,7 +871,7 @@ function BiField({
         <span className="text-[11px] font-medium text-ink-600">{label}</span>
         {hint && <span className="text-[10px] text-ink-400">{hint}</span>}
       </div>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {[
           { code: "EN", val: en, set: setEn, name: nameEn, ph: phEn },
           { code: "УКР", val: uk, set: setUk, name: nameUk, ph: phUk },

@@ -208,7 +208,11 @@ function absoluteEmailHref(href: string | null | undefined): string | null {
   const base = SITE_BASE.replace(/\/+$/, "");
   if (h.startsWith("/")) return `${base}${h}`; // "/#contact", "/circles/x"
   if (h.startsWith("#")) return `${base}/${h}`; // "#contact"
-  return `${base}/${h}`; // "circles/x"
+  // A scheme-less bare domain like "www.svit.live/x" or "example.com" — the
+  // first path segment contains a dot. Prefix https:// rather than treating it
+  // as a path under our own site (which would double the domain into a 404).
+  if (h.split(/[/?#]/)[0].includes(".")) return `https://${h}`;
+  return `${base}/${h}`; // a bare relative path like "circles/x"
 }
 
 /** True if Resend is configured. Used by EmailComposer to decide between real-send vs mailto fallback. */
