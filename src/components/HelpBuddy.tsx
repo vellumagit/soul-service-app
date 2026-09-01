@@ -196,6 +196,23 @@ export function HelpBuddy() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, open, sending]);
 
+  // Grow the composer to fit its content (up to the CSS max-height, after which
+  // it scrolls). Keyed on `input` so it fires for typing AND for a message
+  // seeded by "Ask Lumi" — otherwise a long seeded prompt sits clipped behind a
+  // scrollbar. Reset to `auto` first so it can also shrink back after sending.
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    // Add the border height (offsetHeight − clientHeight): the textarea is
+    // border-box, so scrollHeight excludes the 1px top/bottom border and
+    // `height = scrollHeight` alone would leave a 2px hairline scrollbar. With
+    // it, short and seeded messages show fully with no scrollbar; only a
+    // genuinely long one hits max-height and then scrolls.
+    const borderY = el.offsetHeight - el.clientHeight;
+    el.style.height = `${el.scrollHeight + borderY}px`;
+  }, [input, open]);
+
   // Focus the input when the panel opens. Also stamp the "last opened" time
   // so the idle pulse goes quiet for a while.
   useEffect(() => {
@@ -477,7 +494,7 @@ export function HelpBuddy() {
               rows={1}
               placeholder="Ask anything about the app…"
               disabled={sending}
-              className="flex-1 resize-none text-sm leading-relaxed bg-ink-50 border border-ink-200 rounded-md px-3 py-2 focus:outline-none focus:border-plum-500 focus:bg-white disabled:opacity-60 max-h-32"
+              className="flex-1 resize-none text-sm leading-relaxed bg-ink-50 border border-ink-200 rounded-md px-3 py-2 focus:outline-none focus:border-plum-500 focus:bg-white disabled:opacity-60 max-h-40"
             />
             <button
               type="button"

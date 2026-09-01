@@ -37,11 +37,13 @@ const inCls =
   "w-full px-2.5 py-1.5 text-sm border border-ink-200 rounded-md bg-white text-ink-900 placeholder:text-ink-300 focus:outline-none focus:border-plum-400";
 
 // Seeds for the "Ask Lumi" buttons — open her already pointed at the task so
-// the practitioner lands in a useful conversation, not a blank one.
+// the practitioner lands in a useful conversation, not a blank one. Kept short
+// so they read as a clean starter question and fit the chat box without a wall
+// of text (she can add detail before sending).
 const LUMI_SEED_GENERAL =
-  "I'm creating a lead magnet in Soul Service — a free resource I give away in exchange for someone's email. Can you suggest a couple of ideas for what to offer, and help me write the title and the short description?";
+  "Help me make a lead magnet — ideas for what to give away, plus a title and short description.";
 const LUMI_SEED_FOLLOWUP =
-  "Help me write a warm, short follow-up email to send a couple of days after someone downloads my free resource. Keep it in my voice.";
+  "Help me write a warm, short follow-up email for people who downloaded my free resource.";
 
 function pick(en: string, uk: string, lang: "en" | "uk") {
   const primary = (lang === "uk" ? uk : en).trim();
