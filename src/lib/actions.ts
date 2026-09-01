@@ -1070,7 +1070,12 @@ export async function acceptLeadSubmission(
             ? `${existing.privateNotes}\n\n---\n\n${privateNotes}`
             : privateNotes;
         }
-        if (lane === "client") update.isLead = false;
+        if (lane === "client") {
+          // Promote a network contact into an actual client, and land them on
+          // the "Active" tab (not "New") to match a brand-new client-lane accept.
+          update.isLead = false;
+          update.status = "active";
+        }
         if (Object.keys(update).length > 0) {
           await db
             .update(clients)

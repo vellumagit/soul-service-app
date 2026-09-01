@@ -190,6 +190,27 @@ function escapeHtml(s: string): string {
     .replace(/'/g, "&#039;");
 }
 
+// The public storefront origin, for turning a site-relative CTA link into an
+// absolute one. Same resolution order the rest of the app uses.
+const SITE_BASE =
+  process.env.NEXT_PUBLIC_SITE_URL ||
+  process.env.APP_URL ||
+  "https://www.svit.live";
+
+/** Make a CTA href safe for an EMAIL. Links in a mail client have no base to
+ *  resolve against, so a site-relative path like "/#contact" or "/circles/x"
+ *  is dead — we resolve those against the storefront origin. Absolute http(s)
+ *  / mailto / tel links pass through untouched. Empty → null (no button). */
+function absoluteEmailHref(href: string | null | undefined): string | null {
+  const h = (href ?? "").trim();
+  if (!h) return null;
+  if (/^(https?:\/\/|mailto:|tel:)/i.test(h)) return h;
+  const base = SITE_BASE.replace(/\/+$/, "");
+  if (h.startsWith("/")) return `${base}${h}`; // "/#contact", "/circles/x"
+  if (h.startsWith("#")) return `${base}/${h}`; // "#contact"
+  return `${base}/${h}`; // "circles/x"
+}
+
 /** True if Resend is configured. Used by EmailComposer to decide between real-send vs mailto fallback. */
 export function isResendConfigured(): boolean {
   return Boolean(process.env.RESEND_API_KEY);
@@ -1298,6 +1319,7 @@ export async function sendLeadMagnetDeliveryEmail(input: {
   const first = input.name?.split(" ")[0]?.trim() || null;
   const uk = input.lang === "uk";
   const signoff = input.practitionerName ?? "Svitlana";
+  const ctaHref = absoluteEmailHref(input.ctaHref);
 
   const greeting = uk
     ? first
@@ -1323,7 +1345,7 @@ export async function sendLeadMagnetDeliveryEmail(input: {
 ${intro}
 
 ${input.assetLabel}: ${input.assetUrl}
-${input.ctaLabel && input.ctaHref ? `\n${input.ctaLabel}: ${input.ctaHref}\n` : ""}
+${input.ctaLabel && ctaHref ? `\n${input.ctaLabel}: ${ctaHref}\n` : ""}
 ${closing}
 
 — ${signoff}`;
@@ -1345,11 +1367,11 @@ ${closing}
     input.assetUrl
   )}</span></p>
       ${
-        input.ctaLabel && input.ctaHref
+        input.ctaLabel && ctaHref
           ? `<hr style="border:none;border-top:1px solid #ead9c1;margin:28px 0;"><p style="margin:0 0 12px 0;font-size:14px;color:#3d342e;">${escapeHtml(
               nextIntro
             )}</p><a href="${escapeHtml(
-              input.ctaHref
+              ctaHref
             )}" style="display:inline-block;background:#ffffff;border:1px solid #c9a24b;color:#8a6d24;text-decoration:none;font-size:14px;font-weight:600;padding:11px 18px;border-radius:9px;">${escapeHtml(
               input.ctaLabel
             )}</a>`
@@ -1410,19 +1432,21 @@ export async function sendLeadMagnetFollowupEmail(input: {
     )
     .join("");
 
-  // Optional CTA button — only when both a label and a link are given. Filled
-  // plum, matching the delivery email's asset button.
-  const hasCta = Boolean(input.ctaLabel && input.ctaHref);
+  // Optional CTA button — only when both a label and a (resolved) link are
+  // given. A site-relative link is made absolute so it works in a mail client.
+  // Filled plum, matching the delivery email's asset button.
+  const ctaHref = absoluteEmailHref(input.ctaHref);
+  const hasCta = Boolean(input.ctaLabel && ctaHref);
   const ctaHtml = hasCta
     ? `<p style="margin:24px 0 0 0;"><a href="${escapeHtml(
-        input.ctaHref!
+        ctaHref!
       )}" style="display:inline-block;background:#6b5192;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:12px 20px;border-radius:9px;">${escapeHtml(
         input.ctaLabel!
       )}</a></p>`
     : "";
 
   const text = `${input.body}${
-    hasCta ? `\n\n${input.ctaLabel}: ${input.ctaHref}` : ""
+    hasCta ? `\n\n${input.ctaLabel}: ${ctaHref}` : ""
   }\n\n— ${signoff}`;
   const html = `
 <!doctype html>

@@ -276,6 +276,10 @@ export function LeadMagnetEditor({
                   type="button"
                   title={o.hint}
                   onClick={() => {
+                    // Re-clicking the already-selected kind must be a no-op —
+                    // otherwise it would overwrite a freshly-uploaded replacement
+                    // asset back to the original (silent wrong-file save on edit).
+                    if (o.k === kind) return;
                     setKind(o.k);
                     if (magnet && o.k === magnet.assetKind) {
                       setAssetUrl(magnet.assetKind !== "video_link" ? magnet.assetUrl ?? "" : "");
