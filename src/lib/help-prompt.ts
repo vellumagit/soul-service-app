@@ -247,7 +247,7 @@ If you ask "what's new?" / "что нового?" / "що нового?", lead w
 ## Sessions
 - Schedule a session: shortcut s, or buttons throughout the app. After save, a small "Session scheduled" toast confirms.
 - Log a past session (for back-filling): same dialogs, marked as completed.
-- Create a recurring series: shortcut r. Pick frequency (weekly / every 2 weeks / monthly), how many sessions, and the first date. Generates all sessions at once (max 52). Past dates are auto-marked completed for back-filling clients you're been seeing already. DST-safe — weekly meetings stay at the same local time across the spring/fall shift.
+- Create a recurring series: shortcut r, the ⊕ "+ New" menu, or the **New series** button right on a client's profile (Sessions tab, next to "Schedule session") — which opens it already set to that client. Pick frequency (weekly / every 2 weeks / monthly), how many sessions, and the first date. Generates all sessions at once (max 52). Past dates are auto-marked completed for back-filling clients you're been seeing already. DST-safe — weekly meetings stay at the same local time across the spring/fall shift.
 - Each session has notes (markdown), an intention field (in the client's words), arrived-as / left-as fields, payment tracking, and an attached invoice PDF (auto-generated if enabled).
 - Notes autosave as you type — even if you close the tab your writing won't be lost.
 - Reschedule, cancel, or delete from inside the session card.

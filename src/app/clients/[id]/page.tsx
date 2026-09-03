@@ -18,6 +18,7 @@ import { QuickActions } from "@/components/QuickActions";
 import { TasksBlock } from "@/components/TasksBlock";
 import { ActivityTimeline } from "@/components/ActivityTimeline";
 import { ScheduleSessionDialog } from "@/components/ScheduleSessionDialog";
+import { ScheduleSeriesDialog } from "@/components/ScheduleSeriesDialog";
 import { LogPastSessionDialog } from "@/components/LogPastSessionDialog";
 import { MarkdownRender } from "@/components/NotesEditor";
 import { WalkInCard } from "@/components/WalkInCard";
@@ -437,6 +438,12 @@ export default async function ClientProfilePage({
               defaultClientId={client.id}
               defaultType={client.primarySessionType}
               sabbathDays={(settings.sabbathDays ?? []) as string[]}
+            />
+            <ScheduleSeriesDialog
+              clients={allClients}
+              defaultClientId={client.id}
+              defaultType={client.primarySessionType}
+              respondToShortcut={false}
             />
             <LogPastSessionDialog
               clients={allClients}
