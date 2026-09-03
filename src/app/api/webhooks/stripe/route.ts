@@ -72,7 +72,11 @@ async function handleSessionPayment(
   if (!row) {
     return NextResponse.json({ ok: true, ignored: "unknown session" });
   }
-  if (eventAccount && eventAccount !== row.stripeAccountId) {
+  // Payments are DIRECT charges on the connected account, so a real
+  // checkout.session.completed always fires on that account (event.account set
+  // and equal to the stored id). Reject a missing OR mismatched account — a
+  // null event.account here means it isn't the trusted connected-account event.
+  if (!eventAccount || eventAccount !== row.stripeAccountId) {
     console.error(
       `[stripe webhook] account mismatch for session ${sessionId}: event on ${eventAccount}, expected ${row.stripeAccountId}`
     );
@@ -208,7 +212,10 @@ export async function POST(req: Request): Promise<Response> {
       if (!att) {
         return NextResponse.json({ ok: true, ignored: "unknown attendee" });
       }
-      if (event.account && event.account !== att.stripeAccountId) {
+      // Direct charge on the connected account → event.account is always set and
+      // equal to the stored id for a real seat payment. Reject missing OR
+      // mismatched (a null account here isn't the trusted connected-account event).
+      if (!event.account || event.account !== att.stripeAccountId) {
         console.error(
           `[stripe webhook] account mismatch for attendee ${attendeeId}: event on ${event.account}, expected ${att.stripeAccountId}`
         );
