@@ -13,9 +13,18 @@ export default async function SignInPage({
   const { from, error } = await searchParams;
 
   // If already signed in, bounce to wherever they were headed (or home).
+  // `from` must be a LOCAL path: a single leading "/" only. "//evil.com" and
+  // "/\evil.com" also start with "/" but resolve to an external origin in the
+  // browser (protocol-relative / backslash), so reject those — otherwise a
+  // crafted /signin?from=//evil.com link open-redirects a signed-in user.
   const existing = await getSessionEmail();
   if (existing) {
-    redirect(from && from.startsWith("/") ? from : "/today");
+    const local =
+      !!from &&
+      from.startsWith("/") &&
+      !from.startsWith("//") &&
+      !from.startsWith("/\\");
+    redirect(local ? from! : "/today");
   }
 
   // No account context yet, so the sign-in page is always in the default
