@@ -2127,7 +2127,12 @@ export async function scheduleSessionSeries(
       );
     for (const s of future) {
       try {
-        const sync = await syncSessionToGoogle(s.id);
+        // notify:false — the client (and practitioner) must NOT get a Google
+        // invite email per occurrence. Booking a year of weekly sessions would
+        // otherwise fire ~52 emails at once. The events + Meet links are still
+        // created and the client is still added as a guest; the app sends ONE
+        // series confirmation below.
+        const sync = await syncSessionToGoogle(s.id, { notify: false });
         if (sync.ok === false) {
           console.error(
             `[scheduleSessionSeries] Google sync failed for ${s.id}: ${sync.error}`
@@ -3601,7 +3606,8 @@ export async function syncAllUnsyncedToGoogleAction(): Promise<SyncAllResult> {
 // Currently disabled in UI ("coming soon") but the code still runs if creds
 // happen to be configured — it's a no-op when they aren't.
 async function syncSessionToGoogle(
-  sessionId: string
+  sessionId: string,
+  opts?: { notify?: boolean }
 ): Promise<{ ok: true; meetUrl?: string | null } | { ok: false; error: string }> {
   try {
     const sessionRows = await db
@@ -3644,6 +3650,10 @@ async function syncSessionToGoogle(
       timeZone: resolveTimeZone(session.timezone, settings?.timezone),
       attendeeEmail: client.email,
       practitionerEmail: settings?.googleCalendarEmail ?? null,
+      // Default to notifying (single bookings/reschedules email the client as
+      // before); a bulk caller like a series passes notify:false to avoid a
+      // flood of per-occurrence Google invite emails.
+      notify: opts?.notify ?? true,
     };
 
     const {

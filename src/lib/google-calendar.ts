@@ -391,6 +391,12 @@ export type CalendarEventInput = {
    *  and skips the admit wall. */
   attendeeEmails?: string[] | null;
   practitionerEmail?: string | null; // for the description/owner
+  /** When false, create/patch the event WITHOUT sending Google's invite/update
+   *  emails (sendUpdates: "none"), even though there are guests. Used for bulk
+   *  operations like a recurring series, where emailing an invite per occurrence
+   *  would spam the client (and practitioner) with dozens of messages at once —
+   *  the app sends a single series confirmation instead. Defaults to notifying. */
+  notify?: boolean;
 };
 
 /** Normalise the two attendee shapes into one list for the Google payload. */
@@ -439,7 +445,7 @@ export async function createCalendarEvent(
 
   const res = await calendar.events.insert({
     calendarId: "primary",
-    sendUpdates: guests ? "all" : "none",
+    sendUpdates: input.notify === false ? "none" : guests ? "all" : "none",
     conferenceDataVersion: 1, // required for Meet auto-creation
     requestBody: {
       summary: input.summary,
@@ -499,7 +505,7 @@ export async function updateCalendarEvent(
     const res = await calendar.events.patch({
       calendarId: "primary",
       eventId,
-      sendUpdates: guests ? "all" : "none",
+      sendUpdates: input.notify === false ? "none" : guests ? "all" : "none",
       requestBody: {
         summary: input.summary,
         description: input.description,
