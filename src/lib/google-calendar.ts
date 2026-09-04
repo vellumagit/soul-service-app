@@ -172,7 +172,11 @@ async function cleanupAccountCalendarEvents(accountId: string): Promise<void> {
     );
   await deleteCalendarEventsForSessions(
     accountId,
-    future.map((r) => ({ id: r.id, googleEventId: r.googleEventId! }))
+    future.map((r) => ({ id: r.id, googleEventId: r.googleEventId! })),
+    // Disconnecting Google is not a cancellation — the sessions still exist in
+    // the app. Remove the calendar events quietly; don't email every client a
+    // "cancelled" notice.
+    { notify: false }
   );
 }
 
@@ -186,7 +190,8 @@ async function cleanupAccountCalendarEvents(accountId: string): Promise<void> {
  *  (e.g. nuking a whole series). */
 export async function deleteCalendarEventsForSessions(
   accountId: string,
-  rows: { id: string; googleEventId: string }[]
+  rows: { id: string; googleEventId: string }[],
+  opts?: { notify?: boolean }
 ): Promise<{ cleared: string[]; failed: string[] }> {
   const cleared: string[] = [];
   const failed: string[] = [];
@@ -205,7 +210,9 @@ export async function deleteCalendarEventsForSessions(
       await calendar.events.delete({
         calendarId: "primary",
         eventId: row.googleEventId,
-        sendUpdates: "all",
+        // Bulk deletes (a whole series, or a disconnect cleanup) pass
+        // notify:false so clients don't get a cancellation email per event.
+        sendUpdates: opts?.notify === false ? "none" : "all",
       });
       cleared.push(row.id);
     } catch (err) {

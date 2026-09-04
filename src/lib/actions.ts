@@ -2228,7 +2228,12 @@ export async function cancelSessionSeries(
       const { deleteCalendarEventsForSessions } = await import(
         "./google-calendar"
       );
-      await deleteCalendarEventsForSessions(accountId, withGoogleEvent);
+      // notify:false — one series-cancellation email is sent below; don't let
+      // Google fire a separate cancellation email for each of the (up to 52)
+      // deleted occurrences.
+      await deleteCalendarEventsForSessions(accountId, withGoogleEvent, {
+        notify: false,
+      });
     } catch (e) {
       console.warn(
         "[cancelSessionSeries] Google cleanup failed (continuing with DB delete):",
