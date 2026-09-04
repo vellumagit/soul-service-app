@@ -109,7 +109,7 @@ export async function createGroup(formData: FormData): Promise<void> {
   const capacity = clampInt(formData.get("defaultCapacity"), 2, 500, 20);
   const duration = clampInt(
     formData.get("defaultDurationMinutes"),
-    15,
+    5,
     480,
     120
   );
@@ -161,7 +161,7 @@ export async function updateGroup(
   const capacity = clampInt(formData.get("defaultCapacity"), 2, 500, 20);
   const duration = clampInt(
     formData.get("defaultDurationMinutes"),
-    15,
+    5,
     480,
     120
   );
@@ -300,7 +300,7 @@ export async function scheduleGroupSession(
 
   const duration = clampInt(
     formData.get("durationMinutes"),
-    15,
+    5,
     480,
     group.defaultDurationMinutes
   );

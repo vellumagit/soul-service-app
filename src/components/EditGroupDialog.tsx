@@ -155,9 +155,9 @@ export function EditGroupDialog({
                 type="number"
                 name="defaultDurationMinutes"
                 defaultValue={group.defaultDurationMinutes}
-                min={15}
+                min={5}
                 max={480}
-                step={15}
+                step={5}
                 className="mt-1.5 w-full px-2.5 py-1.5 text-sm border border-ink-200 rounded-md bg-white"
               />
             </label>

@@ -278,9 +278,9 @@ export function ScheduleSeriesDialog({
                   name="durationMinutes"
                   type="number"
                   defaultValue={60}
-                  min={15}
+                  min={5}
                   max={180}
-                  step={15}
+                  step={5}
                   className={inputCls}
                 />
               </Field>

@@ -298,9 +298,9 @@ export function ScheduleSessionDialog({
                   name="durationMinutes"
                   type="number"
                   defaultValue={60}
-                  min={15}
+                  min={5}
                   max={180}
-                  step={15}
+                  step={5}
                   className={`${inputCls} w-24`}
                 />
               </Field>

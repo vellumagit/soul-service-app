@@ -153,9 +153,9 @@ export function AvailabilityPanel({
               type="number"
               name="defaultSessionMinutes"
               defaultValue={initialDefaultSessionMinutes}
-              min={15}
+              min={5}
               max={480}
-              step={15}
+              step={5}
               className="w-24 px-2.5 py-1.5 text-sm border border-ink-200 rounded-md bg-white"
             />
             <span className="text-[12px] text-ink-500 italic">minutes</span>
