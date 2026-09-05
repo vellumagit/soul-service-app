@@ -224,6 +224,14 @@ export const sessions = pgTable(
 
     meetUrl: text("meet_url"),
     googleEventId: text("google_event_id"),
+    // When set, this session is a live OCCURRENCE of a Google *recurring* event
+    // (one calendar event for the whole series, instead of one event per
+    // session — which spammed a "new event" notification per occurrence). While
+    // this is set, `googleEventId` stays NULL and the standard per-session
+    // Google sync is skipped; the occurrence is addressed as an instance of
+    // this recurring event (reschedule/cancel one), and cancelling the whole
+    // series deletes this event once. Null = a standalone session.
+    googleRecurringEventId: text("google_recurring_event_id"),
 
     // "online" (default — a Google Meet / Zoom link, remote notetaker bot) or
     // "in_person". In-person sessions skip Meet generation + the Recall bot;

@@ -2125,25 +2125,47 @@ export async function scheduleSessionSeries(
         (a, b) =>
           new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime()
       );
-    for (const s of future) {
+    // ONE recurring Google event for the whole series — NOT one event per
+    // occurrence. Creating 52 separate events fired a "new event added to your
+    // calendar" email per occurrence (dozens at once). A single recurring event
+    // is one calendar entry, one notification. Built from the first future
+    // occurrence with an RRULE; every future session shares its Meet link and is
+    // linked by googleRecurringEventId so reschedule/cancel-one can address its
+    // own instance. Best-effort: a Google hiccup never undoes the saved series.
+    if (future.length > 0) {
       try {
-        // notify:false — the client (and practitioner) must NOT get a Google
-        // invite email per occurrence. Booking a year of weekly sessions would
-        // otherwise fire ~52 emails at once. The events + Meet links are still
-        // created and the client is still added as a guest; the app sends ONE
-        // series confirmation below.
-        const sync = await syncSessionToGoogle(s.id, { notify: false });
-        if (sync.ok === false) {
-          console.error(
-            `[scheduleSessionSeries] Google sync failed for ${s.id}: ${sync.error}`
-          );
+        const { rruleForSeries } = await import("./google-calendar");
+        const recurring = await syncSeriesToGoogle(
+          future[0].id,
+          rruleForSeries(frequency, future.length)
+        );
+        if (recurring) {
+          await db
+            .update(sessions)
+            .set({
+              googleRecurringEventId: recurring.recurringEventId,
+              meetUrl: recurring.meetUrl,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(sessions.accountId, accountId),
+                eq(sessions.seriesId, seriesRow.id),
+                eq(sessions.status, "scheduled")
+              )
+            );
         }
       } catch (err) {
-        console.error("[scheduleSessionSeries] Google sync threw:", err);
+        console.error(
+          "[scheduleSessionSeries] recurring Google event failed:",
+          err
+        );
       }
-      // Online series sessions default to a Meet link from the sync above, so
-      // the bot can attach. In-person series aren't offered by the dialog.
-      await maybeAutoAddRecallBot(accountId, s.id);
+      // A notetaker bot per future occurrence — each joins the shared Meet at
+      // its own session time. Best-effort. (No Meet → no bot, same as before.)
+      for (const s of future) {
+        await maybeAutoAddRecallBot(accountId, s.id);
+      }
     }
 
     // ONE confirmation for the whole series — the client would otherwise get an
@@ -2207,7 +2229,11 @@ export async function cancelSessionSeries(
   // 10-session series cancellation would silently leave 9 events on her
   // Google Calendar with nothing pointing at them from our app.
   const futureRows = await db
-    .select({ id: sessions.id, googleEventId: sessions.googleEventId })
+    .select({
+      id: sessions.id,
+      googleEventId: sessions.googleEventId,
+      googleRecurringEventId: sessions.googleRecurringEventId,
+    })
     .from(sessions)
     .where(
       and(
@@ -2219,19 +2245,27 @@ export async function cancelSessionSeries(
     );
 
   // Best-effort clean up on Google. Don't block on failures — the DB delete
-  // below is the source of truth for our app, and a later resync (or the
-  // self-heal in syncSessionToGoogle) can clean up stragglers.
-  const withGoogleEvent = futureRows
-    .filter((r): r is { id: string; googleEventId: string } => !!r.googleEventId);
-  if (withGoogleEvent.length > 0) {
+  // below is the source of truth. Deleting the ONE recurring event removes every
+  // remaining occurrence at once; any occurrences that were individually
+  // rescheduled into their own standalone events are deleted alongside it.
+  // Deduped so the shared recurring id is deleted a single time.
+  const toDelete: { id: string; googleEventId: string }[] = [];
+  const seenEventIds = new Set<string>();
+  for (const r of futureRows) {
+    const gid = r.googleRecurringEventId ?? r.googleEventId;
+    if (gid && !seenEventIds.has(gid)) {
+      seenEventIds.add(gid);
+      toDelete.push({ id: r.id, googleEventId: gid });
+    }
+  }
+  if (toDelete.length > 0) {
     try {
       const { deleteCalendarEventsForSessions } = await import(
         "./google-calendar"
       );
       // notify:false — one series-cancellation email is sent below; don't let
-      // Google fire a separate cancellation email for each of the (up to 52)
-      // deleted occurrences.
-      await deleteCalendarEventsForSessions(accountId, withGoogleEvent, {
+      // Google fire its own cancellation notices on top.
+      await deleteCalendarEventsForSessions(accountId, toDelete, {
         notify: false,
       });
     } catch (e) {
@@ -2423,7 +2457,11 @@ export async function rescheduleSession(formData: FormData) {
   // it's scheduled for the OLD time and Recall doesn't let us mutate
   // join_at once a bot exists. We re-schedule a fresh one below.
   const [pre] = await db
-    .select({ botId: sessions.recallBotId })
+    .select({
+      botId: sessions.recallBotId,
+      googleRecurringEventId: sessions.googleRecurringEventId,
+      scheduledAt: sessions.scheduledAt,
+    })
     .from(sessions)
     .where(and(eq(sessions.accountId, accountId), eq(sessions.id, id)))
     .limit(1);
@@ -2457,14 +2495,38 @@ export async function rescheduleSession(formData: FormData) {
     recallBotStatus: null,
   };
   if (durationMinutes !== null) updates.durationMinutes = durationMinutes;
+  // Moving ONE occurrence of a recurring series DETACHES it: it becomes its own
+  // standalone Google event at the new time, so the rest of the series is
+  // untouched. Drop the recurring link now; the standalone is created by the
+  // sync below (googleEventId + googleRecurringEventId both null → it creates
+  // a fresh event and emails the client the one moved invite).
+  if (pre?.googleRecurringEventId) updates.googleRecurringEventId = null;
 
   await db
     .update(sessions)
     .set(updates)
     .where(and(eq(sessions.accountId, accountId), eq(sessions.id, id)));
 
+  // If this was a live series occurrence, cancel THAT occurrence on the shared
+  // recurring event (silently — the standalone below carries the notice), so it
+  // doesn't linger at the old time. Best-effort; the DB is the source of truth.
+  if (pre?.googleRecurringEventId) {
+    try {
+      const { cancelRecurringInstance } = await import("./google-calendar");
+      await cancelRecurringInstance(
+        accountId,
+        pre.googleRecurringEventId,
+        pre.scheduledAt.getTime(),
+        { notify: false }
+      );
+    } catch (err) {
+      console.error("[rescheduleSession] detach from series failed:", err);
+    }
+  }
+
   // Push to Google. If event exists, this updates it (sends "rescheduled"
-  // notification to the client). If it doesn't exist yet, this creates one.
+  // notification to the client). If it doesn't exist yet (including a just-
+  // detached series occurrence), this creates a standalone event.
   await syncSessionToGoogle(id);
 
   // Schedule a fresh bot for the new time (Meet URL stays the same).
@@ -2520,6 +2582,8 @@ export async function cancelSession(sessionId: string, clientId: string) {
   const existingRows = await db
     .select({
       googleEventId: sessions.googleEventId,
+      googleRecurringEventId: sessions.googleRecurringEventId,
+      scheduledAt: sessions.scheduledAt,
       recallBotId: sessions.recallBotId,
     })
     .from(sessions)
@@ -2547,15 +2611,41 @@ export async function cancelSession(sessionId: string, clientId: string) {
     })
     .where(and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId)));
 
-  // Pull from Google Calendar so the client gets a "cancelled" notification
-  await deleteSessionFromGoogle(accountId, existingRows[0]?.googleEventId ?? null);
-  if (existingRows[0]?.googleEventId) {
+  // Remove it from Google. A live series occurrence is an instance of the ONE
+  // recurring event — cancel just THAT occurrence (silently; the app emails its
+  // own cancellation below), leaving the rest of the series intact. A standalone
+  // session deletes its own event as before.
+  if (existingRows[0]?.googleRecurringEventId) {
+    try {
+      const { cancelRecurringInstance } = await import("./google-calendar");
+      await cancelRecurringInstance(
+        accountId,
+        existingRows[0].googleRecurringEventId,
+        existingRows[0].scheduledAt.getTime(),
+        { notify: false }
+      );
+    } catch (err) {
+      console.error("[cancelSession] cancel series occurrence failed:", err);
+    }
     await db
       .update(sessions)
-      .set({ googleEventId: null })
+      .set({ googleRecurringEventId: null })
       .where(
         and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId))
       );
+  } else {
+    await deleteSessionFromGoogle(
+      accountId,
+      existingRows[0]?.googleEventId ?? null
+    );
+    if (existingRows[0]?.googleEventId) {
+      await db
+        .update(sessions)
+        .set({ googleEventId: null })
+        .where(
+          and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId))
+        );
+    }
   }
 
   // Cancelling also settles any open "can we move this?" ask.
@@ -3610,6 +3700,64 @@ export async function syncAllUnsyncedToGoogleAction(): Promise<SyncAllResult> {
 // Never throws; any Google failure is logged + returned as an error string.
 // Currently disabled in UI ("coming soon") but the code still runs if creds
 // happen to be configured — it's a no-op when they aren't.
+/** Create ONE recurring Google event for a whole series, built from its first
+ *  future session (loads client + settings like syncSessionToGoogle). Returns
+ *  the recurring event id + the shared Meet link, or null (not connected / no
+ *  usable data — the series then stays app-only). Never throws. */
+async function syncSeriesToGoogle(
+  firstSessionId: string,
+  recurrence: string
+): Promise<{ recurringEventId: string; meetUrl: string | null } | null> {
+  try {
+    const [session] = await db
+      .select()
+      .from(sessions)
+      .where(eq(sessions.id, firstSessionId))
+      .limit(1);
+    if (!session) return null;
+    const [client] = await db
+      .select()
+      .from(clients)
+      .where(eq(clients.id, session.clientId))
+      .limit(1);
+    if (!client) return null;
+    const [settings] = await db
+      .select()
+      .from(practitionerSettings)
+      .where(eq(practitionerSettings.accountId, session.accountId))
+      .limit(1);
+
+    const { createRecurringCalendarEvent } = await import("./google-calendar");
+    const result = await createRecurringCalendarEvent(
+      session.accountId,
+      {
+        summary: `${session.type} · ${client.fullName}`,
+        description: [
+          session.intention ? `Intention: "${session.intention}"` : null,
+          client.workingOn ? `Working on: ${client.workingOn}` : null,
+          "—",
+          "Recurring series created by Soul Service",
+        ]
+          .filter(Boolean)
+          .join("\n"),
+        startAt: session.scheduledAt,
+        durationMinutes: session.durationMinutes,
+        timeZone: resolveTimeZone(session.timezone, settings?.timezone),
+        attendeeEmail: client.email,
+        practitionerEmail: settings?.googleCalendarEmail ?? null,
+        // One invite email to the client for the whole series, not per session.
+        notify: true,
+      },
+      recurrence
+    );
+    if (!result) return null;
+    return { recurringEventId: result.eventId, meetUrl: result.meetUrl };
+  } catch (err) {
+    console.error("[syncSeriesToGoogle] failed:", err);
+    return null;
+  }
+}
+
 async function syncSessionToGoogle(
   sessionId: string,
   opts?: { notify?: boolean }
@@ -3622,6 +3770,16 @@ async function syncSessionToGoogle(
       .limit(1);
     const session = sessionRows[0];
     if (!session) return { ok: false, error: "Session not found" };
+
+    // A live recurring-series occurrence is managed as an instance of its ONE
+    // recurring event, never as a standalone. Standard sync (create/update)
+    // would spawn a duplicate standalone event and its own "new event" email —
+    // or, worse, patch the whole recurring event. Skip: the series/reschedule/
+    // cancel paths handle these. (A session drops this link the moment it's
+    // individually rescheduled, after which standard sync applies again.)
+    if (session.googleRecurringEventId) {
+      return { ok: true, meetUrl: session.meetUrl };
+    }
 
     const clientRows = await db
       .select()

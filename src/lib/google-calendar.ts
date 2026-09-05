@@ -571,6 +571,127 @@ export async function deleteCalendarEvent(
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Recurring events — ONE Google event for a whole session series, instead of
+// one event per occurrence. This is what keeps booking a series from firing a
+// "new event added to your calendar" email per session (dozens at once).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** RRULE for a series. count = number of occurrences (the series is capped). */
+export function rruleForSeries(
+  frequency: "weekly" | "biweekly" | "monthly",
+  count: number
+): string {
+  const n = Math.max(1, Math.min(Math.floor(count), 520));
+  if (frequency === "monthly") return `RRULE:FREQ=MONTHLY;COUNT=${n}`;
+  if (frequency === "biweekly") return `RRULE:FREQ=WEEKLY;INTERVAL=2;COUNT=${n}`;
+  return `RRULE:FREQ=WEEKLY;COUNT=${n}`;
+}
+
+/** Create ONE recurring event covering the whole series. Same shape as
+ *  createCalendarEvent but with a recurrence rule and popup-only reminders (an
+ *  email reminder per occurrence would trickle out dozens of emails over a long
+ *  series; the app has its own reminder system). One shared Meet link is used
+ *  by every occurrence. Returns null when Google isn't connected. */
+export async function createRecurringCalendarEvent(
+  accountId: string,
+  input: CalendarEventInput,
+  recurrence: string
+): Promise<CalendarEventResult | null> {
+  const auth = await getAuthedClient(accountId);
+  if (!auth) return null;
+
+  const calendar = google.calendar({ version: "v3", auth });
+  const end = new Date(input.startAt.getTime() + input.durationMinutes * 60000);
+  const requestId = `soul-service-series-${Date.now()}-${Math.random()
+    .toString(36)
+    .slice(2)}`;
+  const guests = attendeeList(input);
+
+  const res = await calendar.events.insert({
+    calendarId: "primary",
+    sendUpdates: input.notify === false ? "none" : guests ? "all" : "none",
+    conferenceDataVersion: 1,
+    requestBody: {
+      summary: input.summary,
+      description: input.description,
+      start: {
+        dateTime: input.startAt.toISOString(),
+        timeZone: input.timeZone ?? undefined,
+      },
+      end: {
+        dateTime: end.toISOString(),
+        timeZone: input.timeZone ?? undefined,
+      },
+      recurrence: [recurrence],
+      attendees: guests,
+      conferenceData: {
+        createRequest: {
+          requestId,
+          conferenceSolutionKey: { type: "hangoutsMeet" },
+        },
+      },
+      reminders: {
+        useDefault: false,
+        overrides: [{ method: "popup", minutes: 30 }],
+      },
+    },
+  });
+
+  const meetUrl =
+    res.data.conferenceData?.entryPoints?.find(
+      (e) => e.entryPointType === "video"
+    )?.uri ?? res.data.hangoutLink ?? null;
+
+  return {
+    eventId: res.data.id!,
+    meetUrl,
+    htmlLink: res.data.htmlLink ?? null,
+  };
+}
+
+/** Cancel ONE occurrence of a recurring event, addressed by its start instant.
+ *  Only ever called for an UN-MOVED occurrence (a session drops its
+ *  recurring-event link the moment it's individually rescheduled), so the
+ *  occurrence still sits at `startMs` and a tight time window finds it exactly.
+ *  Best-effort: returns true when done or already gone, false when not found /
+ *  not connected. */
+export async function cancelRecurringInstance(
+  accountId: string,
+  recurringEventId: string,
+  startMs: number,
+  opts?: { notify?: boolean }
+): Promise<boolean> {
+  const auth = await getAuthedClient(accountId);
+  if (!auth) return false;
+
+  const calendar = google.calendar({ version: "v3", auth });
+  try {
+    const list = await calendar.events.instances({
+      calendarId: "primary",
+      eventId: recurringEventId,
+      timeMin: new Date(startMs - 60_000).toISOString(),
+      timeMax: new Date(startMs + 60_000).toISOString(),
+      maxResults: 5,
+    });
+    const inst = (list.data.items ?? []).find((e) => {
+      const s = e.start?.dateTime ?? e.start?.date;
+      return s ? Math.abs(new Date(s).getTime() - startMs) < 90_000 : false;
+    });
+    if (!inst?.id) return false;
+    await calendar.events.patch({
+      calendarId: "primary",
+      eventId: inst.id,
+      sendUpdates: opts?.notify === false ? "none" : "all",
+      requestBody: { status: "cancelled" },
+    });
+    return true;
+  } catch (err) {
+    if (isNotFoundError(err)) return true;
+    throw err;
+  }
+}
+
 function isNotFoundError(err: unknown): boolean {
   if (typeof err !== "object" || err === null) return false;
   const e = err as { code?: number; status?: number };
