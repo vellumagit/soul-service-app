@@ -55,15 +55,22 @@ export function RecallBotChip({
     );
   }
 
-  // 2. A bot is attached — show its live status + offer cancel.
-  if (status) {
+  // 2. A bot is attached (or queued for the cron to send ~40 min before the
+  // session) — show its status + offer cancel. "cancelled" means she called
+  // it off herself: no bot, and the sweep won't add one — fall through to
+  // the manual "Add notetaker" button so she can change her mind.
+  if (status && status !== "cancelled") {
     const label = labelForStatus(status);
     return (
       <span className="flex items-center gap-1.5">
         <span
           className="chip border bg-plum-50 text-plum-700"
           style={{ borderColor: "var(--color-plum-100)" }}
-          title={`Recall bot status: ${status}`}
+          title={
+            status === "pending_auto"
+              ? "A notetaker will be sent to this Meet about 40 minutes before the session starts."
+              : `Recall bot status: ${status}`
+          }
         >
           {label}
         </span>
@@ -93,7 +100,11 @@ export function RecallBotChip({
               })
             }
             className="text-[11px] text-ink-400 hover:text-amber-700 disabled:opacity-50"
-            title="Stop the bot before it joins (or pull it out of the call if it's already in)"
+            title={
+              status === "pending_auto"
+                ? "Don't send a notetaker to this session"
+                : "Stop the bot before it joins (or pull it out of the call if it's already in)"
+            }
           >
             cancel
           </button>
@@ -161,6 +172,8 @@ export function RecallBotChip({
 // might add in the future fall through to the raw code.
 function labelForStatus(code: string): string {
   switch (code) {
+    case "pending_auto":
+      return "Notetaker queued";
     case "scheduled":
       return "Bot scheduled";
     case "ready":

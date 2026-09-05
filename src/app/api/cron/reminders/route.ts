@@ -31,6 +31,18 @@ export async function GET(request: Request) {
 
   const stats = await processReminders();
 
+  // Just-in-time notetaker bots: send a Recall bot for every session starting
+  // in the next ~45 min that has a Meet link, auto-add on, and no bot yet.
+  // A few calls per tick instead of a 52-bot burst at series-creation time.
+  // Best-effort; no-op when Recall isn't configured.
+  let recallBots = { due: 0, created: 0, failed: 0, errors: [] as string[] };
+  try {
+    const { scheduleDueRecallBots } = await import("@/lib/recall-scheduler");
+    recallBots = await scheduleDueRecallBots();
+  } catch (err) {
+    console.error("[cron] recall bot sweep failed", err);
+  }
+
   // Lead-magnet follow-up "flow" — nurture emails due since the last tick.
   // Cheap when nobody has set one up (early-returns after one small query), so
   // it rides every tick without adding Neon wake cost. Best-effort.
@@ -71,6 +83,7 @@ export async function GET(request: Request) {
   return NextResponse.json({
     ok: true,
     ...stats,
+    recallBots,
     leadMagnetFollowups,
     recurringCircles,
     prunedCircles,

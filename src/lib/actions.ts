@@ -1940,16 +1940,20 @@ export async function cancelBotForSession(
       )
       .limit(1);
     if (!sess) return { ok: false, error: "Session not found" };
-    if (!sess.botId) return { ok: true }; // nothing to cancel
 
-    const { cancelBot } = await import("./recall");
-    await cancelBot(sess.botId);
+    if (sess.botId) {
+      const { cancelBot } = await import("./recall");
+      await cancelBot(sess.botId);
+    }
 
+    // Status "cancelled" (with no bot id) tells the cron sweep she called
+    // this one off on purpose — otherwise it would re-add a bot ~40 min
+    // before the session. Also how a "queued" series occurrence is un-queued.
     await db
       .update(sessions)
       .set({
         recallBotId: null,
-        recallBotStatus: null,
+        recallBotStatus: "cancelled",
         updatedAt: new Date(),
       })
       .where(
@@ -2161,10 +2165,16 @@ export async function scheduleSessionSeries(
           err
         );
       }
-      // A notetaker bot per future occurrence — each joins the shared Meet at
-      // its own session time. Best-effort. (No Meet → no bot, same as before.)
-      for (const s of future) {
-        await maybeAutoAddRecallBot(accountId, s.id);
+      // Notetaker bots are NOT created here. Doing so fired one Recall call
+      // per occurrence (52 in a burst → Recall's 120/min limit, silent
+      // failures past it, and hundreds of scheduled bots parked in Recall for
+      // months). Instead each occurrence is marked "queued" and the cron
+      // sweep (recall-scheduler.ts) sends its bot ~40 min before it starts.
+      try {
+        const { queueRecallForSeries } = await import("./recall-scheduler");
+        await queueRecallForSeries(accountId, seriesRow.id);
+      } catch (err) {
+        console.warn("[scheduleSessionSeries] recall queue failed:", err);
       }
     }
 
@@ -2233,6 +2243,7 @@ export async function cancelSessionSeries(
       id: sessions.id,
       googleEventId: sessions.googleEventId,
       googleRecurringEventId: sessions.googleRecurringEventId,
+      recallBotId: sessions.recallBotId,
     })
     .from(sessions)
     .where(
@@ -2243,6 +2254,23 @@ export async function cancelSessionSeries(
         sql`${sessions.scheduledAt} > ${now.toISOString()}`
       )
     );
+
+  // Call off any notetaker bots already sent for these occurrences. Without
+  // this, cancelling a series left its bots queued in Recall — they'd join
+  // the (deleted) Meet at each old session time for months. Best-effort and
+  // sequential so a long series can't itself trip Recall's rate limit.
+  for (const r of futureRows) {
+    if (!r.recallBotId) continue;
+    try {
+      const { cancelBot } = await import("./recall");
+      await cancelBot(r.recallBotId);
+    } catch (e) {
+      console.warn(
+        `[cancelSessionSeries] couldn't cancel Recall bot ${r.recallBotId} for ${r.id}:`,
+        e
+      );
+    }
+  }
 
   // Best-effort clean up on Google. Don't block on failures — the DB delete
   // below is the source of truth. Deleting the ONE recurring event removes every
