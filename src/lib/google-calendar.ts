@@ -579,15 +579,34 @@ export async function deleteCalendarEvent(
 // "new event added to your calendar" email per session (dozens at once).
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** RRULE for a series. count = number of occurrences (the series is capped). */
-export function rruleForSeries(
+/** UTC basic datetime for a recurrence RDATE, e.g. "20260131T170000Z". */
+function toGCalUtcBasic(d: Date): string {
+  return d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+}
+
+/** The recurrence line for a series. Weekly/biweekly use an RRULE (Google's
+ *  weekly expansion matches the app's dates exactly). Monthly uses explicit
+ *  RDATE dates instead: RRULE:FREQ=MONTHLY *skips* months that lack the day
+ *  (29th–31st) per RFC 5545, whereas the app's date math overflows into the next
+ *  month — so listing the actual occurrence dates keeps Google's instances
+ *  aligned to the app's sessions (which cancel/reschedule-one rely on to find
+ *  the right instance). `occurrenceDates` is every future occurrence, sorted;
+ *  the first is the event's DTSTART, the rest go in RDATE. Returns "" for a lone
+ *  occurrence (no recurrence). */
+export function recurrenceForSeries(
   frequency: "weekly" | "biweekly" | "monthly",
-  count: number
+  occurrenceDates: Date[]
 ): string {
-  const n = Math.max(1, Math.min(Math.floor(count), 520));
-  if (frequency === "monthly") return `RRULE:FREQ=MONTHLY;COUNT=${n}`;
-  if (frequency === "biweekly") return `RRULE:FREQ=WEEKLY;INTERVAL=2;COUNT=${n}`;
-  return `RRULE:FREQ=WEEKLY;COUNT=${n}`;
+  const n = occurrenceDates.length;
+  if (n <= 1) return "";
+  if (frequency === "monthly") {
+    return `RDATE:${occurrenceDates.slice(1).map(toGCalUtcBasic).join(",")}`;
+  }
+  const count = Math.min(n, 520);
+  if (frequency === "biweekly") {
+    return `RRULE:FREQ=WEEKLY;INTERVAL=2;COUNT=${count}`;
+  }
+  return `RRULE:FREQ=WEEKLY;COUNT=${count}`;
 }
 
 /** Create ONE recurring event covering the whole series. Same shape as
@@ -625,7 +644,7 @@ export async function createRecurringCalendarEvent(
         dateTime: end.toISOString(),
         timeZone: input.timeZone ?? undefined,
       },
-      recurrence: [recurrence],
+      ...(recurrence ? { recurrence: [recurrence] } : {}),
       attendees: guests,
       conferenceData: {
         createRequest: {

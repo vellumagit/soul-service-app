@@ -2171,10 +2171,13 @@ export async function scheduleSessionSeries(
     // own instance. Best-effort: a Google hiccup never undoes the saved series.
     if (future.length > 0) {
       try {
-        const { rruleForSeries } = await import("./google-calendar");
+        const { recurrenceForSeries } = await import("./google-calendar");
         const recurring = await syncSeriesToGoogle(
           future[0].id,
-          rruleForSeries(frequency, future.length)
+          recurrenceForSeries(
+            frequency,
+            future.map((s) => new Date(s.scheduledAt))
+          )
         );
         if (recurring) {
           await db
@@ -2799,6 +2802,8 @@ export async function deleteSession(sessionId: string, clientId: string) {
   const [existing] = await db
     .select({
       googleEventId: sessions.googleEventId,
+      googleRecurringEventId: sessions.googleRecurringEventId,
+      scheduledAt: sessions.scheduledAt,
       invoiceUrl: sessions.invoiceUrl,
     })
     .from(sessions)
@@ -2821,7 +2826,25 @@ export async function deleteSession(sessionId: string, clientId: string) {
   await db
     .delete(sessions)
     .where(and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId)));
-  await deleteSessionFromGoogle(accountId, existing?.googleEventId ?? null);
+  // Remove it from Google. A live series occurrence is an instance of the shared
+  // recurring event — cancel just that occurrence (silently); a standalone
+  // deletes its own event. Without this, deleting one occurrence of a synced
+  // series left a ghost on the client's + practitioner's calendars.
+  if (existing?.googleRecurringEventId) {
+    try {
+      const { cancelRecurringInstance } = await import("./google-calendar");
+      await cancelRecurringInstance(
+        accountId,
+        existing.googleRecurringEventId,
+        existing.scheduledAt.getTime(),
+        { notify: false }
+      );
+    } catch (err) {
+      console.error("[deleteSession] cancel series occurrence failed:", err);
+    }
+  } else {
+    await deleteSessionFromGoogle(accountId, existing?.googleEventId ?? null);
+  }
 
   // Best-effort Blob cleanup. The DB cascade already deleted the attachment
   // rows; here we tidy up the files those rows pointed at.
@@ -3247,7 +3270,7 @@ export async function updateSettings(formData: FormData) {
       bufferMinutes: clampInt(num(formData, "bufferMinutes"), 0, 240, 15),
       defaultSessionMinutes: clampInt(
         num(formData, "defaultSessionMinutes"),
-        15,
+        5,
         480,
         60
       ),

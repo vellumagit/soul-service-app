@@ -292,8 +292,12 @@ export function WeekCalendar({
                   const { hour, minute } = zonedClock(startInstant, tz);
                   const startH = hour + minute / 60;
                   const top = (startH - HOUR_START) * PX_PER_HOUR;
-                  const height =
-                    (s.durationMinutes / 60) * PX_PER_HOUR - 4;
+                  // Floor at a tappable/legible height — a 5-minute session
+                  // would otherwise compute to ~0px and be invisible.
+                  const height = Math.max(
+                    14,
+                    (s.durationMinutes / 60) * PX_PER_HOUR - 4
+                  );
                   if (top < 0 || top > (HOUR_END - HOUR_START) * PX_PER_HOUR)
                     return null;
                   const tone = toneFor(s.type);

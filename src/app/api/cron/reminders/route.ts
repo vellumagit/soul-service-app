@@ -1,5 +1,9 @@
-// Vercel Cron entrypoint — runs once an hour and sends due session reminders.
-// Schedule lives in `vercel.json` at the repo root.
+// Vercel Cron entrypoint — runs every 10 minutes (schedule in `vercel.json`).
+// Sends due session reminders AND drives the just-in-time notetaker sweep
+// (recall-scheduler.ts). NOTE: the 10-minute cadence is load-bearing — the
+// notetaker sweep's 60-minute window [now-15, now+45] tiles with overlap only
+// at ~10-minute ticks. If this is ever slowed to hourly, widen that window or
+// sessions can fall through the gaps.
 //
 // Vercel sends `Authorization: Bearer <CRON_SECRET>` on cron-triggered
 // requests. Anyone else hitting this endpoint gets 401.
