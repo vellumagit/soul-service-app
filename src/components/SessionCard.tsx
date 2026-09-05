@@ -501,12 +501,19 @@ export function SessionCard({
                   }
                   message={
                     session.seriesId
-                      ? "Cancel just this session? The rest of the recurring series stays on the calendar. If Google Calendar is connected, this event is removed and your client is emailed."
-                      : "Cancel this scheduled session? If Google Calendar is connected, the event will be deleted and your client will be notified."
+                      ? "Cancel just this session? The rest of the recurring series stays on the calendar. If Google Calendar is connected, this event is removed."
+                      : "Cancel this scheduled session? If Google Calendar is connected, the event will be deleted."
                   }
+                  option={{
+                    label: "Email the client that it's cancelled",
+                    defaultChecked: true,
+                    hint: "Untick for test bookings or when they already know — nothing is sent, not even by Google.",
+                  }}
                   confirmLabel="Yes, cancel it"
-                  onConfirm={() =>
-                    cancelSession(session.id, session.clientId)
+                  onConfirm={(notifyClient) =>
+                    cancelSession(session.id, session.clientId, {
+                      notifyClient,
+                    })
                   }
                 />
                 {session.seriesId && (
@@ -517,10 +524,17 @@ export function SessionCard({
                         Cancel whole series
                       </span>
                     }
-                    message="Cancel this and ALL future sessions in this recurring series? Past sessions are kept. Any Google Calendar events for the future sessions are removed, and your client is emailed."
+                    message="Cancel this and ALL future sessions in this recurring series? Past sessions are kept. Any Google Calendar events for the future sessions are removed."
+                    option={{
+                      label: "Email the client that the series is cancelled",
+                      defaultChecked: true,
+                      hint: "Untick for test or duplicate series — nothing is sent.",
+                    }}
                     confirmLabel="Yes, cancel the series"
-                    onConfirm={() =>
-                      cancelSessionSeries(session.seriesId!, session.clientId)
+                    onConfirm={(notifyClient) =>
+                      cancelSessionSeries(session.seriesId!, session.clientId, {
+                        notifyClient,
+                      })
                     }
                   />
                 )}

@@ -12,17 +12,25 @@ export function ConfirmButton({
   message,
   className,
   destructive = true,
+  option,
 }: {
-  onConfirm: () => Promise<void> | void;
+  /** Receives the optional checkbox's state (true when no `option` is set). */
+  onConfirm: (optionChecked: boolean) => Promise<void> | void;
   label: React.ReactNode;
   confirmLabel?: string;
   message: string;
   className?: string;
   destructive?: boolean;
+  /** An optional checkbox inside the dialog — e.g. "Email the client". Its
+   *  value is passed to onConfirm so the action can behave accordingly. */
+  option?: { label: string; defaultChecked?: boolean; hint?: string };
 }) {
   const dialogRef = useRef<HTMLDialogElement | null>(null);
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [optionChecked, setOptionChecked] = useState(
+    option?.defaultChecked ?? true
+  );
 
   function open() {
     setError(null);
@@ -60,6 +68,23 @@ export function ConfirmButton({
             Are you sure?
           </div>
           <div className="text-sm text-ink-600 leading-relaxed">{message}</div>
+          {option && (
+            <label className="mt-3 flex items-start gap-2 text-sm text-ink-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={optionChecked}
+                onChange={(e) => setOptionChecked(e.target.checked)}
+                disabled={pending}
+                className="mt-0.5"
+              />
+              <span>
+                {option.label}
+                {option.hint && (
+                  <span className="block text-xs text-ink-400">{option.hint}</span>
+                )}
+              </span>
+            </label>
+          )}
           {error && (
             <div className="mt-3 text-xs text-red-700 bg-red-50 border border-red-100 rounded p-2">
               {error}
@@ -81,7 +106,7 @@ export function ConfirmButton({
             onClick={() =>
               start(async () => {
                 try {
-                  await onConfirm();
+                  await onConfirm(option ? optionChecked : true);
                   close();
                 } catch (err) {
                   // If onConfirm called redirect(), let it propagate so

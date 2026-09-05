@@ -2251,8 +2251,12 @@ export async function scheduleSessionSeries(
  */
 export async function cancelSessionSeries(
   seriesId: string,
-  clientId: string
+  clientId: string,
+  /** notifyClient:false = quiet cancel — no email to the client. (Google is
+   *  always silent here; the app's one email is the only notice.) */
+  opts: { notifyClient?: boolean } = {}
 ): Promise<void> {
+  const notifyClient = opts.notifyClient !== false;
   const { accountId } = await requireSession();
   const now = new Date();
 
@@ -2340,7 +2344,7 @@ export async function cancelSessionSeries(
   // Tell the client the recurring sessions are off — BEFORE we delete the rows
   // (the email reads the client + type off a session). One note for the whole
   // series, not one per occurrence.
-  if (futureRows[0]) {
+  if (futureRows[0] && notifyClient) {
     await maybeSendCancellationEmail(accountId, futureRows[0].id, {
       series: true,
     });
@@ -2637,7 +2641,14 @@ async function resolvePendingRescheduleRequests(
   }
 }
 
-export async function cancelSession(sessionId: string, clientId: string) {
+export async function cancelSession(
+  sessionId: string,
+  clientId: string,
+  /** notifyClient:false = quiet cancel — no app email, and Google deletes
+   *  the event without its own cancellation notice. Default: notify. */
+  opts: { notifyClient?: boolean } = {}
+) {
+  const notifyClient = opts.notifyClient !== false;
   const { accountId } = await requireSession();
   // Look up before update to grab the Google event id + Recall bot id
   const existingRows = await db
@@ -2697,7 +2708,8 @@ export async function cancelSession(sessionId: string, clientId: string) {
   } else {
     await deleteSessionFromGoogle(
       accountId,
-      existingRows[0]?.googleEventId ?? null
+      existingRows[0]?.googleEventId ?? null,
+      { notify: notifyClient }
     );
     if (existingRows[0]?.googleEventId) {
       await db
@@ -2713,8 +2725,12 @@ export async function cancelSession(sessionId: string, clientId: string) {
   await resolvePendingRescheduleRequests(accountId, sessionId);
 
   // Email the client that it's off. Google only notifies calendar invitees, so
-  // an in-person or no-Google client would otherwise never hear.
-  await maybeSendCancellationEmail(accountId, sessionId, { series: false });
+  // an in-person or no-Google client would otherwise never hear. Skipped when
+  // she unticked "email the client" (test bookings, duplicates, a client who
+  // already knows).
+  if (notifyClient) {
+    await maybeSendCancellationEmail(accountId, sessionId, { series: false });
+  }
 
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/calendar");
@@ -3990,12 +4006,13 @@ async function syncSessionToGoogle(
 
 async function deleteSessionFromGoogle(
   accountId: string,
-  googleEventId: string | null
+  googleEventId: string | null,
+  opts?: { notify?: boolean }
 ) {
   if (!googleEventId) return;
   try {
     const { deleteCalendarEvent } = await import("./google-calendar");
-    await deleteCalendarEvent(accountId, googleEventId);
+    await deleteCalendarEvent(accountId, googleEventId, opts);
   } catch (err) {
     console.warn("Google Calendar delete failed:", err);
   }

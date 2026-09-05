@@ -552,7 +552,8 @@ export async function updateCalendarEvent(
  *  clearing it blind orphans a live event that no retry can ever find. */
 export async function deleteCalendarEvent(
   accountId: string,
-  eventId: string
+  eventId: string,
+  opts?: { notify?: boolean }
 ): Promise<boolean> {
   const auth = await getAuthedClient(accountId);
   if (!auth) return false;
@@ -562,7 +563,8 @@ export async function deleteCalendarEvent(
     await calendar.events.delete({
       calendarId: "primary",
       eventId,
-      sendUpdates: "all",
+      // notify:false = a quiet cancel (she unticked "email the client").
+      sendUpdates: opts?.notify === false ? "none" : "all",
     });
     return true;
   } catch (err) {
