@@ -2054,6 +2054,39 @@ export async function scheduleSessionSeries(
       dates = computeSeriesDates(firstAt, frequency, occurrenceCount);
     }
 
+    // Duplicate-submit guard. On 2026-09-04/05 the same series was created 21
+    // times in a few minutes: the action ran long (52 Google events + 52
+    // Recall bots), the request timed out, the dialog showed an error, and
+    // each retry inserted another full copy — 1,000+ sessions, 400 bots. The
+    // rows always land before the slow hooks, so a retry after an error is
+    // a duplicate, never a repair. Refuse a same-client, same-start, same-
+    // cadence series created in the last 30 minutes and point at it.
+    const dupCutoff = new Date(Date.now() - 30 * 60 * 1000);
+    const [dup] = await db
+      .select({ id: sessionSeries.id, createdAt: sessionSeries.createdAt })
+      .from(sessionSeries)
+      .where(
+        and(
+          eq(sessionSeries.accountId, accountId),
+          eq(sessionSeries.clientId, clientId),
+          eq(sessionSeries.frequency, frequency),
+          eq(sessionSeries.firstAt, firstAt),
+          isNull(sessionSeries.cancelledAt),
+          sql`${sessionSeries.createdAt} > ${dupCutoff.toISOString()}`
+        )
+      )
+      .limit(1);
+    if (dup) {
+      const mins = Math.max(
+        1,
+        Math.round((Date.now() - new Date(dup.createdAt).getTime()) / 60000)
+      );
+      return {
+        ok: false,
+        error: `This series already exists — an identical one for this client was created ${mins} min ago. Check their profile before creating another (if that one looks wrong, cancel it there first).`,
+      };
+    }
+
     // Create the series row first so we can link sessions to it
     const [seriesRow] = await db
       .insert(sessionSeries)
