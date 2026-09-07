@@ -401,6 +401,24 @@ body {
   line-height: 1.2;
   margin-top: 1px;
 }
+/* Short sessions (≲40 min): one centred line — "9:00 Name" — instead of two
+   stacked rows that clip inside a 14–28px box. */
+.cal-block.compact {
+  display: flex;
+  align-items: center;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.cal-block.compact .one {
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1;
+}
+.cal-block.compact .n {
+  margin-top: 0;
+}
 
 /* Tone variants for calendar blocks + chips — softened to match the palette.
    Less primary-color saturation, more "dusk garden" hues. */

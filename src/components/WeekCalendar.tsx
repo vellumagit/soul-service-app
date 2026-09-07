@@ -293,9 +293,10 @@ export function WeekCalendar({
                   const startH = hour + minute / 60;
                   const top = (startH - HOUR_START) * PX_PER_HOUR;
                   // Floor at a tappable/legible height — a 5-minute session
-                  // would otherwise compute to ~0px and be invisible.
+                  // would otherwise compute to ~0px and be invisible. 18px
+                  // fits exactly one line of the compact layout below.
                   const height = Math.max(
-                    14,
+                    18,
                     (s.durationMinutes / 60) * PX_PER_HOUR - 4
                   );
                   if (top < 0 || top > (HOUR_END - HOUR_START) * PX_PER_HOUR)
@@ -304,18 +305,33 @@ export function WeekCalendar({
                   const endInstant = new Date(
                     startInstant.getTime() + s.durationMinutes * 60000
                   );
+                  // Under ~30px (sessions shorter than ~40 min) two stacked
+                  // lines don't fit — the time row got clipped mid-glyph and
+                  // the name never showed. Render ONE line instead: start
+                  // time + name, vertically centred, ellipsised.
+                  const compact = height < 30;
                   return (
                     <Link
                       key={s.id}
                       href={s.href ?? `/clients/${s.clientId}`}
-                      className={`cal-block tone-${tone}`}
+                      className={`cal-block tone-${tone}${compact ? " compact" : ""}`}
                       style={{ top, height }}
+                      title={`${shortTime(startInstant, tz)}–${shortTime(endInstant, tz)} · ${s.clientName} · ${s.type} · ${s.durationMinutes}m`}
                     >
-                      <div className="t">
-                        {shortTime(startInstant, tz)}–{shortTime(endInstant, tz)}
-                      </div>
-                      <div className="n">{s.clientName}</div>
-                      {height > 44 && <div className="m">{s.type}</div>}
+                      {compact ? (
+                        <div className="one">
+                          <span className="t">{shortTime(startInstant, tz)}</span>{" "}
+                          <span className="n">{s.clientName}</span>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="t">
+                            {shortTime(startInstant, tz)}–{shortTime(endInstant, tz)}
+                          </div>
+                          <div className="n">{s.clientName}</div>
+                          {height > 44 && <div className="m">{s.type}</div>}
+                        </>
+                      )}
                     </Link>
                   );
                 })}
