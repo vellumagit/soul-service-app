@@ -136,13 +136,26 @@ export function ScheduleSeriesDialog({
     defaultFirstAt(practiceTz)
   );
   const [frequency, setFrequency] = useState<Frequency>("weekly");
-  const [occurrenceCount, setOccurrenceCount] = useState<number>(8);
+  // The count is kept as the TEXT she typed. Parsing it to a number on every
+  // keystroke (and forcing "" → 0) made React write a literal "0" back into
+  // the box the moment she cleared it, so typing 52 produced "052" — and that
+  // 0 then tripped the browser's min=1 check, which silently blocked the
+  // submit (the validation bubble pops on a field scrolled out of view inside
+  // the modal on a phone). Empty-while-typing is fine; the number is derived
+  // and clamped here, and the clamped value is what the form actually sends.
+  const [countText, setCountText] = useState<string>("8");
+  const parsedCount = parseInt(countText, 10);
+  const occurrenceCount = Number.isFinite(parsedCount)
+    ? Math.min(Math.max(parsedCount, 1), MAX_OCCURRENCES)
+    : 0;
+  const countMissing = !Number.isFinite(parsedCount) || parsedCount < 1;
+  const countClamped = Number.isFinite(parsedCount) && parsedCount > MAX_OCCURRENCES;
 
   const noClients = clients.length === 0;
 
   const previewDates = useMemo(() => {
-    const safeCount = Math.min(Math.max(1, occurrenceCount), MAX_OCCURRENCES);
-    return computeDates(firstAt, frequency, safeCount, practiceTz);
+    if (occurrenceCount < 1) return [];
+    return computeDates(firstAt, frequency, occurrenceCount, practiceTz);
   }, [firstAt, frequency, occurrenceCount, practiceTz]);
 
   const lastDate = previewDates[previewDates.length - 1];
@@ -190,12 +203,17 @@ export function ScheduleSeriesDialog({
             <button
               type="submit"
               form="schedule-series-form"
-              disabled={submitting || noClients || previewDates.length === 0}
+              // Never a dead button: if something's missing, the click says
+              // so in words (see the pre-checks in the form action) instead of
+              // silently doing nothing.
+              disabled={submitting || noClients}
               className="px-4 py-2 text-sm bg-ink-900 hover:bg-ink-800 text-white rounded-md font-medium disabled:opacity-60"
             >
               {submitting
                 ? "Creating…"
-                : `Create ${previewDates.length} sessions`}
+                : previewDates.length > 0
+                  ? `Create ${previewDates.length} sessions`
+                  : "Create series"}
             </button>
           </>
         }
@@ -207,9 +225,23 @@ export function ScheduleSeriesDialog({
         ) : (
           <form
             id="schedule-series-form"
+            // Our own checks with VISIBLE messages, not the browser's — its
+            // validation bubbles can't be seen inside the scrolling modal on
+            // a phone, which made a blocked submit look like a dead button.
+            noValidate
             action={async (fd) => {
-              setSubmitting(true);
               setError(null);
+              if (!parseWall(firstAt)) {
+                setError("Pick the first session's date and time.");
+                return;
+              }
+              if (occurrenceCount < 1) {
+                setError(
+                  `How many sessions? Enter a number from 1 to ${MAX_OCCURRENCES}.`
+                );
+                return;
+              }
+              setSubmitting(true);
               try {
                 const result = await scheduleSessionSeries(fd);
                 if (!result.ok) {
@@ -323,18 +355,36 @@ export function ScheduleSeriesDialog({
                 required
                 hint={`Max ${MAX_OCCURRENCES}`}
               >
+                {/* Visible box is un-named and holds the raw text; the hidden
+                    field below sends the clamped number the server expects. */}
                 <input
-                  name="occurrenceCount"
                   type="number"
-                  required
-                  value={occurrenceCount}
-                  onChange={(e) =>
-                    setOccurrenceCount(Number(e.target.value) || 0)
-                  }
+                  inputMode="numeric"
+                  value={countText}
+                  onChange={(e) => setCountText(e.target.value)}
+                  onBlur={() => {
+                    if (occurrenceCount >= 1) setCountText(String(occurrenceCount));
+                  }}
                   min={1}
                   max={MAX_OCCURRENCES}
                   className={inputCls}
                 />
+                <input
+                  type="hidden"
+                  name="occurrenceCount"
+                  value={occurrenceCount >= 1 ? String(occurrenceCount) : ""}
+                />
+                {countMissing && (
+                  <p className="text-[11px] text-honey-700 mt-1">
+                    Enter a number from 1 to {MAX_OCCURRENCES}.
+                  </p>
+                )}
+                {countClamped && (
+                  <p className="text-[11px] text-honey-700 mt-1">
+                    {MAX_OCCURRENCES} is the most a series can hold — using{" "}
+                    {MAX_OCCURRENCES}.
+                  </p>
+                )}
               </Field>
             </div>
 

@@ -80,8 +80,8 @@ export function PortalConnectionCard({
   if (!enabled) {
     return (
       <section className="paper-card p-5 md:p-6 mb-5">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div className="min-w-0 flex-1">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div className="min-w-0 md:flex-1">
             <p className="text-[10px] uppercase tracking-widest text-honey-700 font-mono mb-1.5">
               Their own space
             </p>
@@ -97,7 +97,10 @@ export function PortalConnectionCard({
               One click turns it on and emails them a sign-in link.
             </p>
           </div>
-          <div className="shrink-0">
+          {/* Stacked under the text on phones (full-width button); beside it
+              from md up. The old flex-wrap let this button keep its width
+              and squeezed the text column to one word per line on mobile. */}
+          <div className="w-full md:w-auto md:shrink-0">
             <button
               type="button"
               disabled={pending || !hasEmail}
@@ -107,12 +110,12 @@ export function PortalConnectionCard({
                   "Their space is open"
                 )
               }
-              className="px-5 py-2.5 text-sm bg-plum-700 hover:bg-plum-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-md font-medium transition-colors"
+              className="w-full md:w-auto px-5 py-2.5 text-sm bg-plum-700 hover:bg-plum-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-md font-medium transition-colors"
             >
               {pending ? "Opening…" : `Give ${clientFirstName} their own space →`}
             </button>
             {!hasEmail && (
-              <p className="text-[11px] text-honey-700 italic mt-2 max-w-[15rem] leading-snug">
+              <p className="text-[11px] text-honey-700 italic mt-2 md:max-w-[15rem] leading-snug">
                 Add an email in Edit profile first — the sign-in link has
                 nowhere to go without one.
               </p>
@@ -132,8 +135,8 @@ export function PortalConnectionCard({
         border: "1px solid var(--color-honey-100)",
       }}
     >
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div className="min-w-0 flex-1">
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0 md:flex-1">
           <p className="text-[10px] uppercase tracking-widest text-honey-700 font-mono mb-1.5">
             {connected ? "Client portal · connected" : "Client portal · invited"}
           </p>
@@ -161,14 +164,14 @@ export function PortalConnectionCard({
           </p>
         </div>
 
-        <div className="shrink-0 flex flex-col items-end gap-2">
+        <div className="w-full md:w-auto md:shrink-0 flex flex-col items-stretch md:items-end gap-2">
           <button
             type="button"
             disabled={pending || justSent}
             onClick={() =>
               run(() => sendPortalInvite(clientId), "Sign-in link sent")
             }
-            className="px-4 py-2 text-sm rounded-md border border-honey-300 text-honey-700 hover:bg-honey-100 disabled:opacity-60 font-medium transition-colors bg-white"
+            className="w-full md:w-auto px-4 py-2 text-sm rounded-md border border-honey-300 text-honey-700 hover:bg-honey-100 disabled:opacity-60 font-medium transition-colors bg-white"
           >
             {justSent
               ? "✓ Sent"
