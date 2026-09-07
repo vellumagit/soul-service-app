@@ -50,6 +50,7 @@ export function SessionCard({
   autoUploadAiNotes = false,
   clientPortalEnabled = false,
   defaultRateCents = null,
+  defaultOpen,
 }: {
   session: Session;
   /** Used to address her by name in the Closing Ritual prompts. Optional —
@@ -64,8 +65,17 @@ export function SessionCard({
   /** Her Settings rate, pre-filled into Mark paid when the session has no
    *  amount of its own. */
   defaultRateCents?: number | null;
+  /** Whether this card starts expanded. The parent decides — historically
+   *  EVERY scheduled session auto-expanded, which mounted hundreds of forms
+   *  at once on a client with a long booked-ahead recurring series and froze
+   *  the page. Now SessionsLog opens only the soonest scheduled card and
+   *  leaves the rest collapsed. Undefined falls back to the old rule so any
+   *  future caller still gets sensible behavior. */
+  defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(session.status === "scheduled");
+  const [open, setOpen] = useState(
+    defaultOpen ?? session.status === "scheduled"
+  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // The Closing Ritual modal. Opens automatically when she marks a session

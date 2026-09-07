@@ -57,6 +57,7 @@ Soul Service is built specifically for Svitlana, a sole practitioner who holds o
 
 If you ask "what's new?" / "что нового?" / "що нового?", lead with the highlights from this list. Most recent first.
 
+- **Client profiles with lots of sessions open fast now.** A client with hundreds of sessions (a long recurring series) used to make their profile slow to load and sometimes freeze. The Sessions tab now shows your 30 most recent first with a "Show older sessions" link, and only the soonest upcoming session opens expanded — so the page stays quick no matter how much history there is.
 - **Short sessions read properly on the week calendar.** A 5- or 15-minute session used to render as a sliver with the time cut off mid-character. Sessions under about 40 minutes now show as one clean line — start time and client name — and hovering the block shows the full time range, type, and length.
 - **Quiet cancel: choose whether the client is emailed.** "Cancel session", "Cancel this one", and "Cancel whole series" each show an **"Email the client"** checkbox, ticked by default. Untick it and the cancellation happens silently — no app email and no Google Calendar notice — which is what you want for a test booking, a duplicate, or someone you've already told.
 - **Fixed: recurring series were flooding the notetaker.** Booking a series used to send a Recall bot for every occurrence the moment you saved it — dozens at once, which tripped Recall's rate limit (so some occurrences silently got no bot) and left hundreds of bots parked in Recall, even after a series was cancelled. Now each occurrence shows **"Notetaker queued"** and its bot is sent about 40 minutes before that session; cancelling a series calls off its bots; and a background sweep makes sure any upcoming Meet session with auto-add on gets a bot before it starts.
@@ -427,6 +428,7 @@ If you ask "what's new?" / "что нового?" / "що нового?", lead w
 - Today is highlighted with a soft plum tint.
 - Cancelled sessions are visibly struck through.
 - On a client's Sessions tab, the month headers ("April 2026", "March 2026") are clickable — they open the whole-app calendar at that month.
+- The Sessions tab shows your most recent 30 sessions first, with a **"Show older sessions"** link at the bottom to reveal the rest — so a client with a long history (a year+ of a weekly recurring series) opens instantly instead of loading everything at once. Only your soonest upcoming session opens expanded by default; the rest are collapsed — click any card to open it.
 
 ## Payments
 - Each session has its own payment tracking — mark paid with method (Venmo/Zelle/cash/etc), amount, optional note. The "Mark paid" dialog also has a **"This one's on me — no charge"** tickbox that records the session as **Free** (a gift/comp): it clears from the unpaid list + outstanding total and is never counted as income — the same way gifted Circle seats work. Reversible: mark it paid later if they did pay you.

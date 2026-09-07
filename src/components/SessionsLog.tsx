@@ -6,11 +6,24 @@
 // a one-click way to jump from "this client's April" to "everything I did in
 // April" without losing her place. Hover to reveal the link affordance so the
 // regular reading view stays clean.
+//
+// Pagination: a client with a long recurring series can have hundreds of
+// sessions. Rendering them all mounted hundreds of SessionCards (and every
+// scheduled one auto-expanded its whole form), which froze the page for a
+// minute. We now render only the most recent PAGE_SIZE and reveal older ones
+// on demand — the DOM the browser mounts stays bounded no matter the history.
 
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
 import { SessionCard } from "./SessionCard";
 import { zonedDateKey } from "@/lib/timezone";
 import type { NoteTemplate, Session } from "@/db/schema";
+
+/** How many sessions to show before "Show older". One page is roughly a year
+ *  of weekly work — enough that most visits never need to expand. */
+const PAGE_SIZE = 30;
 
 type Group = {
   key: string;
@@ -76,7 +89,20 @@ export function SessionsLog({
   /** Passed through to Mark paid so the amount box opens pre-filled. */
   defaultRateCents?: number | null;
 }) {
-  const groups = groupByMonth(sessions, timeZone);
+  // Sessions arrive sorted desc by scheduledAt. Show the most recent slice;
+  // older ones stay off the page (and un-mounted) until she asks for them.
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const visible = sessions.slice(0, visibleCount);
+  const remaining = sessions.length - visible.length;
+
+  // Auto-expand only ONE card: the soonest upcoming (scheduled) session — the
+  // one she's most likely acting on. Everything else starts collapsed so the
+  // browser doesn't mount hundreds of forms at once. "Soonest upcoming" =
+  // the last scheduled row in a desc-sorted list.
+  const firstOpenId =
+    [...visible].reverse().find((s) => s.status === "scheduled")?.id ?? null;
+
+  const groups = groupByMonth(visible, timeZone);
 
   return (
     <div className="space-y-8">
@@ -116,11 +142,29 @@ export function SessionsLog({
                 autoUploadAiNotes={autoUploadAiNotes}
                 clientPortalEnabled={clientPortalEnabled}
                 defaultRateCents={defaultRateCents}
+                defaultOpen={s.id === firstOpenId}
               />
             ))}
           </div>
         </div>
       ))}
+
+      {remaining > 0 && (
+        <div className="text-center pt-2">
+          <button
+            type="button"
+            onClick={() =>
+              setVisibleCount((n) => Math.min(n + PAGE_SIZE, sessions.length))
+            }
+            className="text-sm text-plum-700 hover:underline"
+          >
+            Show older sessions{" "}
+            <span className="text-ink-400">
+              ({remaining} more)
+            </span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
