@@ -22,6 +22,13 @@ const REGIONS = [
 ] as const;
 type Region = (typeof REGIONS)[number];
 
+// Every Recall call runs inside a server action or the cron sweep. Without a
+// timeout a hung request would block the function until Vercel's max duration —
+// and enough of those at once can starve the app of function slots and make it
+// feel frozen. Abort well before that so a slow provider fails fast (all Recall
+// calls here are already best-effort / caught by their callers).
+const RECALL_TIMEOUT_MS = 15_000;
+
 export function recallConfigured(): boolean {
   return (
     typeof process.env.RECALL_API_KEY === "string" &&
@@ -129,6 +136,7 @@ export async function createBot(
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(RECALL_TIMEOUT_MS),
   });
 
   if (!res.ok) {
@@ -195,6 +203,7 @@ export async function cancelBot(botId: string): Promise<void> {
   const deleteRes = await fetch(`${getApiBase()}/bot/${botId}/`, {
     method: "DELETE",
     headers: { Authorization: getAuthHeader() },
+    signal: AbortSignal.timeout(RECALL_TIMEOUT_MS),
   });
   if (deleteRes.ok) return;
   if (deleteRes.status === 404) return; // bot already gone — done
@@ -213,6 +222,7 @@ export async function cancelBot(botId: string): Promise<void> {
   const leaveRes = await fetch(`${getApiBase()}/bot/${botId}/leave_call`, {
     method: "POST",
     headers: { Authorization: getAuthHeader() },
+    signal: AbortSignal.timeout(RECALL_TIMEOUT_MS),
   });
   if (leaveRes.ok) return;
   // 4xx on leave_call — bot already left, was never in the call, etc. Treat
@@ -249,6 +259,7 @@ export async function createAsyncTranscript(
         provider: { recallai_async: { language_code: "auto" } },
         diarization: { use_separate_streams_when_available: true },
       }),
+      signal: AbortSignal.timeout(RECALL_TIMEOUT_MS),
     }
   );
   if (!res.ok) {
@@ -306,6 +317,7 @@ export async function fetchTranscriptText(
   const meta = await fetch(`${getApiBase()}/transcript/${transcriptId}/`, {
     method: "GET",
     headers: { Authorization: getAuthHeader() },
+    signal: AbortSignal.timeout(RECALL_TIMEOUT_MS),
   });
   if (!meta.ok) {
     const text = await meta.text().catch(() => "");
@@ -326,7 +338,10 @@ export async function fetchTranscriptText(
   }
 
   // Step 2: download the actual transcript JSON.
-  const contentRes = await fetch(downloadUrl, { method: "GET" });
+  const contentRes = await fetch(downloadUrl, {
+    method: "GET",
+    signal: AbortSignal.timeout(RECALL_TIMEOUT_MS),
+  });
   if (!contentRes.ok) {
     throw new Error(
       `Recall transcript download failed (${contentRes.status})`

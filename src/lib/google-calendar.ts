@@ -17,6 +17,13 @@ import { practitionerSettings, sessions } from "@/db/schema";
 import { and, eq, gte, inArray, isNotNull, isNull } from "drizzle-orm";
 import { encryptToken, decryptToken } from "./token-crypto";
 
+// Default request timeout for EVERY Google Calendar call. Each runs inside a
+// server action or the cron; without a timeout a hung Google request would
+// block the function until Vercel's max duration, and enough of those at once
+// can starve the app of function slots (a plausible "the whole app froze"
+// cause). Abort well before that — these calls are all best-effort.
+google.options({ timeout: 15_000 });
+
 // Scopes we request: full calendar event management (read + write own events).
 // "calendar.events" is narrower than "calendar" — only events, not calendar lists.
 const SCOPES = [

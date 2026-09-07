@@ -99,6 +99,21 @@ function recipientAllowlist(): Set<string> | null {
   );
 }
 
+/** Reject if a promise hasn't settled in `ms`. Guards against a hung provider
+ *  call holding a server action open until Vercel's max duration (a plausible
+ *  "the whole app froze" cause). It frees the caller; it can't cancel the
+ *  underlying request (the Resend SDK exposes no abort), but every send here is
+ *  best-effort and caught. Clears its timer when the work settles first. */
+function withTimeout<T>(work: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const guard = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(label)), ms);
+  });
+  return Promise.race([work.finally(() => clearTimeout(timer)), guard]);
+}
+
+const EMAIL_TIMEOUT_MS = 15_000;
+
 export async function sendEmail(
   input: SendEmailInput
 ): Promise<{ id: string; suppressed?: boolean }> {
@@ -120,14 +135,18 @@ export async function sendEmail(
   }
 
   const resend = getResend();
-  const result = await resend.emails.send({
-    from: input.from ?? defaultFrom(),
-    to: input.to,
-    subject: input.subject,
-    html: input.html,
-    text: input.text,
-    replyTo: input.replyTo,
-  });
+  const result = await withTimeout(
+    resend.emails.send({
+      from: input.from ?? defaultFrom(),
+      to: input.to,
+      subject: input.subject,
+      html: input.html,
+      text: input.text,
+      replyTo: input.replyTo,
+    }),
+    EMAIL_TIMEOUT_MS,
+    "Resend email send timed out"
+  );
   if (result.error) {
     throw new Error(`Resend error: ${result.error.message}`);
   }
