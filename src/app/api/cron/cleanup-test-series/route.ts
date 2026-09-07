@@ -1,9 +1,13 @@
-// ONE-OFF admin cleanup — remove the recurring-series TEST DATA that bloated
-// two client profiles (Vlado + Svitlana-as-client) to 500+ empty sessions
-// each, froze their profile pages, and littered Google Calendar with hundreds
-// of 5-minute events. Runs in PRODUCTION on purpose: the Google refresh token
-// is encrypted with TOKEN_ENCRYPTION_KEY, which only exists in the deployment
+// ONE-OFF cleanup — remove the recurring-series TEST DATA that bloated two
+// client profiles (Vlado + Svitlana-as-client) to 500+ empty sessions each,
+// froze their profile pages, and littered Google Calendar with hundreds of
+// 5-minute events. Runs in PRODUCTION on purpose: the Google refresh token is
+// encrypted with TOKEN_ENCRYPTION_KEY, which only exists in the deployment
 // env — it can't be decrypted from a local script.
+//
+// Lives under /api/cron/ (not because it's scheduled — it isn't) but because
+// proxy.ts treats that prefix as public, so a CRON_SECRET-bearer call reaches
+// the handler instead of being redirected to /signin by the session gate.
 //
 // This route is TEMPORARY. Remove it once the cleanup is confirmed done.
 //
