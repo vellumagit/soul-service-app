@@ -22,6 +22,50 @@ type CalSession = {
 const HOUR_START = 8;
 const HOUR_END = 21;
 const PX_PER_HOUR = 48;
+
+// Lay overlapping sessions out side by side instead of stacking them on top
+// of each other — stacking hid every session but the front one (eleven 9:00
+// bookings looked like one). Classic interval-lane packing per day column:
+// sort by start, group transitively-overlapping sessions into a cluster,
+// give each the first free lane; every block in a cluster shares its width.
+function layoutLanes(
+  day: CalSession[],
+  tz: string
+): Map<string, { lane: number; lanes: number }> {
+  const out = new Map<string, { lane: number; lanes: number }>();
+  const items = day
+    .map((s) => {
+      const { hour, minute } = zonedClock(new Date(s.scheduledAt), tz);
+      const start = hour * 60 + minute;
+      return { id: s.id, start, end: start + Math.max(s.durationMinutes, 1) };
+    })
+    .sort((a, b) => a.start - b.start || a.end - b.end);
+  let cluster: typeof items = [];
+  let laneEnds: number[] = [];
+  let clusterEnd = -1;
+  const flush = () => {
+    for (const it of cluster) {
+      out.set(it.id, { lane: out.get(it.id)!.lane, lanes: laneEnds.length });
+    }
+    cluster = [];
+    laneEnds = [];
+  };
+  for (const it of items) {
+    if (cluster.length > 0 && it.start >= clusterEnd) flush();
+    clusterEnd = cluster.length === 0 ? it.end : Math.max(clusterEnd, it.end);
+    let lane = laneEnds.findIndex((end) => end <= it.start);
+    if (lane === -1) {
+      lane = laneEnds.length;
+      laneEnds.push(it.end);
+    } else {
+      laneEnds[lane] = it.end;
+    }
+    out.set(it.id, { lane, lanes: 1 });
+    cluster.push(it);
+  }
+  flush();
+  return out;
+}
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 // Column index (0=Sun … 6=Sat) → ISO weekday name (lowercase), matching the
@@ -275,6 +319,7 @@ export function WeekCalendar({
           {dayKeys.map((key, dayIdx) => {
             const isToday = dayIdx === todayDayIndex;
             const isOff = isSabbathCol(dayIdx);
+            const laneOf = layoutLanes(sessionsByDay[dayIdx], tz);
             return (
               <div
                 key={dayIdx}
@@ -301,6 +346,7 @@ export function WeekCalendar({
                   );
                   if (top < 0 || top > (HOUR_END - HOUR_START) * PX_PER_HOUR)
                     return null;
+                  const lane = laneOf.get(s.id) ?? { lane: 0, lanes: 1 };
                   const tone = toneFor(s.type);
                   const endInstant = new Date(
                     startInstant.getTime() + s.durationMinutes * 60000
@@ -315,7 +361,15 @@ export function WeekCalendar({
                       key={s.id}
                       href={s.href ?? `/clients/${s.clientId}`}
                       className={`cal-block tone-${tone}${compact ? " compact" : ""}`}
-                      style={{ top, height }}
+                      style={{
+                        top,
+                        height,
+                        // Side-by-side lanes for overlapping sessions (see
+                        // layoutLanes). Keeps the 4px column gutters.
+                        left: `calc(4px + (100% - 8px) * ${lane.lane} / ${lane.lanes})`,
+                        width: `calc((100% - 8px) / ${lane.lanes} - ${lane.lanes > 1 ? 2 : 0}px)`,
+                        right: "auto",
+                      }}
                       title={`${shortTime(startInstant, tz)}–${shortTime(endInstant, tz)} · ${s.clientName} · ${s.type} · ${s.durationMinutes}m`}
                     >
                       {compact ? (

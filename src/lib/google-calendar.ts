@@ -587,6 +587,68 @@ export async function deleteCalendarEvent(
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** UTC basic datetime for a recurrence RDATE, e.g. "20260131T170000Z". */
+/** Truncate a recurring event so it ENDS at `untilMs` — keeps every instance
+ *  she already held on her calendar, drops the rest. This is what "cancel the
+ *  series" must do once any occurrence has happened: deleting the master
+ *  event would erase the past instances from Google too. Rewrites the RRULE
+ *  (COUNT → UNTIL) and prunes RDATE lists. Returns true when done or already
+ *  gone on Google's side; false when Google isn't connected. */
+export async function truncateRecurringEvent(
+  accountId: string,
+  recurringEventId: string,
+  untilMs: number,
+  opts?: { notify?: boolean }
+): Promise<boolean> {
+  const auth = await getAuthedClient(accountId);
+  if (!auth) return false;
+  const calendar = google.calendar({ version: "v3", auth });
+  const until = toGCalUtcBasic(new Date(untilMs));
+  try {
+    const ev = await calendar.events.get({
+      calendarId: "primary",
+      eventId: recurringEventId,
+    });
+    const next: string[] = [];
+    for (const line of ev.data.recurrence ?? []) {
+      if (line.startsWith("RRULE:")) {
+        // COUNT and UNTIL are mutually exclusive — drop COUNT, set UNTIL.
+        const parts = line
+          .slice(6)
+          .split(";")
+          .filter((p) => p && !/^(COUNT|UNTIL)=/i.test(p));
+        parts.push(`UNTIL=${until}`);
+        next.push(`RRULE:${parts.join(";")}`);
+      } else if (line.startsWith("RDATE:")) {
+        const kept = line
+          .slice(6)
+          .split(",")
+          .filter((d) => parseGCalUtcBasic(d) <= untilMs);
+        if (kept.length > 0) next.push(`RDATE:${kept.join(",")}`);
+      } else {
+        next.push(line); // EXDATE and anything else: keep as-is
+      }
+    }
+    await calendar.events.patch({
+      calendarId: "primary",
+      eventId: recurringEventId,
+      sendUpdates: opts?.notify === false ? "none" : "all",
+      requestBody: { recurrence: next },
+    });
+    return true;
+  } catch (err) {
+    if (isNotFoundError(err)) return true;
+    throw err;
+  }
+}
+
+/** Inverse of toGCalUtcBasic — "20260905T050500Z" → epoch ms. An entry we
+ *  can't parse sorts as "future" so it's dropped rather than kept. */
+function parseGCalUtcBasic(s: string): number {
+  const m = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/.exec(s.trim());
+  if (!m) return Number.POSITIVE_INFINITY;
+  return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]);
+}
+
 function toGCalUtcBasic(d: Date): string {
   return d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
 }

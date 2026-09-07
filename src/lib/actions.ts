@@ -24,7 +24,7 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { getSettings } from "@/db/queries";
 import { requireSession } from "./session-cookies";
 import { reportError } from "./observability";
-import { SERIES_HORIZON_WEEKS } from "./recurring-sessions";
+import { SERIES_HORIZON_WEEKS, occurrenceInstant } from "./recurring-sessions";
 import { isValidTimeZone, resolveTimeZone } from "./timezone";
 import { safeCurrency } from "./format";
 
@@ -2033,6 +2033,20 @@ export async function scheduleSessionSeries(
     // "Monday 10am" stays 10am local across the spring/fall shift). Fall back
     // to a server-side computation if the field is missing (older clients, or
     // somebody scripting the action).
+    // Server-side fallback for the date list (older clients / scripted calls):
+    // DST-correct in the PRACTICE timezone, the same algorithm the cron top-up
+    // uses — never naive UTC arithmetic, which drifts an hour across the shift.
+    const [tzRow] = await db
+      .select({ timezone: practitionerSettings.timezone })
+      .from(practitionerSettings)
+      .where(eq(practitionerSettings.accountId, accountId))
+      .limit(1);
+    const seriesTz = resolveTimeZone(str(formData, "timezone"), tzRow?.timezone);
+    const fallbackDates = () =>
+      Array.from({ length: occurrenceCount }, (_, i) =>
+        occurrenceInstant(firstAt, frequency, i + 1, seriesTz)
+      );
+
     let dates: Date[];
     const computedDatesRaw = str(formData, "computedDates");
     if (computedDatesRaw) {
@@ -2045,16 +2059,16 @@ export async function scheduleSessionSeries(
         ) {
           dates = parsed.map((s) => new Date(s));
           if (dates.some((d) => Number.isNaN(d.getTime()))) {
-            dates = computeSeriesDates(firstAt, frequency, occurrenceCount);
+            dates = fallbackDates();
           }
         } else {
-          dates = computeSeriesDates(firstAt, frequency, occurrenceCount);
+          dates = fallbackDates();
         }
       } catch {
-        dates = computeSeriesDates(firstAt, frequency, occurrenceCount);
+        dates = fallbackDates();
       }
     } else {
-      dates = computeSeriesDates(firstAt, frequency, occurrenceCount);
+      dates = fallbackDates();
     }
 
     // Duplicate-submit guard. On 2026-09-04/05 the same series was created 21
@@ -2385,12 +2399,13 @@ export async function cancelSessionSeries(
   // remaining occurrence at once; any occurrences that were individually
   // rescheduled into their own standalone events are deleted alongside it.
   // Deduped so the shared recurring id is deleted a single time.
-  const toDelete: { id: string; googleEventId: string }[] = [];
-  const seenEventIds = new Set<string>();
-  // The series row is the reliable handle for its ONE recurring event: rows
-  // lose the id when an occurrence is cancelled/detached, and rows beyond the
-  // materialization window don't exist yet — so reading it off future rows
-  // alone could leave every remaining Google instance alive on her calendar.
+  // What to do with the ONE recurring Google event. The series row is the
+  // reliable handle (rows lose the id on cancel-one/reschedule-one; rows past
+  // the window don't exist yet). If any occurrence of that event has already
+  // HAPPENED, truncate the recurrence at "now" — that keeps her held sessions
+  // on her Google Calendar and drops only the future ones. Deleting the master
+  // would erase the past instances from Google too. Only a series with no held
+  // instance yet gets its event deleted outright (nothing to preserve).
   const [seriesRow] = await db
     .select({ googleRecurringEventId: sessionSeries.googleRecurringEventId })
     .from(sessionSeries)
@@ -2398,20 +2413,54 @@ export async function cancelSessionSeries(
       and(eq(sessionSeries.accountId, accountId), eq(sessionSeries.id, seriesId))
     )
     .limit(1);
-  if (seriesRow?.googleRecurringEventId) {
-    seenEventIds.add(seriesRow.googleRecurringEventId);
-    // `id` only serves to null googleEventId on a matching session row; when
-    // no future row exists the series id matches none — harmless.
-    toDelete.push({
-      id: futureRows[0]?.id ?? seriesId,
-      googleEventId: seriesRow.googleRecurringEventId,
-    });
-  }
+  const recurringId =
+    seriesRow?.googleRecurringEventId ??
+    futureRows.find((r) => r.googleRecurringEventId)?.googleRecurringEventId ??
+    null;
+
+  // Detached occurrences (rescheduled into their own standalone events) are
+  // deleted individually; the shared recurring id is handled once, below.
+  const toDelete: { id: string; googleEventId: string }[] = [];
+  const seenEventIds = new Set<string>();
   for (const r of futureRows) {
-    const gid = r.googleRecurringEventId ?? r.googleEventId;
-    if (gid && !seenEventIds.has(gid)) {
-      seenEventIds.add(gid);
-      toDelete.push({ id: r.id, googleEventId: gid });
+    if (r.googleRecurringEventId || !r.googleEventId) continue;
+    if (seenEventIds.has(r.googleEventId)) continue;
+    seenEventIds.add(r.googleEventId);
+    toDelete.push({ id: r.id, googleEventId: r.googleEventId });
+  }
+
+  if (recurringId) {
+    const [held] = await db
+      .select({ id: sessions.id })
+      .from(sessions)
+      .where(
+        and(
+          eq(sessions.accountId, accountId),
+          eq(sessions.seriesId, seriesId),
+          eq(sessions.googleRecurringEventId, recurringId),
+          sql`${sessions.scheduledAt} <= ${now.toISOString()}`
+        )
+      )
+      .limit(1);
+    if (held) {
+      try {
+        const { truncateRecurringEvent } = await import("./google-calendar");
+        await truncateRecurringEvent(accountId, recurringId, now.getTime(), {
+          notify: false,
+        });
+      } catch (e) {
+        console.warn(
+          "[cancelSessionSeries] truncating the recurring event failed (continuing with DB delete):",
+          e
+        );
+      }
+    } else {
+      // `id` only serves to null googleEventId on a matching session row; when
+      // no future row exists the series id matches none — harmless.
+      toDelete.push({
+        id: futureRows[0]?.id ?? seriesId,
+        googleEventId: recurringId,
+      });
     }
   }
   if (toDelete.length > 0) {
@@ -2453,30 +2502,6 @@ export async function cancelSessionSeries(
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/calendar");
   revalidatePath("/today");
-}
-
-/** Pure date math — compute the timestamps for a series. */
-function computeSeriesDates(
-  firstAt: Date,
-  frequency: "weekly" | "biweekly" | "monthly",
-  count: number
-): Date[] {
-  const dates: Date[] = [];
-  for (let i = 0; i < count; i++) {
-    const d = new Date(firstAt);
-    if (frequency === "weekly") {
-      d.setDate(firstAt.getDate() + i * 7);
-    } else if (frequency === "biweekly") {
-      d.setDate(firstAt.getDate() + i * 14);
-    } else {
-      // monthly — same day-of-month each month. JS Date handles month overflow
-      // (e.g. Jan 31 + 1 month = Mar 3 or similar). For practitioner scheduling
-      // that's fine — she'd just adjust the rare overflow manually.
-      d.setMonth(firstAt.getMonth() + i);
-    }
-    dates.push(d);
-  }
-  return dates;
 }
 
 export async function logPastSession(formData: FormData) {
