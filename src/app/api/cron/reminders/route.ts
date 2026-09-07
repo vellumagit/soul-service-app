@@ -71,6 +71,7 @@ export async function GET(request: Request) {
     nowUtc.getUTCHours() === 4 && nowUtc.getUTCMinutes() < 10;
   let recurringCircles = { groups: 0, created: 0 };
   let prunedCircles = 0;
+  let recurringSessions = { series: 0, created: 0 };
   if (runDailyMaintenance) {
     try {
       recurringCircles = await ensureRecurringCircleSessions();
@@ -82,6 +83,15 @@ export async function GET(request: Request) {
     } catch (err) {
       console.error("[cron] empty-cancelled circle prune failed", err);
     }
+    // Top up 1:1 recurring session series into their rolling window (mirrors
+    // the Circle top-up). Daily is ample: the window is 8 weeks, so a new
+    // weekly occurrence has 8 weeks of runway before it needs a row.
+    try {
+      const { ensureSeriesSessions } = await import("@/lib/recurring-sessions");
+      recurringSessions = await ensureSeriesSessions();
+    } catch (err) {
+      console.error("[cron] recurring sessions top-up failed", err);
+    }
   }
 
   return NextResponse.json({
@@ -91,5 +101,6 @@ export async function GET(request: Request) {
     leadMagnetFollowups,
     recurringCircles,
     prunedCircles,
+    recurringSessions,
   });
 }

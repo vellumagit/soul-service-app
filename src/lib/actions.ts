@@ -24,6 +24,7 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { getSettings } from "@/db/queries";
 import { requireSession } from "./session-cookies";
 import { reportError } from "./observability";
+import { SERIES_HORIZON_WEEKS } from "./recurring-sessions";
 import { isValidTimeZone, resolveTimeZone } from "./timezone";
 import { safeCurrency } from "./format";
 
@@ -2104,24 +2105,38 @@ export async function scheduleSessionSeries(
       })
       .returning({ id: sessionSeries.id });
 
-    // Bulk-insert all the sessions
+    // Materialize only a BOUNDED WINDOW, not the whole series. Past-dated
+    // occurrences are back-fill (kept in full — real history she asked for).
+    // Future occurrences are materialized only through SERIES_HORIZON_WEEKS;
+    // the reminders cron tops the window up as time passes (recurring-sessions.ts).
+    // This is what stops a 52-week series from landing 52 rows at once — the
+    // bloat that froze the two profiles. occurrenceIndex is kept 1-based over
+    // the FULL series so the cron top-up dedupes against the same indices.
     const now = new Date();
-    const sessionRows = dates.map((scheduledAt, i) => ({
-      accountId,
-      clientId,
-      type,
-      // Past dates land as 'completed' (treats it like a back-fill).
-      // Future dates are 'scheduled'. Saves a step for clients she's been
-      // seeing weekly for a while.
-      status: (scheduledAt < now ? "completed" : "scheduled") as
-        | "completed"
-        | "scheduled",
-      scheduledAt,
-      durationMinutes,
-      intention,
-      seriesId: seriesRow.id,
-      occurrenceIndex: i + 1,
-    }));
+    const horizonEnd = new Date(
+      now.getTime() + SERIES_HORIZON_WEEKS * 7 * 86_400_000
+    );
+    const sessionRows = dates
+      .map((scheduledAt, i) => ({ scheduledAt, index: i + 1 }))
+      .filter(
+        ({ scheduledAt }) =>
+          scheduledAt.getTime() < now.getTime() || // past → back-fill
+          scheduledAt.getTime() <= horizonEnd.getTime() // future within window
+      )
+      .map(({ scheduledAt, index }) => ({
+        accountId,
+        clientId,
+        type,
+        // Past dates land as 'completed' (back-fill); future dates 'scheduled'.
+        status: (scheduledAt.getTime() < now.getTime()
+          ? "completed"
+          : "scheduled") as "completed" | "scheduled",
+        scheduledAt,
+        durationMinutes,
+        intention,
+        seriesId: seriesRow.id,
+        occurrenceIndex: index,
+      }));
 
     const inserted = await db
       .insert(sessions)
@@ -2164,6 +2179,12 @@ export async function scheduleSessionSeries(
         (a, b) =>
           new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime()
       );
+    // The recurring Google event must cover the ENTIRE remaining series (its
+    // RRULE/RDATE), even though we only materialized the window as rows above.
+    // Rows the cron tops up later inherit this same event — no new Google call.
+    const allFutureDates = dates
+      .filter((d) => d.getTime() > nowMs)
+      .sort((a, b) => a.getTime() - b.getTime());
     // ONE recurring Google event for the whole series — NOT one event per
     // occurrence. Creating 52 separate events fired a "new event added to your
     // calendar" email per occurrence (dozens at once). A single recurring event
@@ -2176,10 +2197,7 @@ export async function scheduleSessionSeries(
         const { recurrenceForSeries } = await import("./google-calendar");
         const recurring = await syncSeriesToGoogle(
           future[0].id,
-          recurrenceForSeries(
-            frequency,
-            future.map((s) => new Date(s.scheduledAt))
-          )
+          recurrenceForSeries(frequency, allFutureDates)
         );
         if (recurring) {
           await db
