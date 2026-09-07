@@ -2116,12 +2116,19 @@ export async function scheduleSessionSeries(
     const horizonEnd = new Date(
       now.getTime() + SERIES_HORIZON_WEEKS * 7 * 86_400_000
     );
+    // The FIRST future occurrence is always materialized, even when it lies
+    // beyond the horizon: it anchors the one recurring Google event, the
+    // confirmation email and the notetaker queue. A series starting three
+    // months out would otherwise have no row to hang any of that on.
+    const firstFutureIndex =
+      dates.findIndex((d) => d.getTime() > now.getTime()) + 1; // 0 = none
     const sessionRows = dates
       .map((scheduledAt, i) => ({ scheduledAt, index: i + 1 }))
       .filter(
-        ({ scheduledAt }) =>
+        ({ scheduledAt, index }) =>
           scheduledAt.getTime() < now.getTime() || // past → back-fill
-          scheduledAt.getTime() <= horizonEnd.getTime() // future within window
+          scheduledAt.getTime() <= horizonEnd.getTime() || // future within window
+          index === firstFutureIndex
       )
       .map(({ scheduledAt, index }) => ({
         accountId,
@@ -2146,6 +2153,19 @@ export async function scheduleSessionSeries(
         scheduledAt: sessions.scheduledAt,
         status: sessions.status,
       });
+
+    // High-water mark for the lazy top-up: every index up to the highest one
+    // we just created is "handled". The cron only ever materializes ABOVE it,
+    // so an occurrence she later deletes is never resurrected. (The window is
+    // contiguous from index 1, so there are no gaps below the mark.)
+    const materializedThrough = sessionRows.reduce(
+      (m, r) => Math.max(m, r.occurrenceIndex),
+      0
+    );
+    await db
+      .update(sessionSeries)
+      .set({ materializedThroughIndex: materializedThrough, updatedAt: now })
+      .where(eq(sessionSeries.id, seriesRow.id));
 
     // Same auto-promote logic as the single-session case — if this client
     // was still in the network, kicking off a series moves them out.
@@ -2193,33 +2213,61 @@ export async function scheduleSessionSeries(
     // linked by googleRecurringEventId so reschedule/cancel-one can address its
     // own instance. Best-effort: a Google hiccup never undoes the saved series.
     if (future.length > 0) {
-      try {
-        const { recurrenceForSeries } = await import("./google-calendar");
-        const recurring = await syncSeriesToGoogle(
-          future[0].id,
-          recurrenceForSeries(frequency, allFutureDates)
-        );
-        if (recurring) {
-          await db
-            .update(sessions)
-            .set({
-              googleRecurringEventId: recurring.recurringEventId,
-              meetUrl: recurring.meetUrl,
-              updatedAt: new Date(),
-            })
-            .where(
-              and(
-                eq(sessions.accountId, accountId),
-                eq(sessions.seriesId, seriesRow.id),
-                eq(sessions.status, "scheduled")
-              )
-            );
+      if (allFutureDates.length >= 2) {
+        try {
+          const { recurrenceForSeries } = await import("./google-calendar");
+          const recurring = await syncSeriesToGoogle(
+            future[0].id,
+            recurrenceForSeries(frequency, allFutureDates)
+          );
+          if (recurring) {
+            await db
+              .update(sessions)
+              .set({
+                googleRecurringEventId: recurring.recurringEventId,
+                meetUrl: recurring.meetUrl,
+                updatedAt: new Date(),
+              })
+              .where(
+                and(
+                  eq(sessions.accountId, accountId),
+                  eq(sessions.seriesId, seriesRow.id),
+                  eq(sessions.status, "scheduled")
+                )
+              );
+            // Remember it on the SERIES too. Rows the cron materializes later
+            // inherit from here, and cancel-series can still find the event
+            // after every materialized occurrence was cancelled or detached
+            // (both of which null the id on their own rows).
+            await db
+              .update(sessionSeries)
+              .set({
+                googleRecurringEventId: recurring.recurringEventId,
+                meetUrl: recurring.meetUrl,
+                updatedAt: new Date(),
+              })
+              .where(eq(sessionSeries.id, seriesRow.id));
+          }
+        } catch (err) {
+          console.error(
+            "[scheduleSessionSeries] recurring Google event failed:",
+            err
+          );
         }
-      } catch (err) {
-        console.error(
-          "[scheduleSessionSeries] recurring Google event failed:",
-          err
-        );
+      } else {
+        // A one-occurrence "series" is just a session. An RRULE with COUNT=1
+        // is pointless and — worse — would stamp googleRecurringEventId on a
+        // NON-recurring event, so cancel/reschedule-one would call
+        // events.instances on it and fail, orphaning the event. Sync it as a
+        // plain standalone event instead (creates it + invites the client).
+        try {
+          await syncSessionToGoogle(future[0].id);
+        } catch (err) {
+          console.error(
+            "[scheduleSessionSeries] single-occurrence Google sync failed:",
+            err
+          );
+        }
       }
       // Notetaker bots are NOT created here. Doing so fired one Recall call
       // per occurrence (52 in a burst → Recall's 120/min limit, silent
@@ -2339,6 +2387,26 @@ export async function cancelSessionSeries(
   // Deduped so the shared recurring id is deleted a single time.
   const toDelete: { id: string; googleEventId: string }[] = [];
   const seenEventIds = new Set<string>();
+  // The series row is the reliable handle for its ONE recurring event: rows
+  // lose the id when an occurrence is cancelled/detached, and rows beyond the
+  // materialization window don't exist yet — so reading it off future rows
+  // alone could leave every remaining Google instance alive on her calendar.
+  const [seriesRow] = await db
+    .select({ googleRecurringEventId: sessionSeries.googleRecurringEventId })
+    .from(sessionSeries)
+    .where(
+      and(eq(sessionSeries.accountId, accountId), eq(sessionSeries.id, seriesId))
+    )
+    .limit(1);
+  if (seriesRow?.googleRecurringEventId) {
+    seenEventIds.add(seriesRow.googleRecurringEventId);
+    // `id` only serves to null googleEventId on a matching session row; when
+    // no future row exists the series id matches none — harmless.
+    toDelete.push({
+      id: futureRows[0]?.id ?? seriesId,
+      googleEventId: seriesRow.googleRecurringEventId,
+    });
+  }
   for (const r of futureRows) {
     const gid = r.googleRecurringEventId ?? r.googleEventId;
     if (gid && !seenEventIds.has(gid)) {

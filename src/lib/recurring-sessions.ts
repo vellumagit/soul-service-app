@@ -9,18 +9,28 @@ import "server-only";
  * rolling window (the next HORIZON_WEEKS weeks) and top it up here as time
  * passes, exactly like recurring Circles (see recurring-circles.ts).
  *
- * The whole series is represented on Google Calendar by ONE recurring event
- * (created at series-creation time, covering every occurrence via its RRULE),
- * so topping up rows makes ZERO Google calls — new rows just inherit the
- * series' googleRecurringEventId + meetUrl. This is the guard that stops the
- * "one calendar event per occurrence" fan-out from ever coming back.
+ * Two invariants make this safe to run blindly every day:
  *
- * Runs on save (scoped to one series, for the first window) and daily from the
- * reminders cron (all active series). Idempotent + deduped by occurrenceIndex,
- * so it's safe to run repeatedly and never double-books.
+ *  1. HIGH-WATER MARK. `session_series.materializedThroughIndex` records the
+ *     highest occurrence index ever handled. The top-up only creates indices
+ *     ABOVE it and then advances it. So an occurrence that later disappears —
+ *     she deletes it, a cleanup purges it — is never resurrected, because its
+ *     index is already below the mark. (Deriving "what exists" from session
+ *     rows was exactly how 21 purged test series nearly came back to life.)
+ *
+ *  2. ONE GOOGLE EVENT. The whole series is one recurring Google event,
+ *     created at series-creation time with an RRULE covering EVERY occurrence
+ *     and remembered on the series row. Topped-up rows just inherit its id +
+ *     Meet link — ZERO Google calls here. The per-occurrence calendar fan-out
+ *     structurally cannot come back.
+ *
+ * Plus a DB unique index on (series_id, occurrence_index), so even a race
+ * (overlapping cron ticks) can't double-insert an occurrence.
+ *
+ * Runs daily from the reminders cron (all active series). Idempotent.
  */
 
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { sessions, sessionSeries, practitionerSettings } from "@/db/schema";
 import {
@@ -35,8 +45,7 @@ import {
 export const SERIES_HORIZON_WEEKS = 8;
 
 /** Never create more than this many rows for one series in a single tick —
- *  a backlog (e.g. a long series that somehow lost its window) fills over a
- *  few ticks instead of in one burst. */
+ *  a backlog fills over a few ticks instead of in one burst. */
 const MAX_CREATE_PER_TICK = 40;
 
 type Freq = "weekly" | "biweekly" | "monthly";
@@ -84,6 +93,9 @@ type SeriesRow = {
   durationMinutes: number;
   firstAt: Date;
   occurrenceCount: number;
+  materializedThroughIndex: number;
+  googleRecurringEventId: string | null;
+  meetUrl: string | null;
   intention: string | null;
   practiceTz: string | null;
 };
@@ -95,9 +107,8 @@ async function ensureForSeries(
 ): Promise<number> {
   const tz = resolveTimeZone(series.practiceTz);
 
-  // Every existing occurrence of this series — ANY status. A cancelled row is
-  // a deliberate "skip this one" marker and must NOT be regenerated (same rule
-  // as the recurring-Circle top-up).
+  // Belt-and-braces alongside the high-water mark: never create an index that
+  // already has a row of ANY status (a cancelled row is a deliberate "skip").
   const existing = await db
     .select({
       idx: sessions.occurrenceIndex,
@@ -111,23 +122,32 @@ async function ensureForSeries(
         eq(sessions.seriesId, series.id)
       )
     );
-
   const taken = new Set<number>();
   for (const e of existing) if (e.idx != null) taken.add(e.idx);
 
-  // New rows inherit the series' single recurring Google event + shared Meet
-  // link, so nothing new is created on Google's side.
-  const anchor =
-    existing.find((e) => e.googleRecurringEventId) ?? existing[0] ?? null;
-  const googleRecurringEventId = anchor?.googleRecurringEventId ?? null;
-  const meetUrl = anchor?.meetUrl ?? null;
+  // Inherit the series' single recurring Google event + shared Meet link.
+  // The series row is authoritative; fall back to any session row that still
+  // carries it (series created before the column existed).
+  const legacyAnchor = existing.find((e) => e.googleRecurringEventId) ?? null;
+  const googleRecurringEventId =
+    series.googleRecurringEventId ?? legacyAnchor?.googleRecurringEventId ?? null;
+  const meetUrl = series.meetUrl ?? legacyAnchor?.meetUrl ?? null;
 
   const toInsert: (typeof sessions.$inferInsert)[] = [];
-  for (let index = 1; index <= series.occurrenceCount; index++) {
-    if (taken.has(index)) continue;
+  // Walk ascending from just above the mark. Dates are monotonic, so the first
+  // occurrence beyond the horizon means every later one is too — stop there
+  // and leave the mark pointing at the last index we actually handled.
+  let newMark = series.materializedThroughIndex;
+  for (
+    let index = series.materializedThroughIndex + 1;
+    index <= series.occurrenceCount;
+    index++
+  ) {
     const at = occurrenceInstant(series.firstAt, series.frequency, index, tz);
-    if (at.getTime() <= now.getTime()) continue; // never backfill from the cron
-    if (at.getTime() > horizonEnd.getTime()) continue; // beyond the window — later
+    if (at.getTime() > horizonEnd.getTime()) break;
+    newMark = index; // handled from here on, created or not
+    if (at.getTime() <= now.getTime()) continue; // missed/past — don't invent a past row
+    if (taken.has(index)) continue;
     toInsert.push({
       accountId: series.accountId,
       clientId: series.clientId,
@@ -144,8 +164,23 @@ async function ensureForSeries(
     if (toInsert.length >= MAX_CREATE_PER_TICK) break;
   }
 
-  if (toInsert.length === 0) return 0;
-  await db.insert(sessions).values(toInsert);
+  if (toInsert.length > 0) {
+    // The unique index on (series_id, occurrence_index) makes a concurrent
+    // duplicate a no-op instead of an error.
+    await db.insert(sessions).values(toInsert).onConflictDoNothing();
+  }
+
+  if (newMark > series.materializedThroughIndex) {
+    // Monotonic: never move the mark backwards, even if two ticks race.
+    await db
+      .update(sessionSeries)
+      .set({
+        materializedThroughIndex: sql`GREATEST(${sessionSeries.materializedThroughIndex}, ${newMark})`,
+        updatedAt: now,
+      })
+      .where(eq(sessionSeries.id, series.id));
+  }
+
   return toInsert.length;
 }
 
@@ -153,7 +188,11 @@ export async function ensureSeriesSessions(opts?: {
   seriesId?: string;
   accountId?: string;
 }): Promise<{ series: number; created: number }> {
-  const conds = [isNull(sessionSeries.cancelledAt)];
+  const conds = [
+    isNull(sessionSeries.cancelledAt),
+    // Finished series (everything materialized) drop out of the daily scan.
+    sql`${sessionSeries.materializedThroughIndex} < ${sessionSeries.occurrenceCount}`,
+  ];
   if (opts?.seriesId) conds.push(eq(sessionSeries.id, opts.seriesId));
   if (opts?.accountId) conds.push(eq(sessionSeries.accountId, opts.accountId));
 
@@ -167,6 +206,9 @@ export async function ensureSeriesSessions(opts?: {
       durationMinutes: sessionSeries.durationMinutes,
       firstAt: sessionSeries.firstAt,
       occurrenceCount: sessionSeries.occurrenceCount,
+      materializedThroughIndex: sessionSeries.materializedThroughIndex,
+      googleRecurringEventId: sessionSeries.googleRecurringEventId,
+      meetUrl: sessionSeries.meetUrl,
       intention: sessionSeries.intention,
       practiceTz: practitionerSettings.timezone,
     })

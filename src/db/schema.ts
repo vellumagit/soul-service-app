@@ -370,9 +370,25 @@ export const sessionSeries = pgTable(
     // pattern for the rest of the series.
     firstAt: timestamp("first_at", { withTimezone: true }).notNull(),
 
-    // How many sessions were generated. Stored so we can render "session 3/12"
-    // without re-counting, and so we know when a series is "complete".
+    // Total occurrences in the series ("session 3/12"). NOT how many rows exist:
+    // rows are materialized lazily in a rolling window (recurring-sessions.ts).
     occurrenceCount: integer("occurrence_count").notNull(),
+
+    // High-water mark: every occurrence index <= this has been HANDLED —
+    // materialized, or deliberately skipped/deleted/purged. The top-up only
+    // ever creates indices above it, so a row she deletes is never resurrected.
+    // Legacy (bulk-created) series were backfilled to occurrenceCount.
+    materializedThroughIndex: integer("materialized_through_index")
+      .notNull()
+      .default(0),
+
+    // The ONE recurring Google event for the whole series + its shared Meet
+    // link. Kept here (not only on session rows) because rows lose the id when
+    // an occurrence is cancelled/detached and rows beyond the window don't
+    // exist yet — this is the reliable handle for top-up inheritance and for
+    // deleting the event when the series is cancelled.
+    googleRecurringEventId: text("google_recurring_event_id"),
+    meetUrl: text("meet_url"),
 
     intention: text("intention"),
 
