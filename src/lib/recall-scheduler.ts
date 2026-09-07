@@ -24,6 +24,7 @@ import { and, asc, eq, gte, isNotNull, isNull, lte, or, sql } from "drizzle-orm"
 import { db } from "@/db";
 import { practitionerSettings, sessions } from "@/db/schema";
 import { createBot, recallConfigured } from "./recall";
+import { reportError } from "./observability";
 
 /** Status marker for "a bot will be sent shortly before the session". */
 export const RECALL_PENDING_AUTO = "pending_auto";
@@ -126,6 +127,11 @@ export async function scheduleDueRecallBots(
       const msg = err instanceof Error ? err.message : String(err);
       stats.errors.push(`${s.id}: ${msg}`);
       console.error("[recall sweep] bot creation failed for", s.id, msg);
+      await reportError(err, {
+        where: "recall-sweep",
+        sessionId: s.id,
+        accountId: s.accountId,
+      });
       // A rate-limit response means every further call this tick will fail
       // too — stop and let the next tick pick the rest up.
       if (/\(429\)/.test(msg)) break;

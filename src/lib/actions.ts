@@ -23,6 +23,7 @@ import {
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { getSettings } from "@/db/queries";
 import { requireSession } from "./session-cookies";
+import { reportError } from "./observability";
 import { isValidTimeZone, resolveTimeZone } from "./timezone";
 import { safeCurrency } from "./format";
 
@@ -1706,6 +1707,7 @@ async function maybeAutoAddRecallBot(
       );
   } catch (err) {
     console.warn("[recall auto-add] failed:", err);
+    await reportError(err, { where: "recall-auto-add", accountId, sessionId });
   }
 }
 
@@ -4002,6 +4004,7 @@ async function syncSessionToGoogle(
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : "Sync failed";
     console.warn("Google Calendar sync failed:", err);
+    await reportError(err, { where: "syncSessionToGoogle", sessionId });
     // Persist the error on the settings row so /status can surface it later.
     // Best-effort — don't fail the action if this write itself errors.
     try {
