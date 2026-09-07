@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useId } from "react";
 import Link from "next/link";
 import {
   addTask,
@@ -183,6 +183,10 @@ function TaskRowItem({
 }
 
 function AddTaskInline({ clientId }: { clientId?: string }) {
+  // Per-instance form id: the footer button binds to THIS form, never
+  // to the first same-named form in the document (a hidden or sibling
+  // instance of this dialog).
+  const formId = useId();
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -215,7 +219,7 @@ function AddTaskInline({ clientId }: { clientId?: string }) {
           </button>
           <button
             type="submit"
-            form="add-task-form"
+            form={formId}
             disabled={submitting}
             className="px-4 py-2 text-sm bg-ink-900 hover:bg-ink-800 text-white rounded-md font-medium disabled:opacity-60"
           >
@@ -225,7 +229,7 @@ function AddTaskInline({ clientId }: { clientId?: string }) {
       }
     >
       <form
-        id="add-task-form"
+        id={formId}
         action={async (fd) => {
           setSubmitting(true);
           setError(null);

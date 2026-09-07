@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useId } from "react";
 import { Modal } from "./Modal";
 import { Field, inputCls } from "./Form";
 import { scheduleSessionSeries } from "@/lib/actions";
@@ -106,6 +106,10 @@ export function ScheduleSeriesDialog({
    *  the always-mounted QuickActions copy so it doesn't double-open. */
   respondToShortcut?: boolean;
 }) {
+  // Per-instance form id: the footer button binds to THIS form, never
+  // to the first same-named form in the document (a hidden or sibling
+  // instance of this dialog).
+  const formId = useId();
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -202,7 +206,7 @@ export function ScheduleSeriesDialog({
             </button>
             <button
               type="submit"
-              form="schedule-series-form"
+              form={formId}
               // Never a dead button: if something's missing, the click says
               // so in words (see the pre-checks in the form action) instead of
               // silently doing nothing.
@@ -224,7 +228,7 @@ export function ScheduleSeriesDialog({
           </div>
         ) : (
           <form
-            id="schedule-series-form"
+            id={formId}
             // Our own checks with VISIBLE messages, not the browser's — its
             // validation bubbles can't be seen inside the scrolling modal on
             // a phone, which made a blocked submit look like a dead button.

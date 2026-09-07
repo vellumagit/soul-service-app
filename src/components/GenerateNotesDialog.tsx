@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useId } from "react";
 import { Modal } from "./Modal";
 import { Field, inputCls } from "./Form";
 import { generateNotesForSession } from "@/lib/actions";
@@ -30,6 +30,10 @@ export function GenerateNotesDialog({
    *  Driven by the practitioner_settings.autoUploadAiNotes toggle. */
   autoClose?: boolean;
 }) {
+  // Per-instance form id: the footer button binds to THIS form, never
+  // to the first same-named form in the document (a hidden or sibling
+  // instance of this dialog).
+  const formId = useId();
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -114,7 +118,7 @@ export function GenerateNotesDialog({
             {!success && (
               <button
                 type="submit"
-                form="gen-notes-form"
+                form={formId}
                 disabled={submitting || transcript.trim().length < 50}
                 className="px-4 py-2 text-sm bg-ink-900 hover:bg-ink-800 text-white rounded-md font-medium disabled:opacity-60 disabled:cursor-not-allowed"
               >
@@ -136,7 +140,7 @@ export function GenerateNotesDialog({
           </div>
         ) : (
           <form
-            id="gen-notes-form"
+            id={formId}
             onSubmit={async (e) => {
               e.preventDefault();
               setSubmitting(true);

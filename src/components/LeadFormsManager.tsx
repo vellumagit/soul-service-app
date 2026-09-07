@@ -8,7 +8,7 @@
 // the prefix is visible from the DB, and she has to rotate to get a fresh
 // token. Standard API-key UX.
 
-import { useState } from "react";
+import { useState, useId } from "react";
 import { Modal } from "./Modal";
 import { Field, inputCls } from "./Form";
 import {
@@ -27,6 +27,11 @@ export function LeadFormsManager({
   forms: LeadFormRow[];
   intakeUrl: string;
 }) {
+  // Per-instance form ids (see the other dialogs): the footer buttons bind
+  // to THESE forms, never to a same-named form elsewhere in the document.
+  const uid = useId();
+  const newFormId = uid + "-new";
+  const editFormId = uid + "-edit";
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<LeadFormRow | null>(null);
   // The cleartext token surfaced after create / rotate. Cleared when the
@@ -183,7 +188,7 @@ export function LeadFormsManager({
             </button>
             <button
               type="submit"
-              form="new-lead-form"
+              form={newFormId}
               className="px-4 py-2 text-sm bg-ink-900 hover:bg-ink-800 text-white rounded-md font-medium"
             >
               Create form
@@ -192,7 +197,7 @@ export function LeadFormsManager({
         }
       >
         <form
-          id="new-lead-form"
+          id={newFormId}
           action={async (fd) => {
             const r = await createLeadForm(fd);
             if (!r.ok) {
@@ -274,7 +279,7 @@ export function LeadFormsManager({
               </button>
               <button
                 type="submit"
-                form="edit-lead-form"
+                form={editFormId}
                 className="px-4 py-2 text-sm bg-ink-900 hover:bg-ink-800 text-white rounded-md font-medium"
               >
                 Save
@@ -283,7 +288,7 @@ export function LeadFormsManager({
           }
         >
           <form
-            id="edit-lead-form"
+            id={editFormId}
             action={async (fd) => {
               const r = await updateLeadForm(editing.id, {
                 name: (fd.get("name") as string) ?? editing.name,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useId } from "react";
 import { Modal } from "./Modal";
 import { Field, inputCls } from "./Form";
 import { ConfirmButton } from "./ConfirmButton";
@@ -25,6 +25,10 @@ export function EditClientDialog({
    *  Pass from the page server component. Self-referral is filtered out. */
   referrerOptions?: { id: string; fullName: string }[];
 }) {
+  // Per-instance form id: the footer button binds to THIS form, never
+  // to the first same-named form in the document (a hidden or sibling
+  // instance of this dialog).
+  const formId = useId();
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -123,7 +127,7 @@ export function EditClientDialog({
             </button>
             <button
               type="submit"
-              form="edit-client-form"
+              form={formId}
               disabled={submitting}
               className="px-4 py-2 text-sm bg-ink-900 hover:bg-ink-800 text-white rounded-md font-medium disabled:opacity-60"
             >
@@ -133,7 +137,7 @@ export function EditClientDialog({
         }
       >
         <form
-          id="edit-client-form"
+          id={formId}
           ref={formRef}
           onInput={snapshotForm}
           action={async (fd) => {
