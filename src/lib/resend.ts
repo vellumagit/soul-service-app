@@ -397,6 +397,85 @@ ${circleContactLineText(lang)}
   });
 }
 
+/** A Circle moved to a new time — or a cancelled one is back on. One email
+ *  per guest; their seat is held, nothing to do. Google is kept silent for
+ *  these so this is the only notice they get. */
+export async function sendCircleMovedEmail(
+  input: CircleEmailInput & {
+    /** The time it USED to be at (moved only). */
+    oldWhenLabel?: string | null;
+    /** true = "it's back on" after a cancellation, rather than a move. */
+    restored?: boolean;
+  }
+): Promise<void> {
+  const lang = input.language ?? "en";
+  const first = input.attendeeName?.split(" ")[0] ?? null;
+  const greeting = circleGreeting(first, lang);
+  const signoff = input.practitionerName ?? "Svitlana";
+  const subject = input.restored
+    ? lang === "uk"
+      ? `Знову в силі — ${input.circleName}, ${input.whenLabel}`
+      : `Back on — ${input.circleName}, ${input.whenLabel}`
+    : lang === "uk"
+      ? `Перенесено — ${input.circleName} тепер ${input.whenLabel}`
+      : `Moved — ${input.circleName} is now ${input.whenLabel}`;
+  const introText = input.restored
+    ? lang === "uk"
+      ? `Добрі новини — ${input.circleName} (${input.whenLabel}) таки збереться. Ваше місце збережено. 🤍`
+      : `Good news — ${input.circleName} on ${input.whenLabel} is back on. Your seat is held. 🤍`
+    : lang === "uk"
+      ? `${input.circleName} перенесено${input.oldWhenLabel ? ` з ${input.oldWhenLabel}` : ""} на ${input.whenLabel}. Ваше місце збережено — нічого робити не потрібно. 🤍`
+      : `${input.circleName} has moved${input.oldWhenLabel ? ` from ${input.oldWhenLabel}` : ""} to ${input.whenLabel}. Your seat is held — nothing to do. 🤍`;
+  const introHtml = input.restored
+    ? lang === "uk"
+      ? `Добрі новини — <strong>${escapeHtml(input.circleName)}</strong> (${escapeHtml(input.whenLabel)}) таки збереться. Ваше місце збережено.`
+      : `Good news — <strong>${escapeHtml(input.circleName)}</strong> on ${escapeHtml(input.whenLabel)} is back on. Your seat is held.`
+    : lang === "uk"
+      ? `<strong>${escapeHtml(input.circleName)}</strong> перенесено${input.oldWhenLabel ? ` з ${escapeHtml(input.oldWhenLabel)}` : ""} на <strong>${escapeHtml(input.whenLabel)}</strong>. Ваше місце збережено — нічого робити не потрібно.`
+      : `<strong>${escapeHtml(input.circleName)}</strong> has moved${input.oldWhenLabel ? ` from ${escapeHtml(input.oldWhenLabel)}` : ""} to <strong>${escapeHtml(input.whenLabel)}</strong>. Your seat is held — nothing to do.`;
+  const linkLine = input.meetingUrl
+    ? lang === "uk"
+      ? `\n\nПриєднуйтеся за цим посиланням, коли настане час:\n${input.meetingUrl}`
+      : `\n\nJoin here when it's time:\n${input.meetingUrl}`
+    : "";
+  const closing = input.cancelUrl
+    ? lang === "uk"
+      ? "Якщо новий час не підходить — скасуйте за посиланням нижче, і ми повернемо оплату."
+      : "If the new time doesn't work for you, cancel with the link below and your payment comes back."
+    : lang === "uk"
+      ? "Якщо новий час не підходить — просто відповідайте на цей лист."
+      : "If the new time doesn't work for you, just reply to this email.";
+  const cancelLine = input.cancelUrl
+    ? lang === "uk"
+      ? `\n\nСкасувати й запросити повернення:\n${input.cancelUrl}`
+      : `\n\nCancel & request a refund:\n${input.cancelUrl}`
+    : "";
+  const whenWord = lang === "uk" ? "Коли" : "When";
+  const text = `${greeting}
+
+${introText}
+
+· ${whenWord}: ${input.whenLabel}${linkLine}
+
+${closing}${cancelLine}
+
+${circleContactLineText(lang)}
+
+— ${signoff}${ukEscapeHatchText(lang)}`;
+  const html = circleEmailHtml({
+    greeting,
+    intro: introHtml,
+    whenLabel: input.whenLabel,
+    meetingUrl: input.meetingUrl,
+    note: null,
+    closing,
+    signoff,
+    cancelUrl: input.cancelUrl ?? null,
+    lang,
+  });
+  await sendEmail({ to: input.to, subject, html, text, replyTo: CIRCLE_CONTACT_EMAIL });
+}
+
 /** Reminder email sent 24h and 1h before a Circle. */
 export async function sendCircleReminderEmail(
   input: CircleEmailInput & { lead: "24h" | "1h" }

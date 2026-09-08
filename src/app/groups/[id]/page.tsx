@@ -21,6 +21,8 @@ import { resolveTimeZone } from "@/lib/timezone";
 import { ScheduleGroupSessionDialog } from "@/components/ScheduleGroupSessionDialog";
 import { GroupAttendeeRow } from "@/components/GroupAttendeeRow";
 import { CancelGroupSessionButton } from "@/components/CancelGroupSessionButton";
+import { RescheduleCircleDialog } from "@/components/RescheduleCircleDialog";
+import { RestoreGroupSessionButton } from "@/components/RestoreGroupSessionButton";
 import { GroupRecurrencePanel } from "@/components/GroupRecurrencePanel";
 import { AddCircleAttendeeInline } from "@/components/AddCircleAttendeeInline";
 import { EditGroupDialog } from "@/components/EditGroupDialog";
@@ -425,6 +427,12 @@ export default async function GroupDetailPage({
                       >
                         Public signup link →
                       </Link>
+                      <RescheduleCircleDialog
+                        sessionId={s.id}
+                        currentScheduledAt={s.scheduledAt}
+                        currentDurationMinutes={s.durationMinutes}
+                        guestCount={attendees.filter((a) => a.status !== "cancelled").length}
+                      />
                       <CancelGroupSessionButton
                         sessionId={s.id}
                         scheduledAtLabel={formatWhen(
@@ -676,6 +684,18 @@ export default async function GroupDetailPage({
                         {s.topic}
                       </span>
                     )}
+                    {/* A cancelled Circle that hasn't happened yet can come back. */}
+                    {s.status === "cancelled" &&
+                      new Date(s.scheduledAt).getTime() > now && (
+                        <RestoreGroupSessionButton
+                          sessionId={s.id}
+                          scheduledAtLabel={formatWhen(
+                            new Date(s.scheduledAt),
+                            locale,
+                            practiceTz
+                          )}
+                        />
+                      )}
                   </li>
                 );
               })}

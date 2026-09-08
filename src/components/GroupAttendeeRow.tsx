@@ -7,6 +7,7 @@ import { useState, useTransition } from "react";
 import {
   confirmAttendee,
   markAttendeeCancelled,
+  reinstateAttendee,
 } from "@/lib/group-actions";
 
 interface Props {
@@ -41,6 +42,19 @@ export function GroupAttendeeRow({ attendee }: Props) {
     setError(null);
     startTransition(async () => {
       const r = await markAttendeeCancelled(attendee.id);
+      if (!r.ok) setError(r.error);
+    });
+  }
+  // Back in. Paid + not refunded → confirmed (welcome email again if they
+  // tick yes); refunded or never paid → pending until she confirms.
+  function handleReinstate() {
+    const withEmail = confirm(
+      `Put ${attendee.name} back in this Circle?\n\nOK = reinstate and email them "you're in" (only if their seat is confirmed).\nCancel = don't.`
+    );
+    if (!withEmail) return;
+    setError(null);
+    startTransition(async () => {
+      const r = await reinstateAttendee(attendee.id, { notify: true });
       if (!r.ok) setError(r.error);
     });
   }
@@ -94,6 +108,19 @@ export function GroupAttendeeRow({ attendee }: Props) {
         )}
       </div>
 
+      {isCancelled && (
+        <div className="flex flex-col items-end gap-1.5 shrink-0">
+          <button
+            type="button"
+            onClick={handleReinstate}
+            disabled={pending}
+            aria-busy={pending}
+            className="text-[11px] text-plum-700 hover:underline disabled:opacity-50"
+          >
+            Reinstate
+          </button>
+        </div>
+      )}
       {!isCancelled && (
         <div className="flex flex-col items-end gap-1.5 shrink-0">
           {!isConfirmed && (

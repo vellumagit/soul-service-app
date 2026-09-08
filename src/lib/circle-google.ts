@@ -57,7 +57,10 @@ export type CircleSyncResult =
  * patches the same event and Google emails only the newly added guest.
  */
 export async function syncCircleToGoogle(
-  groupSessionId: string
+  groupSessionId: string,
+  /** notify:false = create/patch the event WITHOUT Google's invite/update
+   *  emails — used when the app sends its own (a reschedule, a restore). */
+  opts?: { notify?: boolean }
 ): Promise<CircleSyncResult> {
   const [row] = await db
     .select({
@@ -117,6 +120,7 @@ export async function syncCircleToGoogle(
     timeZone: tz,
     attendeeEmails,
     practitionerEmail: row.practitionerEmail,
+    notify: opts?.notify,
   };
 
   try {

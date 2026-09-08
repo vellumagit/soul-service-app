@@ -9,7 +9,8 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { and, eq, gte, isNull, sql, inArray } from "drizzle-orm";
+import { and, eq, gte, isNull, isNotNull, sql, inArray } from "drizzle-orm";
+import { resolveCircleMeetingUrl } from "./circle-fulfillment";
 import { headers } from "next/headers";
 import { db } from "@/db";
 import {
@@ -354,6 +355,366 @@ export type CancelGroupSessionResult = {
   /** Paid seats queued as refund requests in Loose Ends. */
   refundsQueued: number;
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Circles: reschedule, restore a cancelled session, reinstate a cancelled seat
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Guests who still hold a seat (pending or confirmed), with what the email
+ *  needs. Shared by reschedule + restore. */
+async function circleGuestsForNotice(accountId: string, groupSessionId: string) {
+  const [row] = await db
+    .select({
+      groupId: groupSessions.groupId,
+      scheduledAt: groupSessions.scheduledAt,
+      meetUrl: groupSessions.meetUrl,
+      circleName: groups.name,
+      language: groups.language,
+      practiceTz: practitionerSettings.timezone,
+      practitionerName: practitionerSettings.practitionerName,
+      circleRoomUrl: practitionerSettings.circleRoomUrl,
+    })
+    .from(groupSessions)
+    .innerJoin(groups, eq(groups.id, groupSessions.groupId))
+    .leftJoin(
+      practitionerSettings,
+      eq(practitionerSettings.accountId, groupSessions.accountId)
+    )
+    .where(and(eq(groupSessions.accountId, accountId), eq(groupSessions.id, groupSessionId)))
+    .limit(1);
+  if (!row) return null;
+  const guests = await db
+    .select({
+      id: groupAttendees.id,
+      name: groupAttendees.name,
+      email: groupAttendees.email,
+      paid: groupAttendees.paid,
+    })
+    .from(groupAttendees)
+    .where(
+      and(
+        eq(groupAttendees.groupSessionId, groupSessionId),
+        sql`${groupAttendees.status} <> 'cancelled'`
+      )
+    );
+  return { ...row, guests };
+}
+
+export type RescheduleGroupSessionResult =
+  | { ok: true; notified: number }
+  | { ok: false; error: string };
+
+/** Move a Circle to a new time. Seats are kept; reminders and nudges reset
+ *  for the new time; Google is updated silently and each guest gets ONE
+ *  "moved" email (with the meeting link and, if they paid, their cancel /
+ *  refund link) — instead of cancel + recreate + everyone signing up again. */
+export async function rescheduleGroupSession(
+  formData: FormData
+): Promise<RescheduleGroupSessionResult> {
+  try {
+    const { accountId } = await requireSession();
+    const id = String(formData.get("id") ?? "");
+    const newAt = new Date(String(formData.get("scheduledAt") ?? ""));
+    if (!id || !Number.isFinite(newAt.getTime())) {
+      return { ok: false, error: "Please pick a valid date and time." };
+    }
+    const notify = String(formData.get("notifyAttendees") ?? "true") !== "false";
+    const [row] = await db
+      .select({
+        status: groupSessions.status,
+        scheduledAt: groupSessions.scheduledAt,
+        durationMinutes: groupSessions.durationMinutes,
+        recallBotId: groupSessions.recallBotId,
+        groupId: groupSessions.groupId,
+      })
+      .from(groupSessions)
+      .where(and(eq(groupSessions.accountId, accountId), eq(groupSessions.id, id)))
+      .limit(1);
+    if (!row) return { ok: false, error: "Circle session not found." };
+    if (row.status === "cancelled") {
+      return { ok: false, error: "This Circle is cancelled — restore it first." };
+    }
+    const duration = clampInt(
+      formData.get("durationMinutes"),
+      5,
+      480,
+      row.durationMinutes
+    );
+    const now = new Date();
+    const oldAt = new Date(row.scheduledAt);
+
+    // A notetaker booked for the old time is wrong now — call it off.
+    if (row.recallBotId) {
+      try {
+        const { cancelBot } = await import("./recall");
+        await cancelBot(row.recallBotId);
+      } catch (err) {
+        console.warn("[circle] bot cancel on reschedule failed:", err);
+      }
+    }
+    await db
+      .update(groupSessions)
+      .set({
+        scheduledAt: newAt,
+        durationMinutes: duration,
+        hostRemindedAt: null,
+        walkInNudgeSentAt: null,
+        recallBotId: null,
+        recallBotStatus: null,
+        updatedAt: now,
+      })
+      .where(and(eq(groupSessions.accountId, accountId), eq(groupSessions.id, id)));
+    // Guests get fresh "we're starting" nudges for the new time.
+    await db
+      .update(groupAttendees)
+      .set({ walkInNudgeSentAt: null, updatedAt: now })
+      .where(eq(groupAttendees.groupSessionId, id));
+
+    try {
+      const { syncCircleToGoogle } = await import("./circle-google");
+      await syncCircleToGoogle(id, { notify: false });
+    } catch (err) {
+      console.error("[circle] google sync on reschedule failed:", err);
+    }
+
+    let notified = 0;
+    if (notify && isResendConfigured()) {
+      const ctx = await circleGuestsForNotice(accountId, id);
+      if (ctx) {
+        const lang = asCircleEmailLang(ctx.language);
+        const tz = resolveTimeZone(ctx.practiceTz);
+        const loc = lang === "uk" ? "uk-UA" : "en-US";
+        const whenLabel = formatSessionLong(newAt, tz, loc);
+        const oldWhenLabel = formatSessionLong(oldAt, tz, loc);
+        const meetingUrl = resolveCircleMeetingUrl(ctx.meetUrl, ctx.circleRoomUrl ?? null);
+        const { sendCircleMovedEmail } = await import("./resend");
+        const { circleCancelUrl } = await import("./circle-cancel-token");
+        for (const g of ctx.guests) {
+          if (!g.email || !g.email.includes("@")) continue;
+          try {
+            await sendCircleMovedEmail({
+              to: g.email,
+              attendeeName: g.name,
+              circleName: ctx.circleName,
+              whenLabel,
+              oldWhenLabel,
+              meetingUrl,
+              practitionerName: ctx.practitionerName ?? null,
+              cancelUrl: g.paid ? circleCancelUrl(g.id) : null,
+              language: lang,
+            });
+            notified++;
+          } catch (err) {
+            console.error(`[circle] moved email failed for attendee ${g.id}:`, err);
+          }
+        }
+      }
+    }
+
+    revalidatePath(`/groups/${row.groupId}`);
+    revalidatePath("/calendar");
+    revalidatePath("/requests");
+    revalidatePath("/");
+    return { ok: true, notified };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Couldn't move the Circle." };
+  }
+}
+
+export type RestoreGroupSessionResult =
+  | { ok: true; notified: number; refundRequestsCleared: number }
+  | { ok: false; error: string };
+
+/** A cancelled Circle is back on. Its calendar entry is re-created (silently),
+ *  refund requests that haven't been paid out yet are withdrawn (the seat is
+ *  good again), and guests who still hold a seat get one "back on" email.
+ *  Guests already refunded stay cancelled — reinstate them individually. */
+export async function restoreGroupSession(
+  id: string,
+  opts: { notify?: boolean } = {}
+): Promise<RestoreGroupSessionResult> {
+  try {
+    const { accountId } = await requireSession();
+    const now = new Date();
+    const [row] = await db
+      .select({
+        status: groupSessions.status,
+        scheduledAt: groupSessions.scheduledAt,
+        groupId: groupSessions.groupId,
+      })
+      .from(groupSessions)
+      .where(and(eq(groupSessions.accountId, accountId), eq(groupSessions.id, id)))
+      .limit(1);
+    if (!row) return { ok: false, error: "Circle session not found." };
+    if (row.status !== "cancelled") return { ok: true, notified: 0, refundRequestsCleared: 0 };
+    if (new Date(row.scheduledAt).getTime() <= now.getTime()) {
+      return { ok: false, error: "That Circle's time has already passed — schedule a new one instead." };
+    }
+
+    await db
+      .update(groupSessions)
+      .set({ status: "scheduled", updatedAt: now })
+      .where(and(eq(groupSessions.accountId, accountId), eq(groupSessions.id, id)));
+    // Refunds queued by the cancellation but not yet paid out: withdrawn.
+    const cleared = await db
+      .update(groupAttendees)
+      .set({ refundRequestedAt: null, updatedAt: now })
+      .where(
+        and(
+          eq(groupAttendees.groupSessionId, id),
+          isNotNull(groupAttendees.refundRequestedAt),
+          isNull(groupAttendees.refundedAt),
+          sql`${groupAttendees.status} <> 'cancelled'`
+        )
+      )
+      .returning({ id: groupAttendees.id });
+
+    try {
+      const { syncCircleToGoogle } = await import("./circle-google");
+      await syncCircleToGoogle(id, { notify: false });
+    } catch (err) {
+      console.error("[circle] google sync on restore failed:", err);
+    }
+
+    let notified = 0;
+    if (opts.notify !== false && isResendConfigured()) {
+      const ctx = await circleGuestsForNotice(accountId, id);
+      if (ctx) {
+        const lang = asCircleEmailLang(ctx.language);
+        const tz = resolveTimeZone(ctx.practiceTz);
+        const whenLabel = formatSessionLong(new Date(ctx.scheduledAt), tz, lang === "uk" ? "uk-UA" : "en-US");
+        const meetingUrl = resolveCircleMeetingUrl(ctx.meetUrl, ctx.circleRoomUrl ?? null);
+        const { sendCircleMovedEmail } = await import("./resend");
+        const { circleCancelUrl } = await import("./circle-cancel-token");
+        for (const g of ctx.guests) {
+          if (!g.email || !g.email.includes("@")) continue;
+          try {
+            await sendCircleMovedEmail({
+              to: g.email,
+              attendeeName: g.name,
+              circleName: ctx.circleName,
+              whenLabel,
+              restored: true,
+              meetingUrl,
+              practitionerName: ctx.practitionerName ?? null,
+              cancelUrl: g.paid ? circleCancelUrl(g.id) : null,
+              language: lang,
+            });
+            notified++;
+          } catch (err) {
+            console.error(`[circle] back-on email failed for attendee ${g.id}:`, err);
+          }
+        }
+      }
+    }
+
+    revalidatePath(`/groups/${row.groupId}`);
+    revalidatePath("/calendar");
+    revalidatePath("/requests");
+    revalidatePath("/");
+    return { ok: true, notified, refundRequestsCleared: cleared.length };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Couldn't restore the Circle." };
+  }
+}
+
+/** Put a cancelled guest back in. Paid and not refunded → confirmed (and, if
+ *  asked, the welcome email again). Refunded, or never paid on a paid Circle →
+ *  pending (they need to pay again; confirm them once they have). Free Circle
+ *  → confirmed. Refuses when the Circle is full. */
+export async function reinstateAttendee(
+  attendeeId: string,
+  opts: { notify?: boolean } = {}
+): Promise<{ ok: true; status: "confirmed" | "pending" } | { ok: false; error: string }> {
+  try {
+    const { accountId } = await requireSession();
+    const [a] = await db
+      .select({
+        status: groupAttendees.status,
+        paid: groupAttendees.paid,
+        refundedAt: groupAttendees.refundedAt,
+        groupSessionId: groupAttendees.groupSessionId,
+      })
+      .from(groupAttendees)
+      .where(and(eq(groupAttendees.accountId, accountId), eq(groupAttendees.id, attendeeId)))
+      .limit(1);
+    if (!a) return { ok: false, error: "Guest not found." };
+    if (a.status !== "cancelled") {
+      return { ok: true, status: a.status === "confirmed" ? "confirmed" : "pending" };
+    }
+    const [s] = await db
+      .select({
+        status: groupSessions.status,
+        capacity: groupSessions.capacity,
+        priceCents: groupSessions.priceCents,
+        groupId: groupSessions.groupId,
+      })
+      .from(groupSessions)
+      .where(eq(groupSessions.id, a.groupSessionId))
+      .limit(1);
+    if (!s) return { ok: false, error: "Circle session not found." };
+    if (s.status === "cancelled") {
+      return { ok: false, error: "This Circle is cancelled — restore it first." };
+    }
+    const [{ taken }] = await db
+      .select({ taken: sql<number>`count(*)::int` })
+      .from(groupAttendees)
+      .where(
+        and(
+          eq(groupAttendees.groupSessionId, a.groupSessionId),
+          sql`${groupAttendees.status} <> 'cancelled'`
+        )
+      );
+    if (taken >= s.capacity) {
+      return { ok: false, error: `This Circle is full (${taken}/${s.capacity}).` };
+    }
+
+    const refunded = !!a.refundedAt;
+    const holdsPaidSeat = a.paid && !refunded;
+    const status: "confirmed" | "pending" =
+      holdsPaidSeat || s.priceCents === 0 ? "confirmed" : "pending";
+    const now = new Date();
+    await db
+      .update(groupAttendees)
+      .set({
+        status,
+        // A refunded guest no longer holds a paid seat.
+        ...(refunded ? { paid: false, paidAt: null } : {}),
+        refundRequestedAt: null,
+        updatedAt: now,
+      })
+      .where(and(eq(groupAttendees.accountId, accountId), eq(groupAttendees.id, attendeeId)));
+
+    if (status === "confirmed") {
+      try {
+        const { syncCircleToGoogle } = await import("./circle-google");
+        await syncCircleToGoogle(a.groupSessionId, { notify: false });
+      } catch (err) {
+        console.error("[circle] google re-sync on reinstate failed:", err);
+      }
+      if (opts.notify !== false) {
+        // fulfillCircleSeat sends the welcome exactly once per seat; clear the
+        // marker so "you're in" goes out again for the reinstated seat.
+        await db
+          .update(groupAttendees)
+          .set({ welcomeSentAt: null })
+          .where(eq(groupAttendees.id, attendeeId));
+        try {
+          await fulfillCircleSeat(attendeeId);
+        } catch (err) {
+          console.error("[circle] welcome on reinstate failed:", err);
+        }
+      }
+    }
+
+    revalidatePath(`/groups/${s.groupId}`);
+    revalidatePath("/requests");
+    revalidatePath("/groups");
+    return { ok: true, status };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Couldn't reinstate the guest." };
+  }
+}
 
 export async function cancelGroupSession(
   id: string
