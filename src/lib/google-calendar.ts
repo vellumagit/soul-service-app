@@ -649,6 +649,32 @@ function parseGCalUtcBasic(s: string): number {
   return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]);
 }
 
+/** Rename / re-describe a recurring event WITHOUT touching its schedule.
+ *  Patching start/end on the master would rewrite every past instance too, so
+ *  a text-only series edit goes through here. Silent — no update emails.
+ *  Returns true when done or already gone; false when Google isn't connected. */
+export async function patchRecurringEventText(
+  accountId: string,
+  eventId: string,
+  input: { summary: string; description?: string }
+): Promise<boolean> {
+  const auth = await getAuthedClient(accountId);
+  if (!auth) return false;
+  const calendar = google.calendar({ version: "v3", auth });
+  try {
+    await calendar.events.patch({
+      calendarId: "primary",
+      eventId,
+      sendUpdates: "none",
+      requestBody: { summary: input.summary, description: input.description },
+    });
+    return true;
+  } catch (err) {
+    if (isNotFoundError(err)) return true;
+    throw err;
+  }
+}
+
 function toGCalUtcBasic(d: Date): string {
   return d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
 }

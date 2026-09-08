@@ -36,6 +36,7 @@ import { ShareNoteBlock } from "./ShareNoteBlock";
 import { WalkInButton } from "./WalkInButton";
 import { RecordSessionDialog } from "./RecordSessionDialog";
 import { MeetLinkEditor } from "./MeetLinkEditor";
+import { EditSeriesDialog } from "./EditSeriesDialog";
 
 const STATUS_CHIP: Record<string, string> = {
   scheduled: "bg-plum-100 text-plum-700",
@@ -492,8 +493,12 @@ export function SessionCard({
             {isScheduled && (
               <>
                 {session.seriesId && (
-                  <span className="text-[11px] text-ink-400 w-full">
+                  <span className="text-[11px] text-ink-400 w-full flex items-center gap-2 flex-wrap">
                     Part of a recurring series.
+                    <EditSeriesDialog
+                      seriesId={session.seriesId}
+                      clientId={session.clientId}
+                    />
                   </span>
                 )}
                 <WalkInButton sessionId={session.id} />

@@ -395,6 +395,11 @@ export const sessionSeries = pgTable(
     // A single occurrence can still be flipped on its own card.
     locationType: text("location_type").default("online").notNull(),
 
+    // firstAt is the instant of occurrence #anchorIndex. 1 at creation; "Edit
+    // series" moves the anchor to the next occurrence so a new day/time/rhythm
+    // applies from there on while every earlier occurrence keeps its date.
+    anchorIndex: integer("anchor_index").default(1).notNull(),
+
     intention: text("intention"),
 
     // Cancelled (vs deleted) — we keep the row + past sessions but stop future ones.

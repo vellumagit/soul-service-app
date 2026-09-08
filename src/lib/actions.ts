@@ -24,7 +24,11 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { getSettings } from "@/db/queries";
 import { requireSession } from "./session-cookies";
 import { reportError } from "./observability";
-import { SERIES_HORIZON_WEEKS, occurrenceInstant } from "./recurring-sessions";
+import {
+  SERIES_HORIZON_WEEKS,
+  occurrenceInstant,
+  ruleInstant,
+} from "./recurring-sessions";
 import { isValidTimeZone, resolveTimeZone } from "./timezone";
 import { safeCurrency } from "./format";
 
@@ -1722,7 +1726,10 @@ async function maybeAutoAddRecallBot(
 async function maybeSendSeriesConfirmation(
   accountId: string,
   seriesId: string,
-  futureDates: Date[]
+  futureDates: Date[],
+  /** updated:true = the series was EDITED — "Updated schedule", and the count
+   *  reads as what's remaining rather than the series total. */
+  opts: { updated?: boolean } = {}
 ): Promise<void> {
   try {
     const { isResendConfigured } = await import("./resend");
@@ -1765,7 +1772,7 @@ async function maybeSendSeriesConfirmation(
       frequency: row.frequency,
       durationMinutes: row.durationMinutes,
       dates: futureDates,
-      totalCount: row.occurrenceCount,
+      totalCount: opts.updated ? futureDates.length : row.occurrenceCount,
       inPerson: row.locationType === "in_person",
       address: row.businessAddress ?? null,
       meetingUrl: row.meetUrl ?? null,
@@ -1773,6 +1780,7 @@ async function maybeSendSeriesConfirmation(
       replyTo: row.businessEmail ?? undefined,
       timeZone: clientZone,
       language: row.clientLanguage === "uk" ? "uk" : "en",
+      updated: opts.updated === true,
     });
   } catch (err) {
     console.warn("[series confirmation] failed:", err);
@@ -2482,6 +2490,555 @@ export async function scheduleSessionSeries(
     return {
       ok: false,
       error: err instanceof Error ? err.message : "Couldn't create the series.",
+    };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Edit a recurring series — "this and following"
+// ─────────────────────────────────────────────────────────────────────────────
+
+type SeriesFreq = "weekly" | "biweekly" | "monthly";
+
+type SeriesEditRule = {
+  firstAt: Date;
+  frequency: SeriesFreq;
+  anchorIndex: number;
+  occurrenceCount: number;
+  materializedThroughIndex: number;
+};
+
+type SeriesSessionRow = {
+  id: string;
+  occurrenceIndex: number | null;
+  scheduledAt: Date;
+  status: string;
+  recallBotId: string | null;
+  googleRecurringEventId: string | null;
+  meetUrl: string | null;
+};
+
+async function loadSeriesRows(
+  accountId: string,
+  seriesId: string
+): Promise<SeriesSessionRow[]> {
+  return db
+    .select({
+      id: sessions.id,
+      occurrenceIndex: sessions.occurrenceIndex,
+      scheduledAt: sessions.scheduledAt,
+      status: sessions.status,
+      recallBotId: sessions.recallBotId,
+      googleRecurringEventId: sessions.googleRecurringEventId,
+      meetUrl: sessions.meetUrl,
+    })
+    .from(sessions)
+    .where(and(eq(sessions.accountId, accountId), eq(sessions.seriesId, seriesId)));
+}
+
+/** A row still "rides the rule": its time is what the series rule says for
+ *  its index. An occurrence she moved individually no longer matches and is
+ *  left alone by a series edit — moving one never changes the rest, and the
+ *  rest changing never un-moves the one. */
+function isAttached(row: SeriesSessionRow, rule: SeriesEditRule, tz: string): boolean {
+  if (row.occurrenceIndex == null) return false;
+  const expected = ruleInstant(rule, row.occurrenceIndex, tz).getTime();
+  return Math.abs(new Date(row.scheduledAt).getTime() - expected) < 60_000;
+}
+
+/** The next occurrence a series edit applies from: the earliest upcoming,
+ *  still-attached, scheduled row — or, if the window hasn't reached it yet,
+ *  the first not-yet-materialized index whose time is still ahead. */
+function nextAttachedOccurrence(
+  rule: SeriesEditRule,
+  rows: SeriesSessionRow[],
+  tz: string,
+  now: Date
+): { index: number; at: Date; rowId: string | null } | null {
+  const upcoming = rows
+    .filter(
+      (r) =>
+        r.status === "scheduled" &&
+        new Date(r.scheduledAt).getTime() > now.getTime() &&
+        isAttached(r, rule, tz)
+    )
+    .sort((a, b) => (a.occurrenceIndex ?? 0) - (b.occurrenceIndex ?? 0));
+  if (upcoming[0]) {
+    return {
+      index: upcoming[0].occurrenceIndex!,
+      at: new Date(upcoming[0].scheduledAt),
+      rowId: upcoming[0].id,
+    };
+  }
+  for (let k = rule.materializedThroughIndex + 1; k <= rule.occurrenceCount; k++) {
+    const at = ruleInstant(rule, k, tz);
+    if (at.getTime() > now.getTime()) return { index: k, at, rowId: null };
+  }
+  return null;
+}
+
+export type SeriesEditContext =
+  | {
+      ok: true;
+      frequency: SeriesFreq;
+      type: string;
+      durationMinutes: number;
+      intention: string | null;
+      occurrenceCount: number;
+      locationType: "online" | "in_person";
+      /** The occurrence the edit applies from (1-based) and its current time. */
+      nextIndex: number;
+      nextAt: string;
+      practiceTz: string;
+    }
+  | { ok: false; error: string };
+
+/** Everything the Edit-series dialog needs to open pre-filled. */
+export async function getSeriesEditContext(
+  seriesId: string
+): Promise<SeriesEditContext> {
+  try {
+    const { accountId } = await requireSession();
+    const [series] = await db
+      .select({
+        frequency: sessionSeries.frequency,
+        type: sessionSeries.type,
+        durationMinutes: sessionSeries.durationMinutes,
+        intention: sessionSeries.intention,
+        occurrenceCount: sessionSeries.occurrenceCount,
+        locationType: sessionSeries.locationType,
+        firstAt: sessionSeries.firstAt,
+        anchorIndex: sessionSeries.anchorIndex,
+        materializedThroughIndex: sessionSeries.materializedThroughIndex,
+        cancelledAt: sessionSeries.cancelledAt,
+        practiceTz: practitionerSettings.timezone,
+      })
+      .from(sessionSeries)
+      .leftJoin(
+        practitionerSettings,
+        eq(practitionerSettings.accountId, sessionSeries.accountId)
+      )
+      .where(and(eq(sessionSeries.accountId, accountId), eq(sessionSeries.id, seriesId)))
+      .limit(1);
+    if (!series) return { ok: false, error: "Series not found." };
+    if (series.cancelledAt) return { ok: false, error: "This series was cancelled." };
+    const tz = resolveTimeZone(series.practiceTz);
+    const rule: SeriesEditRule = {
+      firstAt: new Date(series.firstAt),
+      frequency: series.frequency as SeriesFreq,
+      anchorIndex: series.anchorIndex,
+      occurrenceCount: series.occurrenceCount,
+      materializedThroughIndex: series.materializedThroughIndex,
+    };
+    const rows = await loadSeriesRows(accountId, seriesId);
+    const next = nextAttachedOccurrence(rule, rows, tz, new Date());
+    if (!next) {
+      return {
+        ok: false,
+        error:
+          "Nothing left to change — every session in this series has already happened.",
+      };
+    }
+    return {
+      ok: true,
+      frequency: rule.frequency,
+      type: series.type,
+      durationMinutes: series.durationMinutes,
+      intention: series.intention,
+      occurrenceCount: series.occurrenceCount,
+      locationType: series.locationType === "in_person" ? "in_person" : "online",
+      nextIndex: next.index,
+      nextAt: next.at.toISOString(),
+      practiceTz: tz,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Couldn't load the series.",
+    };
+  }
+}
+
+export type EditSeriesResult =
+  | { ok: true; updated: number }
+  | { ok: false; error: string };
+
+/**
+ * Edit a recurring series "this and following": a new day/time, rhythm,
+ * length, title, intention, total count, or online/in person — applied from
+ * the NEXT occurrence onward.
+ *
+ * What stays untouched, always: every past session; any upcoming occurrence
+ * she moved individually (it no longer rides the rule); any she cancelled
+ * individually (still a "skip" marker). Google follows the same "this and
+ * following" model: the existing recurring event is truncated at now (its
+ * held instances stay on her calendar) and a fresh one is created from the
+ * next occurrence. A title/intention-only change just renames the event.
+ * The client gets ONE "updated schedule" email (optional).
+ */
+export async function editSessionSeries(
+  formData: FormData
+): Promise<EditSeriesResult> {
+  try {
+    const { accountId } = await requireSession();
+    const seriesId = required(str(formData, "seriesId"), "Series");
+    const clientId = required(str(formData, "clientId"), "Client");
+    const type = str(formData, "type") ?? "Session";
+    const durationMinutes = Math.max(
+      5,
+      Math.min(180, num(formData, "durationMinutes") ?? 60)
+    );
+    const intention = str(formData, "intention");
+    const frequencyRaw = str(formData, "frequency") ?? "weekly";
+    if (
+      frequencyRaw !== "weekly" &&
+      frequencyRaw !== "biweekly" &&
+      frequencyRaw !== "monthly"
+    ) {
+      return { ok: false, error: "Invalid frequency" };
+    }
+    const frequency: SeriesFreq = frequencyRaw;
+    const isInPerson = str(formData, "locationType") === "in_person";
+    const locationType = isInPerson ? "in_person" : "online";
+    const notifyClient = str(formData, "notifyClient") !== "false";
+    const newTotal = Math.floor(num(formData, "occurrenceCount") ?? 0);
+    const newAnchor = new Date(required(str(formData, "firstAt"), "Next session date/time"));
+    if (Number.isNaN(newAnchor.getTime())) {
+      return { ok: false, error: "Couldn't read the next session's date and time." };
+    }
+    const now = new Date();
+    if (newAnchor.getTime() <= now.getTime()) {
+      return { ok: false, error: "Pick a date and time in the future for the next session." };
+    }
+
+    const [series] = await db
+      .select({
+        type: sessionSeries.type,
+        frequency: sessionSeries.frequency,
+        durationMinutes: sessionSeries.durationMinutes,
+        intention: sessionSeries.intention,
+        firstAt: sessionSeries.firstAt,
+        anchorIndex: sessionSeries.anchorIndex,
+        occurrenceCount: sessionSeries.occurrenceCount,
+        materializedThroughIndex: sessionSeries.materializedThroughIndex,
+        locationType: sessionSeries.locationType,
+        googleRecurringEventId: sessionSeries.googleRecurringEventId,
+        cancelledAt: sessionSeries.cancelledAt,
+        practiceTz: practitionerSettings.timezone,
+      })
+      .from(sessionSeries)
+      .leftJoin(
+        practitionerSettings,
+        eq(practitionerSettings.accountId, sessionSeries.accountId)
+      )
+      .where(and(eq(sessionSeries.accountId, accountId), eq(sessionSeries.id, seriesId)))
+      .limit(1);
+    if (!series) return { ok: false, error: "Series not found." };
+    if (series.cancelledAt) return { ok: false, error: "This series was cancelled." };
+
+    const tz = resolveTimeZone(series.practiceTz);
+    const rule: SeriesEditRule = {
+      firstAt: new Date(series.firstAt),
+      frequency: series.frequency as SeriesFreq,
+      anchorIndex: series.anchorIndex,
+      occurrenceCount: series.occurrenceCount,
+      materializedThroughIndex: series.materializedThroughIndex,
+    };
+    const rows = await loadSeriesRows(accountId, seriesId);
+    const next = nextAttachedOccurrence(rule, rows, tz, now);
+    if (!next) {
+      return {
+        ok: false,
+        error: "Nothing left to change — every session in this series has already happened.",
+      };
+    }
+    const nextIndex = next.index;
+    if (newTotal < nextIndex) {
+      return {
+        ok: false,
+        error: `Keep at least ${nextIndex} sessions — that's the one coming up. To end the series instead, use "Cancel whole series".`,
+      };
+    }
+    if (newTotal > MAX_OCCURRENCES) {
+      return { ok: false, error: `A series holds at most ${MAX_OCCURRENCES} sessions.` };
+    }
+
+    // New instants for occurrences nextIndex..newTotal. Prefer the dialog's
+    // list (computed in the practice zone, DST-correct); fall back to the same
+    // math server-side.
+    const remaining = newTotal - nextIndex + 1;
+    let newDates: Date[] | null = null;
+    const computedRaw = str(formData, "computedDates");
+    if (computedRaw) {
+      try {
+        const parsed = JSON.parse(computedRaw);
+        if (Array.isArray(parsed) && parsed.length === remaining) {
+          const ds = parsed.map((s: unknown) => new Date(String(s)));
+          if (ds.every((d) => !Number.isNaN(d.getTime()))) newDates = ds;
+        }
+      } catch {
+        /* fall through to server math */
+      }
+    }
+    if (!newDates) {
+      newDates = Array.from({ length: remaining }, (_, i) =>
+        occurrenceInstant(newAnchor, frequency, i + 1, tz)
+      );
+    }
+
+    const scheduleShaping =
+      frequency !== rule.frequency ||
+      durationMinutes !== series.durationMinutes ||
+      newTotal !== series.occurrenceCount ||
+      locationType !== series.locationType ||
+      Math.abs(newAnchor.getTime() - next.at.getTime()) >= 60_000;
+    const textOnly =
+      !scheduleShaping &&
+      (type !== series.type || (intention ?? null) !== (series.intention ?? null));
+    if (!scheduleShaping && !textOnly) return { ok: true, updated: 0 };
+
+    const futureAttached = rows
+      .filter(
+        (r) =>
+          r.status === "scheduled" &&
+          new Date(r.scheduledAt).getTime() > now.getTime() &&
+          isAttached(r, rule, tz) &&
+          (r.occurrenceIndex ?? 0) >= nextIndex
+      )
+      .sort((a, b) => (a.occurrenceIndex ?? 0) - (b.occurrenceIndex ?? 0));
+
+    if (scheduleShaping) {
+      // 1) Bots already sent are for the OLD times / meeting — call them off.
+      //    The sweep re-queues fresh ones for the new times (online only).
+      for (const r of futureAttached) {
+        if (!r.recallBotId) continue;
+        try {
+          const { cancelBot } = await import("./recall");
+          await cancelBot(r.recallBotId);
+        } catch (err) {
+          console.warn("[editSessionSeries] bot cancel failed:", err);
+        }
+      }
+      // 2) Google, "this and following": keep held instances of the old event
+      //    on her calendar, drop its future ones; a fresh event follows below.
+      const oldEvent = series.googleRecurringEventId;
+      if (oldEvent) {
+        const held = rows.some(
+          (r) =>
+            r.googleRecurringEventId === oldEvent &&
+            new Date(r.scheduledAt).getTime() <= now.getTime()
+        );
+        try {
+          const gcal = await import("./google-calendar");
+          if (held) {
+            await gcal.truncateRecurringEvent(accountId, oldEvent, now.getTime(), {
+              notify: false,
+            });
+          } else {
+            await gcal.deleteCalendarEventsForSessions(
+              accountId,
+              [{ id: futureAttached[0]?.id ?? seriesId, googleEventId: oldEvent }],
+              { notify: false }
+            );
+          }
+        } catch (err) {
+          console.warn("[editSessionSeries] Google this-and-following failed:", err);
+        }
+      }
+    }
+
+    // 3) A shortened series drops its tail (the Google side is handled above).
+    const tail = futureAttached.filter((r) => (r.occurrenceIndex ?? 0) > newTotal);
+    if (tail.length > 0) {
+      await db.delete(sessions).where(
+        and(
+          eq(sessions.accountId, accountId),
+          inArray(
+            sessions.id,
+            tail.map((r) => r.id)
+          )
+        )
+      );
+    }
+
+    // 4) The kept upcoming occurrences take the new shape.
+    const kept = futureAttached.filter((r) => (r.occurrenceIndex ?? 0) <= newTotal);
+    for (const r of kept) {
+      const at = newDates[(r.occurrenceIndex ?? nextIndex) - nextIndex];
+      const patch: Partial<typeof sessions.$inferInsert> = {
+        type,
+        intention,
+        durationMinutes,
+        locationType,
+        updatedAt: now,
+      };
+      if (scheduleShaping) {
+        Object.assign(patch, {
+          scheduledAt: at,
+          // Re-stamped below once the new Google event exists (online).
+          googleRecurringEventId: null,
+          meetUrl: null,
+          recallBotId: null,
+          recallBotStatus: isInPerson ? "cancelled" : null,
+          // A moved time deserves fresh reminders + nudges.
+          clientReminderSentAt: null,
+          practitionerReminderSentAt: null,
+          walkInNudgeSentAt: null,
+          clientWalkInNudgeSentAt: null,
+        });
+      }
+      await db
+        .update(sessions)
+        .set(patch)
+        .where(and(eq(sessions.accountId, accountId), eq(sessions.id, r.id)));
+    }
+
+    // 5) The rule itself. Re-anchor at the next occurrence when the schedule
+    //    changed; earlier occurrences are rows already and keep their dates.
+    await db
+      .update(sessionSeries)
+      .set({
+        type,
+        intention,
+        durationMinutes,
+        frequency,
+        occurrenceCount: newTotal,
+        locationType,
+        ...(scheduleShaping
+          ? {
+              firstAt: newAnchor,
+              anchorIndex: nextIndex,
+              googleRecurringEventId: null,
+              meetUrl: null,
+            }
+          : {}),
+        materializedThroughIndex: Math.min(series.materializedThroughIndex, newTotal),
+        updatedAt: now,
+      })
+      .where(and(eq(sessionSeries.accountId, accountId), eq(sessionSeries.id, seriesId)));
+
+    // 6) The next occurrence must exist as a row — it anchors the new Google
+    //    event and the email. (It may sit beyond the materialization window.)
+    let nextRowId = kept.find((r) => r.occurrenceIndex === nextIndex)?.id ?? null;
+    let insertedNext = 0;
+    if (!nextRowId) {
+      const [made] = await db
+        .insert(sessions)
+        .values({
+          accountId,
+          clientId,
+          type,
+          status: "scheduled",
+          scheduledAt: newDates[0],
+          durationMinutes,
+          intention,
+          seriesId,
+          occurrenceIndex: nextIndex,
+          locationType,
+          recallBotStatus: isInPerson ? "cancelled" : null,
+        })
+        .onConflictDoNothing()
+        .returning({ id: sessions.id });
+      if (made) {
+        nextRowId = made.id;
+        insertedNext = 1;
+        await db
+          .update(sessionSeries)
+          .set({
+            materializedThroughIndex: sql`GREATEST(${sessionSeries.materializedThroughIndex}, ${nextIndex})`,
+          })
+          .where(eq(sessionSeries.id, seriesId));
+      }
+    }
+
+    // 7) Google going forward.
+    if (!isInPerson && nextRowId) {
+      if (scheduleShaping) {
+        try {
+          if (newDates.length >= 2) {
+            const { recurrenceForSeries } = await import("./google-calendar");
+            const recurring = await syncSeriesToGoogle(
+              nextRowId,
+              recurrenceForSeries(frequency, newDates)
+            );
+            if (recurring) {
+              const ids = [...kept.map((r) => r.id), nextRowId];
+              await db
+                .update(sessions)
+                .set({
+                  googleRecurringEventId: recurring.recurringEventId,
+                  meetUrl: recurring.meetUrl,
+                  updatedAt: new Date(),
+                })
+                .where(
+                  and(
+                    eq(sessions.accountId, accountId),
+                    inArray(sessions.id, [...new Set(ids)])
+                  )
+                );
+              await db
+                .update(sessionSeries)
+                .set({
+                  googleRecurringEventId: recurring.recurringEventId,
+                  meetUrl: recurring.meetUrl,
+                  updatedAt: new Date(),
+                })
+                .where(eq(sessionSeries.id, seriesId));
+            }
+          } else {
+            // One occurrence left: a plain standalone event, never an RRULE
+            // with COUNT=1 (see scheduleSessionSeries).
+            await syncSessionToGoogle(nextRowId);
+          }
+        } catch (err) {
+          console.error("[editSessionSeries] Google event failed:", err);
+        }
+      } else if (textOnly && series.googleRecurringEventId) {
+        try {
+          const [client] = await db
+            .select({ fullName: clients.fullName, workingOn: clients.workingOn })
+            .from(clients)
+            .where(and(eq(clients.accountId, accountId), eq(clients.id, clientId)))
+            .limit(1);
+          const { patchRecurringEventText } = await import("./google-calendar");
+          await patchRecurringEventText(accountId, series.googleRecurringEventId, {
+            summary: `${type} · ${client?.fullName ?? ""}`.trim(),
+            description: [
+              intention ? `Intention: "${intention}"` : null,
+              client?.workingOn ? `Working on: ${client.workingOn}` : null,
+              "—",
+              "Recurring series created by Soul Service",
+            ]
+              .filter(Boolean)
+              .join("\n"),
+          });
+        } catch (err) {
+          console.warn("[editSessionSeries] Google rename failed:", err);
+        }
+      }
+      // Fresh bots for the new times, just-in-time via the sweep.
+      try {
+        const { queueRecallForSeries } = await import("./recall-scheduler");
+        await queueRecallForSeries(accountId, seriesId);
+      } catch (err) {
+        console.warn("[editSessionSeries] recall queue failed:", err);
+      }
+    }
+
+    // 8) ONE "updated schedule" email — never a cancel + new pair.
+    if (notifyClient) {
+      await maybeSendSeriesConfirmation(accountId, seriesId, newDates, { updated: true });
+    }
+
+    revalidatePath(`/clients/${clientId}`);
+    revalidatePath("/calendar");
+    revalidatePath("/today");
+    return { ok: true, updated: kept.length + insertedNext };
+  } catch (err) {
+    console.error("[editSessionSeries] failed:", err);
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Couldn't update the series.",
     };
   }
 }

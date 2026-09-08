@@ -84,6 +84,23 @@ export function occurrenceInstant(
   );
 }
 
+/** Instant of occurrence `index` under the series' CURRENT rule. `firstAt` is
+ *  the instant of occurrence #anchorIndex — 1 at creation; "Edit series" moves
+ *  the anchor to the next occurrence so the new rhythm applies from there on.
+ *  Earlier occurrences are rows already, never recomputed. */
+export function ruleInstant(
+  series: { firstAt: Date; frequency: Freq; anchorIndex: number },
+  index: number,
+  tz: string
+): Date {
+  return occurrenceInstant(
+    series.firstAt,
+    series.frequency,
+    index - series.anchorIndex + 1,
+    tz
+  );
+}
+
 type SeriesRow = {
   id: string;
   accountId: string;
@@ -92,6 +109,7 @@ type SeriesRow = {
   frequency: Freq;
   durationMinutes: number;
   firstAt: Date;
+  anchorIndex: number;
   occurrenceCount: number;
   materializedThroughIndex: number;
   googleRecurringEventId: string | null;
@@ -144,7 +162,7 @@ async function ensureForSeries(
     index <= series.occurrenceCount;
     index++
   ) {
-    const at = occurrenceInstant(series.firstAt, series.frequency, index, tz);
+    const at = ruleInstant(series, index, tz);
     if (at.getTime() > horizonEnd.getTime()) break;
     newMark = index; // handled from here on, created or not
     if (at.getTime() <= now.getTime()) continue; // missed/past — don't invent a past row
@@ -207,6 +225,7 @@ export async function ensureSeriesSessions(opts?: {
       frequency: sessionSeries.frequency,
       durationMinutes: sessionSeries.durationMinutes,
       firstAt: sessionSeries.firstAt,
+      anchorIndex: sessionSeries.anchorIndex,
       occurrenceCount: sessionSeries.occurrenceCount,
       materializedThroughIndex: sessionSeries.materializedThroughIndex,
       googleRecurringEventId: sessionSeries.googleRecurringEventId,

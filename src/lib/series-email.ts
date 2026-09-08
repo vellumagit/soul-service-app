@@ -36,6 +36,9 @@ export type SeriesConfirmationInput = {
   /** RECIPIENT's zone — the client's own if known, else the practice's. */
   timeZone: string;
   language: Lang;
+  /** True when the series was EDITED (new day/time/rhythm…): same shape, a
+   *  different opening, and the count reads as "remaining" rather than total. */
+  updated?: boolean;
 };
 
 const NEXT_DATES_SHOWN = 5;
@@ -122,21 +125,29 @@ export async function sendSeriesBookingConfirmationEmail(
         : "Online — I'll share the meeting link before our first one.";
 
   const t = {
-    subject:
-      lang === "uk"
+    subject: input.updated
+      ? lang === "uk"
+        ? `Оновлений розклад — ${countLabel}, ${cadenceShort("uk", input.frequency)} з ${shortDate(first)}`
+        : `Updated schedule — ${countLabel}, ${cadenceShort("en", input.frequency)} from ${shortDate(first)}`
+      : lang === "uk"
         ? `Ви записані — ${countLabel}, ${cadenceShort("uk", input.frequency)} з ${shortDate(first)}`
         : `You're booked — ${countLabel}, ${cadenceShort("en", input.frequency)} from ${shortDate(first)}`,
     greeting:
       lang === "uk"
         ? firstName ? `Привіт, ${firstName}!` : "Привіт!"
         : firstName ? `Hi ${firstName},` : "Hi,",
-    lead:
-      lang === "uk"
+    lead: input.updated
+      ? lang === "uk"
+        ? `Наш розклад (${typeLabel}) оновлено — ось як він виглядає тепер. Усе, що вже відбулося, лишається без змін. 🤍`
+        : `I've updated our ${typeLabel.toLowerCase()} schedule — here's the new shape of it. Anything already behind us stays exactly as it was. 🤍`
+      : lang === "uk"
         ? `Ми домовилися про регулярні зустрічі (${typeLabel}) — ось усе в одному місці, щоб нічого не загубилося. 🤍`
         : `We've set up a regular rhythm for our ${typeLabel.toLowerCase()} together — here's the shape of it, all in one place. 🤍`,
     rhythmWord: lang === "uk" ? "Ритм" : "Rhythm",
     yourTime: lang === "uk" ? "(ваш час)" : "(your time)",
-    howMany: lang === "uk" ? "Скільки" : "How many",
+    howMany: input.updated
+      ? lang === "uk" ? "Залишилось" : "Remaining"
+      : lang === "uk" ? "Скільки" : "How many",
     length: lang === "uk" ? "Тривалість" : "Length",
     minutes: lang === "uk" ? "хвилин" : "minutes",
     comingUp: lang === "uk" ? "Найближчі" : "Coming up",
