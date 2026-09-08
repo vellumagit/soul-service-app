@@ -2677,6 +2677,323 @@ export async function applyTimeOff(formData: FormData): Promise<ApplyTimeOffResu
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Bookkeeping moves: a session to another client; merge duplicate clients
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** The client picker list, for dialogs that need it after mount. */
+export async function getClientOptions(): Promise<
+  { ok: true; clients: { id: string; fullName: string }[] } | { ok: false; error: string }
+> {
+  try {
+    const { accountId } = await requireSession();
+    const { listClientsForPicker } = await import("@/db/queries");
+    const rows = await listClientsForPicker(accountId);
+    return { ok: true, clients: rows.map((c) => ({ id: c.id, fullName: c.fullName })) };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Couldn't load clients." };
+  }
+}
+
+/** A session booked under the wrong client. Notes, transcript, payment and
+ *  attachments travel with it. A recurring occurrence is detached from its
+ *  series (a series belongs to one client). Any invoice is cleared — it named
+ *  the wrong person — so a fresh one can be generated. Upcoming + online: the
+ *  calendar entry is re-pointed at the new client (silently unless asked). */
+export async function moveSessionToClient(
+  sessionId: string,
+  fromClientId: string,
+  toClientId: string,
+  opts: { notifyClient?: boolean } = {}
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const { accountId } = await requireSession();
+    if (fromClientId === toClientId) return { ok: true };
+    const [sess] = await db
+      .select({
+        clientId: sessions.clientId,
+        status: sessions.status,
+        scheduledAt: sessions.scheduledAt,
+        seriesId: sessions.seriesId,
+        locationType: sessions.locationType,
+        googleRecurringEventId: sessions.googleRecurringEventId,
+        recallBotId: sessions.recallBotId,
+      })
+      .from(sessions)
+      .where(and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId)))
+      .limit(1);
+    if (!sess) return { ok: false, error: "Session not found." };
+    if (sess.clientId !== fromClientId) {
+      return { ok: false, error: "That session isn't on this client anymore — refresh and try again." };
+    }
+    const [target] = await db
+      .select({ id: clients.id })
+      .from(clients)
+      .where(and(eq(clients.accountId, accountId), eq(clients.id, toClientId)))
+      .limit(1);
+    if (!target) return { ok: false, error: "Couldn't find the client to move it to." };
+
+    const now = new Date();
+    const upcoming =
+      sess.status === "scheduled" && new Date(sess.scheduledAt).getTime() > now.getTime();
+    const notify = opts.notifyClient === true;
+
+    // Leaving a series: drop this occurrence from the shared Google event and
+    // call off its bot — a fresh standalone event (and bot) follows below.
+    if (sess.seriesId) {
+      if (sess.googleRecurringEventId && upcoming) {
+        try {
+          const { cancelRecurringInstance } = await import("./google-calendar");
+          await cancelRecurringInstance(
+            accountId,
+            sess.googleRecurringEventId,
+            new Date(sess.scheduledAt).getTime(),
+            { notify: false }
+          );
+        } catch (err) {
+          console.warn("[moveSessionToClient] series instance cancel failed:", err);
+        }
+      }
+      if (sess.recallBotId) {
+        try {
+          const { cancelBot } = await import("./recall");
+          await cancelBot(sess.recallBotId);
+        } catch (err) {
+          console.warn("[moveSessionToClient] bot cancel failed:", err);
+        }
+      }
+    }
+
+    await db
+      .update(sessions)
+      .set({
+        clientId: toClientId,
+        seriesId: null,
+        occurrenceIndex: null,
+        googleRecurringEventId: null,
+        ...(sess.seriesId ? { meetUrl: null, recallBotId: null, recallBotStatus: null } : {}),
+        invoiceUrl: null,
+        invoiceNumber: null,
+        updatedAt: now,
+      })
+      .where(and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId)));
+    await db
+      .update(attachments)
+      .set({ clientId: toClientId })
+      .where(and(eq(attachments.accountId, accountId), eq(attachments.sessionId, sessionId)));
+
+    if (upcoming && sess.locationType !== "in_person") {
+      try {
+        await syncSessionToGoogle(sessionId, { notify });
+      } catch (err) {
+        console.warn("[moveSessionToClient] Google re-point failed:", err);
+      }
+      if (notify) await maybeSendBookingConfirmation(accountId, sessionId);
+    }
+
+    revalidatePath(`/clients/${fromClientId}`);
+    revalidatePath(`/clients/${toClientId}`);
+    revalidatePath("/calendar");
+    revalidatePath("/today");
+    revalidatePath("/payments");
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Couldn't move the session." };
+  }
+}
+
+export type MergePreview =
+  | {
+      ok: true;
+      fullName: string;
+      email: string | null;
+      counts: Record<string, number>;
+    }
+  | { ok: false; error: string };
+
+/** What merging `otherClientId` INTO another profile would carry across. */
+export async function getMergePreview(otherClientId: string): Promise<MergePreview> {
+  try {
+    const { accountId } = await requireSession();
+    const [c] = await db
+      .select({ fullName: clients.fullName, email: clients.email })
+      .from(clients)
+      .where(and(eq(clients.accountId, accountId), eq(clients.id, otherClientId)))
+      .limit(1);
+    if (!c) return { ok: false, error: "Client not found." };
+    const s = await import("@/db/schema");
+    const count = async (table: { clientId: unknown }) => {
+      const [r] = await db
+        .select({ n: sql<number>`count(*)::int` })
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .from(table as any)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .where(eq(table.clientId as any, otherClientId));
+      return r?.n ?? 0;
+    };
+    const counts: Record<string, number> = {
+      sessions: await count(s.sessions),
+      series: await count(s.sessionSeries),
+      notesAndFiles: await count(s.attachments),
+      tasks: await count(s.tasks),
+      goals: await count(s.goals),
+      communications: await count(s.communications),
+      people: await count(s.importantPeople),
+      themes: await count(s.themes),
+      observations: await count(s.observations),
+      reflections: await count(s.clientReflections),
+      requests: (await count(s.clientBookingRequests)) + (await count(s.rescheduleRequests)),
+      circleSeats: await count(s.groupAttendees),
+    };
+    return { ok: true, fullName: c.fullName, email: c.email, counts };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Couldn't preview the merge." };
+  }
+}
+
+/** Fold `mergeId` into `keepId`: every row that points at the duplicate is
+ *  re-pointed at the kept profile (sessions, series, files, tasks, goals,
+ *  notes, people, themes, observations, reflections, requests, portal
+ *  sign-ins, lead submissions, Circle seats, and "met via" links), the kept
+ *  profile absorbs any details it was missing, then the duplicate is deleted.
+ *  Nothing is lost; nothing is emailed. */
+export async function mergeClients(
+  keepId: string,
+  mergeId: string
+): Promise<{ ok: true; moved: Record<string, number> } | { ok: false; error: string }> {
+  try {
+    const { accountId } = await requireSession();
+    if (keepId === mergeId) return { ok: false, error: "Pick two different clients." };
+    const [keep] = await db
+      .select()
+      .from(clients)
+      .where(and(eq(clients.accountId, accountId), eq(clients.id, keepId)))
+      .limit(1);
+    const [dupe] = await db
+      .select()
+      .from(clients)
+      .where(and(eq(clients.accountId, accountId), eq(clients.id, mergeId)))
+      .limit(1);
+    if (!keep || !dupe) return { ok: false, error: "One of those clients no longer exists." };
+
+    const s = await import("@/db/schema");
+    const moved: Record<string, number> = {};
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const reassign = async (name: string, table: any) => {
+      const rows = await db
+        .update(table)
+        .set({ clientId: keepId })
+        .where(eq(table.clientId, mergeId))
+        .returning({ id: table.id });
+      moved[name] = rows.length;
+    };
+    await reassign("sessions", s.sessions);
+    await reassign("series", s.sessionSeries);
+    await reassign("attachments", s.attachments);
+    await reassign("goals", s.goals);
+    await reassign("tasks", s.tasks);
+    await reassign("communications", s.communications);
+    await reassign("people", s.importantPeople);
+    await reassign("themes", s.themes);
+    await reassign("observations", s.observations);
+    await reassign("reflections", s.clientReflections);
+    await reassign("rescheduleRequests", s.rescheduleRequests);
+    await reassign("bookingRequests", s.clientBookingRequests);
+    await reassign("portalTokens", s.clientPortalTokens);
+    await reassign("portalSessions", s.clientPortalSessions);
+    await reassign("leadSubmissions", s.leadSubmissions);
+    await reassign("circleSeats", s.groupAttendees);
+    // Other clients who were "met via" the duplicate now point at the kept one.
+    const via = await db
+      .update(clients)
+      .set({ metViaClientId: keepId })
+      .where(and(eq(clients.accountId, accountId), eq(clients.metViaClientId, mergeId)))
+      .returning({ id: clients.id });
+    moved.metVia = via.length;
+
+    // The kept profile absorbs whatever it was missing. Free-text notes on
+    // both sides are joined, never overwritten.
+    const takeIfBlank = <T,>(a: T | null | undefined, b: T | null | undefined) =>
+      a == null || (typeof a === "string" && a.trim() === "") ? (b ?? null) : a;
+    const joinNotes = (a: string | null, b: string | null) => {
+      const A = a?.trim() ?? "";
+      const B = b?.trim() ?? "";
+      if (!B) return A || null;
+      if (!A) return B;
+      return `${A}\n\n— Merged from ${dupe.fullName} —\n${B}`;
+    };
+    const uniq = (xs: unknown[]) => [...new Set(xs.filter((x) => typeof x === "string"))];
+    await db
+      .update(clients)
+      .set({
+        email: takeIfBlank(keep.email, dupe.email),
+        phone: takeIfBlank(keep.phone, dupe.phone),
+        city: takeIfBlank(keep.city, dupe.city),
+        timezone: takeIfBlank(keep.timezone, dupe.timezone),
+        preferredLanguage: takeIfBlank(keep.preferredLanguage, dupe.preferredLanguage),
+        pronouns: takeIfBlank(keep.pronouns, dupe.pronouns),
+        workingOn: takeIfBlank(keep.workingOn, dupe.workingOn),
+        howTheyFoundMe: takeIfBlank(keep.howTheyFoundMe, dupe.howTheyFoundMe),
+        emergencyName: takeIfBlank(keep.emergencyName, dupe.emergencyName),
+        emergencyPhone: takeIfBlank(keep.emergencyPhone, dupe.emergencyPhone),
+        avatarUrl: takeIfBlank(keep.avatarUrl, dupe.avatarUrl),
+        dob: takeIfBlank(keep.dob, dupe.dob),
+        metOn: takeIfBlank(keep.metOn, dupe.metOn),
+        primarySessionType: takeIfBlank(keep.primarySessionType, dupe.primarySessionType),
+        tags: uniq([
+          ...((keep.tags as unknown[] | null) ?? []),
+          ...((dupe.tags as unknown[] | null) ?? []),
+        ]),
+        aboutClient: joinNotes(keep.aboutClient, dupe.aboutClient),
+        intakeNotes: joinNotes(keep.intakeNotes, dupe.intakeNotes),
+        privateNotes: joinNotes(keep.privateNotes, dupe.privateNotes),
+        sensitivities: uniq([
+          ...((keep.sensitivities as unknown[] | null) ?? []),
+          ...((dupe.sensitivities as unknown[] | null) ?? []),
+        ]),
+        // A real client on either side means a real client.
+        isLead: keep.isLead && dupe.isLead,
+        portalEnabled: keep.portalEnabled || dupe.portalEnabled,
+        lastPortalVisitAt:
+          keep.lastPortalVisitAt && dupe.lastPortalVisitAt
+            ? new Date(Math.max(new Date(keep.lastPortalVisitAt).getTime(), new Date(dupe.lastPortalVisitAt).getTime()))
+            : keep.lastPortalVisitAt ?? dupe.lastPortalVisitAt,
+        status: keep.status === "new" && dupe.status === "active" ? "active" : keep.status,
+        createdAt:
+          new Date(dupe.createdAt).getTime() < new Date(keep.createdAt).getTime()
+            ? dupe.createdAt
+            : keep.createdAt,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(clients.accountId, accountId), eq(clients.id, keepId)));
+
+    // Everything has been re-pointed, so deleting the duplicate cascades to
+    // nothing. Its avatar file goes too unless the kept profile adopted it.
+    await db
+      .delete(clients)
+      .where(and(eq(clients.accountId, accountId), eq(clients.id, mergeId)));
+    if (dupe.avatarUrl && dupe.avatarUrl !== keep.avatarUrl && !(!keep.avatarUrl && dupe.avatarUrl) && process.env.BLOB_READ_WRITE_TOKEN) {
+      try {
+        const { del } = await import("@vercel/blob");
+        await del(dupe.avatarUrl);
+      } catch (e) {
+        console.warn("[mergeClients] avatar blob delete failed:", e);
+      }
+    }
+
+    revalidatePath("/clients");
+    revalidatePath(`/clients/${keepId}`);
+    revalidatePath("/calendar");
+    revalidatePath("/today");
+    revalidatePath("/payments");
+    revalidatePath("/network");
+    return { ok: true, moved };
+  } catch (err) {
+    console.error("[mergeClients] failed:", err);
+    return { ok: false, error: err instanceof Error ? err.message : "Couldn't merge those clients." };
+  }
+}
+
 export async function cancelBotForSession(
   sessionId: string
 ): Promise<CancelBotResult> {

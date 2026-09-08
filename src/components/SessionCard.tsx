@@ -12,6 +12,7 @@ import {
   markNoShow,
 } from "@/lib/actions";
 import { FixDateDialog } from "./FixDateDialog";
+import { MoveSessionDialog } from "./MoveSessionDialog";
 import type { NoteTemplate, Session } from "@/db/schema";
 import {
   fullDate,
@@ -687,6 +688,13 @@ export function SessionCard({
                 currentDurationMinutes={session.durationMinutes}
               />
             )}
+            <MoveSessionDialog
+              sessionId={session.id}
+              clientId={session.clientId}
+              upcoming={isScheduled && new Date(session.scheduledAt).getTime() > Date.now()}
+              inSeries={!!session.seriesId}
+              hasInvoice={!!session.invoiceUrl}
+            />
             <div className="flex-1" />
             <ConfirmButton
               label={

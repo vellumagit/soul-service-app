@@ -5,6 +5,7 @@ import { useState } from "react";
 import type { Client } from "@/db/schema";
 import { Avatar } from "./Avatar";
 import { EditClientDialog } from "./EditClientDialog";
+import { MergeClientDialog } from "./MergeClientDialog";
 import { ScheduleSessionDialog } from "./ScheduleSessionDialog";
 import { LogPastSessionDialog } from "./LogPastSessionDialog";
 import { EmailComposer } from "./EmailComposer";
@@ -114,6 +115,10 @@ export function ClientHeader({
               )}
               <div className="flex-1" />
               <EditClientDialog client={client} referrerOptions={allClients} />
+              <MergeClientDialog
+                client={{ id: client.id, fullName: client.fullName }}
+                candidates={allClients}
+              />
             </div>
 
             {/* Contact line */}
