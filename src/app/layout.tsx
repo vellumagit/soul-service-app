@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, JetBrains_Mono, Fraunces } from "next/font/google";
 import "./globals.css";
 import { ChunkReloadGuard } from "@/components/ChunkReloadGuard";
+import { NavigationProgress } from "@/components/NavigationProgress";
 import { BrandProvider } from "@/components/BrandProvider";
 import { getBrand } from "@/lib/brand";
 
@@ -63,6 +64,7 @@ export default async function RootLayout({
       className={`${inter.variable} ${jetbrainsMono.variable} ${fraunces.variable} h-full antialiased`}
     >
       <body className="min-h-full text-ink-800">
+        <NavigationProgress />
         <ChunkReloadGuard />
         <BrandProvider logoUrl={logoUrl}>{children}</BrandProvider>
       </body>

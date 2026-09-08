@@ -196,7 +196,7 @@ export function LeadMagnetOptin({
       )}
       <button
         type="submit"
-        disabled={saving}
+        disabled={saving} aria-busy={saving}
         className="cta"
         style={{
           display: "block",

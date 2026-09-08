@@ -181,7 +181,7 @@ export function LandingLeadForm({
 
       <button
         type="submit"
-        disabled={pending}
+        disabled={pending} aria-busy={pending}
         className="px-5 py-2.5 text-sm bg-plum-700 hover:bg-plum-600 text-white rounded-md font-medium transition-colors disabled:opacity-60"
       >
         {pending ? copy.submitting : copy.submit}

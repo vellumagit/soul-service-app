@@ -149,7 +149,7 @@ export function CircleSignupForm({
 
       <button
         type="submit"
-        disabled={pending}
+        disabled={pending} aria-busy={pending}
         className="w-full py-3 text-sm font-medium text-white rounded-md disabled:opacity-50"
         style={{
           background: "var(--land-clay, #b05c36)",

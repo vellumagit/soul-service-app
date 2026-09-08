@@ -191,7 +191,7 @@ export function PortalDetailsCard({
         <button
           type="button"
           onClick={save}
-          disabled={pending}
+          disabled={pending} aria-busy={pending}
           className="px-4 py-2 text-sm bg-plum-700 hover:bg-plum-600 disabled:opacity-60 text-white rounded-md font-medium transition-colors"
         >
           {pending ? "Saving…" : "Save"}

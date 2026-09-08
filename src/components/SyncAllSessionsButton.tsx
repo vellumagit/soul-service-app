@@ -98,7 +98,7 @@ export function SyncAllSessionsButton() {
       <button
         type="button"
         onClick={run}
-        disabled={pending}
+        disabled={pending} aria-busy={pending}
         className="text-xs font-medium border border-ink-200 hover:bg-ink-50 px-3 py-1.5 rounded-md disabled:opacity-60"
       >
         {pending ? "Syncing…" : "Sync all sessions to Google Calendar"}

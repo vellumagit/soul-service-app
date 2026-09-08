@@ -66,7 +66,7 @@ export function LooseEndRowActions({
     return (
       <button
         type="button"
-        disabled={pending || retried}
+        disabled={pending || retried} aria-busy={pending}
         onClick={() =>
           startTransition(async () => {
             const r = await addBotToSessionNow(row.sessionId);

@@ -55,7 +55,7 @@ export function GenerateInvoiceButton({
               }
             });
           }}
-          disabled={pending}
+          disabled={pending} aria-busy={pending}
           className="text-[11px] text-ink-400 hover:text-ink-700"
           title="Regenerate (e.g. after editing the session)"
         >
@@ -81,7 +81,7 @@ export function GenerateInvoiceButton({
             }
           });
         }}
-        disabled={pending}
+        disabled={pending} aria-busy={pending}
         className="text-xs text-plum-700 hover:underline font-medium"
       >
         {pending ? "Generating…" : "Generate invoice"}

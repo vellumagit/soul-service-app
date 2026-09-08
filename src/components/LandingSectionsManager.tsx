@@ -390,7 +390,7 @@ function SectionDialog({
           </button>
           <button
             type="submit"
-            disabled={submitting}
+            disabled={submitting} aria-busy={submitting}
             className="text-xs font-medium px-4 py-2 rounded-md bg-plum-700 text-white hover:bg-plum-800 disabled:opacity-60"
           >
             {submitting ? "Saving…" : "Save these words"}

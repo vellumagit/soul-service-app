@@ -97,7 +97,7 @@ export function MeetLinkEditor({
       <button
         type="button"
         onClick={() => void save()}
-        disabled={saving}
+        disabled={saving} aria-busy={saving}
         className="text-xs bg-ink-900 hover:bg-ink-800 text-white rounded px-2.5 py-1 font-medium disabled:opacity-50"
       >
         {saving ? "Saving…" : "Save & invite client"}

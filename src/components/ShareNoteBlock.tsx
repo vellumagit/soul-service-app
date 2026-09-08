@@ -58,7 +58,7 @@ export function ShareNoteBlock({
       <div className="flex items-center gap-3 mt-1.5">
         <button
           type="button"
-          disabled={pending || !dirty}
+          disabled={pending || !dirty} aria-busy={pending}
           onClick={() =>
             startTransition(async () => {
               const r = await shareSessionNote(sessionId, value);

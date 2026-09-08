@@ -62,7 +62,7 @@ export function MarkPaidDialog({
             <button
               type="submit"
               form={formId}
-              disabled={submitting}
+              disabled={submitting} aria-busy={submitting}
               className="px-4 py-2 text-sm bg-green-600 hover:bg-green-700 text-white rounded-md font-medium disabled:opacity-60"
             >
               {submitting ? "Saving…" : noCharge ? "Mark free" : "Mark paid"}

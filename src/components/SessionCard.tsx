@@ -388,7 +388,7 @@ export function SessionCard({
                   type="submit"
                   name="markComplete"
                   value="true"
-                  disabled={submitting}
+                  disabled={submitting} aria-busy={submitting}
                   className="bg-green-600 hover:bg-green-700 text-white text-sm font-medium px-3 py-2 rounded-md disabled:opacity-60"
                 >
                   {submitting ? "Saving…" : "Save & mark complete"}
@@ -396,7 +396,7 @@ export function SessionCard({
               )}
               <button
                 type="submit"
-                disabled={submitting}
+                disabled={submitting} aria-busy={submitting}
                 className="bg-ink-900 hover:bg-ink-800 text-white text-sm font-medium px-3 py-2 rounded-md disabled:opacity-60"
               >
                 {submitting ? "Saving…" : "Save"}

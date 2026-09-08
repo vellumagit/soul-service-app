@@ -80,7 +80,7 @@ export function PasswordSettings({ hasPassword }: { hasPassword: boolean }) {
 
         <button
           type="submit"
-          disabled={pending}
+          disabled={pending} aria-busy={pending}
           className="bg-plum-700 hover:bg-plum-600 text-white text-sm font-medium px-4 py-2 rounded-md disabled:opacity-60 transition"
         >
           {pending

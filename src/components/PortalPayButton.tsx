@@ -42,7 +42,7 @@ export function PortalPayButton({
       <button
         type="button"
         onClick={pay}
-        disabled={busy}
+        disabled={busy} aria-busy={busy}
         className="px-3 py-1.5 text-xs bg-plum-700 hover:bg-plum-600 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-md font-medium transition-colors"
       >
         {busy ? "Opening…" : `Pay ${amountLabel} by card`}

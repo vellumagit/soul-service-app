@@ -91,7 +91,7 @@ export function BookingRequestRowActions({
         <span className="text-ink-300">·</span>
         <button
           type="button"
-          disabled={pending || resolved}
+          disabled={pending || resolved} aria-busy={pending}
           onClick={() =>
             startTransition(async () => {
               const r = await resolveBookingRequest(requestId);

@@ -540,7 +540,7 @@ export function SettingsForm({
       >
         <button
           type="submit"
-          disabled={submitting}
+          disabled={submitting} aria-busy={submitting}
           className="px-6 py-2.5 text-sm bg-ink-900 hover:bg-ink-800 text-white rounded-md font-medium disabled:opacity-60"
         >
           {submitting ? "Saving…" : "Save changes"}

@@ -630,7 +630,7 @@ export function LeadMagnetEditor({
             <div className="flex items-center gap-3 pt-1">
               <button
                 type="submit"
-                disabled={submitting || uploading}
+                disabled={submitting || uploading} aria-busy={submitting}
                 className="px-5 py-2 text-sm font-medium bg-plum-700 hover:bg-plum-800 text-white rounded-md disabled:opacity-60"
               >
                 {uploading

@@ -106,7 +106,7 @@ export function AddCircleAttendeeInline({
           <button
             type="button"
             onClick={submit}
-            disabled={saving}
+            disabled={saving} aria-busy={saving}
             className="text-xs bg-ink-900 hover:bg-ink-800 text-white rounded px-3 py-1.5 font-medium disabled:opacity-50"
           >
             {saving ? "Adding…" : "Add & send them the link"}

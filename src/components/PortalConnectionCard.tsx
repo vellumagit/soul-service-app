@@ -103,7 +103,7 @@ export function PortalConnectionCard({
           <div className="w-full md:w-auto md:shrink-0">
             <button
               type="button"
-              disabled={pending || !hasEmail}
+              disabled={pending || !hasEmail} aria-busy={pending}
               onClick={() =>
                 run(
                   () => connectClientPortal(clientId),
@@ -167,7 +167,7 @@ export function PortalConnectionCard({
         <div className="w-full md:w-auto md:shrink-0 flex flex-col items-stretch md:items-end gap-2">
           <button
             type="button"
-            disabled={pending || justSent}
+            disabled={pending || justSent} aria-busy={pending}
             onClick={() =>
               run(() => sendPortalInvite(clientId), "Sign-in link sent")
             }

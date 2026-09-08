@@ -24,7 +24,7 @@ export function PortalSubmitButton({
   return (
     <button
       type="submit"
-      disabled={pending}
+      disabled={pending} aria-busy={pending}
       className={`${className} disabled:opacity-60 disabled:cursor-not-allowed`}
     >
       {pending ? pendingLabel : children}

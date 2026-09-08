@@ -781,3 +781,121 @@ body {
     animation: none !important;
   }
 }
+
+/* ── Interaction feedback ────────────────────────────────────────────────────
+   Every button should FEEL pressed, and every in-flight action should LOOK in
+   flight. Before this, a click gave no visual response at all and a pending
+   server action showed at most a text swap — on a slow round-trip that reads
+   as "the click didn't work", which is exactly how a real bug got missed.
+
+   • press: a small scale on :active (buttons only, not disabled ones)
+   • busy:  any button with aria-busy="true" grows a spinner after its label
+            and stops taking clicks — components just set aria-busy={pending}
+   • touch: kill the tap highlight + the double-tap-zoom delay on phones
+   Base layer, so per-button Tailwind utilities still win. ─────────────────── */
+@layer base {
+  button,
+  [role="button"],
+  input[type="submit"],
+  input[type="button"] {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    transition:
+      transform 80ms ease,
+      opacity 120ms ease,
+      background-color 120ms ease,
+      color 120ms ease,
+      border-color 120ms ease,
+      box-shadow 120ms ease;
+  }
+  button:not(:disabled):not([aria-busy="true"]):active,
+  [role="button"]:not([aria-disabled="true"]):active {
+    transform: scale(0.97);
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+  button[aria-busy="true"],
+  [role="button"][aria-busy="true"] {
+    pointer-events: none;
+    cursor: progress;
+    opacity: 0.85;
+  }
+  button[aria-busy="true"]::after,
+  [role="button"][aria-busy="true"]::after {
+    content: "";
+    display: inline-block;
+    width: 0.85em;
+    height: 0.85em;
+    margin-left: 0.5em;
+    vertical-align: -0.12em;
+    border-radius: 9999px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    animation: ss-spin 0.7s linear infinite;
+  }
+}
+@keyframes ss-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Top-edge navigation progress bar (NavigationProgress.tsx). Idle: invisible.
+   Active: creeps toward 85% over ~8s so a slow page still shows life.
+   Done: snaps to 100% and fades. */
+.nav-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 2px;
+  width: 0;
+  background: var(--color-plum-500);
+  box-shadow: 0 0 8px var(--color-plum-300);
+  z-index: 9999;
+  opacity: 0;
+  pointer-events: none;
+  transition: width 8s cubic-bezier(0.1, 0.7, 0.2, 1), opacity 200ms ease;
+}
+.nav-progress.active {
+  opacity: 1;
+  width: 85%;
+}
+.nav-progress.done {
+  width: 100%;
+  opacity: 0;
+  transition: width 200ms ease-out, opacity 300ms ease 150ms;
+}
+
+/* Pending dot on the nav item you just clicked (useLinkStatus). Always
+   rendered at fixed size so it never shifts layout — only opacity toggles. */
+.nav-pending {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: auto;
+  border-radius: 9999px;
+  background: var(--color-honey-500);
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+.nav-pending.on {
+  opacity: 1;
+  animation: ss-pulse 0.9s ease-in-out infinite;
+}
+@keyframes ss-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(0.6); opacity: 0.5; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button:not(:disabled):active,
+  [role="button"]:active {
+    transform: none;
+  }
+  button[aria-busy="true"]::after,
+  [role="button"][aria-busy="true"]::after {
+    animation-duration: 1.4s;
+  }
+  .nav-pending.on {
+    animation: none;
+  }
+}

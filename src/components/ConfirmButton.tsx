@@ -102,7 +102,7 @@ export function ConfirmButton({
           </button>
           <button
             type="button"
-            disabled={pending}
+            disabled={pending} aria-busy={pending}
             onClick={() =>
               start(async () => {
                 try {

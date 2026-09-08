@@ -211,7 +211,7 @@ function ThemesBlock({
           />
           <button
             type="submit"
-            disabled={submitting}
+            disabled={submitting} aria-busy={submitting}
             className="text-[10px] text-plum-700 font-medium"
           >
             {submitting ? "…" : "add"}
@@ -306,7 +306,7 @@ function ObservationsBlock({
             </button>
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting} aria-busy={submitting}
               className="text-xs bg-ink-900 text-white px-2 py-1 rounded font-medium disabled:opacity-60"
             >
               {submitting ? "…" : "add"}

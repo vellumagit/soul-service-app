@@ -238,7 +238,7 @@ export function EditGroupDialog({
             </button>
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting} aria-busy={submitting}
               className="px-4 py-2 text-sm bg-plum-700 hover:bg-plum-600 text-white rounded-md font-medium disabled:opacity-60"
             >
               {submitting ? "Saving…" : "Save Circle"}

@@ -97,7 +97,7 @@ export function CircleRefundRequestRow({
         <button
           type="button"
           onClick={approve}
-          disabled={busy !== null}
+          disabled={busy !== null} aria-busy={busy !== null}
           className="text-xs bg-plum-700 hover:bg-plum-600 text-white rounded-md px-3 py-1.5 font-medium disabled:opacity-50"
         >
           {busy === "approve" ? "Refunding…" : "Refund & release"}
@@ -105,7 +105,7 @@ export function CircleRefundRequestRow({
         <button
           type="button"
           onClick={dismiss}
-          disabled={busy !== null}
+          disabled={busy !== null} aria-busy={busy !== null}
           className="text-xs text-ink-500 hover:text-ink-800 disabled:opacity-50"
         >
           {busy === "dismiss" ? "…" : "Keep them in"}

@@ -85,7 +85,7 @@ export function PushToGoogleButton({
     <button
       type="button"
       onClick={push}
-      disabled={pending}
+      disabled={pending} aria-busy={pending}
       className="text-xs text-ink-500 hover:text-plum-700 underline-offset-2 hover:underline disabled:opacity-60"
       title="Create a Google Calendar event for this session"
     >

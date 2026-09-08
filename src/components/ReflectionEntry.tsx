@@ -59,7 +59,7 @@ export function ReflectionEntry({
         <div className="flex items-center gap-2 mt-3">
           <button
             type="button"
-            disabled={pending || !draft.trim()}
+            disabled={pending || !draft.trim()} aria-busy={pending}
             onClick={() =>
               startTransition(async () => {
                 setError(null);

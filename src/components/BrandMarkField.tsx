@@ -138,7 +138,7 @@ export function BrandMarkField({
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
-              disabled={busy}
+              disabled={busy} aria-busy={busy}
               className="px-3 py-1.5 rounded-md bg-plum-700 text-white text-sm hover:bg-plum-800 disabled:opacity-50"
             >
               {busy

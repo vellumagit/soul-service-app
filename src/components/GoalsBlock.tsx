@@ -181,7 +181,7 @@ function AddGoalForm({
         </button>
         <button
           type="submit"
-          disabled={submitting}
+          disabled={submitting} aria-busy={submitting}
           className="text-xs bg-ink-900 text-white px-3 py-1.5 rounded font-medium disabled:opacity-60"
         >
           {submitting ? "…" : "add"}

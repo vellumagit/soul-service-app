@@ -216,7 +216,7 @@ export function PrivateNotesBlock({
             <button
               type="button"
               onClick={save}
-              disabled={submitting}
+              disabled={submitting} aria-busy={submitting}
               className="text-xs font-medium px-3 py-1.5 rounded bg-ink-900 text-white hover:bg-ink-800 disabled:opacity-60"
             >
               {submitting ? "Saving…" : "Save"}

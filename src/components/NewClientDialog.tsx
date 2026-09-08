@@ -122,7 +122,7 @@ export function NewClientDialog({
             <button
               type="submit"
               form={newClientFormId}
-              disabled={submitting}
+              disabled={submitting} aria-busy={submitting}
               className="px-4 py-2 text-sm bg-ink-900 hover:bg-ink-800 text-white rounded-md font-medium disabled:opacity-60"
             >
               {submitting ? "Adding…" : "Add client"}

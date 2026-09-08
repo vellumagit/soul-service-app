@@ -25,7 +25,7 @@ export function SignOutButton() {
     >
       <button
         type="submit"
-        disabled={pending}
+        disabled={pending} aria-busy={pending}
         className="text-[10px] uppercase tracking-wide text-ink-400 hover:text-ink-700 disabled:opacity-60"
       >
         {pending ? t("sidebar.signingOut") : t("sidebar.signOut")}

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { SearchPalette } from "./SearchPalette";
@@ -405,10 +405,19 @@ function NavItemLink({
         <path strokeLinecap="round" strokeLinejoin="round" d={ICON[item.icon]} />
       </svg>
       <span className="flex-1 text-left">{t(item.labelKey)}</span>
+      <NavPending />
       {item.href === "/requests" && <RequestsBadge />}
       {item.href === "/network/inbox" && <InboxBadge />}
     </Link>
   );
+}
+
+// A pulsing dot on the nav item you just clicked, until its page arrives.
+// Fixed-size and always rendered (only opacity toggles) so it never shifts
+// the row. Pairs with the top-edge NavigationProgress bar.
+function NavPending() {
+  const { pending } = useLinkStatus();
+  return <span aria-hidden className={`nav-pending${pending ? " on" : ""}`} />;
 }
 
 function SidebarNav({

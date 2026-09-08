@@ -47,7 +47,7 @@ export function ReconnectGoogleButton({
       <button
         type="button"
         onClick={go}
-        disabled={pending}
+        disabled={pending} aria-busy={pending}
         className="font-medium text-red-900 underline hover:no-underline disabled:opacity-60"
       >
         {pending ? "Opening Google…" : "Reconnect Google →"}
@@ -59,7 +59,7 @@ export function ReconnectGoogleButton({
     <button
       type="button"
       onClick={go}
-      disabled={pending}
+      disabled={pending} aria-busy={pending}
       className="text-xs font-medium border border-ink-200 hover:bg-ink-50 px-3 py-1.5 rounded-md disabled:opacity-60"
     >
       {pending ? "Opening Google…" : "Reconnect Google"}

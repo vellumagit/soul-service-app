@@ -52,7 +52,7 @@ export function DeleteGroupButton({ groupId, groupName }: Props) {
     <button
       type="button"
       onClick={onClick}
-      disabled={pending}
+      disabled={pending} aria-busy={pending}
       className="text-[11px] text-ink-400 hover:text-rose-700 disabled:opacity-50"
     >
       {pending ? "Deleting…" : "Delete this Circle"}
