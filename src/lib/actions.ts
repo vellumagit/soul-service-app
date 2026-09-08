@@ -2994,6 +2994,125 @@ export async function mergeClients(
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Edit-in-place for the small things: tasks, goals, themes, observations,
+// logged communications. Before this they were add + delete only — a typo
+// meant retyping.
+// ─────────────────────────────────────────────────────────────────────────────
+
+type EditResult = { ok: true } | { ok: false; error: string };
+const clean = (s: string | null | undefined) => {
+  const t = (s ?? "").trim();
+  return t.length > 0 ? t : null;
+};
+
+export async function updateTask(
+  taskId: string,
+  clientId: string | null,
+  input: { title: string; body?: string | null; dueAt?: string | null }
+): Promise<EditResult> {
+  try {
+    const { accountId } = await requireSession();
+    const title = clean(input.title);
+    if (!title) return { ok: false, error: "A task needs a title." };
+    let dueAt: Date | null = null;
+    if (clean(input.dueAt)) {
+      dueAt = new Date(input.dueAt!);
+      if (Number.isNaN(dueAt.getTime())) return { ok: false, error: "Couldn't read that due date." };
+    }
+    await db
+      .update(tasks)
+      .set({ title, body: clean(input.body), dueAt, updatedAt: new Date() })
+      .where(and(eq(tasks.accountId, accountId), eq(tasks.id, taskId)));
+    revalidatePath("/today");
+    if (clientId) revalidatePath(`/clients/${clientId}`);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Couldn't save the task." };
+  }
+}
+
+export async function updateGoal(
+  goalId: string,
+  clientId: string,
+  input: { label: string; note?: string | null }
+): Promise<EditResult> {
+  try {
+    const { accountId } = await requireSession();
+    const label = clean(input.label);
+    if (!label) return { ok: false, error: "A goal needs a name." };
+    await db
+      .update(goals)
+      .set({ label, note: clean(input.note), updatedAt: new Date() })
+      .where(and(eq(goals.accountId, accountId), eq(goals.id, goalId)));
+    revalidatePath(`/clients/${clientId}`);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Couldn't save the goal." };
+  }
+}
+
+export async function updateTheme(
+  themeId: string,
+  clientId: string,
+  label: string
+): Promise<EditResult> {
+  try {
+    const { accountId } = await requireSession();
+    const next = clean(label);
+    if (!next) return { ok: false, error: "A theme can't be empty." };
+    await db
+      .update(themes)
+      .set({ label: next })
+      .where(and(eq(themes.accountId, accountId), eq(themes.id, themeId)));
+    revalidatePath(`/clients/${clientId}`);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Couldn't save the theme." };
+  }
+}
+
+export async function updateObservation(
+  observationId: string,
+  clientId: string,
+  body: string
+): Promise<EditResult> {
+  try {
+    const { accountId } = await requireSession();
+    const next = clean(body);
+    if (!next) return { ok: false, error: "An observation can't be empty." };
+    await db
+      .update(observations)
+      .set({ body: next })
+      .where(and(eq(observations.accountId, accountId), eq(observations.id, observationId)));
+    revalidatePath(`/clients/${clientId}`);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Couldn't save the observation." };
+  }
+}
+
+export async function updateCommunication(
+  communicationId: string,
+  clientId: string,
+  input: { subject?: string | null; body?: string | null }
+): Promise<EditResult> {
+  try {
+    const { accountId } = await requireSession();
+    const subject = clean(input.subject);
+    const body = clean(input.body);
+    if (!subject && !body) return { ok: false, error: "Keep at least a subject or a note." };
+    await db
+      .update(communications)
+      .set({ subject, body })
+      .where(and(eq(communications.accountId, accountId), eq(communications.id, communicationId)));
+    revalidatePath(`/clients/${clientId}`);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Couldn't save the entry." };
+  }
+}
+
 export async function cancelBotForSession(
   sessionId: string
 ): Promise<CancelBotResult> {

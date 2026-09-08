@@ -1007,6 +1007,13 @@ export async function getClientActivity(
         ? c.body.slice(0, 160) + (c.body.length > 160 ? "…" : "")
         : undefined,
       occurredAt: c.occurredAt,
+      // The real row + full text, so the timeline's edit-in-place can prefill
+      // (the body above is truncated for display).
+      meta: {
+        communicationId: c.id,
+        subject: c.subject ?? "",
+        body: c.body ?? "",
+      },
     });
   }
 

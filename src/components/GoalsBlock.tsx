@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { addGoal, deleteGoal, updateGoalProgress } from "@/lib/actions";
+import { addGoal, deleteGoal, updateGoal, updateGoalProgress } from "@/lib/actions";
 import type { Goal } from "@/db/schema";
 import { ConfirmButton } from "./ConfirmButton";
 import { Field, inputCls } from "./Form";
@@ -51,6 +51,8 @@ function GoalRow({ goal, clientId }: { goal: Goal; clientId: string }) {
   // chance to retry or reload.
   const [error, setError] = useState<string | null>(null);
 
+  const [editing, setEditing] = useState(false);
+
   // Wrap the optimistic save: on failure, snap the slider back to the
   // server's known value and show the message.
   function commit() {
@@ -73,7 +75,11 @@ function GoalRow({ goal, clientId }: { goal: Goal; clientId: string }) {
   return (
     <div className="group">
       <div className="flex items-center justify-between text-sm">
-        <span className="text-ink-800">{goal.label}</span>
+        {editing ? (
+          <GoalEditForm goal={goal} clientId={clientId} onDone={() => setEditing(false)} />
+        ) : (
+          <span className="text-ink-800">{goal.label}</span>
+        )}
         <span className="font-mono text-[11px] text-ink-500">
           {progress}%
         </span>
@@ -97,6 +103,15 @@ function GoalRow({ goal, clientId }: { goal: Goal; clientId: string }) {
           <div className="text-[11px] text-ink-500 mt-0.5">{goal.note}</div>
         )}
         <div className="flex-1" />
+        {!editing && (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="text-[10px] text-ink-400 hover:text-ink-900 opacity-0 group-hover:opacity-100"
+          >
+            edit
+          </button>
+        )}
         <ConfirmButton
           label={
             <span className="text-[10px] text-ink-400 hover:text-red-700 opacity-0 group-hover:opacity-100">
@@ -109,6 +124,61 @@ function GoalRow({ goal, clientId }: { goal: Goal; clientId: string }) {
         />
       </div>
     </div>
+  );
+}
+
+// Edit-in-place for a goal's name + note (progress has its own slider).
+function GoalEditForm({
+  goal,
+  clientId,
+  onDone,
+}: {
+  goal: Goal;
+  clientId: string;
+  onDone: () => void;
+}) {
+  const [pending, start] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <form
+      className="flex-1 min-w-0 space-y-1.5"
+      action={(fd) => {
+        setError(null);
+        start(async () => {
+          const r = await updateGoal(goal.id, clientId, {
+            label: String(fd.get("label") ?? ""),
+            note: String(fd.get("note") ?? ""),
+          });
+          if (!r.ok) {
+            setError(r.error);
+            return;
+          }
+          onDone();
+        });
+      }}
+    >
+      <input name="label" defaultValue={goal.label} className={inputCls} autoFocus />
+      <input
+        name="note"
+        defaultValue={goal.note ?? ""}
+        placeholder="Note (optional)"
+        className={inputCls}
+      />
+      {error && <div className="text-[11px] text-red-700">{error}</div>}
+      <div className="flex items-center gap-2">
+        <button
+          type="submit"
+          disabled={pending}
+          aria-busy={pending}
+          className="px-2.5 py-1 text-[11px] font-medium bg-ink-900 hover:bg-ink-800 text-white rounded-md disabled:opacity-60"
+        >
+          Save
+        </button>
+        <button type="button" onClick={onDone} className="text-[11px] text-ink-500 hover:text-ink-900">
+          Cancel
+        </button>
+      </div>
+    </form>
   );
 }
 

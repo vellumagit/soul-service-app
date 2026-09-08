@@ -4,13 +4,136 @@ import { useState, useTransition } from "react";
 import {
   addTheme,
   deleteTheme,
+  updateTheme,
   addObservation,
   deleteObservation,
+  updateObservation,
 } from "@/lib/actions";
 import type { Theme, Observation, Session } from "@/db/schema";
 import { ConfirmButton } from "./ConfirmButton";
 import { shortDate } from "@/lib/format";
 import { useTimeZone } from "./TimeZoneProvider";
+
+// A theme chip's label: click to rename in place. Enter saves, Escape or an
+// unchanged blur cancels.
+function ThemeLabel({ theme, clientId }: { theme: Theme; clientId: string }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(theme.label);
+  const [pending, start] = useTransition();
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          setValue(theme.label);
+          setEditing(true);
+        }}
+        className="hover:underline decoration-dotted"
+        title="Click to rename"
+      >
+        {theme.label}
+      </button>
+    );
+  }
+  const save = () => {
+    const next = value.trim();
+    if (!next || next === theme.label) {
+      setEditing(false);
+      return;
+    }
+    start(async () => {
+      const r = await updateTheme(theme.id, clientId, next);
+      if (r.ok) setEditing(false);
+    });
+  };
+  return (
+    <input
+      autoFocus
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={save}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          save();
+        } else if (e.key === "Escape") {
+          setEditing(false);
+        }
+      }}
+      disabled={pending}
+      className="bg-white border border-ink-200 rounded px-1 text-xs w-32"
+    />
+  );
+}
+
+// An observation's text: hover "edit" swaps in a textarea.
+function ObservationBody({
+  observation,
+  clientId,
+}: {
+  observation: Observation;
+  clientId: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [pending, start] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  if (!editing) {
+    return (
+      <>
+        <span className="flex-1 leading-relaxed">{observation.body}</span>
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="text-[10px] text-ink-400 hover:text-ink-900 opacity-0 group-hover:opacity-100"
+        >
+          edit
+        </button>
+      </>
+    );
+  }
+  return (
+    <form
+      className="flex-1 space-y-1.5"
+      action={(fd) => {
+        setError(null);
+        start(async () => {
+          const r = await updateObservation(observation.id, clientId, String(fd.get("body") ?? ""));
+          if (!r.ok) {
+            setError(r.error);
+            return;
+          }
+          setEditing(false);
+        });
+      }}
+    >
+      <textarea
+        name="body"
+        defaultValue={observation.body}
+        rows={3}
+        autoFocus
+        className="w-full bg-white border border-ink-200 rounded-md px-2 py-1.5 text-sm"
+      />
+      {error && <div className="text-[11px] text-red-700">{error}</div>}
+      <div className="flex items-center gap-2">
+        <button
+          type="submit"
+          disabled={pending}
+          aria-busy={pending}
+          className="px-2.5 py-1 text-[11px] font-medium bg-ink-900 hover:bg-ink-800 text-white rounded-md disabled:opacity-60"
+        >
+          Save
+        </button>
+        <button
+          type="button"
+          onClick={() => setEditing(false)}
+          className="text-[11px] text-ink-500 hover:text-ink-900"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
 
 export function PatternsTab({
   clientId,
@@ -171,7 +294,7 @@ function ThemesBlock({
           key={t.id}
           className="chip bg-ink-100 text-ink-700 group flex items-center gap-1"
         >
-          {t.label}
+          <ThemeLabel theme={t} clientId={clientId} />
           <button
             onClick={() => start(() => deleteTheme(t.id, clientId))}
             disabled={pending}
@@ -259,7 +382,7 @@ function ObservationsBlock({
       <ul className="space-y-2 list-disc pl-4 text-sm text-ink-700">
         {observations.map((o) => (
           <li key={o.id} className="group flex items-start gap-2">
-            <span className="flex-1 leading-relaxed">{o.body}</span>
+            <ObservationBody observation={o} clientId={clientId} />
             <ConfirmButton
               label={
                 <span className="text-[10px] text-ink-400 hover:text-red-700 opacity-0 group-hover:opacity-100">

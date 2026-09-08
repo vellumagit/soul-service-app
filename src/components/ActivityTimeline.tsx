@@ -1,4 +1,5 @@
 import type { ActivityEvent } from "@/db/queries";
+import { CommunicationEventEdit } from "./CommunicationEventEdit";
 import { relativeTime, shortDateTime } from "@/lib/format";
 
 const KIND_META: Record<
@@ -20,8 +21,11 @@ const KIND_META: Record<
 export function ActivityTimeline({
   events,
   timeZone,
+  clientId,
 }: {
   events: ActivityEvent[];
+  /** When set, logged communications get an edit-in-place affordance. */
+  clientId?: string;
   /** Practice timezone — render the hover timestamp in HER local zone. */
   timeZone?: string;
 }) {
@@ -41,7 +45,7 @@ export function ActivityTimeline({
         return (
           <div
             key={e.id}
-            className="flex gap-3 relative"
+            className="group flex gap-3 relative"
           >
             {/* Connector line */}
             {i < events.length - 1 && (
@@ -71,6 +75,14 @@ export function ActivityTimeline({
                 <div className="text-xs text-ink-600 mt-0.5 leading-relaxed whitespace-pre-wrap">
                   {e.body}
                 </div>
+              )}
+              {e.kind === "communication" && clientId && e.meta?.communicationId && (
+                <CommunicationEventEdit
+                  communicationId={e.meta.communicationId}
+                  clientId={clientId}
+                  subject={e.meta.subject ?? ""}
+                  body={e.meta.body ?? ""}
+                />
               )}
             </div>
           </div>

@@ -427,7 +427,11 @@ export default async function ClientProfilePage({
       )}
 
       {tab === "activity" && (
-        <ActivityTimeline events={activity} timeZone={practiceTz} />
+        <ActivityTimeline
+          events={activity}
+          timeZone={practiceTz}
+          clientId={client.id}
+        />
       )}
 
       {tab === "sessions" && (

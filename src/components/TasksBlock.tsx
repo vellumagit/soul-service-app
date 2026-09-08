@@ -6,7 +6,9 @@ import {
   addTask,
   toggleTaskComplete,
   deleteTask,
+  updateTask,
 } from "@/lib/actions";
+import { zonedLocalInputValue } from "@/lib/timezone";
 import { Modal } from "./Modal";
 import { Field, inputCls } from "./Form";
 import { ConfirmButton } from "./ConfirmButton";
@@ -76,6 +78,73 @@ export function TasksBlock({
   );
 }
 
+// Edit-in-place for a task: title, due date/time, note. Saves through
+// updateTask; the page revalidates, so no local state to keep in sync.
+function TaskEditForm({
+  task,
+  onDone,
+}: {
+  task: TaskRow;
+  onDone: () => void;
+}) {
+  const tz = useTimeZone();
+  const [pending, start] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <form
+      className="flex-1 min-w-0 space-y-1.5"
+      action={(fd) => {
+        setError(null);
+        start(async () => {
+          const r = await updateTask(task.id, task.clientId ?? null, {
+            title: String(fd.get("title") ?? ""),
+            body: String(fd.get("body") ?? ""),
+            dueAt: String(fd.get("dueAt") ?? ""),
+          });
+          if (!r.ok) {
+            setError(r.error);
+            return;
+          }
+          onDone();
+        });
+      }}
+    >
+      <input name="title" defaultValue={task.title} className={inputCls} autoFocus />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+        <LocalDateTimeInput
+          name="dueAt"
+          defaultValue={task.dueAt ? zonedLocalInputValue(new Date(task.dueAt), tz) : ""}
+          className={inputCls}
+        />
+        <input
+          name="body"
+          defaultValue={task.body ?? ""}
+          placeholder="Note (optional)"
+          className={inputCls}
+        />
+      </div>
+      {error && <div className="text-[11px] text-red-700">{error}</div>}
+      <div className="flex items-center gap-2">
+        <button
+          type="submit"
+          disabled={pending}
+          aria-busy={pending}
+          className="px-2.5 py-1 text-[11px] font-medium bg-ink-900 hover:bg-ink-800 text-white rounded-md disabled:opacity-60"
+        >
+          Save
+        </button>
+        <button
+          type="button"
+          onClick={onDone}
+          className="text-[11px] text-ink-500 hover:text-ink-900"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
 function TaskRowItem({
   task,
   showClient,
@@ -86,6 +155,7 @@ function TaskRowItem({
   const tz = useTimeZone();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
   const isDone = !!task.completedAt;
   const isOverdue =
     !isDone && task.dueAt && new Date(task.dueAt) < new Date();
@@ -132,6 +202,9 @@ function TaskRowItem({
           </svg>
         )}
       </button>
+      {editing ? (
+        <TaskEditForm task={task} onDone={() => setEditing(false)} />
+      ) : (
       <div className="flex-1 min-w-0 text-sm">
         <div
           className={`${isDone ? "text-ink-400 line-through" : "text-ink-900"}`}
@@ -163,6 +236,16 @@ function TaskRowItem({
           </div>
         )}
       </div>
+      )}
+      {!editing && (
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="text-[10px] text-ink-400 hover:text-ink-900 opacity-0 group-hover:opacity-100"
+        >
+          edit
+        </button>
+      )}
       <ConfirmButton
         label={
           <span className="text-[10px] text-ink-400 hover:text-red-700 opacity-0 group-hover:opacity-100">
