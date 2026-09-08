@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import {
   updateSession,
   cancelSession,
   cancelSessionSeries,
   deleteSession,
   markSessionUnpaid,
+  setSessionLocation,
 } from "@/lib/actions";
 import type { NoteTemplate, Session } from "@/db/schema";
 import {
@@ -550,6 +551,16 @@ export function SessionCard({
                 )}
               </>
             )}
+            {/* Where THIS session happens. Flipping one occurrence of a series
+                to in person (no Meet, no bot — record in the room) leaves the
+                rest of the series alone. Only while it's still upcoming. */}
+            {isScheduled && (
+              <LocationToggle
+                sessionId={session.id}
+                clientId={session.clientId}
+                value={session.locationType === "in_person" ? "in_person" : "online"}
+              />
+            )}
             {session.locationType === "in_person" ? (
               // In-person: no Meet/bot — she records in the room. The recorder
               // feeds the same "From the meeting" panel as the remote notetaker.
@@ -622,6 +633,61 @@ export function SessionCard({
         }}
       />
     </div>
+  );
+}
+
+// Online ⇄ In person for ONE session. Same rules as booking: in person means no
+// Meet link and no notetaker bot (she records in the room); online restores the
+// link + bot eligibility. Optimistic label; the server confirms.
+function LocationToggle({
+  sessionId,
+  clientId,
+  value,
+}: {
+  sessionId: string;
+  clientId: string;
+  value: "online" | "in_person";
+}) {
+  const [pending, start] = useTransition();
+  const [current, setCurrent] = useState(value);
+  useEffect(() => setCurrent(value), [value]);
+  const opts = [
+    { key: "online", label: "Online" },
+    { key: "in_person", label: "In person" },
+  ] as const;
+  return (
+    <span
+      className="inline-flex rounded-md border border-ink-200 overflow-hidden text-[11px]"
+      title="Where this session happens. Switching one session to in person turns off its video link and notetaker — the rest of a series is unaffected."
+      aria-busy={pending}
+    >
+      {opts.map((opt) => (
+        <button
+          key={opt.key}
+          type="button"
+          disabled={pending}
+          onClick={() => {
+            if (opt.key === current) return;
+            const prev = current;
+            setCurrent(opt.key);
+            start(async () => {
+              const r = await setSessionLocation(sessionId, clientId, opt.key);
+              if (!r.ok) {
+                setCurrent(prev);
+                notify({ kind: "warning", title: "Couldn't change where it happens", body: r.error });
+              }
+            });
+          }}
+          className={`px-2.5 py-1 transition ${
+            current === opt.key
+              ? "bg-ink-900 text-white"
+              : "bg-white text-ink-600 hover:bg-ink-50"
+          }`}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </span>
   );
 }
 

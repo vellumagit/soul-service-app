@@ -96,6 +96,7 @@ type SeriesRow = {
   materializedThroughIndex: number;
   googleRecurringEventId: string | null;
   meetUrl: string | null;
+  locationType: string;
   intention: string | null;
   practiceTz: string | null;
 };
@@ -160,6 +161,7 @@ async function ensureForSeries(
       occurrenceIndex: index,
       googleRecurringEventId,
       meetUrl,
+      locationType: series.locationType,
     });
     if (toInsert.length >= MAX_CREATE_PER_TICK) break;
   }
@@ -209,6 +211,7 @@ export async function ensureSeriesSessions(opts?: {
       materializedThroughIndex: sessionSeries.materializedThroughIndex,
       googleRecurringEventId: sessionSeries.googleRecurringEventId,
       meetUrl: sessionSeries.meetUrl,
+      locationType: sessionSeries.locationType,
       intention: sessionSeries.intention,
       practiceTz: practitionerSettings.timezone,
     })

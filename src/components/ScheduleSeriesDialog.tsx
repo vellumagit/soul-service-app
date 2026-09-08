@@ -140,6 +140,12 @@ export function ScheduleSeriesDialog({
     defaultFirstAt(practiceTz)
   );
   const [frequency, setFrequency] = useState<Frequency>("weekly");
+  // Online (Meet + notetaker) vs in person (no Meet/bot; she records in the
+  // room). Applies to the whole series; any one occurrence can be flipped
+  // later on its own card.
+  const [locationType, setLocationType] = useState<"online" | "in_person">(
+    "online"
+  );
   // The count is kept as the TEXT she typed. Parsing it to a number on every
   // keystroke (and forcing "" → 0) made React write a literal "0" back into
   // the box the moment she cleared it, so typing 52 produced "052" — and that
@@ -265,6 +271,12 @@ export function ScheduleSeriesDialog({
             className="space-y-4"
           >
             <input type="hidden" name="timezone" value={practiceTz} readOnly />
+            <input
+              type="hidden"
+              name="locationType"
+              value={locationType}
+              readOnly
+            />
             {error && (
               <div className="text-xs text-red-700 bg-red-50 border border-red-100 rounded p-2">
                 {error}
@@ -391,6 +403,37 @@ export function ScheduleSeriesDialog({
                 )}
               </Field>
             </div>
+
+            <Field
+              label="Where"
+              hint={
+                locationType === "in_person"
+                  ? "No video link and no notetaker for these sessions — record each one in the room with “Record session” on its card. You can flip any single session back to online later."
+                  : "One Google Meet link for the whole series (generated when Google is connected). Any single session can be switched to in person later on its card."
+              }
+            >
+              <div className="inline-flex rounded-md border border-ink-200 overflow-hidden text-sm">
+                {(
+                  [
+                    { key: "online", label: "Online" },
+                    { key: "in_person", label: "In person" },
+                  ] as const
+                ).map((opt) => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => setLocationType(opt.key)}
+                    className={`px-4 py-1.5 transition ${
+                      locationType === opt.key
+                        ? "bg-ink-900 text-white"
+                        : "bg-white text-ink-600 hover:bg-ink-50"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </Field>
 
             <Field label="Intention (optional)" hint="Applies to every session in the series. You can still edit each one individually after.">
               <input

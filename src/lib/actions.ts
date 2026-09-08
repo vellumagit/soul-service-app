@@ -1716,6 +1716,69 @@ async function maybeAutoAddRecallBot(
  *  Independent of Google Calendar — this is the reliable confirmation. Skips
  *  silently when Resend isn't configured or the client has no email. Never
  *  throws (a mail failure must not fail the booking). */
+// ONE email for a whole recurring series — the schedule in plain words, the
+// next few dates and where to show up — in the client's preferred language.
+// Best-effort: an email hiccup never undoes a saved series.
+async function maybeSendSeriesConfirmation(
+  accountId: string,
+  seriesId: string,
+  futureDates: Date[]
+): Promise<void> {
+  try {
+    const { isResendConfigured } = await import("./resend");
+    if (!isResendConfigured() || futureDates.length === 0) return;
+    const [row] = await db
+      .select({
+        clientName: clients.fullName,
+        clientEmail: clients.email,
+        clientTimezone: clients.timezone,
+        clientLanguage: clients.preferredLanguage,
+        sessionType: sessionSeries.type,
+        frequency: sessionSeries.frequency,
+        durationMinutes: sessionSeries.durationMinutes,
+        occurrenceCount: sessionSeries.occurrenceCount,
+        locationType: sessionSeries.locationType,
+        meetUrl: sessionSeries.meetUrl,
+        practitionerName: practitionerSettings.practitionerName,
+        businessEmail: practitionerSettings.businessEmail,
+        businessAddress: practitionerSettings.businessAddress,
+        practiceTimezone: practitionerSettings.timezone,
+      })
+      .from(sessionSeries)
+      .innerJoin(clients, eq(clients.id, sessionSeries.clientId))
+      .leftJoin(
+        practitionerSettings,
+        eq(practitionerSettings.accountId, sessionSeries.accountId)
+      )
+      .where(
+        and(eq(sessionSeries.accountId, accountId), eq(sessionSeries.id, seriesId))
+      )
+      .limit(1);
+    if (!row?.clientEmail) return;
+    // The client's own zone if known, else the practice zone.
+    const clientZone = resolveTimeZone(row.clientTimezone, row.practiceTimezone);
+    const { sendSeriesBookingConfirmationEmail } = await import("./series-email");
+    await sendSeriesBookingConfirmationEmail({
+      to: row.clientEmail,
+      clientName: row.clientName,
+      sessionType: row.sessionType,
+      frequency: row.frequency,
+      durationMinutes: row.durationMinutes,
+      dates: futureDates,
+      totalCount: row.occurrenceCount,
+      inPerson: row.locationType === "in_person",
+      address: row.businessAddress ?? null,
+      meetingUrl: row.meetUrl ?? null,
+      practitionerName: row.practitionerName ?? null,
+      replyTo: row.businessEmail ?? undefined,
+      timeZone: clientZone,
+      language: row.clientLanguage === "uk" ? "uk" : "en",
+    });
+  } catch (err) {
+    console.warn("[series confirmation] failed:", err);
+  }
+}
+
 async function maybeSendBookingConfirmation(
   accountId: string,
   sessionId: string,
@@ -1930,6 +1993,87 @@ export async function addBotToSessionNow(
  *  she can call off a bot that's about to join unwantedly. */
 export type CancelBotResult = { ok: true } | { ok: false; error: string };
 
+/** Flip ONE session between online and in person — e.g. an occurrence of a
+ *  recurring series that happens in the room this week. Same rules as booking:
+ *  in person = no Meet, no notetaker bot (she records with "Record session");
+ *  online = Meet link + bot eligibility back on. The rest of a series, and its
+ *  single Google event, are untouched. */
+export async function setSessionLocation(
+  sessionId: string,
+  clientId: string,
+  locationType: "online" | "in_person"
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const { accountId } = await requireSession();
+    const [sess] = await db
+      .select({
+        current: sessions.locationType,
+        botId: sessions.recallBotId,
+        botStatus: sessions.recallBotStatus,
+        meetUrl: sessions.meetUrl,
+        seriesId: sessions.seriesId,
+      })
+      .from(sessions)
+      .where(and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId)))
+      .limit(1);
+    if (!sess) return { ok: false, error: "Session not found." };
+    if (sess.current === locationType) return { ok: true };
+
+    if (locationType === "in_person") {
+      // Call off a bot that's already been sent, and mark the row so the
+      // just-in-time sweep never sends one ("cancelled" = she called it off).
+      if (sess.botId) {
+        try {
+          const { cancelBot } = await import("./recall");
+          await cancelBot(sess.botId);
+        } catch (err) {
+          console.warn("[setSessionLocation] bot cancel failed:", err);
+        }
+      }
+      await db
+        .update(sessions)
+        .set({
+          locationType,
+          recallBotId: null,
+          recallBotStatus: "cancelled",
+          updatedAt: new Date(),
+        })
+        .where(and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId)));
+    } else {
+      // Back online: restore the series' shared Meet link if this row has none,
+      // and clear the "called off" marker so auto-add can queue a bot again.
+      let meetUrl = sess.meetUrl;
+      if (!meetUrl && sess.seriesId) {
+        const [s] = await db
+          .select({ meetUrl: sessionSeries.meetUrl })
+          .from(sessionSeries)
+          .where(eq(sessionSeries.id, sess.seriesId))
+          .limit(1);
+        meetUrl = s?.meetUrl ?? null;
+      }
+      await db
+        .update(sessions)
+        .set({
+          locationType,
+          meetUrl,
+          recallBotStatus: sess.botStatus === "cancelled" ? null : sess.botStatus,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId)));
+    }
+
+    revalidatePath(`/clients/${clientId}`);
+    revalidatePath("/calendar");
+    revalidatePath("/today");
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Couldn't change the location.",
+    };
+  }
+}
+
 export async function cancelBotForSession(
   sessionId: string
 ): Promise<CancelBotResult> {
@@ -2004,6 +2148,12 @@ export async function scheduleSessionSeries(
     const firstAtRaw = required(str(formData, "firstAt"), "First session date/time");
     const durationMinutes = num(formData, "durationMinutes") ?? 60;
     const intention = str(formData, "intention");
+    // Online (Meet + notetaker) or in person (no Meet, no bot — she records in
+    // the room). Same rule as a single session. Stored on the series so rows
+    // the cron materializes later inherit it; any one occurrence can still be
+    // flipped on its own card.
+    const isInPerson = str(formData, "locationType") === "in_person";
+    const locationType = isInPerson ? "in_person" : "online";
     const frequencyRaw = str(formData, "frequency") ?? "weekly";
     if (
       frequencyRaw !== "weekly" &&
@@ -2116,6 +2266,7 @@ export async function scheduleSessionSeries(
         firstAt,
         occurrenceCount,
         intention,
+        locationType,
       })
       .returning({ id: sessionSeries.id });
 
@@ -2157,6 +2308,7 @@ export async function scheduleSessionSeries(
         intention,
         seriesId: seriesRow.id,
         occurrenceIndex: index,
+        locationType,
       }));
 
     const inserted = await db
@@ -2226,7 +2378,10 @@ export async function scheduleSessionSeries(
     // occurrence with an RRULE; every future session shares its Meet link and is
     // linked by googleRecurringEventId so reschedule/cancel-one can address its
     // own instance. Best-effort: a Google hiccup never undoes the saved series.
-    if (future.length > 0) {
+    // An in-person series skips Google AND the notetaker queue entirely — the
+    // same rule as a single in-person session (no Meet to generate; she records
+    // in the room). The schedule email below still goes out.
+    if (future.length > 0 && !isInPerson) {
       if (allFutureDates.length >= 2) {
         try {
           const { recurrenceForSeries } = await import("./google-calendar");
@@ -2302,7 +2457,9 @@ export async function scheduleSessionSeries(
     // check for that first session in case the series starts inside a reminder
     // window.
     if (future.length > 0) {
-      await maybeSendBookingConfirmation(accountId, future[0].id);
+      // ONE email describing the whole series (rhythm, count, next dates,
+      // where) — not the single-session "You're booked" for occurrence #1.
+      await maybeSendSeriesConfirmation(accountId, seriesRow.id, allFutureDates);
       try {
         const { sendImmediateSessionReminders } = await import("./reminders");
         await sendImmediateSessionReminders(future[0].id);

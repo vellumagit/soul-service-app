@@ -390,6 +390,11 @@ export const sessionSeries = pgTable(
     googleRecurringEventId: text("google_recurring_event_id"),
     meetUrl: text("meet_url"),
 
+    // "online" (Meet + notetaker) or "in_person" (no Meet, no bot — she
+    // records in the room). Inherited by rows the cron materializes later.
+    // A single occurrence can still be flipped on its own card.
+    locationType: text("location_type").default("online").notNull(),
+
     intention: text("intention"),
 
     // Cancelled (vs deleted) — we keep the row + past sessions but stop future ones.
