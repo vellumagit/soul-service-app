@@ -20,9 +20,9 @@
 
 import "server-only";
 
-import { eq } from "drizzle-orm";
+import { and, eq, gte, lte } from "drizzle-orm";
 import { db } from "@/db";
-import { practitionerSettings } from "@/db/schema";
+import { practitionerSettings, timeOff } from "@/db/schema";
 import { getFreeBusy, type BusyInterval } from "./google-calendar";
 import {
   resolveTimeZone,
@@ -55,7 +55,29 @@ export type ConflictCheck =
     }
   | { status: "outside-hours" }
   | { status: "sabbath-day" }
+  /** Inside a blocked time-off range (Calendar → Time off). */
+  | { status: "time-off" }
   | { status: "no-google" };
+
+/** Time-off ranges overlapping [from, to]. Blocking a range is the 4th signal
+ *  alongside working hours, sabbath days and Google FreeBusy. */
+async function loadTimeOff(
+  accountId: string,
+  from: Date,
+  to: Date
+): Promise<{ startsAt: Date; endsAt: Date }[]> {
+  const rows = await db
+    .select({ startsAt: timeOff.startsAt, endsAt: timeOff.endsAt })
+    .from(timeOff)
+    .where(
+      and(
+        eq(timeOff.accountId, accountId),
+        lte(timeOff.startsAt, to),
+        gte(timeOff.endsAt, from)
+      )
+    );
+  return rows.map((r) => ({ startsAt: new Date(r.startsAt), endsAt: new Date(r.endsAt) }));
+}
 
 // ─────────────────────────────────────────────────────────────────────
 // Public API
@@ -83,13 +105,19 @@ export async function getAvailableWindows(
   // we don't hammer Google per-day.
   const endAt = new Date(fromAt.getTime() + lookAheadDays * 24 * 60 * 60 * 1000);
   const busy = await getFreeBusy(accountId, fromAt, endAt);
+  const off = await loadTimeOff(accountId, fromAt, endAt);
 
   const out: AvailableWindow[] = [];
   for (let i = 0; i < lookAheadDays && out.length < limit; i++) {
     // Walk PRACTICE-TZ calendar days — each iteration hands sliceDay the
     // midnight instant of that day in her zone.
     const dayStart = zonedAddDays(fromAt, i, cfg.timezone);
-    const slots = sliceDay(dayStart, fromAt, duration, cfg, busy);
+    const slots = sliceDay(dayStart, fromAt, duration, cfg, busy).filter(
+      (slot) =>
+        !off.some((r) =>
+          intervalsOverlap(r.startsAt, r.endsAt, slot.startAt, slot.endAt)
+        )
+    );
     for (const slot of slots) {
       out.push(slot);
       if (out.length >= limit) break;
@@ -111,6 +139,12 @@ export async function checkConflict(
   const weekday = WEEKDAY_KEYS[zonedWeekday(startAt, cfg.timezone)];
   if (cfg.sabbathDays.includes(weekday)) {
     return { status: "sabbath-day" };
+  }
+
+  // 1b) Blocked time off (Calendar → Time off) — a hard no, like a sabbath day.
+  const off = await loadTimeOff(accountId, startAt, endAt);
+  if (off.some((r) => intervalsOverlap(r.startsAt, r.endsAt, startAt, endAt))) {
+    return { status: "time-off" };
   }
 
   // 2) Within working-hours check (if working_hours is set)

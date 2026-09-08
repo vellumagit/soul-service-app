@@ -13,6 +13,7 @@ import { MonthCalendar } from "@/components/MonthCalendar";
 import { QuickActions } from "@/components/QuickActions";
 import { ScheduleSessionDialog } from "@/components/ScheduleSessionDialog";
 import { ScheduleSeriesDialog } from "@/components/ScheduleSeriesDialog";
+import { TimeOffDialog } from "@/components/TimeOffDialog";
 import { CalendarJumpToDate } from "@/components/CalendarJumpToDate";
 import { requireSession } from "@/lib/session-cookies";
 import { asLocale, t } from "@/lib/i18n";
@@ -270,6 +271,7 @@ export default async function CalendarPage({
           clients={clients}
           sabbathDays={(settings.sabbathDays ?? []) as string[]}
         />
+        <TimeOffDialog />
       </div>
 
       {/* The calendar itself. Sabbath days come straight from settings —

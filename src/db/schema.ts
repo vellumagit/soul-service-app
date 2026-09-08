@@ -415,6 +415,30 @@ export const sessionSeries = pgTable(
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
+// time_off — a range she's away. Applying it cancels every session inside the
+// range (one email per client) and blocks new bookings inside it.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const timeOff = pgTable(
+  "time_off",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+    /** Optional, shown to clients in the email ("family trip"). */
+    note: text("note"),
+    sessionsCancelled: integer("sessions_cancelled").default(0).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    accountIdx: index("time_off_account_idx").on(t.accountId, t.startsAt),
+  })
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // attachments — files uploaded for a client (and optionally tied to a session)
 // ─────────────────────────────────────────────────────────────────────────────
 

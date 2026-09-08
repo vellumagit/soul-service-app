@@ -226,6 +226,110 @@ function ukPlural(n: number, one: string, few: string, many: string): string {
   return many;
 }
 
+// ── Time off ─────────────────────────────────────────────────────────────────
+// ONE email per client when she blocks out a range: the dates of theirs that
+// are off, when they pick back up, nothing to do on their end.
+
+export async function sendTimeOffEmail(input: {
+  to: string;
+  clientName: string | null;
+  practitionerName: string | null;
+  replyTo?: string;
+  timeZone: string;
+  language: Lang;
+  from: Date;
+  to_: Date;
+  cancelledDates: Date[];
+  /** Their next session after the break, if one is on the calendar. */
+  resumesAt: Date | null;
+  note: string | null;
+}): Promise<void> {
+  const lang = input.language;
+  const loc = lang === "uk" ? "uk-UA" : "en-US";
+  const tz = input.timeZone;
+  const firstName = input.clientName?.split(" ")[0]?.trim() || null;
+  const signoff = input.practitionerName ?? "Svitlana";
+  const day = (d: Date) =>
+    new Intl.DateTimeFormat(loc, { month: "short", day: "numeric", timeZone: tz }).format(d);
+  const dayYear = (d: Date) =>
+    new Intl.DateTimeFormat(loc, { month: "short", day: "numeric", year: "numeric", timeZone: tz }).format(d);
+  const when = (d: Date) =>
+    new Intl.DateTimeFormat(loc, {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone: tz,
+    }).format(d);
+  const range = `${day(input.from)} – ${dayYear(input.to_)}`;
+  const n = input.cancelledDates.length;
+  const countLabel =
+    lang === "uk"
+      ? `${n} ${ukPlural(n, "сесія", "сесії", "сесій")}`
+      : `${n} ${n === 1 ? "session" : "sessions"}`;
+
+  const t = {
+    subject:
+      lang === "uk"
+        ? `Мене не буде ${range} — ${countLabel} на паузі`
+        : `Away ${range} — ${countLabel} paused`,
+    greeting:
+      lang === "uk"
+        ? firstName ? `Привіт, ${firstName}!` : "Привіт!"
+        : firstName ? `Hi ${firstName},` : "Hi,",
+    lead:
+      lang === "uk"
+        ? `Мене не буде з ${day(input.from)} до ${dayYear(input.to_)}${input.note ? ` — ${input.note}` : ""}. Ці наші зустрічі поки що скасовано:`
+        : `I'll be away from ${day(input.from)} to ${dayYear(input.to_)}${input.note ? ` — ${input.note}` : ""}. These sessions of ours are off for now:`,
+    resume: input.resumesAt
+      ? lang === "uk"
+        ? `Повертаємось ${when(input.resumesAt)} — той самий ритм, як і раніше.`
+        : `We pick back up on ${when(input.resumesAt)} — same rhythm as before.`
+      : lang === "uk"
+        ? "Я напишу вам щодо нашої наступної зустрічі."
+        : "I'll be in touch about our next time.",
+    nothing:
+      lang === "uk"
+        ? "З вашого боку нічого робити не потрібно. Якщо хочете щось перенести, просто відповідайте на цей лист."
+        : "Nothing to do on your end. If you'd like to move anything, just reply to this email.",
+    warmly: lang === "uk" ? "З теплом," : "Warmly,",
+  };
+
+  const list = input.cancelledDates.map((d) => `· ${when(d)}`).join("\n");
+  const text = `${t.greeting}
+
+${t.lead}
+
+${list}
+
+${t.resume}
+
+${t.nothing}
+
+${t.warmly}
+${signoff}`;
+
+  const html = `
+<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#faf6f0;font-family:Georgia,'Times New Roman',serif;color:#3d342e;">
+    <div style="max-width:480px;margin:48px auto;padding:36px 32px;background:#fdf9f1;border-radius:12px;border:1px solid #ead9c1;">
+      <p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;color:#564a42;">${esc(t.greeting)}</p>
+      <p style="margin:0 0 14px 0;font-size:15px;line-height:1.6;color:#564a42;">${esc(t.lead)}</p>
+      <ul style="margin:0 0 18px 18px;padding:0;font-size:14px;line-height:1.7;color:#564a42;">
+        ${input.cancelledDates.map((d) => `<li>${esc(when(d))}</li>`).join("")}
+      </ul>
+      <p style="margin:0 0 12px 0;font-size:15px;line-height:1.6;color:#564a42;">${esc(t.resume)}</p>
+      <p style="margin:0 0 0 0;font-size:14px;line-height:1.6;color:#786b60;">${esc(t.nothing)}</p>
+      <p style="margin:20px 0 0 0;font-size:15px;line-height:1.6;color:#564a42;">${esc(t.warmly)}<br>${esc(signoff)}</p>
+    </div>
+  </body>
+</html>`.trim();
+
+  await sendEmail({ to: input.to, subject: t.subject, html, text, replyTo: input.replyTo });
+}
+
 function esc(s: string): string {
   return s
     .replace(/&/g, "&amp;")

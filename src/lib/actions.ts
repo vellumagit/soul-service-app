@@ -20,7 +20,7 @@ import {
   leadForms,
   leadSubmissions,
 } from "@/db/schema";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { asc, and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { getSettings } from "@/db/queries";
 import { requireSession } from "./session-cookies";
 import { reportError } from "./observability";
@@ -2078,6 +2078,601 @@ export async function setSessionLocation(
     return {
       ok: false,
       error: err instanceof Error ? err.message : "Couldn't change the location.",
+    };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The session card's reverse gear: restore, no-show, fix a held session's date
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Put a cancelled / no-show session back on the calendar as scheduled — or
+ *  reopen one marked complete by mistake. Upcoming + online: the Google entry
+ *  comes back (a series occurrence is un-cancelled on the shared event; a
+ *  standalone gets a fresh event) and the client can be told it's back on.
+ *  Past sessions: just the status flips — nothing to put on a calendar. */
+export async function restoreSession(
+  sessionId: string,
+  clientId: string,
+  opts: { notifyClient?: boolean } = {}
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const { accountId } = await requireSession();
+    const [row] = await db
+      .select({
+        status: sessions.status,
+        scheduledAt: sessions.scheduledAt,
+        seriesId: sessions.seriesId,
+        locationType: sessions.locationType,
+        googleEventId: sessions.googleEventId,
+        googleRecurringEventId: sessions.googleRecurringEventId,
+      })
+      .from(sessions)
+      .where(and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId)))
+      .limit(1);
+    if (!row) return { ok: false, error: "Session not found." };
+    if (row.status === "scheduled") return { ok: true };
+
+    const now = new Date();
+    const upcoming = new Date(row.scheduledAt).getTime() > now.getTime();
+    const inPerson = row.locationType === "in_person";
+    const notify = opts.notifyClient !== false;
+
+    await db
+      .update(sessions)
+      .set({
+        status: "scheduled",
+        recallBotId: null,
+        // In person never gets a bot; online is eligible again for auto-add.
+        recallBotStatus: inPerson ? "cancelled" : null,
+        updatedAt: now,
+      })
+      .where(and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId)));
+
+    if (upcoming && !inPerson) {
+      try {
+        let reattached = false;
+        if (row.seriesId) {
+          const [s] = await db
+            .select({
+              gid: sessionSeries.googleRecurringEventId,
+              meetUrl: sessionSeries.meetUrl,
+            })
+            .from(sessionSeries)
+            .where(eq(sessionSeries.id, row.seriesId))
+            .limit(1);
+          if (s?.gid) {
+            const { patchRecurringInstance } = await import("./google-calendar");
+            const ok = await patchRecurringInstance(
+              accountId,
+              s.gid,
+              new Date(row.scheduledAt).getTime(),
+              { status: "confirmed" },
+              { notify: false }
+            );
+            if (ok) {
+              reattached = true;
+              await db
+                .update(sessions)
+                .set({ googleRecurringEventId: s.gid, meetUrl: s.meetUrl, updatedAt: new Date() })
+                .where(and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId)));
+            }
+          }
+        }
+        if (!reattached && !row.googleEventId) {
+          // Standalone (or the series has no Google event): a fresh event.
+          await syncSessionToGoogle(sessionId, { notify });
+        }
+      } catch (err) {
+        console.warn("[restoreSession] Google restore failed:", err);
+      }
+      if (notify) await maybeSendBookingConfirmation(accountId, sessionId);
+    }
+
+    revalidatePath(`/clients/${clientId}`);
+    revalidatePath("/calendar");
+    revalidatePath("/today");
+    revalidatePath("/payments");
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Couldn't restore the session.",
+    };
+  }
+}
+
+/** The client didn't turn up. Keeps the row (and its payment tracking — a
+ *  no-show may be billable) and calls off any notetaker bot. */
+export async function markNoShow(
+  sessionId: string,
+  clientId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const { accountId } = await requireSession();
+    const [row] = await db
+      .select({ status: sessions.status, botId: sessions.recallBotId })
+      .from(sessions)
+      .where(and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId)))
+      .limit(1);
+    if (!row) return { ok: false, error: "Session not found." };
+    if (row.botId) {
+      try {
+        const { cancelBot } = await import("./recall");
+        await cancelBot(row.botId);
+      } catch (err) {
+        console.warn("[markNoShow] bot cancel failed:", err);
+      }
+    }
+    await db
+      .update(sessions)
+      .set({
+        status: "no_show",
+        recallBotId: null,
+        recallBotStatus: null,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId)));
+    revalidatePath(`/clients/${clientId}`);
+    revalidatePath("/calendar");
+    revalidatePath("/today");
+    revalidatePath("/payments");
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Couldn't mark the no-show.",
+    };
+  }
+}
+
+/** Correct the recorded date/time (and length) of a session that already
+ *  happened — a typo in "Log a past session", or a completed / no-show /
+ *  cancelled row. Purely a record fix: no client email, no bot, and the
+ *  Google entry (if any) is moved silently. Upcoming sessions use Reschedule. */
+export async function correctSessionDate(
+  formData: FormData
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const { accountId } = await requireSession();
+    const id = required(str(formData, "id"), "Session id");
+    const clientId = required(str(formData, "clientId"), "Client id");
+    const newAt = new Date(required(str(formData, "scheduledAt"), "Date / time"));
+    if (Number.isNaN(newAt.getTime())) {
+      return { ok: false, error: "Couldn't read that date and time." };
+    }
+    const durationRaw = num(formData, "durationMinutes");
+    const [row] = await db
+      .select({
+        status: sessions.status,
+        scheduledAt: sessions.scheduledAt,
+        durationMinutes: sessions.durationMinutes,
+        googleEventId: sessions.googleEventId,
+        googleRecurringEventId: sessions.googleRecurringEventId,
+      })
+      .from(sessions)
+      .where(and(eq(sessions.accountId, accountId), eq(sessions.id, id)))
+      .limit(1);
+    if (!row) return { ok: false, error: "Session not found." };
+    if (row.status === "scheduled") {
+      return {
+        ok: false,
+        error: "This session is still upcoming — use Reschedule for it.",
+      };
+    }
+    const durationMinutes =
+      durationRaw != null ? Math.max(5, Math.min(180, durationRaw)) : row.durationMinutes;
+
+    await db
+      .update(sessions)
+      .set({ scheduledAt: newAt, durationMinutes, updatedAt: new Date() })
+      .where(and(eq(sessions.accountId, accountId), eq(sessions.id, id)));
+
+    // Move the calendar entry to match — silently; it's a record correction.
+    try {
+      const g = await import("./google-calendar");
+      if (row.googleRecurringEventId) {
+        await g.patchRecurringInstance(
+          accountId,
+          row.googleRecurringEventId,
+          new Date(row.scheduledAt).getTime(),
+          { startAt: newAt, durationMinutes },
+          { notify: false }
+        );
+      } else if (row.googleEventId) {
+        await g.patchEventTimes(accountId, row.googleEventId, newAt, durationMinutes);
+      }
+    } catch (err) {
+      console.warn("[correctSessionDate] Google move failed:", err);
+    }
+
+    revalidatePath(`/clients/${clientId}`);
+    revalidatePath("/calendar");
+    revalidatePath("/payments");
+    revalidatePath("/today");
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Couldn't change the date.",
+    };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Time off — block a range: cancel everything inside it, one email per client
+// ─────────────────────────────────────────────────────────────────────────────
+
+type TimeOffHit = {
+  sessionId: string | null; // null = a series occurrence not materialized yet
+  clientId: string;
+  clientName: string;
+  scheduledAt: Date;
+  type: string;
+  seriesId: string | null;
+  occurrenceIndex: number | null;
+  googleEventId: string | null;
+  googleRecurringEventId: string | null;
+  recallBotId: string | null;
+  // For not-yet-materialized occurrences: what to insert as the skip marker.
+  seriesDurationMinutes?: number;
+  seriesIntention?: string | null;
+  seriesLocationType?: string;
+  seriesGoogleRecurringEventId?: string | null;
+};
+
+/** Everything that would be cancelled by a time-off range: upcoming scheduled
+ *  sessions inside it, plus series occurrences inside it that the rolling
+ *  window hasn't created yet (they get skip markers so the cron never fills
+ *  the gap). */
+async function collectTimeOffHits(
+  accountId: string,
+  from: Date,
+  to: Date
+): Promise<TimeOffHit[]> {
+  const now = new Date();
+  const lower = from.getTime() > now.getTime() ? from : now;
+  const rows = await db
+    .select({
+      sessionId: sessions.id,
+      clientId: sessions.clientId,
+      clientName: clients.fullName,
+      scheduledAt: sessions.scheduledAt,
+      type: sessions.type,
+      seriesId: sessions.seriesId,
+      occurrenceIndex: sessions.occurrenceIndex,
+      googleEventId: sessions.googleEventId,
+      googleRecurringEventId: sessions.googleRecurringEventId,
+      recallBotId: sessions.recallBotId,
+    })
+    .from(sessions)
+    .innerJoin(clients, eq(clients.id, sessions.clientId))
+    .where(
+      and(
+        eq(sessions.accountId, accountId),
+        eq(sessions.status, "scheduled"),
+        sql`${sessions.scheduledAt} >= ${lower.toISOString()}`,
+        sql`${sessions.scheduledAt} <= ${to.toISOString()}`
+      )
+    )
+    .orderBy(asc(sessions.scheduledAt));
+  const hits: TimeOffHit[] = rows.map((r) => ({
+    ...r,
+    scheduledAt: new Date(r.scheduledAt),
+  }));
+
+  // Series occurrences beyond the materialized window.
+  const series = await db
+    .select({
+      id: sessionSeries.id,
+      clientId: sessionSeries.clientId,
+      clientName: clients.fullName,
+      type: sessionSeries.type,
+      frequency: sessionSeries.frequency,
+      firstAt: sessionSeries.firstAt,
+      anchorIndex: sessionSeries.anchorIndex,
+      occurrenceCount: sessionSeries.occurrenceCount,
+      materializedThroughIndex: sessionSeries.materializedThroughIndex,
+      durationMinutes: sessionSeries.durationMinutes,
+      intention: sessionSeries.intention,
+      locationType: sessionSeries.locationType,
+      googleRecurringEventId: sessionSeries.googleRecurringEventId,
+      practiceTz: practitionerSettings.timezone,
+    })
+    .from(sessionSeries)
+    .innerJoin(clients, eq(clients.id, sessionSeries.clientId))
+    .leftJoin(
+      practitionerSettings,
+      eq(practitionerSettings.accountId, sessionSeries.accountId)
+    )
+    .where(
+      and(
+        eq(sessionSeries.accountId, accountId),
+        isNull(sessionSeries.cancelledAt),
+        sql`${sessionSeries.materializedThroughIndex} < ${sessionSeries.occurrenceCount}`
+      )
+    );
+  for (const s of series) {
+    const tz = resolveTimeZone(s.practiceTz);
+    const rule = {
+      firstAt: new Date(s.firstAt),
+      frequency: s.frequency as "weekly" | "biweekly" | "monthly",
+      anchorIndex: s.anchorIndex,
+    };
+    for (let k = s.materializedThroughIndex + 1; k <= s.occurrenceCount; k++) {
+      const at = ruleInstant(rule, k, tz);
+      if (at.getTime() > to.getTime()) break;
+      if (at.getTime() < lower.getTime()) continue;
+      hits.push({
+        sessionId: null,
+        clientId: s.clientId,
+        clientName: s.clientName,
+        scheduledAt: at,
+        type: s.type,
+        seriesId: s.id,
+        occurrenceIndex: k,
+        googleEventId: null,
+        googleRecurringEventId: null,
+        recallBotId: null,
+        seriesDurationMinutes: s.durationMinutes,
+        seriesIntention: s.intention,
+        seriesLocationType: s.locationType,
+        seriesGoogleRecurringEventId: s.googleRecurringEventId,
+      });
+    }
+  }
+  return hits.sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime());
+}
+
+export type TimeOffPreview =
+  | {
+      ok: true;
+      sessions: {
+        clientId: string;
+        clientName: string;
+        scheduledAt: string;
+        type: string;
+        notYetCreated: boolean;
+      }[];
+      clients: number;
+    }
+  | { ok: false; error: string };
+
+export async function previewTimeOff(
+  fromIso: string,
+  toIso: string
+): Promise<TimeOffPreview> {
+  try {
+    const { accountId } = await requireSession();
+    const from = new Date(fromIso);
+    const to = new Date(toIso);
+    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+      return { ok: false, error: "Pick both dates." };
+    }
+    if (to.getTime() < from.getTime()) {
+      return { ok: false, error: "The end date is before the start date." };
+    }
+    const hits = await collectTimeOffHits(accountId, from, to);
+    return {
+      ok: true,
+      sessions: hits.map((h) => ({
+        clientId: h.clientId,
+        clientName: h.clientName,
+        scheduledAt: h.scheduledAt.toISOString(),
+        type: h.type,
+        notYetCreated: h.sessionId === null,
+      })),
+      clients: new Set(hits.map((h) => h.clientId)).size,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Couldn't preview that range.",
+    };
+  }
+}
+
+export type ApplyTimeOffResult =
+  | { ok: true; cancelled: number; clients: number; emailed: number }
+  | { ok: false; error: string };
+
+/** Block a range. Every upcoming session inside it is cancelled (bots called
+ *  off, Google entries removed silently), series gaps are pinned so the cron
+ *  can't refill them, new bookings inside the range are refused, and each
+ *  affected client gets ONE email listing their dates and when you're back. */
+export async function applyTimeOff(formData: FormData): Promise<ApplyTimeOffResult> {
+  try {
+    const { accountId } = await requireSession();
+    const from = new Date(required(str(formData, "from"), "Start"));
+    const to = new Date(required(str(formData, "to"), "End"));
+    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+      return { ok: false, error: "Pick both dates." };
+    }
+    if (to.getTime() < from.getTime()) {
+      return { ok: false, error: "The end date is before the start date." };
+    }
+    const note = str(formData, "note");
+    const notifyClients = str(formData, "notifyClients") !== "false";
+    const now = new Date();
+
+    const { timeOff } = await import("@/db/schema");
+    const [block] = await db
+      .insert(timeOff)
+      .values({ accountId, startsAt: from, endsAt: to, note })
+      .returning({ id: timeOff.id });
+
+    const hits = await collectTimeOffHits(accountId, from, to);
+    const byClient = new Map<string, TimeOffHit[]>();
+    for (const h of hits) {
+      const list = byClient.get(h.clientId) ?? [];
+      list.push(h);
+      byClient.set(h.clientId, list);
+    }
+
+    let cancelled = 0;
+    for (const h of hits) {
+      if (h.sessionId) {
+        // An existing upcoming session: same steps as "Cancel this one", minus
+        // the per-session email.
+        if (h.recallBotId) {
+          try {
+            const { cancelBot } = await import("./recall");
+            await cancelBot(h.recallBotId);
+          } catch (err) {
+            console.warn("[timeOff] bot cancel failed:", err);
+          }
+        }
+        await db
+          .update(sessions)
+          .set({
+            status: "cancelled",
+            recallBotId: null,
+            recallBotStatus: null,
+            updatedAt: now,
+          })
+          .where(and(eq(sessions.accountId, accountId), eq(sessions.id, h.sessionId)));
+        try {
+          if (h.googleRecurringEventId) {
+            const { cancelRecurringInstance } = await import("./google-calendar");
+            await cancelRecurringInstance(
+              accountId,
+              h.googleRecurringEventId,
+              h.scheduledAt.getTime(),
+              { notify: false }
+            );
+            await db
+              .update(sessions)
+              .set({ googleRecurringEventId: null })
+              .where(and(eq(sessions.accountId, accountId), eq(sessions.id, h.sessionId)));
+          } else if (h.googleEventId) {
+            await deleteSessionFromGoogle(accountId, h.googleEventId, { notify: false });
+            await db
+              .update(sessions)
+              .set({ googleEventId: null })
+              .where(and(eq(sessions.accountId, accountId), eq(sessions.id, h.sessionId)));
+          }
+        } catch (err) {
+          console.warn("[timeOff] Google cleanup failed:", err);
+        }
+        cancelled++;
+      } else if (h.seriesId && h.occurrenceIndex != null) {
+        // A series occurrence the window hasn't created yet: pin a cancelled
+        // skip marker so the cron never fills the gap, and drop the instance
+        // from the shared Google event.
+        const [made] = await db
+          .insert(sessions)
+          .values({
+            accountId,
+            clientId: h.clientId,
+            type: h.type,
+            status: "cancelled",
+            scheduledAt: h.scheduledAt,
+            durationMinutes: h.seriesDurationMinutes ?? 60,
+            intention: h.seriesIntention ?? null,
+            seriesId: h.seriesId,
+            occurrenceIndex: h.occurrenceIndex,
+            locationType: h.seriesLocationType ?? "online",
+          })
+          .onConflictDoNothing()
+          .returning({ id: sessions.id });
+        if (made) {
+          cancelled++;
+          if (h.seriesGoogleRecurringEventId) {
+            try {
+              const { cancelRecurringInstance } = await import("./google-calendar");
+              await cancelRecurringInstance(
+                accountId,
+                h.seriesGoogleRecurringEventId,
+                h.scheduledAt.getTime(),
+                { notify: false }
+              );
+            } catch (err) {
+              console.warn("[timeOff] Google instance cancel failed:", err);
+            }
+          }
+        }
+      }
+    }
+
+    // One email per client.
+    let emailed = 0;
+    if (notifyClients && byClient.size > 0) {
+      try {
+        const { isResendConfigured } = await import("./resend");
+        if (isResendConfigured()) {
+          const [settings] = await db
+            .select({
+              practitionerName: practitionerSettings.practitionerName,
+              businessEmail: practitionerSettings.businessEmail,
+              practiceTz: practitionerSettings.timezone,
+            })
+            .from(practitionerSettings)
+            .where(eq(practitionerSettings.accountId, accountId))
+            .limit(1);
+          const { sendTimeOffEmail } = await import("./series-email");
+          for (const [clientId, list] of byClient) {
+            const [c] = await db
+              .select({
+                email: clients.email,
+                fullName: clients.fullName,
+                timezone: clients.timezone,
+                language: clients.preferredLanguage,
+              })
+              .from(clients)
+              .where(and(eq(clients.accountId, accountId), eq(clients.id, clientId)))
+              .limit(1);
+            if (!c?.email) continue;
+            const [next] = await db
+              .select({ at: sessions.scheduledAt })
+              .from(sessions)
+              .where(
+                and(
+                  eq(sessions.accountId, accountId),
+                  eq(sessions.clientId, clientId),
+                  eq(sessions.status, "scheduled"),
+                  sql`${sessions.scheduledAt} > ${to.toISOString()}`
+                )
+              )
+              .orderBy(asc(sessions.scheduledAt))
+              .limit(1);
+            await sendTimeOffEmail({
+              to: c.email,
+              clientName: c.fullName,
+              practitionerName: settings?.practitionerName ?? null,
+              replyTo: settings?.businessEmail ?? undefined,
+              timeZone: resolveTimeZone(c.timezone, settings?.practiceTz),
+              language: c.language === "uk" ? "uk" : "en",
+              from,
+              to_: to,
+              cancelledDates: list.map((h) => h.scheduledAt),
+              resumesAt: next ? new Date(next.at) : null,
+              note,
+            });
+            emailed++;
+          }
+        }
+      } catch (err) {
+        console.warn("[timeOff] emails failed:", err);
+      }
+    }
+
+    if (block) {
+      await db
+        .update(timeOff)
+        .set({ sessionsCancelled: cancelled })
+        .where(eq(timeOff.id, block.id));
+    }
+
+    revalidatePath("/calendar");
+    revalidatePath("/today");
+    revalidatePath("/clients");
+    revalidatePath("/payments");
+    return { ok: true, cancelled, clients: byClient.size, emailed };
+  } catch (err) {
+    console.error("[applyTimeOff] failed:", err);
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Couldn't apply the time off.",
     };
   }
 }

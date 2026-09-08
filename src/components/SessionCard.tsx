@@ -8,7 +8,10 @@ import {
   deleteSession,
   markSessionUnpaid,
   setSessionLocation,
+  restoreSession,
+  markNoShow,
 } from "@/lib/actions";
+import { FixDateDialog } from "./FixDateDialog";
 import type { NoteTemplate, Session } from "@/db/schema";
 import {
   fullDate,
@@ -44,6 +47,10 @@ const STATUS_CHIP: Record<string, string> = {
   cancelled: "bg-ink-100 text-ink-500",
   no_show: "bg-amber-50 text-amber-700",
 };
+
+function statusLabel(status: string): string {
+  return status === "no_show" ? "NO-SHOW" : status.toUpperCase();
+}
 
 export function SessionCard({
   session,
@@ -119,6 +126,8 @@ export function SessionCard({
 
   const isScheduled = session.status === "scheduled";
   const isCompleted = session.status === "completed";
+  const isCancelled = session.status === "cancelled";
+  const isNoShow = session.status === "no_show";
 
   return (
     <div
@@ -162,7 +171,7 @@ export function SessionCard({
             STATUS_CHIP[session.status] ?? "bg-ink-100 text-ink-500"
           } shrink-0`}
         >
-          {session.status.toUpperCase()}
+          {statusLabel(session.status)}
         </span>
         {isCompleted && (
           <span
@@ -512,6 +521,20 @@ export function SessionCard({
                   destructive={false}
                   label={
                     <span className="text-xs text-ink-500 hover:text-amber-700">
+                      No-show
+                    </span>
+                  }
+                  message="Mark this session as a no-show? It stays on the record (you can still mark it paid if you charge for no-shows), and any notetaker is called off. You can restore it later if plans change."
+                  confirmLabel="Yes, no-show"
+                  onConfirm={async () => {
+                    const r = await markNoShow(session.id, session.clientId);
+                    if (!r.ok) throw new Error(r.error);
+                  }}
+                />
+                <ConfirmButton
+                  destructive={false}
+                  label={
+                    <span className="text-xs text-ink-500 hover:text-amber-700">
                       {session.seriesId ? "Cancel this one" : "Cancel session"}
                     </span>
                   }
@@ -606,6 +629,63 @@ export function SessionCard({
                   sessionStatus={session.status}
                 />
               </>
+            )}
+            {/* The reverse gear. A cancelled or no-show session can come back
+                on the calendar; a completed one can be reopened if it was
+                marked by mistake; and a held session's recorded date can be
+                corrected without emailing anyone. */}
+            {(isCancelled || isNoShow) && (
+              <ConfirmButton
+                destructive={false}
+                label={
+                  <span className="text-xs text-plum-700 hover:underline">
+                    Restore session
+                  </span>
+                }
+                message={
+                  session.seriesId
+                    ? "Put this session back on the calendar? It rejoins its recurring series, and if Google Calendar is connected the entry comes back."
+                    : "Put this session back on the calendar as scheduled? If Google Calendar is connected, the entry is re-created."
+                }
+                option={{
+                  label: "Email the client that it's back on",
+                  defaultChecked: true,
+                  hint: "Untick if they already know.",
+                }}
+                confirmLabel="Yes, restore it"
+                onConfirm={async (notifyClient) => {
+                  const r = await restoreSession(session.id, session.clientId, {
+                    notifyClient,
+                  });
+                  if (!r.ok) throw new Error(r.error);
+                }}
+              />
+            )}
+            {isCompleted && (
+              <ConfirmButton
+                destructive={false}
+                label={
+                  <span className="text-xs text-ink-500 hover:text-ink-900">
+                    Not held yet — reopen
+                  </span>
+                }
+                message="Mark this session as not held yet? It goes back to scheduled. Notes, payment and the Closing stay exactly as they are."
+                confirmLabel="Yes, reopen"
+                onConfirm={async () => {
+                  const r = await restoreSession(session.id, session.clientId, {
+                    notifyClient: false,
+                  });
+                  if (!r.ok) throw new Error(r.error);
+                }}
+              />
+            )}
+            {!isScheduled && (
+              <FixDateDialog
+                sessionId={session.id}
+                clientId={session.clientId}
+                currentScheduledAt={session.scheduledAt}
+                currentDurationMinutes={session.durationMinutes}
+              />
             )}
             <div className="flex-1" />
             <ConfirmButton

@@ -675,6 +675,107 @@ export async function patchRecurringEventText(
   }
 }
 
+/** Patch ONE instance of a recurring event: its status (cancel / bring back)
+ *  or its start + duration (silently correcting a held session's time). Finds
+ *  the instance by its start (±60s). `showDeleted` so a cancelled instance can
+ *  be found and restored. Returns true when done or the event is gone on
+ *  Google's side; false when Google isn't connected or no instance matched. */
+export async function patchRecurringInstance(
+  accountId: string,
+  recurringEventId: string,
+  startMs: number,
+  patch: {
+    status?: "confirmed" | "cancelled";
+    startAt?: Date;
+    durationMinutes?: number;
+    timeZone?: string | null;
+  },
+  opts?: { notify?: boolean }
+): Promise<boolean> {
+  const auth = await getAuthedClient(accountId);
+  if (!auth) return false;
+  const calendar = google.calendar({ version: "v3", auth });
+  try {
+    const list = await calendar.events.instances({
+      calendarId: "primary",
+      eventId: recurringEventId,
+      timeMin: new Date(startMs - 60_000).toISOString(),
+      timeMax: new Date(startMs + 60_000).toISOString(),
+      maxResults: 5,
+      showDeleted: true,
+    });
+    const inst = (list.data.items ?? []).find((e) => {
+      const s = e.start?.dateTime ?? e.start?.date;
+      return s ? Math.abs(new Date(s).getTime() - startMs) < 90_000 : false;
+    });
+    if (!inst?.id) return false;
+
+    const body: {
+      status?: string;
+      start?: { dateTime: string; timeZone?: string };
+      end?: { dateTime: string; timeZone?: string };
+    } = {};
+    if (patch.status) body.status = patch.status;
+    const tz = patch.timeZone ?? inst.start?.timeZone ?? undefined;
+    if (patch.startAt) {
+      const instEnd = inst.end?.dateTime ? new Date(inst.end.dateTime).getTime() : null;
+      const dur =
+        patch.durationMinutes ??
+        (instEnd ? Math.max(5, Math.round((instEnd - startMs) / 60_000)) : 60);
+      body.start = { dateTime: patch.startAt.toISOString(), timeZone: tz };
+      body.end = {
+        dateTime: new Date(patch.startAt.getTime() + dur * 60_000).toISOString(),
+        timeZone: tz,
+      };
+    } else if (patch.durationMinutes) {
+      body.end = {
+        dateTime: new Date(startMs + patch.durationMinutes * 60_000).toISOString(),
+        timeZone: tz,
+      };
+    }
+    await calendar.events.patch({
+      calendarId: "primary",
+      eventId: inst.id,
+      sendUpdates: opts?.notify === false ? "none" : "all",
+      requestBody: body,
+    });
+    return true;
+  } catch (err) {
+    if (isNotFoundError(err)) return true;
+    throw err;
+  }
+}
+
+/** Silently move a standalone event's start/end (correcting a held session's
+ *  recorded time). No update emails. */
+export async function patchEventTimes(
+  accountId: string,
+  eventId: string,
+  startAt: Date,
+  durationMinutes: number
+): Promise<boolean> {
+  const auth = await getAuthedClient(accountId);
+  if (!auth) return false;
+  const calendar = google.calendar({ version: "v3", auth });
+  try {
+    await calendar.events.patch({
+      calendarId: "primary",
+      eventId,
+      sendUpdates: "none",
+      requestBody: {
+        start: { dateTime: startAt.toISOString() },
+        end: {
+          dateTime: new Date(startAt.getTime() + durationMinutes * 60_000).toISOString(),
+        },
+      },
+    });
+    return true;
+  } catch (err) {
+    if (isNotFoundError(err)) return true;
+    throw err;
+  }
+}
+
 function toGCalUtcBasic(d: Date): string {
   return d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
 }
