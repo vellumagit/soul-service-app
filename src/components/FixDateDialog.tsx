@@ -20,11 +20,14 @@ export function FixDateDialog({
   clientId,
   currentScheduledAt,
   currentDurationMinutes,
+  triggerClassName,
 }: {
   sessionId: string;
   clientId: string;
   currentScheduledAt: Date | string;
   currentDurationMinutes: number;
+  /** Override the trigger button styling. */
+  triggerClassName?: string;
 }) {
   const formId = useId();
   const [open, setOpen] = useState(false);
@@ -43,7 +46,7 @@ export function FixDateDialog({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="text-xs text-ink-500 hover:text-ink-900"
+        className={triggerClassName ?? "text-xs text-ink-500 hover:text-ink-900"}
       >
         Fix date
       </button>

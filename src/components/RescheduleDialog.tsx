@@ -16,11 +16,14 @@ export function RescheduleDialog({
   clientId,
   currentScheduledAt,
   currentDurationMinutes,
+  triggerClassName,
 }: {
   sessionId: string;
   clientId: string;
   currentScheduledAt: Date | string;
   currentDurationMinutes: number;
+  /** Override the trigger button styling (the session card control panel). */
+  triggerClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -49,7 +52,7 @@ export function RescheduleDialog({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="text-xs text-ink-500 hover:text-ink-900"
+        className={triggerClassName ?? "text-xs text-ink-500 hover:text-ink-900"}
       >
         Reschedule
       </button>

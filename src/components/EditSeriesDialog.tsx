@@ -33,9 +33,12 @@ type Loaded = Extract<SeriesEditContext, { ok: true }>;
 export function EditSeriesDialog({
   seriesId,
   clientId,
+  triggerClassName,
 }: {
   seriesId: string;
   clientId: string;
+  /** Override the trigger button styling. */
+  triggerClassName?: string;
 }) {
   const formId = useId();
   const [open, setOpen] = useState(false);
@@ -107,7 +110,7 @@ export function EditSeriesDialog({
       <button
         type="button"
         onClick={openDialog}
-        className="text-[11px] text-plum-700 hover:underline"
+        className={triggerClassName ?? "text-[11px] text-plum-700 hover:underline"}
       >
         Edit series…
       </button>

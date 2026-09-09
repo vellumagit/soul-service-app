@@ -899,3 +899,10 @@ body {
     animation: none;
   }
 }
+
+/* Session-card control panel: a label/value row whose value rendered
+   nothing (e.g. the notetaker chip on a session too old to join) hides
+   itself, so the panel never shows a label pointing at blank space. */
+.ctl-row:not(:has(.ctl-val > *)) {
+  display: none;
+}

@@ -12,10 +12,14 @@ import Link from "next/link";
 export function WalkInButton({
   sessionId,
   size = "sm",
+  className,
 }: {
   sessionId: string;
   /** "sm" for compact contexts (rows), "md" for headers. */
   size?: "sm" | "md";
+  /** Full class override — the session card control panel sizes it like
+   *  its sibling buttons. */
+  className?: string;
 }) {
   const sizing =
     size === "md"
@@ -25,7 +29,10 @@ export function WalkInButton({
     <Link
       href={`/sessions/${sessionId}/prep`}
       onClick={(e) => e.stopPropagation()}
-      className={`${sizing} rounded-md border border-plum-200 bg-plum-50 text-plum-700 hover:bg-plum-100 hover:border-plum-300 transition-colors shrink-0 inline-flex items-center gap-1`}
+      className={
+        className ??
+        `${sizing} rounded-md border border-plum-200 bg-plum-50 text-plum-700 hover:bg-plum-100 hover:border-plum-300 transition-colors shrink-0 inline-flex items-center gap-1`
+      }
       title="Open the prep view for this session"
     >
       Walk in

@@ -498,33 +498,41 @@ export function SessionCard({
             </div>
           )}
 
-          {/* Cancel / delete row */}
-          <div className="border-t border-ink-100 pt-3 flex items-center gap-2 flex-wrap">
-            {isScheduled && (
-              <>
-                {session.seriesId && (
-                  <span className="text-[11px] text-ink-400 w-full flex items-center gap-2 flex-wrap">
-                    Part of a recurring series.
-                    <EditSeriesDialog
-                      seriesId={session.seriesId}
-                      clientId={session.clientId}
-                    />
-                  </span>
-                )}
-                <WalkInButton sessionId={session.id} />
+          {/* CONTROL PANEL. Three bands, each with one rule, so the eye
+              knows where to look on a phone:
+                1. Do now — the actions she takes often, as equal buttons.
+                2. This session — settings and status as label/value rows,
+                   the same shape as the Payment row above.
+                3. More — the rare and destructive actions, folded away
+                   so a glance at the card never shows four ways to break it.
+              Rows whose value renders nothing hide themselves (.ctl-row). */}
+          <div className="border-t border-ink-100 pt-4 space-y-4">
+            {isScheduled && session.seriesId && (
+              <div className="flex items-center justify-between gap-3 text-[11px] text-ink-400">
+                <span>Part of a recurring series</span>
+                <EditSeriesDialog
+                  seriesId={session.seriesId}
+                  clientId={session.clientId}
+                  triggerClassName="text-[11px] font-medium text-plum-700 hover:underline shrink-0"
+                />
+              </div>
+            )}
+
+            {/* 1. Do now */}
+            {isScheduled ? (
+              <div className="grid grid-cols-3 gap-2">
+                <WalkInButton sessionId={session.id} className={ctlPrimary} />
                 <RescheduleDialog
                   sessionId={session.id}
                   clientId={session.clientId}
                   currentScheduledAt={session.scheduledAt}
                   currentDurationMinutes={session.durationMinutes}
+                  triggerClassName={ctlBtn}
                 />
                 <ConfirmButton
                   destructive={false}
-                  label={
-                    <span className="text-xs text-ink-500 hover:text-amber-700">
-                      No-show
-                    </span>
-                  }
+                  className={ctlBtn}
+                  label="No-show"
                   message="Mark this session as a no-show? It stays on the record (you can still mark it paid if you charge for no-shows), and any notetaker is called off. You can restore it later if plans change."
                   confirmLabel="Yes, no-show"
                   onConfirm={async () => {
@@ -532,38 +540,168 @@ export function SessionCard({
                     if (!r.ok) throw new Error(r.error);
                   }}
                 />
-                <ConfirmButton
-                  destructive={false}
-                  label={
-                    <span className="text-xs text-ink-500 hover:text-amber-700">
-                      {session.seriesId ? "Cancel this one" : "Cancel session"}
-                    </span>
-                  }
-                  message={
-                    session.seriesId
-                      ? "Cancel just this session? The rest of the recurring series stays on the calendar. If Google Calendar is connected, this event is removed."
-                      : "Cancel this scheduled session? If Google Calendar is connected, the event will be deleted."
-                  }
-                  option={{
-                    label: "Email the client that it's cancelled",
-                    defaultChecked: true,
-                    hint: "Untick for test bookings or when they already know — nothing is sent, not even by Google.",
-                  }}
-                  confirmLabel="Yes, cancel it"
-                  onConfirm={(notifyClient) =>
-                    cancelSession(session.id, session.clientId, {
-                      notifyClient,
-                    })
-                  }
-                />
-                {session.seriesId && (
+              </div>
+            ) : (
+              // The reverse gear: a cancelled or no-show session can come
+              // back; a completed one can be reopened; a held session's
+              // recorded date can be corrected without emailing anyone.
+              <div className="grid grid-cols-2 gap-2">
+                {(isCancelled || isNoShow) && (
                   <ConfirmButton
                     destructive={false}
-                    label={
-                      <span className="text-xs text-ink-500 hover:text-amber-700">
-                        Cancel whole series
-                      </span>
+                    className={ctlPrimary}
+                    label="Restore session"
+                    message={
+                      session.seriesId
+                        ? "Put this session back on the calendar? It rejoins its recurring series, and if Google Calendar is connected the entry comes back."
+                        : "Put this session back on the calendar as scheduled? If Google Calendar is connected, the entry is re-created."
                     }
+                    option={{
+                      label: "Email the client that it's back on",
+                      defaultChecked: true,
+                      hint: "Untick if they already know.",
+                    }}
+                    confirmLabel="Yes, restore it"
+                    onConfirm={async (notifyClient) => {
+                      const r = await restoreSession(session.id, session.clientId, {
+                        notifyClient,
+                      });
+                      if (!r.ok) throw new Error(r.error);
+                    }}
+                  />
+                )}
+                {isCompleted && (
+                  <ConfirmButton
+                    destructive={false}
+                    className={ctlBtn}
+                    label="Not held yet — reopen"
+                    message="Mark this session as not held yet? It goes back to scheduled. Notes, payment and the Closing stay exactly as they are."
+                    confirmLabel="Yes, reopen"
+                    onConfirm={async () => {
+                      const r = await restoreSession(session.id, session.clientId, {
+                        notifyClient: false,
+                      });
+                      if (!r.ok) throw new Error(r.error);
+                    }}
+                  />
+                )}
+                <FixDateDialog
+                  sessionId={session.id}
+                  clientId={session.clientId}
+                  currentScheduledAt={session.scheduledAt}
+                  currentDurationMinutes={session.durationMinutes}
+                  triggerClassName={ctlBtn}
+                />
+              </div>
+            )}
+
+            {/* 2. This session */}
+            <div className="rounded-lg border border-ink-100 bg-ink-50/40 px-3 divide-y divide-ink-100">
+              {isScheduled && (
+                <ControlRow label="Where">
+                  <LocationToggle
+                    sessionId={session.id}
+                    clientId={session.clientId}
+                    value={session.locationType === "in_person" ? "in_person" : "online"}
+                  />
+                </ControlRow>
+              )}
+              {session.locationType === "in_person" ? (
+                // In-person: no Meet/bot — she records in the room. The
+                // recorder feeds the same "From the meeting" panel as the
+                // remote notetaker.
+                <ControlRow label="Recording">
+                  <RecordSessionDialog
+                    sessionId={session.id}
+                    hasExistingNotes={
+                      !!session.notes && session.notes.trim().length > 0
+                    }
+                  />
+                </ControlRow>
+              ) : (
+                <>
+                  <ControlRow label="Meet link">
+                    <MeetLinkEditor
+                      sessionId={session.id}
+                      meetUrl={session.meetUrl}
+                    />
+                  </ControlRow>
+                  <ControlRow label="Google Calendar">
+                    <PushToGoogleButton
+                      sessionId={session.id}
+                      hasGoogleEvent={!!session.googleEventId}
+                    />
+                  </ControlRow>
+                  <ControlRow label="Notetaker">
+                    <RecallBotChip
+                      sessionId={session.id}
+                      status={session.recallBotStatus}
+                      hasMeetUrl={!!session.meetUrl}
+                      scheduledAt={new Date(session.scheduledAt)}
+                      transcriptReceivedAt={
+                        session.recallTranscriptReceivedAt
+                          ? new Date(session.recallTranscriptReceivedAt)
+                          : null
+                      }
+                      sessionStatus={session.status}
+                    />
+                  </ControlRow>
+                </>
+              )}
+            </div>
+
+            {/* 3. More */}
+            <details className="group">
+              <summary className="cursor-pointer select-none list-none inline-flex items-center gap-1 text-xs text-ink-500 hover:text-ink-800 [&::-webkit-details-marker]:hidden">
+                More options
+                <svg
+                  className="w-3.5 h-3.5 transition-transform group-open:rotate-180"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  strokeWidth={2}
+                  aria-hidden="true"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
+              </summary>
+              <div className="grid grid-cols-2 gap-2 pt-3">
+                {isScheduled && (
+                  <ConfirmButton
+                    destructive={false}
+                    className={ctlBtn}
+                    label={session.seriesId ? "Cancel this one" : "Cancel session"}
+                    message={
+                      session.seriesId
+                        ? "Cancel just this session? The rest of the recurring series stays on the calendar. If Google Calendar is connected, this event is removed."
+                        : "Cancel this scheduled session? If Google Calendar is connected, the event will be deleted."
+                    }
+                    option={{
+                      label: "Email the client that it's cancelled",
+                      defaultChecked: true,
+                      hint: "Untick for test bookings or when they already know — nothing is sent, not even by Google.",
+                    }}
+                    confirmLabel="Yes, cancel it"
+                    onConfirm={(notifyClient) =>
+                      cancelSession(session.id, session.clientId, {
+                        notifyClient,
+                      })
+                    }
+                  />
+                )}
+                <MoveSessionDialog
+                  sessionId={session.id}
+                  clientId={session.clientId}
+                  upcoming={isScheduled && new Date(session.scheduledAt).getTime() > Date.now()}
+                  inSeries={!!session.seriesId}
+                  hasInvoice={!!session.invoiceUrl}
+                  triggerClassName={ctlBtn}
+                />
+                {isScheduled && session.seriesId && (
+                  <ConfirmButton
+                    destructive={false}
+                    className={ctlDanger}
+                    label="Cancel whole series"
                     message="Cancel this and ALL future sessions in this recurring series? Past sessions are kept. Any Google Calendar events for the future sessions are removed."
                     option={{
                       label: "Email the client that the series is cancelled",
@@ -578,134 +716,15 @@ export function SessionCard({
                     }
                   />
                 )}
-              </>
-            )}
-            {/* Where THIS session happens. Flipping one occurrence of a series
-                to in person (no Meet, no bot — record in the room) leaves the
-                rest of the series alone. Only while it's still upcoming. */}
-            {isScheduled && (
-              <LocationToggle
-                sessionId={session.id}
-                clientId={session.clientId}
-                value={session.locationType === "in_person" ? "in_person" : "online"}
-              />
-            )}
-            {session.locationType === "in_person" ? (
-              // In-person: no Meet/bot — she records in the room. The recorder
-              // feeds the same "From the meeting" panel as the remote notetaker.
-              <>
-                <span className="text-[11px] text-ink-400 font-mono">
-                  In person
-                </span>
-                <RecordSessionDialog
-                  sessionId={session.id}
-                  hasExistingNotes={
-                    !!session.notes && session.notes.trim().length > 0
-                  }
+                <ConfirmButton
+                  className={ctlDanger}
+                  label="Delete"
+                  message="Delete this session permanently? This can't be undone."
+                  confirmLabel="Yes, delete"
+                  onConfirm={() => deleteSession(session.id, session.clientId)}
                 />
-              </>
-            ) : (
-              <>
-                {/* Add / edit the meeting link after creation → emails the
-                    client the link. Fallback for when Google didn't generate
-                    one, or she made a Zoom/Meet room by hand. */}
-                <MeetLinkEditor
-                  sessionId={session.id}
-                  meetUrl={session.meetUrl}
-                />
-                <PushToGoogleButton
-                  sessionId={session.id}
-                  hasGoogleEvent={!!session.googleEventId}
-                />
-                <RecallBotChip
-                  sessionId={session.id}
-                  status={session.recallBotStatus}
-                  hasMeetUrl={!!session.meetUrl}
-                  scheduledAt={new Date(session.scheduledAt)}
-                  transcriptReceivedAt={
-                    session.recallTranscriptReceivedAt
-                      ? new Date(session.recallTranscriptReceivedAt)
-                      : null
-                  }
-                  sessionStatus={session.status}
-                />
-              </>
-            )}
-            {/* The reverse gear. A cancelled or no-show session can come back
-                on the calendar; a completed one can be reopened if it was
-                marked by mistake; and a held session's recorded date can be
-                corrected without emailing anyone. */}
-            {(isCancelled || isNoShow) && (
-              <ConfirmButton
-                destructive={false}
-                label={
-                  <span className="text-xs text-plum-700 hover:underline">
-                    Restore session
-                  </span>
-                }
-                message={
-                  session.seriesId
-                    ? "Put this session back on the calendar? It rejoins its recurring series, and if Google Calendar is connected the entry comes back."
-                    : "Put this session back on the calendar as scheduled? If Google Calendar is connected, the entry is re-created."
-                }
-                option={{
-                  label: "Email the client that it's back on",
-                  defaultChecked: true,
-                  hint: "Untick if they already know.",
-                }}
-                confirmLabel="Yes, restore it"
-                onConfirm={async (notifyClient) => {
-                  const r = await restoreSession(session.id, session.clientId, {
-                    notifyClient,
-                  });
-                  if (!r.ok) throw new Error(r.error);
-                }}
-              />
-            )}
-            {isCompleted && (
-              <ConfirmButton
-                destructive={false}
-                label={
-                  <span className="text-xs text-ink-500 hover:text-ink-900">
-                    Not held yet — reopen
-                  </span>
-                }
-                message="Mark this session as not held yet? It goes back to scheduled. Notes, payment and the Closing stay exactly as they are."
-                confirmLabel="Yes, reopen"
-                onConfirm={async () => {
-                  const r = await restoreSession(session.id, session.clientId, {
-                    notifyClient: false,
-                  });
-                  if (!r.ok) throw new Error(r.error);
-                }}
-              />
-            )}
-            {!isScheduled && (
-              <FixDateDialog
-                sessionId={session.id}
-                clientId={session.clientId}
-                currentScheduledAt={session.scheduledAt}
-                currentDurationMinutes={session.durationMinutes}
-              />
-            )}
-            <MoveSessionDialog
-              sessionId={session.id}
-              clientId={session.clientId}
-              upcoming={isScheduled && new Date(session.scheduledAt).getTime() > Date.now()}
-              inSeries={!!session.seriesId}
-              hasInvoice={!!session.invoiceUrl}
-            />
-            <div className="flex-1" />
-            <ConfirmButton
-              label={
-                <span className="text-xs text-ink-400 hover:text-red-700">
-                  Delete
-                </span>
-              }
-              message="Delete this session permanently? This can't be undone."
-              confirmLabel="Yes, delete"
-              onConfirm={() => deleteSession(session.id, session.clientId)}
-            />
+              </div>
+            </details>
           </div>
         </div>
       )}
@@ -728,6 +747,37 @@ export function SessionCard({
     </div>
   );
 }
+// Control-panel button recipe: every action in the card's bottom band is the
+// same height and fills its grid cell, so a phone shows a tidy panel rather
+// than a ragged row of links. Three weights: the one primary, the quiet
+// default, and the outlined-red destructive.
+const ctlBtn =
+  "min-h-10 py-1.5 w-full inline-flex items-center justify-center gap-1 rounded-md border border-ink-200 bg-white px-2 text-sm font-medium text-ink-800 hover:bg-ink-50 hover:border-ink-300 disabled:opacity-60 text-center leading-tight";
+const ctlPrimary =
+  "min-h-10 py-1.5 w-full inline-flex items-center justify-center gap-1 rounded-md border border-plum-700 bg-plum-700 px-2 text-sm font-medium text-white hover:bg-plum-600 disabled:opacity-60 text-center leading-tight";
+const ctlDanger =
+  "min-h-10 py-1.5 w-full inline-flex items-center justify-center gap-1 rounded-md border border-red-200 bg-white px-2 text-sm font-medium text-red-700 hover:bg-red-50 hover:border-red-300 disabled:opacity-60 text-center leading-tight";
+
+// One label/value row of the "This session" band. Hides itself (via the
+// .ctl-row rule in globals.css) when the value renders nothing — e.g. the
+// notetaker chip on a session too old to join.
+function ControlRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="ctl-row flex items-center justify-between gap-3 flex-wrap py-2.5">
+      <span className="text-xs text-ink-500 shrink-0">{label}</span>
+      <span className="ctl-val flex items-center justify-end gap-2 flex-wrap text-sm">
+        {children}
+      </span>
+    </div>
+  );
+}
+
 
 // Online ⇄ In person for ONE session. Same rules as booking: in person means no
 // Meet link and no notetaker bot (she records in the room); online restores the

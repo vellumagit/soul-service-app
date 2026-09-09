@@ -19,12 +19,15 @@ export function MoveSessionDialog({
   upcoming,
   inSeries,
   hasInvoice,
+  triggerClassName,
 }: {
   sessionId: string;
   clientId: string;
   upcoming: boolean;
   inSeries: boolean;
   hasInvoice: boolean;
+  /** Override the trigger button styling. */
+  triggerClassName?: string;
 }) {
   const formId = useId();
   const [open, setOpen] = useState(false);
@@ -56,7 +59,7 @@ export function MoveSessionDialog({
       <button
         type="button"
         onClick={openDialog}
-        className="text-xs text-ink-500 hover:text-ink-900"
+        className={triggerClassName ?? "text-xs text-ink-500 hover:text-ink-900"}
       >
         Move to another client
       </button>
