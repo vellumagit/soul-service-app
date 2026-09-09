@@ -236,6 +236,14 @@ export function RecordSessionDialog({
       mediaRecorderRef.current?.stop();
     } catch (err) {
       console.error("[record-session] stop failed:", err);
+      // onstop will never fire, so nothing else would unlock the dialog.
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+      setStage({
+        kind: "error",
+        message:
+          "The recorder couldn't stop cleanly and this take was lost. Close and start again.",
+      });
     }
   }
 

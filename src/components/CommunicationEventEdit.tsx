@@ -6,7 +6,8 @@
 // one interactive island it needs.
 
 import { useState, useTransition } from "react";
-import { updateCommunication } from "@/lib/actions";
+import { deleteCommunication, updateCommunication } from "@/lib/actions";
+import { ConfirmButton } from "./ConfirmButton";
 
 export function CommunicationEventEdit({
   communicationId,
@@ -83,6 +84,14 @@ export function CommunicationEventEdit({
         >
           Cancel
         </button>
+        <span className="flex-1" />
+        <ConfirmButton
+          label="Delete"
+          className="text-[11px] text-ink-400 hover:text-red-700"
+          message="Delete this logged communication from the timeline? The email itself (if one was sent) is not affected."
+          confirmLabel="Yes, delete"
+          onConfirm={() => deleteCommunication(communicationId, clientId)}
+        />
       </div>
     </form>
   );

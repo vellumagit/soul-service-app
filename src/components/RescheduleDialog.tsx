@@ -84,9 +84,14 @@ export function RescheduleDialog({
       >
         <form
           id={formId}
+          noValidate
           action={async (fd) => {
-            setSubmitting(true);
             setError(null);
+            if (!String(fd.get("scheduledAt") ?? "")) {
+              setError("Pick the new date and time.");
+              return;
+            }
+            setSubmitting(true);
             try {
               await rescheduleSession(fd);
               setOpen(false);

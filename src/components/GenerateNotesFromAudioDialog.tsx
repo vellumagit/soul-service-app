@@ -201,6 +201,13 @@ export function GenerateNotesFromAudioDialog({
       mediaRecorderRef.current.stop();
     } catch (err) {
       console.error("[record] stop failed:", err);
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+      setStage({
+        kind: "error",
+        message:
+          "The recorder couldn't stop cleanly and this take was lost. Close and start again.",
+      });
     }
   }
 

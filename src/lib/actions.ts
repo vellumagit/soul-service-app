@@ -650,6 +650,9 @@ export async function sendPortalInvite(
     }
     return { ok: true, sentTo: client.email };
   } catch (err) {
+    // portalEnabled may already be on (connectClientPortal flips it before
+    // sending) — refresh so the card doesn't keep saying "no portal yet".
+    revalidatePath(`/clients/${clientId}`);
     return {
       ok: false,
       error: err instanceof Error ? err.message : "Couldn't send invite",
@@ -4366,6 +4369,8 @@ export async function updateSession(formData: FormData) {
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/calendar");
   revalidatePath("/today");
+  // Completing creates a new unpaid row.
+  revalidatePath("/payments");
 }
 
 // Reschedule = change scheduledAt (and optionally durationMinutes). Pushes to Google.
@@ -4792,6 +4797,7 @@ export async function markSessionUnpaid(sessionId: string, clientId: string) {
     );
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/payments");
+  revalidatePath("/today"); // the Unpaid tile and list live there too
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

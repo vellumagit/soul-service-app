@@ -27,6 +27,7 @@ export function ClientHeader({
   lastSession,
   paymentInstructions,
   allClients,
+  sabbathDays = [],
   resendConfigured = false,
   togetherSince,
 }: {
@@ -36,6 +37,9 @@ export function ClientHeader({
   lastSession: Session | null;
   paymentInstructions: string | null;
   allClients: { id: string; fullName: string }[];
+  /** Days she has marked off — the Schedule dialog warns when a pick lands
+   *  on one. Without this the header dialog never warned. */
+  sabbathDays?: string[];
   resendConfigured?: boolean;
   /** First non-cancelled session date for this client. Falls back to
    *  client.createdAt if she hasn't had a session yet. Drives the small
@@ -227,6 +231,7 @@ export function ClientHeader({
                 clients={allClients}
                 defaultClientId={client.id}
                 defaultType={client.primarySessionType}
+                sabbathDays={sabbathDays}
               />
               <LogPastSessionDialog
                 clients={allClients}

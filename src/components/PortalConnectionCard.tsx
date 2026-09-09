@@ -62,6 +62,9 @@ export function PortalConnectionCard({
       }
       if ("sentTo" in r && r.sentTo) {
         setJustSent(true);
+        // Show the tick briefly, then let her send again — the copy right
+        // above promises she can "send a fresh one if it's gone stale".
+        window.setTimeout(() => setJustSent(false), 6000);
         notify({
           kind: r.suppressed ? "warning" : "success",
           title: successTitle,

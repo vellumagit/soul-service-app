@@ -133,11 +133,13 @@ function Cell({
     muted: "text-ink-500",
   }[accent];
 
+  // `className` (e.g. hidden lg:flex) must sit on the OUTERMOST element —
+  // when the cell is a link, that is the <Link>, not this div.
   const inner = (
     <div
       className={`px-4 py-3.5 flex flex-col justify-center ${
         href ? "hover:bg-ink-50 transition" : ""
-      } ${className}`}
+      } ${href ? "" : className}`}
     >
       <div className="text-[10px] uppercase tracking-wider text-ink-500">
         {label}
@@ -148,5 +150,11 @@ function Cell({
       )}
     </div>
   );
-  return href ? <Link href={href}>{inner}</Link> : inner;
+  return href ? (
+    <Link href={href} className={className}>
+      {inner}
+    </Link>
+  ) : (
+    inner
+  );
 }

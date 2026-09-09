@@ -171,9 +171,20 @@ export function ScheduleSessionDialog({
         ) : (
           <form
             id={scheduleFormId}
+            // Our own checks with VISIBLE messages — the browser's bubbles
+            // can't be seen inside the scrolling modal on a phone.
+            noValidate
             action={async (fd) => {
-              setSubmitting(true);
               setError(null);
+              if (!String(fd.get("clientId") ?? "")) {
+                setError("Choose a client.");
+                return;
+              }
+              if (!String(fd.get("scheduledAt") ?? "")) {
+                setError("Pick the date and time.");
+                return;
+              }
+              setSubmitting(true);
               try {
                 const result = await scheduleSession(fd);
                 // The session is saved regardless of Google sync status. Close

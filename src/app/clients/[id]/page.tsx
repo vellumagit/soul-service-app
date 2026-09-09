@@ -126,6 +126,7 @@ export default async function ClientProfilePage({
         lastSession={lastSession}
         paymentInstructions={settings.paymentInstructions}
         allClients={allClients}
+        sabbathDays={(settings.sabbathDays ?? []) as string[]}
         resendConfigured={!!process.env.RESEND_API_KEY}
         togetherSince={
           file.sessions
@@ -442,6 +443,9 @@ export default async function ClientProfilePage({
               defaultClientId={client.id}
               defaultType={client.primarySessionType}
               sabbathDays={(settings.sabbathDays ?? []) as string[]}
+              // The header copy (always mounted) answers the `s` shortcut;
+              // both answering opened two stacked dialogs.
+              respondToShortcut={false}
             />
             <ScheduleSeriesDialog
               clients={allClients}

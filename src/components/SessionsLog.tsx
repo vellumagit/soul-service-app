@@ -15,7 +15,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { SessionCard } from "./SessionCard";
 import { zonedDateKey } from "@/lib/timezone";
@@ -92,6 +92,21 @@ export function SessionsLog({
   // Sessions arrive sorted desc by scheduledAt. Show the most recent slice;
   // older ones stay off the page (and un-mounted) until she asks for them.
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  // A journey-timeline marker links to #<sessionId>. If that session sits
+  // below the first page, reveal up to it and scroll there — otherwise the
+  // click silently did nothing.
+  useEffect(() => {
+    const id = window.location.hash.slice(1);
+    if (!id) return;
+    const idx = sessions.findIndex((s) => s.id === id);
+    if (idx < 0) return;
+    if (idx >= visibleCount) {
+      setVisibleCount(Math.ceil((idx + 1) / PAGE_SIZE) * PAGE_SIZE);
+      return;
+    }
+    document.getElementById(id)?.scrollIntoView({ block: "start" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleCount]);
   const visible = sessions.slice(0, visibleCount);
   const remaining = sessions.length - visible.length;
 

@@ -11,6 +11,8 @@ import {
 } from "@/lib/actions";
 import type { Theme, Observation, Session } from "@/db/schema";
 import { ConfirmButton } from "./ConfirmButton";
+import { notify } from "./FlashNotifier";
+import { rethrowIfRedirect } from "@/lib/redirect-error";
 import { shortDate } from "@/lib/format";
 import { useTimeZone } from "./TimeZoneProvider";
 
@@ -43,7 +45,13 @@ function ThemeLabel({ theme, clientId }: { theme: Theme; clientId: string }) {
     }
     start(async () => {
       const r = await updateTheme(theme.id, clientId, next);
-      if (r.ok) setEditing(false);
+      if (r.ok) {
+        setEditing(false);
+      } else {
+        // The save fires on blur, so a silent failure looked like the rename
+        // simply hadn't happened. Say so and keep her text.
+        notify({ kind: "warning", title: "Couldn't rename the theme", body: r.error });
+      }
     });
   };
   return (
@@ -295,15 +303,13 @@ function ThemesBlock({
           className="chip bg-ink-100 text-ink-700 group flex items-center gap-1"
         >
           <ThemeLabel theme={t} clientId={clientId} />
-          <button
-            onClick={() => start(() => deleteTheme(t.id, clientId))}
-            disabled={pending}
-            className="opacity-0 group-hover:opacity-100 text-ink-400 hover:text-red-700"
-            title="Remove"
-            type="button"
-          >
-            ×
-          </button>
+          <ConfirmButton
+            label="×"
+            className="opacity-0 group-hover:opacity-100 focus:opacity-100 text-ink-400 hover:text-red-700"
+            message={`Remove the theme "${t.label}"? Sessions tagged with it keep their notes; only the tag goes.`}
+            confirmLabel="Yes, remove it"
+            onConfirm={() => deleteTheme(t.id, clientId)}
+          />
         </span>
       ))}
 
@@ -314,6 +320,13 @@ function ThemesBlock({
             try {
               await addTheme(fd);
               setAdding(false);
+            } catch (err) {
+              rethrowIfRedirect(err);
+              notify({
+                kind: "warning",
+                title: "Couldn't add the theme",
+                body: err instanceof Error ? err.message : "Try again.",
+              });
             } finally {
               setSubmitting(false);
             }
@@ -404,6 +417,13 @@ function ObservationsBlock({
             try {
               await addObservation(fd);
               setAdding(false);
+            } catch (err) {
+              rethrowIfRedirect(err);
+              notify({
+                kind: "warning",
+                title: "Couldn't save the observation",
+                body: err instanceof Error ? err.message : "Try again.",
+              });
             } finally {
               setSubmitting(false);
             }
