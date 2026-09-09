@@ -202,7 +202,7 @@ export function NewClientDialog({
               <input
                 name="pronouns"
                 className={inputCls}
-                placeholder="she/her"
+                placeholder="they/them, she/her, he/him…"
               />
             </Field>
             <Field label="Email">

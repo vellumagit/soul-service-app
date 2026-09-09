@@ -1,8 +1,18 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono, Fraunces } from "next/font/google";
 import "./globals.css";
 import { ChunkReloadGuard } from "@/components/ChunkReloadGuard";
 import { NavigationProgress } from "@/components/NavigationProgress";
+import { UpdateBeacon } from "@/components/UpdateBeacon";
+
+// Home-screen install polish: the plum theme colour in the status bar, and
+// full-bleed under the notch (safe-area padding is handled per component).
+export const viewport: Viewport = {
+  themeColor: "#5a3f4f",
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
 import { BrandProvider } from "@/components/BrandProvider";
 import { getBrand } from "@/lib/brand";
 
@@ -41,6 +51,13 @@ export async function generateMetadata(): Promise<Metadata> {
     title: "Soul Service",
     description:
       "A quiet, personal client workspace for one-on-one practitioners.",
+    // Installable as an app (see app/manifest.ts). iOS reads these directly.
+    manifest: "/manifest.webmanifest",
+    appleWebApp: {
+      capable: true,
+      statusBarStyle: "default",
+      title: "Soul Service",
+    },
   };
   // Hers if she's uploaded one, otherwise the bundled on-brand mark. Always
   // emitting exactly one icon keeps browsers from picking between competing
@@ -65,6 +82,7 @@ export default async function RootLayout({
     >
       <body className="min-h-full text-ink-800">
         <NavigationProgress />
+        <UpdateBeacon />
         <ChunkReloadGuard />
         <BrandProvider logoUrl={logoUrl}>{children}</BrandProvider>
       </body>

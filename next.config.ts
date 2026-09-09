@@ -24,6 +24,13 @@ import path from "node:path";
 // no-op for dev — you're on one bundle anyway).
 const nextConfig: NextConfig = {
   deploymentId: process.env.VERCEL_DEPLOYMENT_ID,
+  // The sha this bundle was built from, baked into the client. UpdateBeacon
+  // compares it against /api/version (the RUNNING deploy) to catch a
+  // home-screen app or tab that resumed on an older build and reload it.
+  env: {
+    NEXT_PUBLIC_BUILD_SHA:
+      process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 12) ?? "dev",
+  },
   experimental: {
     serverActions: {
       // Every upload in this app (review photos, portrait, logo, favicon,

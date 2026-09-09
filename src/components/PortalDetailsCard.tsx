@@ -10,6 +10,7 @@
 import { useState, useTransition } from "react";
 import { updatePortalClientDetails } from "@/lib/portal-client-actions";
 import { COMMON_TIME_ZONES } from "@/lib/timezone";
+import { pronounSet } from "@/lib/pronouns";
 
 type Details = {
   fullName: string;
@@ -107,7 +108,7 @@ export function PortalDetailsCard({
         </div>
         {saved ? (
           <p className="text-[11px] text-honey-700 italic mt-3 leading-snug">
-            Saved. {firstName} sees the update on her side too.
+            Saved. {firstName} sees the update on {pronounSet(details.pronouns).possessive} side too.
           </p>
         ) : (
           <p className="text-[11px] text-ink-500 italic mt-3 leading-snug">

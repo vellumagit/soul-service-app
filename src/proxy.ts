@@ -38,6 +38,9 @@ const PUBLIC_PATHS = new Set<string>([
   "/", // marketing homepage — ALWAYS public
   "/quiz", // public self-selection quiz (lead magnet) — no auth
   "/api/health", // DB-free liveness probe — point uptime monitors here
+  "/api/version", // running deploy sha — UpdateBeacon polls it, no auth
+  "/manifest.webmanifest", // PWA install manifest — fetched without cookies
+  "/sw.js", // service worker — must never be redirected to /signin
   "/favicon.ico",
   "/robots.txt",
   "/sitemap.xml",

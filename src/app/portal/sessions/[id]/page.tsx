@@ -256,7 +256,7 @@ export default async function PortalSessionDetailPage({
           </h2>
           <p className="text-sm text-ink-600 italic mb-4 leading-relaxed">
             Anything you&apos;d like to name for yourself before the session.
-            Your practitioner sees this in her prep view so she can walk in
+            Your practitioner sees this in their prep view so they can walk in
             holding it with you. Optional.
           </p>
           <form action={saveClientStatedIntention} className="space-y-3">

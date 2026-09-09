@@ -256,7 +256,7 @@ export function ClosingRitualDialog({
             </span>
             <span className="block text-[11px] text-ink-500 mt-0.5 leading-snug">
               A short name for what just happened. Becomes a labelled anchor on
-              the timeline. E.g. &ldquo;first breakthrough&rdquo;, &ldquo;she
+              the timeline. E.g. &ldquo;first breakthrough&rdquo;, &ldquo;they
               said it out loud&rdquo;, &ldquo;moved out&rdquo;.
             </span>
             <input

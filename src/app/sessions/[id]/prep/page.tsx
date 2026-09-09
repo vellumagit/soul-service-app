@@ -207,7 +207,7 @@ export default async function ThresholdPage({
                   to other closing lines, then notes excerpt. */}
               {lastSession.closingNeverForget ? (
                 <ClosingEcho
-                  label="She said"
+                  label={`${firstName} said`}
                   body={lastSession.closingNeverForget}
                 />
               ) : lastSession.closingRemember ? (
@@ -292,7 +292,7 @@ export default async function ThresholdPage({
               href={`/clients/${client.id}?tab=sessions`}
               className="text-[11px] text-ink-400 hover:text-ink-700 italic"
             >
-              Open her full file →
+              Open their full file →
             </Link>
           </div>
         </article>

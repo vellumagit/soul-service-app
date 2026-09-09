@@ -154,7 +154,7 @@ export default async function PortalArcPage() {
                     }}
                   >
                     <p className="text-[10px] uppercase tracking-widest text-honey-700 font-mono mb-1.5">
-                      A note from her
+                      A note from your practitioner
                     </p>
                     <p className="serif-italic text-ink-800" style={{ fontWeight: 400 }}>
                       &ldquo;{visibleNote}&rdquo;

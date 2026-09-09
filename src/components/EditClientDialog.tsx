@@ -207,7 +207,7 @@ export function EditClientDialog({
                 name="pronouns"
                 defaultValue={client.pronouns ?? ""}
                 className={inputCls}
-                placeholder="she/her"
+                placeholder="they/them, she/her, he/him…"
               />
             </Field>
           </div>
