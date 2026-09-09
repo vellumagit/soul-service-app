@@ -3,6 +3,7 @@
 //
 // Lazy-init so the app can build/dev before RESEND_API_KEY is set.
 import "server-only";
+import { USER_MAGIC_LINK_TTL_MIN } from "./session-cookies";
 
 import { Resend } from "resend";
 import {
@@ -162,7 +163,7 @@ export async function sendMagicLinkEmail(
   url: string
 ): Promise<void> {
   const subject = "Sign in to Soul Service";
-  const text = `Sign in to Soul Service:\n\n${url}\n\nThis link expires in 15 minutes. If you didn't request this, you can safely ignore the email.`;
+  const text = `Sign in to Soul Service:\n\n${url}\n\nThis link expires in ${USER_MAGIC_LINK_TTL_MIN} minutes. If you didn't request this, you can safely ignore the email.`;
   const html = magicLinkHtml(url);
   await sendEmail({ to: email, subject, html, text });
 }
@@ -181,7 +182,7 @@ function magicLinkHtml(url: string): string {
       </div>
       <h1 style="font-size:18px;font-weight:600;margin:0 0 8px 0;letter-spacing:-0.01em;">Sign in to your space</h1>
       <p style="margin:0 0 24px 0;font-size:14px;color:#5a5a5a;line-height:1.55;">
-        Click the link below to sign in. It expires in 15 minutes.
+        Click the link below to sign in. It expires in ${USER_MAGIC_LINK_TTL_MIN} minutes.
       </p>
       <a href="${escapeHtml(url)}"
          style="display:inline-block;background:#1a1a1a;color:#ffffff;text-decoration:none;font-size:14px;font-weight:500;padding:12px 20px;border-radius:8px;">
@@ -1616,7 +1617,7 @@ ${details.length > 0 ? `${details.join("\n")}\n\n` : ""}${
     input.message
       ? `"${input.message}"\n\n`
       : "(They didn't add a note.)\n\n"
-  }Nothing has changed on your calendar — this is a request, not an automatic move. Open Loose ends in your workspace to act on it${
+  }Nothing has changed on your calendar — this is a request, not an automatic move. Open Requests in your workspace to act on it${
     input.clientEmail ? ", or just hit Reply to answer them" : ""
   }.`;
 
@@ -1640,7 +1641,7 @@ ${details.length > 0 ? `${details.join("\n")}\n\n` : ""}${
       <p style="margin:20px 0 0 0;font-size:13px;color:#786b60;line-height:1.55;">Nothing has changed on your calendar — this is a request, not an automatic move.${
         input.link
           ? ` <a href="${escapeHtml(input.link)}" style="color:#7a4a6b;">Open it in your workspace</a>.`
-          : " Open Loose ends in your workspace to act on it."
+          : " Open Requests in your workspace to act on it."
       }</p>
     </div>
   </body>

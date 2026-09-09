@@ -14,10 +14,24 @@
 
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
+import { COUNTS_EVENT } from "@/lib/counts-event";
 
 export function RequestsBadge() {
   const pathname = usePathname();
   const [count, setCount] = useState(0);
+
+  // Refetch on route change, and whenever an in-place action says the
+  // number moved (bumpCounts), or the tab regains focus.
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const bump = () => setTick((n) => n + 1);
+    window.addEventListener(COUNTS_EVENT, bump);
+    window.addEventListener("focus", bump);
+    return () => {
+      window.removeEventListener(COUNTS_EVENT, bump);
+      window.removeEventListener("focus", bump);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -32,7 +46,7 @@ export function RequestsBadge() {
     return () => {
       cancelled = true;
     };
-  }, [pathname]);
+  }, [pathname, tick]);
 
   if (count <= 0) return null;
 

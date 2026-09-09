@@ -400,9 +400,15 @@ function OutstandingCard({
           ${(totalCents / 100).toFixed(2)}
         </span>
       </p>
+      <Link
+        href="/portal/billing"
+        className="inline-block mt-3 text-sm text-plum-700 hover:underline font-medium"
+      >
+        Settle up →
+      </Link>
       <p className="text-[12px] text-ink-500 italic mt-2 leading-relaxed">
-        Reach out below to settle up — your practitioner handles payments
-        directly.
+        Card payment where it&apos;s set up, or the other ways to pay — all on
+        the billing page.
       </p>
     </section>
   );

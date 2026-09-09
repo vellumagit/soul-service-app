@@ -21,6 +21,7 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { resolveRescheduleRequest } from "@/lib/actions";
 import { notify } from "./FlashNotifier";
+import { bumpCounts } from "@/lib/counts-event";
 import { RequestReplyDialog } from "./RequestReplyDialog";
 
 export function RescheduleRequestRowActions({
@@ -104,6 +105,7 @@ export function RescheduleRequestRowActions({
                 return;
               }
               setResolved(true);
+              bumpCounts();
               notify({
                 kind: "success",
                 title: "Resolved",

@@ -23,6 +23,7 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { resolveBookingRequest } from "@/lib/actions";
 import { notify } from "./FlashNotifier";
+import { bumpCounts } from "@/lib/counts-event";
 import { RequestReplyDialog } from "./RequestReplyDialog";
 
 export function BookingRequestRowActions({
@@ -104,6 +105,7 @@ export function BookingRequestRowActions({
                 return;
               }
               setResolved(true);
+              bumpCounts();
               notify({
                 kind: "success",
                 title: "Resolved",

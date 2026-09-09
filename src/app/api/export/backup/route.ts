@@ -18,6 +18,22 @@ import {
   importantPeople,
   themes,
   observations,
+  groups,
+  groupSessions,
+  groupAttendees,
+  landingOffers,
+  landingOfferRows,
+  landingReviews,
+  landingSections,
+  leadMagnets,
+  leadForms,
+  leadSubmissions,
+  clientReflections,
+  timeOff,
+  clientBookingRequests,
+  rescheduleRequests,
+  products,
+  productPurchases,
 } from "@/db";
 import { requireSession } from "@/lib/session-cookies";
 
@@ -42,6 +58,7 @@ export async function GET() {
     peopleRows,
     themeRows,
     observationRows,
+    ...extraRows
   ] = await Promise.all([
     db.select().from(accounts).where(eq(accounts.id, accountId)).limit(1),
     db.select().from(clients).where(eq(clients.accountId, accountId)),
@@ -78,7 +95,30 @@ export async function GET() {
       .select()
       .from(observations)
       .where(eq(observations.accountId, accountId)),
+    // Everything else that is hers: Circles and their guests, the storefront
+    // (offers, rows, reviews, sections), lead magnets/forms/submissions,
+    // client reflections, time off, requests, and Library purchases. The
+    // Settings copy promises "every record across every table".
+    db.select().from(groups).where(eq(groups.accountId, accountId)),
+    db.select().from(groupSessions).where(eq(groupSessions.accountId, accountId)),
+    db.select().from(groupAttendees).where(eq(groupAttendees.accountId, accountId)),
+    db.select().from(landingOffers).where(eq(landingOffers.accountId, accountId)),
+    db.select().from(landingOfferRows).where(eq(landingOfferRows.accountId, accountId)),
+    db.select().from(landingReviews).where(eq(landingReviews.accountId, accountId)),
+    db.select().from(landingSections).where(eq(landingSections.accountId, accountId)),
+    db.select().from(leadMagnets).where(eq(leadMagnets.accountId, accountId)),
+    db.select().from(leadForms).where(eq(leadForms.accountId, accountId)),
+    db.select().from(leadSubmissions).where(eq(leadSubmissions.accountId, accountId)),
+    db.select().from(clientReflections).where(eq(clientReflections.accountId, accountId)),
+    db.select().from(timeOff).where(eq(timeOff.accountId, accountId)),
+    db.select().from(clientBookingRequests).where(eq(clientBookingRequests.accountId, accountId)),
+    db.select().from(rescheduleRequests).where(eq(rescheduleRequests.accountId, accountId)),
+    db.select().from(products).where(eq(products.accountId, accountId)),
+    db.select().from(productPurchases).where(eq(productPurchases.accountId, accountId)),
   ]);
+  const extraByName = Object.fromEntries(
+    ["groups", "groupSessions", "groupAttendees", "landingOffers", "landingOfferRows", "landingReviews", "landingSections", "leadMagnets", "leadForms", "leadSubmissions", "clientReflections", "timeOff", "clientBookingRequests", "rescheduleRequests", "products", "productPurchases"].map((name, i) => [name, extraRows[i]])
+  ) as Record<string, unknown[]>;
 
   // Don't leak Google OAuth tokens or other secrets in the backup. The
   // settings row stays but we null out fields that aren't meaningful to
@@ -107,6 +147,7 @@ export async function GET() {
       importantPeople: peopleRows.length,
       themes: themeRows.length,
       observations: observationRows.length,
+      ...Object.fromEntries(Object.entries(extraByName).map(([k, v]) => [k, v.length])),
     },
     settings: sanitizedSettings,
     clients: clientRows,
@@ -121,6 +162,7 @@ export async function GET() {
     importantPeople: peopleRows,
     themes: themeRows,
     observations: observationRows,
+    ...extraByName,
   };
 
   const ymd = new Date().toISOString().slice(0, 10);

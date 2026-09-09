@@ -947,7 +947,14 @@ async function sendDueSessionWalkInNudges(
       )
     );
 
-  const base = process.env.NEXT_PUBLIC_SITE_URL ?? "";
+  // Same origin chain as every other email link — the old bare
+  // NEXT_PUBLIC_SITE_URL fallback of "" produced a relative href that is
+  // dead inside a mail client.
+  const base =
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    process.env.APP_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "") ||
+    "https://app.svit.live";
   let count = 0;
   for (const row of rows) {
     const claimed = await db

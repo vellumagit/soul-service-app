@@ -16,6 +16,8 @@ import {
 } from "@/lib/actions";
 import type { LeadSubmissionRow } from "@/db/queries";
 import { notify } from "./FlashNotifier";
+import { ConfirmButton } from "./ConfirmButton";
+import { bumpCounts } from "@/lib/counts-event";
 import { relativeTime } from "@/lib/format";
 
 export function LeadInboxList({
@@ -58,6 +60,7 @@ function SubmissionRow({
         return;
       }
       setHidden(true);
+      bumpCounts();
       notify({
         kind: "success",
         title: as === "client" ? "Added to your clients" : "Added to your network",
@@ -257,6 +260,8 @@ function SubmissionRow({
                       return;
                     }
                     setHidden(true);
+                  bumpCounts();
+                    bumpCounts();
                   })
                 }
                 className="px-3 py-1.5 text-xs text-ink-500 hover:text-amber-700 rounded-md disabled:opacity-50"
@@ -288,6 +293,7 @@ function SubmissionRow({
                     ttlMs: 2500,
                   });
                   setHidden(true);
+                  bumpCounts();
                 })
               }
               className="px-3 py-1.5 text-xs font-medium text-sage-700 hover:text-sage-800 border border-sage-200 rounded-md disabled:opacity-50"
@@ -296,29 +302,18 @@ function SubmissionRow({
             </button>
           )}
           {(filter !== "pending" || s.status !== "pending") && (
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() =>
-                startTransition(async () => {
-                  setBusy("delete");
-                  const r = await deleteLeadSubmission(s.id);
-                  setBusy(null);
-                  if (!r.ok) {
-                    notify({
-                      kind: "warning",
-                      title: "Delete failed",
-                      body: r.error,
-                    });
-                    return;
-                  }
-                  setHidden(true);
-                })
-              }
+            <ConfirmButton
+              label="Delete"
               className="text-[11px] text-ink-400 hover:text-red-700 disabled:opacity-50"
-            >
-              Delete
-            </button>
+              message="Delete this message for good? The name, email and note are removed and can't be recovered."
+              confirmLabel="Yes, delete"
+              onConfirm={async () => {
+                const r = await deleteLeadSubmission(s.id);
+                if (!r.ok) throw new Error(r.error);
+                setHidden(true);
+                bumpCounts();
+              }}
+            />
           )}
         </div>
       </div>

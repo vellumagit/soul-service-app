@@ -4,6 +4,7 @@
 // buttons for "Mark paid + Confirm", "Confirm only", and "Cancel".
 
 import { useState, useTransition } from "react";
+import { bumpCounts } from "@/lib/counts-event";
 import {
   confirmAttendee,
   markAttendeeCancelled,
@@ -35,6 +36,7 @@ export function GroupAttendeeRow({ attendee }: Props) {
     startTransition(async () => {
       const r = await confirmAttendee(attendee.id, markPaid);
       if (!r.ok) setError(r.error);
+      else bumpCounts();
     });
   }
   function handleCancel() {
@@ -43,6 +45,7 @@ export function GroupAttendeeRow({ attendee }: Props) {
     startTransition(async () => {
       const r = await markAttendeeCancelled(attendee.id);
       if (!r.ok) setError(r.error);
+      else bumpCounts();
     });
   }
   // Back in. Paid + not refunded → confirmed (welcome email again if they
@@ -56,6 +59,7 @@ export function GroupAttendeeRow({ attendee }: Props) {
     startTransition(async () => {
       const r = await reinstateAttendee(attendee.id, { notify: true });
       if (!r.ok) setError(r.error);
+      else bumpCounts();
     });
   }
 

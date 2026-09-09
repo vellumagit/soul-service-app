@@ -48,6 +48,22 @@ import {
 // loaded (rate limit, missing fields) stay English; the browser's required-
 // field validation catches most of those first anyway.
 const PUB_MSG = {
+  nameRequired: {
+    en: "Please share your name.",
+    uk: "Будь ласка, вкажіть своє ім'я.",
+  },
+  emailRequired: {
+    en: "Please share a valid email.",
+    uk: "Будь ласка, вкажіть дійсну електронну адресу.",
+  },
+  slowDown: {
+    en: "Slow down a moment. Try again shortly.",
+    uk: "Хвилинку — спробуйте ще раз трохи згодом.",
+  },
+  cardNotReady: {
+    en: "Card payment isn't set up yet. Use the other ways to pay below.",
+    uk: "Оплата карткою ще не налаштована. Скористайтеся іншими способами оплати нижче.",
+  },
   unavailable: {
     en: "That session isn't available.",
     uk: "Ця зустріч недоступна.",
@@ -513,7 +529,7 @@ export async function rescheduleGroupSession(
 
     revalidatePath(`/groups/${row.groupId}`);
     revalidatePath("/calendar");
-    revalidatePath("/requests");
+    revalidatePath("/requests", "layout");
     revalidatePath("/");
     return { ok: true, notified };
   } catch (err) {
@@ -610,7 +626,7 @@ export async function restoreGroupSession(
 
     revalidatePath(`/groups/${row.groupId}`);
     revalidatePath("/calendar");
-    revalidatePath("/requests");
+    revalidatePath("/requests", "layout");
     revalidatePath("/");
     return { ok: true, notified, refundRequestsCleared: cleared.length };
   } catch (err) {
@@ -708,7 +724,7 @@ export async function reinstateAttendee(
     }
 
     revalidatePath(`/groups/${s.groupId}`);
-    revalidatePath("/requests");
+    revalidatePath("/requests", "layout");
     revalidatePath("/groups");
     return { ok: true, status };
   } catch (err) {
@@ -828,7 +844,7 @@ export async function cancelGroupSession(
 
     revalidatePath(`/groups/${row.groupId}`);
     revalidatePath("/calendar");
-    revalidatePath("/requests");
+    revalidatePath("/requests", "layout");
     revalidatePath("/");
   }
   return { ok: true, notified, refundsQueued };
@@ -964,25 +980,7 @@ export async function signUpForGroupSession(
     String(formData.get("phone") ?? "").trim().slice(0, 50) || null;
 
   if (!groupSessionId) return { ok: false, error: "Missing session." };
-  if (!name) return { ok: false, error: "Please share your name." };
-  if (!emailRaw || !emailRaw.includes("@")) {
-    return { ok: false, error: "Please share a valid email." };
-  }
   const email = emailRaw.toLowerCase();
-
-  // Rate limit — generous; this is a public form
-  const h = await headers();
-  const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-  const limit = checkRateLimit("group-signup", ip, {
-    limit: 6,
-    windowMs: 60_000,
-  });
-  if (!limit.ok) {
-    return {
-      ok: false,
-      error: `Slow down a moment. Try again in ${limit.retryAfterSeconds}s.`,
-    };
-  }
 
   // Verify session exists + published + open + still scheduled. The public
   // page enforces all of this in the UI, but the action must too — a direct
@@ -1008,6 +1006,18 @@ export async function signUpForGroupSession(
   if (!session || !srow.published) {
     return { ok: false, error: pubMsg("unavailable", lang) };
   }
+  // Field checks live here, after the row is known, so they speak the
+  // Circle's language like every other message on the page.
+  if (!name) return { ok: false, error: pubMsg("nameRequired", lang) };
+  if (!emailRaw || !emailRaw.includes("@")) {
+    return { ok: false, error: pubMsg("emailRequired", lang) };
+  }
+  // Rate limit — generous; this is a public form. `h`/`ip` are reused below
+  // for the sign-up row.
+  const h = await headers();
+  const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const limit = checkRateLimit("group-signup", ip, { limit: 6, windowMs: 60_000 });
+  if (!limit.ok) return { ok: false, error: pubMsg("slowDown", lang) };
   if (!(srow.signupsOpen ?? false)) {
     return { ok: false, error: pubMsg("signupsClosed", lang) };
   }
@@ -1087,7 +1097,7 @@ export async function signUpForGroupSession(
     return { ok: false, error: pubMsg("full", lang) };
   }
 
-  revalidatePath("/requests");
+  revalidatePath("/requests", "layout");
   revalidatePath("/groups");
   revalidatePath(`/circles/${groupSessionId}`);
 
@@ -1113,22 +1123,12 @@ export async function createCircleCheckout(input: {
   if ((input._hp ?? "").trim().length > 0) {
     return { ok: false, error: "Something went wrong. Please try again." };
   }
-  if (!isStripeConfigured()) {
-    return {
-      ok: false,
-      error: "Card payment isn't set up yet. Use the other ways to pay below.",
-    };
-  }
 
   const groupSessionId = String(input.groupSessionId ?? "");
   const name = String(input.name ?? "").trim().slice(0, 200);
   const emailRaw = String(input.email ?? "").trim().slice(0, 200);
   const phone = String(input.phone ?? "").trim().slice(0, 50) || null;
   if (!groupSessionId) return { ok: false, error: "Missing session." };
-  if (!name) return { ok: false, error: "Please share your name." };
-  if (!emailRaw || !emailRaw.includes("@")) {
-    return { ok: false, error: "Please share a valid email." };
-  }
   const email = emailRaw.toLowerCase();
 
   // Rate limit — generous; public form.
@@ -1138,12 +1138,7 @@ export async function createCircleCheckout(input: {
     limit: 6,
     windowMs: 60_000,
   });
-  if (!limit.ok) {
-    return {
-      ok: false,
-      error: `Slow down a moment. Try again in ${limit.retryAfterSeconds}s.`,
-    };
-  }
+  const rateLimited = !limit.ok;
 
   // Load session + group (price, currency, capacity, name).
   const [row] = await db
@@ -1175,6 +1170,13 @@ export async function createCircleCheckout(input: {
   if (!row || !row.published) {
     return { ok: false, error: pubMsg("unavailable", lang) };
   }
+  // Field / limit / Stripe checks after the row, so they speak the Circle's language.
+  if (rateLimited) return { ok: false, error: pubMsg("slowDown", lang) };
+  if (!isStripeConfigured()) return { ok: false, error: pubMsg("cardNotReady", lang) };
+  if (!name) return { ok: false, error: pubMsg("nameRequired", lang) };
+  if (!emailRaw || !emailRaw.includes("@")) {
+    return { ok: false, error: pubMsg("emailRequired", lang) };
+  }
   if (row.status !== "scheduled") {
     return { ok: false, error: pubMsg("notOpen", lang) };
   }
@@ -1189,10 +1191,7 @@ export async function createCircleCheckout(input: {
   // activation (charges enabled). Until then the storefront shows only the
   // manual (Venmo/cash) lane, so this is a belt-and-suspenders guard.
   if (!row.stripeAccountId || !row.stripeChargesEnabled) {
-    return {
-      ok: false,
-      error: "Card payment isn't set up yet. Use the other ways to pay below.",
-    };
+    return { ok: false, error: pubMsg("cardNotReady", lang) };
   }
   const connectedAccountId = row.stripeAccountId;
 
@@ -1421,7 +1420,7 @@ export async function confirmAttendee(
     } catch (err) {
       console.error("[group] fulfillment after manual confirm failed", err);
     }
-    revalidatePath("/requests");
+    revalidatePath("/requests", "layout");
     revalidatePath("/groups");
     return { ok: true };
   } catch (err) {
@@ -1536,7 +1535,7 @@ export async function addCircleAttendee(input: {
     }
 
     revalidatePath(`/groups/${session.groupId}`);
-    revalidatePath("/requests");
+    revalidatePath("/requests", "layout");
     revalidatePath("/today");
     return { ok: true };
   } catch (err) {
@@ -1572,7 +1571,7 @@ export async function markAttendeeCancelled(
         console.error("[circle] google re-sync on attendee cancel failed:", err);
       }
     }
-    revalidatePath("/requests");
+    revalidatePath("/requests", "layout");
     revalidatePath("/groups");
     return { ok: true };
   } catch (err) {
@@ -1649,10 +1648,15 @@ export async function requestCircleRefund(
   if (row.refundRequestedAt) return { ok: true, state: "already" };
 
   const now = new Date();
+  // ANY paid seat becomes a refund request she settles in Requests — card
+  // refunds go through Stripe there; Venmo/cash ones she marks settled once
+  // the money is returned. (It used to release non-Stripe seats outright,
+  // so a manually-paid guest was promised a refund that never got queued.)
   const paidViaStripe = row.paid && !!row.stripePaymentIntentId;
+  const wantsRefund = !!row.paid;
 
-  if (paidViaStripe) {
-    // Flag the request; she approves in Loose Ends (one tap → Stripe refund).
+  if (wantsRefund) {
+    // Flag the request; she approves in Requests (one tap → Stripe refund).
     await db
       .update(groupAttendees)
       .set({ refundRequestedAt: now, updatedAt: now })
@@ -1704,7 +1708,7 @@ export async function requestCircleRefund(
             new Date(row.scheduledAt),
             resolveTimeZone(pset?.timezone)
           ),
-          paid: paidViaStripe,
+          paid: wantsRefund,
           replyTo: row.email,
         });
       }
@@ -1713,9 +1717,9 @@ export async function requestCircleRefund(
     console.error("[circle] refund-request notify failed", err);
   }
 
-  revalidatePath("/requests");
+  revalidatePath("/requests", "layout");
   revalidatePath("/groups");
-  return { ok: true, state: paidViaStripe ? "requested" : "cancelled" };
+  return { ok: true, state: wantsRefund ? "requested" : "cancelled" };
 }
 
 /** Practitioner — one-tap approve: issue the Stripe refund on her connected
@@ -1749,7 +1753,7 @@ export async function approveCircleRefund(
       .limit(1);
     if (!row) return { ok: false, error: "Attendee not found." };
     if (row.refundedAt) {
-      revalidatePath("/requests");
+      revalidatePath("/requests", "layout");
       return { ok: true }; // already refunded — idempotent
     }
     if (!row.paid) {
@@ -1817,7 +1821,7 @@ export async function approveCircleRefund(
           console.error("[circle] manual refund email failed", err);
         }
       }
-      revalidatePath("/requests");
+      revalidatePath("/requests", "layout");
       revalidatePath("/groups");
       return { ok: true };
     }
@@ -1842,7 +1846,7 @@ export async function approveCircleRefund(
       console.error("[circle] post-refund seat release failed", err);
     }
 
-    revalidatePath("/requests");
+    revalidatePath("/requests", "layout");
     revalidatePath("/groups");
     return { ok: true };
   } catch (err) {
@@ -1868,7 +1872,7 @@ export async function dismissCircleRefundRequest(
           eq(groupAttendees.id, attendeeId)
         )
       );
-    revalidatePath("/requests");
+    revalidatePath("/requests", "layout");
     return { ok: true };
   } catch (err) {
     return {

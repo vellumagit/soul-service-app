@@ -124,7 +124,10 @@ export function MonthCalendar({
               d.getUTCDate() - d.getUTCDay()
             )
           );
-          const weekHref = `/calendar?view=week&start=${weekStart.toISOString()}`;
+          // A bare YYYY-MM-DD: the calendar page reads it as a PRACTICE-tz day.
+          // The full ISO instant (midnight UTC) resolved to the previous
+          // Saturday in every American zone, so every click opened last week.
+          const weekHref = `/calendar?view=week&start=${weekStart.toISOString().slice(0, 10)}`;
 
           const off = sabbathSet.has(WEEKDAY_NAME[d.getUTCDay()]);
           return (
@@ -178,7 +181,7 @@ export function MonthCalendar({
                 return (
                   <Link
                     key={s.id}
-                    href={s.href ?? `/clients/${s.clientId}#${s.id}`}
+                    href={s.href ?? `/clients/${s.clientId}?tab=sessions#${s.id}`}
                     className={[
                       "block px-1.5 py-0.5 rounded text-[10px] leading-tight truncate hover:translate-x-px transition",
                       `tone-${tone}`,

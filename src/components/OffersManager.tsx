@@ -16,6 +16,7 @@ import { useRouter } from "next/navigation";
 import { Modal } from "./Modal";
 import { Field, inputCls } from "./Form";
 import { notify } from "./FlashNotifier";
+import { QUIZ_PAUSED } from "@/lib/quiz-status";
 import {
   saveOffer,
   deleteOffer,
@@ -644,7 +645,11 @@ function OfferDialog({
               <option value="circle">
                 The next Circle&apos;s booking page
               </option>
-              <option value="quiz">The quiz</option>
+              {(!QUIZ_PAUSED || linkKind === "quiz") && (
+                <option value="quiz">
+                  The quiz{QUIZ_PAUSED ? " (paused — card hidden on your page)" : ""}
+                </option>
+              )}
               <option value="custom">A link you choose</option>
             </select>
           </Field>

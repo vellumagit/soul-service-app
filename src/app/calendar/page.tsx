@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { and, eq, gte, lt } from "drizzle-orm";
 import { db } from "@/db";
-import { groupSessions, groups } from "@/db/schema";
+import { groupSessions, groups, timeOff } from "@/db/schema";
 import { AppShell } from "@/components/AppShell";
 import {
   listSessionsInRange,
@@ -14,6 +14,7 @@ import { QuickActions } from "@/components/QuickActions";
 import { ScheduleSessionDialog } from "@/components/ScheduleSessionDialog";
 import { ScheduleSeriesDialog } from "@/components/ScheduleSeriesDialog";
 import { TimeOffDialog } from "@/components/TimeOffDialog";
+import { TimeOffList } from "@/components/TimeOffList";
 import { CalendarJumpToDate } from "@/components/CalendarJumpToDate";
 import { requireSession } from "@/lib/session-cookies";
 import { asLocale, t } from "@/lib/i18n";
@@ -100,7 +101,7 @@ export default async function CalendarPage({
   const weekStartKey = zonedDateKey(weekStartInstant, tz);
   const monthStartKey = zonedDateKey(monthStartInstant, tz);
 
-  const [sessions, clients, circleRows] = await Promise.all([
+  const [sessions, clients, circleRows, timeOffRows] = await Promise.all([
     listSessionsInRange(accountId, rangeStart, rangeEnd),
     listClientsForPicker(accountId),
     // Circles were invisible on her own calendar — she could double-book
@@ -123,7 +124,32 @@ export default async function CalendarPage({
           lt(groupSessions.scheduledAt, rangeEnd)
         )
       ),
+    // Time-off blocks that are still current or upcoming — shown above the
+    // grid so a block can be seen and removed (it used to be invisible).
+    db
+      .select({
+        id: timeOff.id,
+        startsAt: timeOff.startsAt,
+        endsAt: timeOff.endsAt,
+        note: timeOff.note,
+        sessionsCancelled: timeOff.sessionsCancelled,
+      })
+      .from(timeOff)
+      .where(and(eq(timeOff.accountId, accountId), gte(timeOff.endsAt, new Date())))
+      .orderBy(timeOff.startsAt),
   ]);
+  const dayFmt = new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: tz,
+  });
+  const timeOffData = timeOffRows.map((r) => ({
+    id: r.id,
+    label: `${dayFmt.format(r.startsAt)} – ${dayFmt.format(r.endsAt)}`,
+    note: r.note,
+    sessionsCancelled: r.sessionsCancelled,
+  }));
   const locale = asLocale(settings.uiLanguage);
 
   const sessionData = [
@@ -271,13 +297,16 @@ export default async function CalendarPage({
         </div>
 
         {/* Action buttons */}
-        <ScheduleSeriesDialog clients={clients} />
+        <ScheduleSeriesDialog clients={clients} respondToShortcut={false} />
         <ScheduleSessionDialog
           clients={clients}
+          respondToShortcut={false}
           sabbathDays={(settings.sabbathDays ?? []) as string[]}
         />
         <TimeOffDialog />
       </div>
+
+      <TimeOffList rows={timeOffData} />
 
       {/* The calendar itself. Sabbath days come straight from settings —
           both views render them with a soft shaded background. */}

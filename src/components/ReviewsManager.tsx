@@ -248,6 +248,7 @@ function ReviewDialog({
   const [photoUrl, setPhotoUrl] = useState<string | null>(
     review?.photoUrl ?? null
   );
+  const [removingPhoto, setRemovingPhoto] = useState(false);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -371,13 +372,28 @@ function ReviewDialog({
             {review && photoUrl && (
               <button
                 type="button"
+                disabled={removingPhoto}
+                aria-busy={removingPhoto}
                 onClick={async () => {
-                  await onPhotoRemoved(review.id);
-                  setPhotoUrl(null);
+                  if (!confirm("Remove this photo? The file is deleted and can't be brought back.")) return;
+                  setRemovingPhoto(true);
+                  try {
+                    await onPhotoRemoved(review.id);
+                    setPhotoUrl(null);
+                    notify({ kind: "success", title: "Photo removed", ttlMs: 2500 });
+                  } catch (err) {
+                    notify({
+                      kind: "warning",
+                      title: "Couldn't remove the photo",
+                      body: err instanceof Error ? err.message : "Try again.",
+                    });
+                  } finally {
+                    setRemovingPhoto(false);
+                  }
                 }}
-                className="text-[11px] text-ink-500 hover:text-red-600"
+                className="text-[11px] text-ink-500 hover:text-red-600 disabled:opacity-50"
               >
-                Remove
+                {removingPhoto ? "Removing…" : "Remove"}
               </button>
             )}
           </div>

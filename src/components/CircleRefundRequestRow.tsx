@@ -12,6 +12,7 @@ import {
 } from "@/lib/group-actions";
 import { rethrowIfRedirect } from "@/lib/redirect-error";
 import { notify } from "./FlashNotifier";
+import { bumpCounts } from "@/lib/counts-event";
 
 export function CircleRefundRequestRow({
   attendeeId,
@@ -30,6 +31,12 @@ export function CircleRefundRequestRow({
   const [done, setDone] = useState<null | "refunded" | "kept">(null);
 
   async function approve() {
+    if (
+      !confirm(
+        `Refund ${name} and release their seat in ${circleName}? The card refund is issued on Stripe straight away and can't be undone here.`
+      )
+    )
+      return;
     setBusy("approve");
     try {
       const res = await approveCircleRefund(attendeeId);
@@ -38,6 +45,7 @@ export function CircleRefundRequestRow({
         return;
       }
       setDone("refunded");
+      bumpCounts();
       notify({
         kind: "success",
         title: "Refunded & seat released",
@@ -61,6 +69,7 @@ export function CircleRefundRequestRow({
         return;
       }
       setDone("kept");
+      bumpCounts();
       notify({ kind: "success", title: "Kept their seat", body: `${name} stays booked.`, ttlMs: 4000 });
     } catch (e) {
       rethrowIfRedirect(e);

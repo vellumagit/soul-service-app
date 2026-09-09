@@ -368,6 +368,9 @@ export default async function GroupDetailPage({
               const confirmed = attendees.filter(
                 (a) => a.status === "confirmed"
               );
+              const removed = attendees.filter(
+                (a) => a.status === "cancelled"
+              );
               const block = (
                 <article key={s.id} className="paper-card p-5">
                   <header className="flex items-baseline justify-between gap-3 flex-wrap mb-3">
@@ -444,7 +447,7 @@ export default async function GroupDetailPage({
                     </div>
                   </header>
 
-                  {attendees.length === 0 ? (
+                  {pending.length + confirmed.length === 0 && removed.length === 0 ? (
                     <>
                       <p className="text-xs text-ink-500 italic mt-3">
                         No sign-ups yet. Share the public link to start.
@@ -491,7 +494,33 @@ export default async function GroupDetailPage({
                           ))}
                         </>
                       )}
+                      {pending.length + confirmed.length === 0 && (
+                        <p className="text-xs text-ink-500 italic">
+                          Nobody is booked right now.
+                        </p>
+                      )}
                       <AddCircleAttendeeInline groupSessionId={s.id} />
+                      {removed.length > 0 && (
+                        // Folded away — a mis-click on Remove used to be
+                        // permanent because removed guests appeared nowhere.
+                        <details className="mt-3">
+                          <summary className="text-[10px] uppercase tracking-wider font-mono text-ink-400 cursor-pointer select-none">
+                            Removed ({removed.length})
+                          </summary>
+                          <div className="space-y-2 mt-2 opacity-80">
+                            {removed.map((a) => (
+                              <GroupAttendeeRow
+                                key={a.id}
+                                attendee={{
+                                  ...a,
+                                  createdAt: new Date(a.createdAt),
+                                  paidAt: a.paidAt ? new Date(a.paidAt) : null,
+                                }}
+                              />
+                            ))}
+                          </div>
+                        </details>
+                      )}
                     </div>
                   )}
                 </article>

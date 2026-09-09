@@ -4,12 +4,14 @@
 // group" button. Submits to createGroup which inserts and then redirects
 // to the group's detail page.
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { Modal } from "./Modal";
 import { createGroup } from "@/lib/group-actions";
 
 export function NewGroupDialog() {
   const [open, setOpen] = useState(false);
+  const [pending, start] = useTransition();
+  const [error, setError] = useState<string | null>(null);
 
   return (
     <>
@@ -26,7 +28,31 @@ export function NewGroupDialog() {
         title="New circle"
         size="md"
       >
-        <form action={createGroup} className="space-y-4">
+        <form
+          action={(fd) => {
+            if (!String(fd.get("name") ?? "").trim()) {
+              setError("Give the circle a name.");
+              return;
+            }
+            setError(null);
+            start(async () => {
+              try {
+                await createGroup(fd);
+              } catch (err) {
+                // A redirect throws on success — let it through.
+                if (err && typeof err === "object" && "digest" in err) throw err;
+                setError(err instanceof Error ? err.message : "Couldn't create the circle.");
+              }
+            });
+          }}
+          noValidate
+          className="space-y-4"
+        >
+          {error && (
+            <div className="text-xs text-red-700 bg-red-50 border border-red-100 rounded p-2">
+              {error}
+            </div>
+          )}
           <label className="block">
             <span className="text-xs uppercase tracking-wider text-ink-500 font-mono">
               Name
@@ -179,9 +205,11 @@ export function NewGroupDialog() {
             </button>
             <button
               type="submit"
-              className="px-4 py-2 text-sm bg-plum-700 hover:bg-plum-600 text-white rounded-md font-medium"
+              disabled={pending}
+              aria-busy={pending}
+              className="px-4 py-2 text-sm bg-plum-700 hover:bg-plum-600 text-white rounded-md font-medium disabled:opacity-60"
             >
-              Create circle
+              {pending ? "Creating…" : "Create circle"}
             </button>
           </div>
         </form>

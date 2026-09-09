@@ -97,7 +97,7 @@ export function SetupChecklist({
             </div>
           </div>
           {!status.hasClient && (
-            <NewClientDialog
+            <NewClientDialog respondToShortcut={false}
               trigger={(open) => (
                 <button
                   onClick={open}
@@ -120,7 +120,7 @@ export function SetupChecklist({
             </div>
           </div>
           {!status.hasSession && status.hasClient && (
-            <ScheduleSessionDialog
+            <ScheduleSessionDialog respondToShortcut={false}
               clients={clients}
               trigger={(open) => (
                 <button

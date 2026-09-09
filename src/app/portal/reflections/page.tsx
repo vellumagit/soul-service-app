@@ -28,7 +28,7 @@ async function submitReflection(formData: FormData): Promise<void> {
   "use server";
   const portal = await requirePortalSession();
   const body = String(formData.get("body") ?? "").trim();
-  if (!body || body.length === 0) return;
+  if (!body || body.length === 0) redirect("/portal/reflections?error=blank");
   const sessionIdRaw = formData.get("sessionId");
   let sessionId: string | null = null;
   if (typeof sessionIdRaw === "string" && sessionIdRaw.length > 0) {
@@ -57,7 +57,12 @@ async function submitReflection(formData: FormData): Promise<void> {
   redirect("/portal/reflections");
 }
 
-export default async function PortalReflectionsPage() {
+export default async function PortalReflectionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const { error } = await searchParams;
   const session = await requirePortalSession();
   const firstName =
     session.clientFullName.split(" ")[0] ?? session.clientFullName;
@@ -125,6 +130,11 @@ export default async function PortalReflectionsPage() {
 
       <section className="paper-card paper-card--feature p-5 md:p-6 mb-8">
         <form action={submitReflection} className="space-y-4">
+          {error === "blank" && (
+            <p className="text-sm text-honey-700 italic">
+              Write a few words first — an empty reflection isn&apos;t saved.
+            </p>
+          )}
           <label className="block">
             <span className="serif-italic text-base text-plum-700 block mb-2" style={{ fontWeight: 400 }}>
               Write a reflection

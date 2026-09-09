@@ -8,7 +8,8 @@
 // the prefix is visible from the DB, and she has to rotate to get a fresh
 // token. Standard API-key UX.
 
-import { useState, useId } from "react";
+import { useState, useId, useTransition } from "react";
+import { ConfirmButton } from "./ConfirmButton";
 import { Modal } from "./Modal";
 import { Field, inputCls } from "./Form";
 import {
@@ -140,8 +141,8 @@ export function LeadFormsManager({
                           · {f.submissionCount} submissions
                         </span>
                       </span>
-                      <button
-                        type="button"
+                      <AsyncButton
+                        pendingLabel="Restoring…"
                         onClick={async () => {
                           const r = await archiveLeadForm(f.id, false);
                           if (!r.ok) {
@@ -158,10 +159,10 @@ export function LeadFormsManager({
                             });
                           }
                         }}
-                        className="text-[11px] text-plum-700 hover:underline"
+                        className="text-[11px] text-plum-700 hover:underline disabled:opacity-50"
                       >
                         Restore
-                      </button>
+                      </AsyncButton>
                     </li>
                   ))}
                 </ul>
@@ -476,23 +477,50 @@ function FormRow({
           >
             Edit
           </button>
-          <button
-            type="button"
-            onClick={onRotate}
+          <ConfirmButton
+            label="Rotate token"
             className="text-xs text-plum-700 hover:underline"
-            title="Generate a new token. The old one stops working immediately."
-          >
-            Rotate token
-          </button>
-          <button
-            type="button"
+            message={`Generate a new token for "${form.name}"? The old one stops working immediately — every Make.com scenario or embed posting to this form must be updated with the new token.`}
+            confirmLabel="Yes, rotate it"
+            onConfirm={onRotate}
+          />
+          <AsyncButton
+            pendingLabel="Archiving…"
             onClick={onArchive}
-            className="text-xs text-ink-500 hover:text-amber-700"
+            className="text-xs text-ink-500 hover:text-amber-700 disabled:opacity-50"
           >
             Archive
-          </button>
+          </AsyncButton>
         </div>
       </div>
     </li>
+  );
+}
+
+
+// A text button that shows it is working: disabled + relabelled for the
+// round trip, so a slow archive/restore doesn't read as a dead click.
+function AsyncButton({
+  onClick,
+  pendingLabel,
+  className,
+  children,
+}: {
+  onClick: () => Promise<void>;
+  pendingLabel: string;
+  className: string;
+  children: React.ReactNode;
+}) {
+  const [pending, start] = useTransition();
+  return (
+    <button
+      type="button"
+      disabled={pending}
+      aria-busy={pending}
+      onClick={() => start(onClick)}
+      className={className}
+    >
+      {pending ? pendingLabel : children}
+    </button>
   );
 }

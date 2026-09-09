@@ -89,6 +89,7 @@ export function RequestReplyDialog({
 
       <Modal
         open={open}
+        locked={pending}
         onClose={() => setOpen(false)}
         title={`Reply to ${first}`}
       >

@@ -8,6 +8,7 @@
 // but nothing was sent.
 
 import { headers } from "next/headers";
+import { PortalSubmitButton } from "@/components/PortalSubmitButton";
 import { startPortalSignInByEmail } from "@/lib/portal-signin";
 import { checkRateLimit } from "@/lib/rate-limit";
 
@@ -84,6 +85,11 @@ export default async function PortalSignInPage({
           >
             Check your email. If we have you on file, a sign-in link is on
             its way. It'll expire in 30 minutes.
+            <div className="mt-3">
+              <a href="/portal/sign-in" className="underline">
+                Use a different email
+              </a>
+            </div>
           </div>
         ) : (
           <form action={requestMagicLinkAndRedirect} className="space-y-4">
@@ -101,12 +107,12 @@ export default async function PortalSignInPage({
                 placeholder="you@example.com"
               />
             </label>
-            <button
-              type="submit"
-              className="w-full px-4 py-2.5 text-sm bg-plum-700 hover:bg-plum-600 text-white rounded-md font-medium transition-colors"
+            <PortalSubmitButton
+              pendingLabel="Sending…"
+              className="w-full px-4 py-2.5 text-sm bg-plum-700 hover:bg-plum-600 text-white rounded-md font-medium transition-colors disabled:opacity-60"
             >
               Send me a link
-            </button>
+            </PortalSubmitButton>
             {error === "expired" && (
               <p className="text-xs text-honey-700 italic">
                 That link expired or had already been used. Request a fresh one.

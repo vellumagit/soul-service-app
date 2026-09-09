@@ -61,7 +61,7 @@ export default async function ClientsPage({
             Open a client to see their full profile, sessions, and notes.
           </p>
         </div>
-        <NewClientDialog />
+        <NewClientDialog respondToShortcut={false} />
       </div>
 
       {/* Smart filters */}
@@ -94,7 +94,7 @@ export default async function ClientsPage({
               ? "Add your first one and start building their profile."
               : "Try a different filter."}
           </div>
-          {filter === "all" && <NewClientDialog />}
+          {filter === "all" && <NewClientDialog respondToShortcut={false} />}
         </div>
       ) : (
         <>

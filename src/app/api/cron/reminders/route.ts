@@ -39,12 +39,16 @@ export async function GET(request: Request) {
   // in the next ~45 min that has a Meet link, auto-add on, and no bot yet.
   // A few calls per tick instead of a 52-bot burst at series-creation time.
   // Best-effort; no-op when Recall isn't configured.
+  // Each best-effort step logs and continues, but a total outage of one of
+  // them must not look like a quiet day. Collect the failures and say so.
+  const degraded: string[] = [];
   let recallBots = { due: 0, created: 0, failed: 0, errors: [] as string[] };
   try {
     const { scheduleDueRecallBots } = await import("@/lib/recall-scheduler");
     recallBots = await scheduleDueRecallBots();
   } catch (err) {
     console.error("[cron] recall bot sweep failed", err);
+    degraded.push(`recallBots: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   // Lead-magnet follow-up "flow" — nurture emails due since the last tick.
@@ -55,6 +59,7 @@ export async function GET(request: Request) {
     leadMagnetFollowups = await processLeadMagnetFollowups();
   } catch (err) {
     console.error("[cron] lead-magnet follow-ups failed", err);
+    degraded.push(`leadMagnetFollowups: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   // Top up 1:1 recurring session series into their rolling window (mirrors
@@ -68,6 +73,7 @@ export async function GET(request: Request) {
     recurringSessions = await ensureSeriesSessions();
   } catch (err) {
     console.error("[cron] recurring sessions top-up failed", err);
+    degraded.push(`recurringSessions: ${err instanceof Error ? err.message : String(err)}`);
   }
 
 
@@ -90,16 +96,19 @@ export async function GET(request: Request) {
       recurringCircles = await ensureRecurringCircleSessions();
     } catch (err) {
       console.error("[cron] recurring circles top-up failed", err);
+      degraded.push(`recurringCircles: ${err instanceof Error ? err.message : String(err)}`);
     }
     try {
       prunedCircles = await pruneEmptyCancelledCircleSessions();
     } catch (err) {
       console.error("[cron] empty-cancelled circle prune failed", err);
+      degraded.push(`prunedCircles: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
   return NextResponse.json({
-    ok: true,
+    ok: degraded.length === 0,
+    degraded,
     ...stats,
     recallBots,
     leadMagnetFollowups,

@@ -49,6 +49,9 @@ async function saveClientStatedIntention(formData: FormData): Promise<void> {
   // she walks in already holding what the client brought.
   revalidatePath(`/sessions/${sessionIdRaw}/prep`);
   revalidatePath(`/clients/${portal.clientId}`);
+  // Land back with a visible "Saved" — the button alone flipping from
+  // "Saving…" to "Save" told them nothing.
+  redirect(`/portal/sessions/${sessionIdRaw}?saved=1`);
 }
 
 async function submitRescheduleRequest(formData: FormData): Promise<void> {
@@ -117,11 +120,11 @@ export default async function PortalSessionDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ submitted?: string }>;
+  searchParams: Promise<{ submitted?: string; saved?: string }>;
 }) {
   const portalSession = await requirePortalSession();
   const { id } = await params;
-  const { submitted } = await searchParams;
+  const { submitted, saved } = await searchParams;
 
   const rows = await db
     .select({
@@ -259,6 +262,11 @@ export default async function PortalSessionDetailPage({
             Your practitioner sees this in their prep view so they can walk in
             holding it with you. Optional.
           </p>
+          {saved === "1" && (
+            <p className="text-sm text-honey-700 italic mb-2">
+              Saved. Your practitioner will see it before the session.
+            </p>
+          )}
           <form action={saveClientStatedIntention} className="space-y-3">
             <input type="hidden" name="sessionId" value={session.id} />
             <textarea

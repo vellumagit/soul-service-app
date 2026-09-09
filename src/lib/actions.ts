@@ -335,7 +335,7 @@ export async function resolveBookingRequest(
     if (updated.length === 0) {
       return { ok: false, error: "Request not found" };
     }
-    revalidatePath("/requests");
+    revalidatePath("/requests", "layout");
     revalidatePath(`/clients/${updated[0].clientId}`);
     return { ok: true };
   } catch (err) {
@@ -371,7 +371,7 @@ export async function resolveRescheduleRequest(
     if (updated.length === 0) {
       return { ok: false, error: "Request not found" };
     }
-    revalidatePath("/requests");
+    revalidatePath("/requests", "layout");
     revalidatePath(`/clients/${updated[0].clientId}`);
     return { ok: true };
   } catch (err) {
@@ -483,7 +483,7 @@ export async function replyToRequest(input: {
       console.error("[request reply] couldn't log communication:", err);
     }
 
-    revalidatePath("/requests");
+    revalidatePath("/requests", "layout");
     revalidatePath(`/clients/${row.clientId}`);
     revalidatePath("/portal");
     revalidatePath("/portal/book");
@@ -1339,6 +1339,8 @@ export async function saveSessionClosing(
     revalidatePath(`/clients/${updated[0].clientId}`);
     revalidatePath("/calendar");
     revalidatePath("/today");
+    // The "Waiting for a closing" list lives under /requests.
+    revalidatePath("/requests", "layout");
     revalidatePath("/practice");
 
     return { ok: true };
@@ -1593,7 +1595,7 @@ export async function scheduleSession(
           inArray(clientBookingRequests.status, ["pending", "acknowledged"])
         )
       );
-    revalidatePath("/requests");
+    revalidatePath("/requests", "layout");
     revalidatePath("/portal/book");
   } catch (err) {
     console.error("[schedule] couldn't close booking requests:", err);
@@ -2483,6 +2485,28 @@ export type ApplyTimeOffResult =
  *  off, Google entries removed silently), series gaps are pinned so the cron
  *  can't refill them, new bookings inside the range are refused, and each
  *  affected client gets ONE email listing their dates and when you're back. */
+/** Remove a time-off block. Re-opens those days for booking; sessions
+ *  cancelled when the block was applied are left as they are (the client was
+ *  already emailed — restoring is a per-session decision on their file). */
+export async function deleteTimeOff(
+  id: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const { accountId } = await requireSession();
+    const { timeOff } = await import("@/db/schema");
+    const deleted = await db
+      .delete(timeOff)
+      .where(and(eq(timeOff.accountId, accountId), eq(timeOff.id, id)))
+      .returning({ id: timeOff.id });
+    if (deleted.length === 0) return { ok: false, error: "That block is already gone." };
+    revalidatePath("/calendar");
+    revalidatePath("/today");
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Couldn't remove it." };
+  }
+}
+
 export async function applyTimeOff(formData: FormData): Promise<ApplyTimeOffResult> {
   try {
     const { accountId } = await requireSession();
@@ -4479,7 +4503,7 @@ export async function rescheduleSession(formData: FormData) {
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/calendar");
   revalidatePath("/today");
-  revalidatePath("/requests");
+  revalidatePath("/requests", "layout");
   revalidatePath(`/portal/sessions/${id}`);
 }
 
@@ -4601,7 +4625,7 @@ export async function cancelSession(
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/calendar");
   revalidatePath("/today");
-  revalidatePath("/requests");
+  revalidatePath("/requests", "layout");
   revalidatePath(`/portal/sessions/${sessionId}`);
 }
 

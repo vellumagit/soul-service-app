@@ -19,8 +19,11 @@ type CalSession = {
   paid: boolean;
 };
 
-const HOUR_START = 8;
-const HOUR_END = 21;
+// Default visible window. The grid widens when a session falls outside it
+// (a 7:30am or 9:30pm booking used to render nothing while the header
+// still counted it).
+const DEFAULT_HOUR_START = 8;
+const DEFAULT_HOUR_END = 21;
 const PX_PER_HOUR = 48;
 
 // Lay overlapping sessions out side by side instead of stacking them on top
@@ -95,6 +98,18 @@ export function WeekCalendar({
   // the right row/column no matter what zone the browser is in (Svit in
   // Edmonton, Brian in Brazil — identical view).
   const tz = useTimeZone();
+
+  // Visible hours: the default window, stretched to cover every session in
+  // this week so nothing is drawn off the grid.
+  let hourStart = DEFAULT_HOUR_START;
+  let hourEnd = DEFAULT_HOUR_END;
+  for (const s of sessions) {
+    const { hour, minute } = zonedClock(new Date(s.scheduledAt), tz);
+    const startH = hour + minute / 60;
+    const endH = startH + s.durationMinutes / 60;
+    hourStart = Math.min(hourStart, Math.floor(startH));
+    hourEnd = Math.max(hourEnd, Math.min(24, Math.ceil(endH)));
+  }
 
   // The 7 day columns as pure "YYYY-MM-DD" calendar dates, built from the
   // week's Sunday. Viewer- and server-tz independent (plain date arithmetic).
@@ -288,13 +303,13 @@ export function WeekCalendar({
           className="grid relative"
           style={{
             gridTemplateColumns: "56px repeat(7, 1fr)",
-            height: `${(HOUR_END - HOUR_START) * PX_PER_HOUR}px`,
+            height: `${(hourEnd - hourStart) * PX_PER_HOUR}px`,
           }}
         >
           {/* Time labels */}
           <div className="relative border-r border-ink-100">
-            {Array.from({ length: HOUR_END - HOUR_START }, (_, i) => {
-              const h = HOUR_START + i;
+            {Array.from({ length: hourEnd - hourStart }, (_, i) => {
+              const h = hourStart + i;
               const label =
                 h === 12 ? "12pm" : h > 12 ? `${h - 12}pm` : `${h}am`;
               return (
@@ -336,7 +351,7 @@ export function WeekCalendar({
                   const startInstant = new Date(s.scheduledAt);
                   const { hour, minute } = zonedClock(startInstant, tz);
                   const startH = hour + minute / 60;
-                  const top = (startH - HOUR_START) * PX_PER_HOUR;
+                  const top = (startH - hourStart) * PX_PER_HOUR;
                   // Floor at a tappable/legible height — a 5-minute session
                   // would otherwise compute to ~0px and be invisible. 18px
                   // fits exactly one line of the compact layout below.
@@ -344,7 +359,7 @@ export function WeekCalendar({
                     18,
                     (s.durationMinutes / 60) * PX_PER_HOUR - 4
                   );
-                  if (top < 0 || top > (HOUR_END - HOUR_START) * PX_PER_HOUR)
+                  if (top < 0 || top > (hourEnd - hourStart) * PX_PER_HOUR)
                     return null;
                   const lane = laneOf.get(s.id) ?? { lane: 0, lanes: 1 };
                   const tone = toneFor(s.type);
@@ -395,7 +410,7 @@ export function WeekCalendar({
                       position: "absolute",
                       left: 0,
                       right: 0,
-                      top: (nowHour - HOUR_START) * PX_PER_HOUR,
+                      top: (nowHour - hourStart) * PX_PER_HOUR,
                       height: 1,
                       background: "var(--color-plum-600)",
                       zIndex: 3,

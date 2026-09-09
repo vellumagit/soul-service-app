@@ -18,7 +18,12 @@ type ClientOption = { id: string; fullName: string };
 // trigger; the menu items call those openers directly, so closing the menu is
 // independent of opening the dialog.
 //
-// The always-mounted copies pass `respondToShortcut={false}` so they don't
+// The always-mounted copies here are the ONES that answer the n / s / r
+// keyboard shortcuts (they exist on every page); page-level copies pass
+// `respondToShortcut={false}` so a key never opens two dialogs. Historic note:
+// it used to be the other way round, which left the shortcuts dead on every
+// page without a page-level copy. Old comment kept below for context —
+// the always-mounted copies used to pass `respondToShortcut={false}` so they don't
 // also fire on the global n/s/r keyboard shortcuts (those are handled by the
 // page-level dialog instances). This copy is menu-driven only.
 export function QuickActions({ clients }: { clients: ClientOption[] }) {
@@ -95,7 +100,6 @@ export function QuickActions({ clients }: { clients: ClientOption[] }) {
       {/* Always-mounted dialogs. Each trigger registers its opener and renders
           nothing visible; the Modal inside shows when its own open state flips. */}
       <NewClientDialog
-        respondToShortcut={false}
         trigger={(open) => {
           openers.current.client = open;
           return null;
@@ -103,7 +107,6 @@ export function QuickActions({ clients }: { clients: ClientOption[] }) {
       />
       <ScheduleSessionDialog
         clients={clients}
-        respondToShortcut={false}
         trigger={(open) => {
           openers.current.session = open;
           return null;
@@ -111,7 +114,6 @@ export function QuickActions({ clients }: { clients: ClientOption[] }) {
       />
       <ScheduleSeriesDialog
         clients={clients}
-        respondToShortcut={false}
         trigger={(open) => {
           openers.current.series = open;
           return null;

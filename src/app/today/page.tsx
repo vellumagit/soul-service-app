@@ -238,7 +238,7 @@ export default async function HomePage() {
           <div className="text-sm text-ink-500 mb-6 max-w-md mx-auto leading-relaxed">
             {t(locale, "home.firstRun.body")}
           </div>
-          <NewClientDialog />
+          <NewClientDialog respondToShortcut={false} />
         </div>
       ) : (
         <>
@@ -256,11 +256,19 @@ export default async function HomePage() {
               {upcomingToday.length > 0 && (
                 <div className="-mx-5 -mb-5 overflow-hidden divide-y divide-ink-100">
                   {upcomingToday.map((s) => (
-                    <Link
+                    // A div with a stretched link, not a <Link> around the
+                    // row: Walk in / Join are links themselves, and an <a>
+                    // inside an <a> is invalid HTML — the browser split the
+                    // row and the buttons sat below it until hydration.
+                    <div
                       key={s.id}
-                      href={`/clients/${s.clientId}`}
-                      className="flex items-center gap-3 px-5 py-3 hover:bg-ink-50"
+                      className="relative flex items-center gap-3 px-5 py-3 hover:bg-ink-50"
                     >
+                      <Link
+                        href={`/clients/${s.clientId}`}
+                        className="absolute inset-0"
+                        aria-label={`Open ${s.clientName}`}
+                      />
                       <div className="font-mono text-sm text-plum-700 font-medium w-20 shrink-0">
                         {shortTime(s.scheduledAt, practiceTz)}
                       </div>
@@ -272,9 +280,11 @@ export default async function HomePage() {
                           {s.type} · {s.durationMinutes}m
                         </div>
                       </div>
-                      <WalkInButton sessionId={s.id} />
-                      {s.meetUrl && <JoinMeetButton href={s.meetUrl} />}
-                    </Link>
+                      <span className="relative z-[1] flex items-center gap-2">
+                        <WalkInButton sessionId={s.id} />
+                        {s.meetUrl && <JoinMeetButton href={s.meetUrl} />}
+                      </span>
+                    </div>
                   ))}
                 </div>
               )}

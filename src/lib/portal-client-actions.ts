@@ -27,6 +27,9 @@ export async function capturePortalClientTimezone(tz: string): Promise<void> {
     .update(clients)
     .set({ timezone: tz, updatedAt: new Date() })
     .where(and(eq(clients.id, session.clientId), isNull(clients.timezone)));
+  // The page that called this already rendered in the practice zone; refresh
+  // so the client's first look at "Coming up" is in their own clock.
+  revalidatePath("/portal");
 }
 
 export type PortalDetailsResult = { ok: true } | { ok: false; error: string };

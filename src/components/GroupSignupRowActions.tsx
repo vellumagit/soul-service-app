@@ -5,6 +5,7 @@
 // page — keeps the row out of the list once it's confirmed + paid.
 
 import { useState, useTransition } from "react";
+import { bumpCounts } from "@/lib/counts-event";
 import {
   confirmAttendee,
   markAttendeeCancelled,
@@ -29,6 +30,7 @@ export function GroupSignupRowActions({
     startTransition(async () => {
       const r = await confirmAttendee(attendeeId, markPaid);
       if (!r.ok) setError(r.error);
+      else bumpCounts();
     });
   }
   function onCancel() {
@@ -37,6 +39,7 @@ export function GroupSignupRowActions({
     startTransition(async () => {
       const r = await markAttendeeCancelled(attendeeId);
       if (!r.ok) setError(r.error);
+      else bumpCounts();
     });
   }
 

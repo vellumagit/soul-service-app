@@ -40,7 +40,9 @@ async function submitBookingRequest(formData: FormData): Promise<void> {
   // Require at least one of the two — a fully blank request isn't
   // actionable. Don't trip silently, but the form has client-side
   // validation so this should be rare.
-  if (preferredTimes.length === 0 && reason.length === 0) return;
+  if (preferredTimes.length === 0 && reason.length === 0) {
+    redirect("/portal/book?error=blank");
+  }
 
   await db.insert(clientBookingRequests).values({
     accountId: portal.accountId,
@@ -71,10 +73,10 @@ async function submitBookingRequest(formData: FormData): Promise<void> {
 export default async function PortalBookPage({
   searchParams,
 }: {
-  searchParams: Promise<{ submitted?: string }>;
+  searchParams: Promise<{ submitted?: string; error?: string }>;
 }) {
   const portal = await requirePortalSession();
-  const { submitted } = await searchParams;
+  const { submitted, error } = await searchParams;
   // Her first name — this page only ever refers to the practitioner by name.
   // It used to use the CLIENT's own name here, so the note under a pending
   // request read "both will be visible to <themselves>".
@@ -142,7 +144,7 @@ export default async function PortalBookPage({
         >
           <p className="font-medium mb-1 text-sm">Sent.</p>
           <p className="text-sm leading-relaxed">
-            Your practitioner has been notified. She&apos;ll be in touch to
+            {practitionerFirstName} has been notified and will be in touch to
             find a time.
           </p>
           <Link
@@ -190,6 +192,11 @@ export default async function PortalBookPage({
 
           <section className="paper-card paper-card--feature p-6 md:p-8">
             <form action={submitBookingRequest} className="space-y-5">
+              {error === "blank" && (
+                <p className="text-sm text-honey-700 italic">
+                  Add a few words — a time that works, or what you&apos;d like the session to hold — so this can be acted on.
+                </p>
+              )}
               <label className="block">
                 <span
                   className="serif-italic text-base text-plum-700 block mb-2"

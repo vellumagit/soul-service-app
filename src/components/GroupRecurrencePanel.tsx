@@ -5,8 +5,9 @@
 // the "fill seats as a lead engine" workflow. Submits to setGroupRecurrence,
 // which saves the config and immediately generates the upcoming sessions.
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { setGroupRecurrence } from "@/lib/group-actions";
+import { notify } from "./FlashNotifier";
 
 const WEEKDAYS = [
   { v: 0, label: "Sunday" },
@@ -30,10 +31,32 @@ export function GroupRecurrencePanel({
   time: string | null;
 }) {
   const [on, setOn] = useState(enabled);
+  const [pending, start] = useTransition();
 
   return (
     <form
-      action={setGroupRecurrence}
+      action={(fd) =>
+        start(async () => {
+          try {
+            await setGroupRecurrence(fd);
+            notify({
+              kind: "success",
+              title: fd.get("recurrenceEnabled") === "true" ? "Rhythm saved" : "Rhythm turned off",
+              body:
+                fd.get("recurrenceEnabled") === "true"
+                  ? "The next few weeks are on your calendar and the storefront."
+                  : undefined,
+              ttlMs: 4000,
+            });
+          } catch (err) {
+            notify({
+              kind: "warning",
+              title: "Couldn't save the rhythm",
+              body: err instanceof Error ? err.message : "Try again.",
+            });
+          }
+        })
+      }
       className="paper-card p-4 mb-7 max-w-2xl"
     >
       <input type="hidden" name="id" value={groupId} />
@@ -101,9 +124,11 @@ export function GroupRecurrencePanel({
       <div className="flex items-center justify-end gap-2 pt-3">
         <button
           type="submit"
-          className="px-4 py-2 text-sm bg-plum-700 hover:bg-plum-600 text-white rounded-md font-medium"
+          disabled={pending}
+          aria-busy={pending}
+          className="px-4 py-2 text-sm bg-plum-700 hover:bg-plum-600 text-white rounded-md font-medium disabled:opacity-60"
         >
-          Save rhythm
+          {pending ? "Saving…" : "Save rhythm"}
         </button>
       </div>
     </form>

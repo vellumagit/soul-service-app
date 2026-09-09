@@ -222,17 +222,16 @@ export function SettingsForm({
           <LandingPortraitField initialUrl={settings.landingPortraitUrl} />
         </Field>
         <p className="text-[11px] text-ink-400 italic mt-2">
-          Preview your landing page at{" "}
+          See your landing page as visitors do:{" "}
           <a
-            href="/?preview=1"
+            href="/"
             target="_blank"
             rel="noopener noreferrer"
             className="text-plum-700 hover:underline font-mono"
           >
-            /?preview=1
-          </a>{" "}
-          — the &ldquo;preview&rdquo; query param escapes the auto-redirect
-          to /today so you can see what visitors see.
+            open it in a new tab
+          </a>
+          . It never redirects you to your workspace, even while signed in.
         </p>
       </Section>
       </SettingsPanel>

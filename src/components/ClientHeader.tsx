@@ -232,6 +232,7 @@ export function ClientHeader({
                 defaultClientId={client.id}
                 defaultType={client.primarySessionType}
                 sabbathDays={sabbathDays}
+                respondToShortcut={false}
               />
               <LogPastSessionDialog
                 clients={allClients}
