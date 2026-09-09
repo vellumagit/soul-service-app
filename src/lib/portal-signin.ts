@@ -37,6 +37,7 @@ export async function startPortalSignInByEmail(
       id: clients.id,
       fullName: clients.fullName,
       email: clients.email,
+      preferredLanguage: clients.preferredLanguage,
     })
     .from(clients)
     .where(
@@ -67,6 +68,7 @@ export async function startPortalSignInByEmail(
       url,
       clientFirstName: match.fullName.split(" ")[0] ?? null,
       practitionerName: settingsRows[0]?.practitionerName ?? null,
+      language: match.preferredLanguage === "uk" ? "uk" : "en",
     });
   } catch (err) {
     console.error("[portal sign-in] sendPortalMagicLinkEmail failed:", err);

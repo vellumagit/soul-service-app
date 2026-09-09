@@ -38,9 +38,12 @@ export type LandingWindow = {
 export function LandingLeadForm({
   availableWindows = [],
   copy,
+  lang = "en",
 }: {
   availableWindows?: LandingWindow[];
   copy: LandingFormCopy;
+  /** Page language — the action answers validation errors in it. */
+  lang?: "en" | "uk";
 }) {
   const [state, action, pending] = useActionState(
     submitLandingLead,
@@ -72,6 +75,7 @@ export function LandingLeadForm({
 
   return (
     <form action={action} className="space-y-4">
+      <input type="hidden" name="lang" value={lang} />
       {/* Honeypot — visually hidden, accessibly hidden, but rendered. */}
       <div
         aria-hidden="true"

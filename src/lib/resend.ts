@@ -44,6 +44,20 @@ const CIRCLE_CONTACT_EMAIL =
 /** Attendee-facing Circle emails speak the CIRCLE's language. */
 export type CircleEmailLang = "en" | "uk";
 
+/** 1-on-1 client emails speak the CLIENT's preferred language (Edit profile).
+ *  Same two values; a separate name so call sites read clearly. */
+export type ClientEmailLang = "en" | "uk";
+
+/** "чт, 12 вер." — the short date used in Ukrainian subjects. */
+function ukShortDate(d: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat("uk-UA", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    timeZone,
+  }).format(d);
+}
+
 /** Normalise a stored group language for the email senders. */
 export function asCircleEmailLang(
   raw: string | null | undefined
@@ -253,14 +267,21 @@ export async function sendPortalMagicLinkEmail(input: {
   url: string;
   clientFirstName: string | null;
   practitionerName: string | null;
+  /** The client's preferred language (Edit profile). Default English. */
+  language?: ClientEmailLang;
   /** Reports whether the send was suppressed by EMAIL_RECIPIENT_ALLOWLIST, so
    *  the "Invite sent" confirmation on her side can stay honest. */
 }): Promise<{ suppressed: boolean }> {
-  const greeting = input.clientFirstName ? `Hi ${input.clientFirstName},` : "Hi,";
-  const signoff = input.practitionerName ?? "Your practitioner";
-  const subject = "Your space — sign in link";
-  const text = `${greeting}\n\nHere's a link to sign in to your space:\n\n${input.url}\n\nIt'll expire in 30 minutes. If you didn't expect this email, you can ignore it.\n\n— ${signoff}`;
-  const html = portalMagicLinkHtml(input.url, greeting, signoff);
+  const uk = input.language === "uk";
+  const greeting = uk
+    ? input.clientFirstName ? `Привіт, ${input.clientFirstName}!` : "Вітаю!"
+    : input.clientFirstName ? `Hi ${input.clientFirstName},` : "Hi,";
+  const signoff = input.practitionerName ?? (uk ? "Ваш практик" : "Your practitioner");
+  const subject = uk ? "Ваш простір — посилання для входу" : "Your space — sign in link";
+  const text = uk
+    ? `${greeting}\n\nОсь посилання для входу у ваш простір:\n\n${input.url}\n\nВоно діє 30 хвилин. Якщо ви не очікували цього листа, просто проігноруйте його.\n\n— ${signoff}`
+    : `${greeting}\n\nHere's a link to sign in to your space:\n\n${input.url}\n\nIt'll expire in 30 minutes. If you didn't expect this email, you can ignore it.\n\n— ${signoff}`;
+  const html = portalMagicLinkHtml(input.url, greeting, signoff, uk);
   const res = await sendEmail({ to: input.to, subject, html, text });
   return { suppressed: res.suppressed === true };
 }
@@ -268,7 +289,8 @@ export async function sendPortalMagicLinkEmail(input: {
 function portalMagicLinkHtml(
   url: string,
   greeting: string,
-  signoff: string
+  signoff: string,
+  uk = false
 ): string {
   return `
 <!doctype html>
@@ -279,14 +301,14 @@ function portalMagicLinkHtml(
         ${escapeHtml(greeting)}
       </p>
       <p style="margin:0 0 24px 0;font-size:15px;line-height:1.6;color:#564a42;">
-        Here's a link to sign in to your space. It'll expire in 30 minutes.
+        ${uk ? "Ось посилання для входу у ваш простір. Воно діє 30 хвилин." : "Here's a link to sign in to your space. It'll expire in 30 minutes."}
       </p>
       <a href="${escapeHtml(url)}"
          style="display:inline-block;background:#5a3f4f;color:#fdf9f1;text-decoration:none;font-size:14px;font-weight:500;padding:12px 22px;border-radius:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;letter-spacing:0.01em;">
-        Open your space
+        ${uk ? "Відкрити мій простір" : "Open your space"}
       </a>
       <p style="margin:28px 0 8px 0;font-size:13px;color:#786b60;line-height:1.55;">
-        Or paste this URL:
+        ${uk ? "Або вставте цю адресу:" : "Or paste this URL:"}
       </p>
       <p style="margin:0 0 32px 0;font-size:12px;color:#786b60;line-height:1.5;word-break:break-all;font-family:ui-monospace,Menlo,monospace;">
         ${escapeHtml(url)}
@@ -1686,23 +1708,53 @@ export async function sendSessionBookingConfirmationEmail(input: {
    *  same link, different opening line — a client who gets "You're booked"
    *  for the second time reasonably wonders if they now have two sessions. */
   moved?: boolean;
+  /** The client's preferred language (Edit profile). Default English. */
+  language?: ClientEmailLang;
 }): Promise<void> {
+  const lang: ClientEmailLang = input.language === "uk" ? "uk" : "en";
+  const uk = lang === "uk";
   const first = input.clientName?.split(" ")[0] ?? null;
-  const greeting = first ? `Hi ${first},` : "Hi,";
+  const greeting = uk ? (first ? `Привіт, ${first}!` : "Вітаю!") : first ? `Hi ${first},` : "Hi,";
   const signoff = input.practitionerName ?? "Svitlana";
-  const typeLabel = input.sessionType?.trim() ? input.sessionType.trim() : "session";
-  const when = formatSessionLong(input.scheduledAt, input.timeZone);
-  const shortDate = formatSessionShortDate(input.scheduledAt, input.timeZone);
-  const subject = input.moved
-    ? `Moved — our ${typeLabel.toLowerCase()} is now ${shortDate}`
-    : `You're booked — ${shortDate}`;
-  const leadText = input.moved
-    ? `Our ${typeLabel.toLowerCase()} has moved. Here's the new time — nothing else changes, and your link below is the same one.`
-    : `You're booked in for our ${typeLabel.toLowerCase()} together. 🤍`;
+  const typeLabel = input.sessionType?.trim() ? input.sessionType.trim() : uk ? "сесія" : "session";
+  const when = formatSessionLong(input.scheduledAt, input.timeZone, uk ? "uk-UA" : "en-US");
+  const shortDate = uk
+    ? ukShortDate(input.scheduledAt, input.timeZone)
+    : formatSessionShortDate(input.scheduledAt, input.timeZone);
+  const subject = uk
+    ? input.moved
+      ? `Перенесено — наша ${typeLabel.toLowerCase()} тепер ${shortDate}`
+      : `Ви записані — ${shortDate}`
+    : input.moved
+      ? `Moved — our ${typeLabel.toLowerCase()} is now ${shortDate}`
+      : `You're booked — ${shortDate}`;
+  const leadText = uk
+    ? input.moved
+      ? `Нашу ${typeLabel.toLowerCase()} перенесено. Ось новий час — усе інше без змін, і посилання нижче те саме.`
+      : `Ви записані на нашу ${typeLabel.toLowerCase()}. 🤍`
+    : input.moved
+      ? `Our ${typeLabel.toLowerCase()} has moved. Here's the new time — nothing else changes, and your link below is the same one.`
+      : `You're booked in for our ${typeLabel.toLowerCase()} together. 🤍`;
   const linkLine = input.meetingUrl
-    ? `\n\nWhen it's time, join here:\n${input.meetingUrl}`
-    : "\n\nI'll share the meeting link with you before we meet.";
-  const text = `${greeting}
+    ? uk
+      ? `\n\nКоли настане час, приєднуйтеся тут:\n${input.meetingUrl}`
+      : `\n\nWhen it's time, join here:\n${input.meetingUrl}`
+    : uk
+      ? "\n\nЯ надішлю посилання на зустріч перед нашою сесією."
+      : "\n\nI'll share the meeting link with you before we meet.";
+  const text = uk
+    ? `${greeting}
+
+${leadText}
+
+· Коли: ${when}
+· Тривалість: ${input.durationMinutes} хв${linkLine}
+
+Якщо у вас щось зміниться — просто відповідайте на цей лист, і ми знайдемо інший час. Найкраще, коли ви в тихому, приватному місці.
+
+З теплом,
+${signoff}`
+    : `${greeting}
 
 ${leadText}
 
@@ -1721,6 +1773,7 @@ ${signoff}`;
     meetingUrl: input.meetingUrl,
     signoff,
     moved: input.moved === true,
+    lang,
   });
   await sendEmail({ to: input.to, subject, html, text, replyTo: input.replyTo });
 }
@@ -1739,30 +1792,48 @@ export async function sendSessionCancelledEmail(input: {
   timeZone: string;
   /** True = the whole recurring series was called off, not just one occurrence. */
   series?: boolean;
+  /** The client's preferred language (Edit profile). Default English. */
+  language?: ClientEmailLang;
 }): Promise<void> {
+  const uk = input.language === "uk";
   const first = input.clientName?.split(" ")[0] ?? null;
-  const greeting = first ? `Hi ${first},` : "Hi,";
+  const greeting = uk ? (first ? `Привіт, ${first}!` : "Вітаю!") : first ? `Hi ${first},` : "Hi,";
   const signoff = input.practitionerName ?? "Svitlana";
   const typeLabel = input.sessionType?.trim()
     ? input.sessionType.trim()
-    : "session";
-  const when = formatSessionLong(input.scheduledAt, input.timeZone);
-  const shortDate = formatSessionShortDate(input.scheduledAt, input.timeZone);
+    : uk ? "сесія" : "session";
+  const when = formatSessionLong(input.scheduledAt, input.timeZone, uk ? "uk-UA" : "en-US");
+  const shortDate = uk
+    ? ukShortDate(input.scheduledAt, input.timeZone)
+    : formatSessionShortDate(input.scheduledAt, input.timeZone);
 
-  const subject = input.series
-    ? `Cancelled — our recurring ${typeLabel.toLowerCase()} sessions`
-    : `Cancelled — our ${typeLabel.toLowerCase()} on ${shortDate}`;
-  const lead = input.series
-    ? `I've cancelled our recurring ${typeLabel.toLowerCase()} sessions — nothing further is on the calendar for now.`
-    : `I've had to cancel our ${typeLabel.toLowerCase()} on ${when}.`;
+  const subject = uk
+    ? input.series
+      ? `Скасовано — наші регулярні сесії (${typeLabel.toLowerCase()})`
+      : `Скасовано — наша ${typeLabel.toLowerCase()} ${shortDate}`
+    : input.series
+      ? `Cancelled — our recurring ${typeLabel.toLowerCase()} sessions`
+      : `Cancelled — our ${typeLabel.toLowerCase()} on ${shortDate}`;
+  const lead = uk
+    ? input.series
+      ? `Наші регулярні сесії (${typeLabel.toLowerCase()}) скасовано — наразі в календарі більше нічого немає.`
+      : `Нашу ${typeLabel.toLowerCase()} ${when} довелося скасувати.`
+    : input.series
+      ? `I've cancelled our recurring ${typeLabel.toLowerCase()} sessions — nothing further is on the calendar for now.`
+      : `I've had to cancel our ${typeLabel.toLowerCase()} on ${when}.`;
+  const here = uk
+    ? "Я тут, коли ви захочете знайти інший час — просто відповідайте на цей лист."
+    : "I'm here whenever you'd like to find another time — just reply to this email.";
+  const warmly = uk ? "З теплом," : "Warmly,";
+  const cancelledLabel = uk ? "Скасовано" : "Cancelled";
 
   const text = `${greeting}
 
 ${lead}
 
-I'm here whenever you'd like to find another time — just reply to this email.
+${here}
 
-Warmly,
+${warmly}
 ${signoff}`;
 
   const html = `
@@ -1770,11 +1841,11 @@ ${signoff}`;
 <html>
   <body style="margin:0;padding:0;background:#faf6f0;font-family:Georgia,'Times New Roman',serif;color:#3d342e;">
     <div style="max-width:480px;margin:48px auto;padding:36px 32px;background:#fdf9f1;border-radius:12px;border:1px solid #ead9c1;">
-      <p style="margin:0 0 6px 0;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#b05c36;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">Cancelled</p>
+      <p style="margin:0 0 6px 0;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#b05c36;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">${cancelledLabel}</p>
       <p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;color:#564a42;">${escapeHtml(greeting)}</p>
       <p style="margin:0 0 20px 0;font-size:15px;line-height:1.6;color:#564a42;">${escapeHtml(lead)}</p>
-      <p style="margin:24px 0 0 0;font-size:15px;line-height:1.6;color:#564a42;">I'm here whenever you'd like to find another time — just reply.</p>
-      <p style="margin:16px 0 0 0;font-size:15px;line-height:1.6;color:#564a42;">Warmly,<br>${escapeHtml(signoff)}</p>
+      <p style="margin:24px 0 0 0;font-size:15px;line-height:1.6;color:#564a42;">${escapeHtml(here)}</p>
+      <p style="margin:16px 0 0 0;font-size:15px;line-height:1.6;color:#564a42;">${warmly}<br>${escapeHtml(signoff)}</p>
     </div>
   </body>
 </html>`;
@@ -1790,27 +1861,52 @@ function bookingConfirmationHtml(p: {
   meetingUrl: string | null;
   signoff: string;
   moved?: boolean;
+  lang?: ClientEmailLang;
 }): string {
-  const lead = p.moved
-    ? `Our <strong>${escapeHtml(p.typeLabel.toLowerCase())}</strong> has moved. Here's the new time — nothing else changes.`
-    : `You're booked in for our <strong>${escapeHtml(p.typeLabel.toLowerCase())}</strong> together.`;
+  const uk = p.lang === "uk";
+  const t = uk
+    ? {
+        newTime: "Новий час",
+        when: "Коли:",
+        length: "Тривалість:",
+        minutes: "хв",
+        join: "Приєднатися, коли настане час",
+        linkLater: "Я надішлю посилання на зустріч перед нашою сесією.",
+        footer: "Якщо у вас щось зміниться — просто відповідайте на цей лист, і ми знайдемо інший час. Найкраще, коли ви в тихому, приватному місці.",
+      }
+    : {
+        newTime: "New time",
+        when: "When:",
+        length: "Length:",
+        minutes: "minutes",
+        join: "Join when it's time",
+        linkLater: "I'll share the meeting link with you before we meet.",
+        footer: "If anything shifts on your end, just reply to this email and we'll find another time. A quiet, private spot works best when we meet.",
+      };
+  const lead = uk
+    ? p.moved
+      ? `Нашу <strong>${escapeHtml(p.typeLabel.toLowerCase())}</strong> перенесено. Ось новий час — усе інше без змін.`
+      : `Ви записані на нашу <strong>${escapeHtml(p.typeLabel.toLowerCase())}</strong>.`
+    : p.moved
+      ? `Our <strong>${escapeHtml(p.typeLabel.toLowerCase())}</strong> has moved. Here's the new time — nothing else changes.`
+      : `You're booked in for our <strong>${escapeHtml(p.typeLabel.toLowerCase())}</strong> together.`;
   return `
 <!doctype html>
 <html>
   <body style="margin:0;padding:0;background:#faf6f0;font-family:Georgia,'Times New Roman',serif;color:#3d342e;">
     <div style="max-width:480px;margin:48px auto;padding:36px 32px;background:#fdf9f1;border-radius:12px;border:1px solid #ead9c1;">
-      ${p.moved ? `<p style="margin:0 0 6px 0;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#b05c36;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">New time</p>` : ""}
+      ${p.moved ? `<p style="margin:0 0 6px 0;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#b05c36;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">${t.newTime}</p>` : ""}
       <p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;color:#564a42;">${escapeHtml(p.greeting)}</p>
       <p style="margin:0 0 20px 0;font-size:15px;line-height:1.6;color:#564a42;">${lead}</p>
-      <p style="margin:0 0 6px 0;font-size:14px;color:#564a42;"><strong>When:</strong> ${escapeHtml(p.when)}</p>
-      <p style="margin:0 0 8px 0;font-size:14px;color:#564a42;"><strong>Length:</strong> ${p.durationMinutes} minutes</p>
+      <p style="margin:0 0 6px 0;font-size:14px;color:#564a42;"><strong>${t.when}</strong> ${escapeHtml(p.when)}</p>
+      <p style="margin:0 0 8px 0;font-size:14px;color:#564a42;"><strong>${t.length}</strong> ${p.durationMinutes} ${t.minutes}</p>
       ${
         p.meetingUrl
-          ? `<a href="${escapeHtml(p.meetingUrl)}" style="display:inline-block;margin:16px 0 8px 0;background:#5a3f4f;color:#fdf9f1;text-decoration:none;font-size:14px;font-weight:500;padding:12px 22px;border-radius:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">Join when it's time</a>
+          ? `<a href="${escapeHtml(p.meetingUrl)}" style="display:inline-block;margin:16px 0 8px 0;background:#5a3f4f;color:#fdf9f1;text-decoration:none;font-size:14px;font-weight:500;padding:12px 22px;border-radius:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">${t.join}</a>
       <p style="margin:8px 0 0 0;font-size:12px;color:#786b60;line-height:1.5;word-break:break-all;font-family:ui-monospace,Menlo,monospace;">${escapeHtml(p.meetingUrl)}</p>`
-          : `<p style="margin:12px 0 0 0;font-size:13px;color:#786b60;font-style:italic;">I'll share the meeting link with you before we meet.</p>`
+          : `<p style="margin:12px 0 0 0;font-size:13px;color:#786b60;font-style:italic;">${t.linkLater}</p>`
       }
-      <p style="margin:24px 0 0 0;font-size:14px;line-height:1.6;color:#564a42;">If anything shifts on your end, just reply to this email and we'll find another time. A quiet, private spot works best when we meet.</p>
+      <p style="margin:24px 0 0 0;font-size:14px;line-height:1.6;color:#564a42;">${t.footer}</p>
       <p style="margin:20px 0 0 0;font-size:14px;color:#564a42;font-style:italic;">— ${escapeHtml(p.signoff)}</p>
     </div>
   </body>

@@ -228,6 +228,7 @@ export async function sendImmediateSessionReminders(
       clientName: clients.fullName,
       clientEmail: clients.email,
       clientTimezone: clients.timezone,
+      clientLanguage: clients.preferredLanguage,
     })
     .from(sessions)
     .innerJoin(clients, eq(sessions.clientId, clients.id))
@@ -286,6 +287,7 @@ export async function sendImmediateSessionReminders(
           meetUrl: row.meetUrl,
           practitionerName: settings.practitionerName ?? "your practitioner",
           timeZone,
+          language: row.clientLanguage === "uk" ? "uk" : "en",
         });
         await sendEmail({
           to: row.clientEmail,
@@ -389,6 +391,7 @@ async function sendDueClientReminders(
       clientName: clients.fullName,
       clientEmail: clients.email,
       clientTimezone: clients.timezone,
+      clientLanguage: clients.preferredLanguage,
       scheduledAt: sessions.scheduledAt,
       durationMinutes: sessions.durationMinutes,
       sessionType: sessions.type,
@@ -444,6 +447,7 @@ async function sendDueClientReminders(
         meetUrl: row.meetUrl,
         practitionerName: settings.practitionerName ?? "your practitioner",
         timeZone,
+        language: row.clientLanguage === "uk" ? "uk" : "en",
       });
 
       await sendEmail({
@@ -1371,41 +1375,73 @@ type ClientReminderInput = {
   practitionerName: string;
   /** IANA zone to render times in — resolved for this recipient by the caller. */
   timeZone: string;
+  /** The client's preferred language (Edit profile). Default English. */
+  language?: "en" | "uk";
 };
 
 function buildClientReminderEmail(input: ClientReminderInput) {
+  const uk = input.language === "uk";
   const firstName = input.clientName.split(" ")[0] ?? input.clientName;
-  const when = formatSessionLong(input.scheduledAt, input.timeZone);
-  const meetSection = input.meetUrl
-    ? `\n\nJoin via Google Meet: ${input.meetUrl}\n`
-    : "";
+  const when = formatSessionLong(input.scheduledAt, input.timeZone, uk ? "uk-UA" : "en-US");
+  const shortDate = uk
+    ? new Intl.DateTimeFormat("uk-UA", { weekday: "short", day: "numeric", month: "short", timeZone: input.timeZone }).format(input.scheduledAt)
+    : formatSessionShortDate(input.scheduledAt, input.timeZone);
+  const type = input.sessionType.toLowerCase();
+  const t = uk
+    ? {
+        subject: `Нагадування: наша сесія ${shortDate}`,
+        hi: `Привіт, ${firstName}!`,
+        lead: `Коротке нагадування про нашу ${type}:`,
+        when: "Коли:",
+        length: "Тривалість:",
+        minutes: "хв",
+        joinText: (url: string) => `\n\nПриєднатися через Google Meet: ${url}\n`,
+        joinLabel: "Приєднатися:",
+        joinLink: "посилання Google Meet",
+        quiet: "Найкраще, коли ви в тихому, приватному місці. Якщо до зустрічі з'явилося щось, про що ви хотіли б мені сказати, — напишіть заздалегідь.",
+        bye: "До зустрічі,",
+      }
+    : {
+        subject: `Reminder: our session on ${shortDate}`,
+        hi: `Hi ${firstName},`,
+        lead: `A quick reminder of our ${type} together:`,
+        when: "When:",
+        length: "Length:",
+        minutes: "minutes",
+        joinText: (url: string) => `\n\nJoin via Google Meet: ${url}\n`,
+        joinLabel: "Join:",
+        joinLink: "Google Meet link",
+        quiet: "A quiet, private spot works best. If anything has come up between now and then that you'd like me to know, feel free to share before we meet.",
+        bye: "See you soon,",
+      };
+  const meetSection = input.meetUrl ? t.joinText(input.meetUrl) : "";
 
-  const subject = `Reminder: our session on ${formatSessionShortDate(input.scheduledAt, input.timeZone)}`;
-  const text = `Hi ${firstName},
+  const subject = t.subject;
+  const text = `${t.hi}
 
-A quick reminder of our ${input.sessionType.toLowerCase()} together:
+${t.lead}
 
-· When: ${when}
-· Length: ${input.durationMinutes} minutes${meetSection}
-A quiet, private spot works best. If anything has come up between now and then that you'd like me to know, feel free to share before we meet.
+· ${t.when} ${when}
+· ${t.length} ${input.durationMinutes} ${t.minutes}${meetSection}
+${t.quiet}
 
-See you soon,
+${t.bye}
 ${input.practitionerName}`;
 
   const html = wrapHtml(`
-    <p>Hi ${escapeHtml(firstName)},</p>
-    <p>A quick reminder of our ${escapeHtml(input.sessionType.toLowerCase())} together:</p>
+    <p>${escapeHtml(t.hi)}</p>
+    <p>${escapeHtml(t.lead)}</p>
     <ul style="padding-left:18px;">
-      <li><strong>When:</strong> ${escapeHtml(when)}</li>
-      <li><strong>Length:</strong> ${input.durationMinutes} minutes</li>
+      <li><strong>${t.when}</strong> ${escapeHtml(when)}</li>
+      <li><strong>${t.length}</strong> ${input.durationMinutes} ${t.minutes}</li>
       ${
         input.meetUrl
-          ? `<li><strong>Join:</strong> <a href="${escapeHtml(input.meetUrl)}">Google Meet link</a></li>`
+          ? `<li><strong>${t.joinLabel}</strong> <a href="${escapeHtml(input.meetUrl)}">${t.joinLink}</a></li>`
           : ""
       }
     </ul>
-    <p>A quiet, private spot works best. If anything has come up between now and then that you'd like me to know, feel free to share before we meet.</p>
-    <p>See you soon,<br>${escapeHtml(input.practitionerName)}</p>
+    <p>${escapeHtml(t.quiet)}</p>
+    <p>${escapeHtml(t.bye)}<br>${escapeHtml(input.practitionerName)}</p>
   `);
 
   return { subject, text, html };

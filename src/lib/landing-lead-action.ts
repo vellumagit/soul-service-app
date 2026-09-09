@@ -66,11 +66,27 @@ export async function submitLandingLead(
     formData.get("preferredWindowIso") ?? ""
   ).trim();
 
+  // Errors speak the page's language — every other string on the landing
+  // page does, and a Ukrainian visitor used to hit English here.
+  const uk = String(formData.get("lang") ?? "") === "uk";
+  const msg = uk
+    ? {
+        name: "Будь ласка, вкажіть своє ім'я.",
+        email: "Будь ласка, вкажіть дійсну електронну адресу.",
+        slow: "Забагато надсилань з цього з'єднання — спробуйте ще раз за хвилину.",
+        notReady: "Сторінка ще налаштовується. Спробуйте трохи згодом.",
+      }
+    : {
+        name: "Please share your name.",
+        email: "Please share a valid email.",
+        slow: "Slow down a moment — too many submissions from this connection. Try again in a minute.",
+        notReady: "The practice isn't set up yet. Try again shortly.",
+      };
   if (!name) {
-    return { ok: false, error: "Please share your name." };
+    return { ok: false, error: msg.name };
   }
   if (!emailRaw || !emailRaw.includes("@")) {
-    return { ok: false, error: "Please share a valid email." };
+    return { ok: false, error: msg.email };
   }
   const email = emailRaw.toLowerCase().slice(0, 200);
 
@@ -83,10 +99,7 @@ export async function submitLandingLead(
     windowMs: 60_000,
   });
   if (!limit.ok) {
-    return {
-      ok: false,
-      error: `Slow down a moment — too many submissions from this connection. Try again in ${limit.retryAfterSeconds}s.`,
-    };
+    return { ok: false, error: msg.slow };
   }
 
   // Resolve the storefront's account deterministically (env override, else
@@ -94,10 +107,7 @@ export async function submitLandingLead(
   // naive first-row pick would file leads under the wrong (e.g. legacy) one.
   const accountId = await resolveStorefrontAccountId();
   if (!accountId) {
-    return {
-      ok: false,
-      error: "The practice isn't set up yet. Try again shortly.",
-    };
+    return { ok: false, error: msg.notReady };
   }
 
   // Find or create the "landing page" lead form. Idempotent — if a

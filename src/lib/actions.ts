@@ -590,6 +590,7 @@ export async function sendPortalInvite(
         fullName: clients.fullName,
         email: clients.email,
         portalEnabled: clients.portalEnabled,
+        preferredLanguage: clients.preferredLanguage,
       })
       .from(clients)
       .where(and(eq(clients.accountId, accountId), eq(clients.id, clientId)))
@@ -635,6 +636,7 @@ export async function sendPortalInvite(
       url,
       clientFirstName: client.fullName.split(" ")[0] ?? null,
       practitionerName: settingsRows[0]?.practitionerName ?? null,
+      language: client.preferredLanguage === "uk" ? "uk" : "en",
     });
 
     revalidatePath(`/clients/${clientId}`);
@@ -1813,6 +1815,7 @@ async function maybeSendBookingConfirmation(
         sessionType: sessions.type,
         meetUrl: sessions.meetUrl,
         sessionTimezone: sessions.timezone,
+        clientLanguage: clients.preferredLanguage,
         practitionerName: practitionerSettings.practitionerName,
         businessEmail: practitionerSettings.businessEmail,
         practiceTimezone: practitionerSettings.timezone,
@@ -1843,6 +1846,7 @@ async function maybeSendBookingConfirmation(
       scheduledAt: new Date(row.scheduledAt),
       durationMinutes: row.durationMinutes,
       meetingUrl: row.meetUrl,
+      language: row.clientLanguage === "uk" ? "uk" : "en",
       practitionerName: row.practitionerName ?? null,
       replyTo: row.businessEmail ?? undefined,
       timeZone: clientZone,
@@ -4650,6 +4654,7 @@ async function maybeSendCancellationEmail(
         scheduledAt: sessions.scheduledAt,
         sessionType: sessions.type,
         sessionTimezone: sessions.timezone,
+        clientLanguage: clients.preferredLanguage,
         practitionerName: practitionerSettings.practitionerName,
         businessEmail: practitionerSettings.businessEmail,
         practiceTimezone: practitionerSettings.timezone,
@@ -4677,6 +4682,7 @@ async function maybeSendCancellationEmail(
       replyTo: row.businessEmail ?? undefined,
       timeZone: clientZone,
       series: opts.series === true,
+      language: row.clientLanguage === "uk" ? "uk" : "en",
     });
   } catch (err) {
     console.warn("[cancellation email] failed:", err);

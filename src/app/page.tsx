@@ -618,6 +618,7 @@ export default async function LandingPage() {
               <LandingLeadForm
                 availableWindows={availableWindows}
                 copy={c.form}
+                lang={lang === "uk" ? "uk" : "en"}
               />
             </div>
           </section>
