@@ -184,6 +184,10 @@ export default async function CalendarPage({
     >
       {/* Toolbar: nav + range label + view switcher + create actions */}
       <div className="flex items-center gap-2 flex-wrap mb-4">
+        {/* On phones the title and the prev/today/next group own the first
+            row; from md up the wrapper dissolves (contents) and they sit in
+            the toolbar flow as before. */}
+        <div className="flex items-center justify-between w-full md:w-auto md:contents">
         <h1 className="text-2xl font-semibold text-ink-900 tracking-tight mr-3">
           {t(locale, "calendar.title")}
         </h1>
@@ -235,8 +239,9 @@ export default async function CalendarPage({
             </svg>
           </Link>
         </div>
+        </div>
 
-        <div className="text-sm font-medium text-ink-700">{rangeLabel}</div>
+        <div className="hidden md:block text-sm font-medium text-ink-700">{rangeLabel}</div>
 
         {/* Jump-to-date picker — primary way to navigate to a specific past
             (or future) date without clicking Prev/Next over and over. */}

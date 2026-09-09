@@ -56,7 +56,7 @@ export async function ClientReflectionsTab({
           Nothing here yet.
         </p>
         <p className="text-sm text-ink-500">
-          When {firstName} writes a reflection in the portal, it&apos;ll appear
+          When {firstName}{" "}writes a reflection in the portal, it&apos;ll appear
           here. They show up immediately, no notification needed.
         </p>
       </div>

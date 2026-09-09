@@ -588,7 +588,7 @@ function OfferDialog({
                   placeholder={en ? "A Single Session" : "Одна сесія"}
                 />
               </Field>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field label="Price" hint="Written as you want it read.">
                   <input
                     name={en ? "priceEn" : "priceUk"}
@@ -663,7 +663,7 @@ function OfferDialog({
             </Field>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Which row">
               <select
                 name="rowId"

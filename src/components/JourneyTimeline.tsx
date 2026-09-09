@@ -88,7 +88,10 @@ export function JourneyTimeline({
 
   function xPercent(d: Date): number {
     const offset = d.getTime() - firstAt.getTime();
-    return Math.max(0, Math.min(100, (offset / totalMs) * 100));
+    // Two decimals: the server and client render a few ms apart and `today`
+    // moves the span, so raw floats never match and React logs a hydration
+    // mismatch on every profile load.
+    return Number(Math.max(0, Math.min(100, (offset / totalMs) * 100)).toFixed(2));
   }
 
   // Counts for the header line

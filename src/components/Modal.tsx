@@ -76,7 +76,7 @@ export function Modal({
       ref={ref}
       onClose={onClose}
       onClick={handleBackdropClick}
-      className={`rounded-lg border border-ink-200 shadow-2xl p-0 backdrop:bg-ink-900/40 w-full m-auto fixed inset-0 ${sizeCls}`}
+      className={`border border-ink-200 shadow-2xl p-0 backdrop:bg-ink-900/40 w-full fixed inset-0 mx-auto mt-auto mb-0 rounded-t-xl rounded-b-none sm:m-auto sm:rounded-lg ${sizeCls}`}
     >
       <div className="px-5 py-3 border-b border-ink-100 flex items-center justify-between">
         <h2 className="text-sm font-semibold text-ink-900">{title}</h2>
@@ -102,9 +102,12 @@ export function Modal({
           </svg>
         </button>
       </div>
-      <div className="p-5 max-h-[70vh] overflow-y-auto">{children}</div>
+      <div className="p-4 sm:p-5 max-h-[calc(100dvh-8rem)] sm:max-h-[70vh] overflow-y-auto">{children}</div>
       {footer && (
-        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-ink-100 bg-ink-50/40">
+        <div
+          className="flex items-center justify-end gap-2 px-4 sm:px-5 py-3 border-t border-ink-100 bg-ink-50/40"
+          style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+        >
           {footer}
         </div>
       )}

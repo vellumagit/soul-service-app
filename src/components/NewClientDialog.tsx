@@ -197,7 +197,7 @@ export function NewClientDialog({
             />
           </Field>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Pronouns">
               <input
                 name="pronouns"
@@ -210,7 +210,7 @@ export function NewClientDialog({
             </Field>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Phone">
               <input name="phone" className={inputCls} />
             </Field>

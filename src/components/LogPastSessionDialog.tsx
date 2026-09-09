@@ -168,7 +168,7 @@ export function LogPastSessionDialog({
               />
             </Field>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="How they arrived">
                 <input
                   name="arrivedAs"
@@ -201,7 +201,7 @@ export function LogPastSessionDialog({
                 Already paid
               </label>
               {paid && (
-                <div className="grid grid-cols-2 gap-3 mt-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
                   <Field label="Method">
                     <select
                       name="paymentMethod"

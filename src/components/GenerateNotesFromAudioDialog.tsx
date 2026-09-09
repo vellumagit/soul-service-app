@@ -430,7 +430,7 @@ export function GenerateNotesFromAudioDialog({
           )}
 
           {/* Settings: notes template + language hint + replace mode */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {noteTemplates.length > 0 && (
               <Field label="Notes template" hint="Drives the headings used.">
                 <select

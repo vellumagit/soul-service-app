@@ -211,7 +211,7 @@ export function AddLeadDialog({
             />
           </Field>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="When you met" hint="Optional">
               <input name="metOn" type="date" className={inputCls} />
             </Field>
@@ -236,7 +236,7 @@ export function AddLeadDialog({
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Email">
               <input name="email" type="email" className={inputCls} />
             </Field>

@@ -89,7 +89,7 @@ export function PortalConnectionCard({
               className="serif-italic text-lg text-plum-700 mb-1"
               style={{ fontWeight: 400 }}
             >
-              {clientFirstName} doesn&apos;t have a portal yet.
+              {clientFirstName}{" "}doesn&apos;t have a portal yet.
             </p>
             <p className="text-sm text-ink-600 leading-relaxed">
               A private page where they see their upcoming sessions, join the

@@ -133,7 +133,7 @@ export function EditGroupDialog({
             />
           </label>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label className="block">
               <span className="text-xs uppercase tracking-wider text-ink-500 font-mono">
                 Seats per Circle

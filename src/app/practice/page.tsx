@@ -85,7 +85,7 @@ export default async function PracticePage({
 
       {empty ? (
         <div className="paper-card p-12 text-center text-sm text-ink-500">
-          Nothing held in {year} yet. Come back when there&apos;s an arc to
+          Nothing held in {year}{" "}yet. Come back when there&apos;s an arc to
           show.
         </div>
       ) : (

@@ -312,7 +312,7 @@ export function ScheduleSeriesDialog({
               </select>
             </Field>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Session type">
                 <input
                   name="type"
@@ -353,7 +353,7 @@ export function ScheduleSeriesDialog({
               />
             </Field>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Repeat" required>
                 <select
                   name="frequency"

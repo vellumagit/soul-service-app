@@ -193,7 +193,7 @@ export function EditClientDialog({
             <SaveStatusChip status={draft.status} />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Full name" required>
               <input
                 name="fullName"
@@ -212,7 +212,7 @@ export function EditClientDialog({
             </Field>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Email">
               <input
                 name="email"
@@ -230,7 +230,7 @@ export function EditClientDialog({
             </Field>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="City">
               <input
                 name="city"
@@ -292,7 +292,7 @@ export function EditClientDialog({
             />
           </Field>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Primary session type">
               <input
                 name="primarySessionType"
@@ -314,7 +314,7 @@ export function EditClientDialog({
             </Field>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Date you met" hint="Optional — separate from the first session date.">
               <input
                 name="metOn"
@@ -396,7 +396,7 @@ export function EditClientDialog({
             />
           </Field>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Emergency contact">
               <input
                 name="emergencyName"

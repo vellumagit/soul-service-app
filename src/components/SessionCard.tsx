@@ -263,7 +263,7 @@ export function SessionCard({
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Session type">
                 <input
                   name="type"
@@ -281,7 +281,7 @@ export function SessionCard({
               </Field>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="How they arrived">
                 <input
                   name="arrivedAs"
