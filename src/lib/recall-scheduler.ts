@@ -256,6 +256,7 @@ export async function syncRecallBotStatuses(
 
       const notAdmitted =
         snap.subCode === "timeout_exceeded_waiting_room" ||
+        snap.endedSubCode === "timeout_exceeded_waiting_room" ||
         (snap.code === "in_waiting_room" &&
           now.getTime() - new Date(s.scheduledAt).getTime() > 30 * 60 * 1000);
       if (notAdmitted) {

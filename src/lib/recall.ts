@@ -404,6 +404,10 @@ export type BotSnapshot = {
   code: string | null;
   /** Its sub_code, e.g. "timeout_exceeded_waiting_room". */
   subCode: string | null;
+  /** sub_code of the call_ended entry — the REASON the call ended. The
+   *  final entry is usually a plain "done", so the reason lives one step
+   *  earlier. */
+  endedSubCode: string | null;
   recordingId: string | null;
   /** "done" once the recording has been processed. */
   recordingStatus: string | null;
@@ -432,11 +436,14 @@ export async function getBotSnapshot(botId: string): Promise<BotSnapshot> {
       };
     }>;
   };
-  const last = json.status_changes?.[json.status_changes.length - 1];
+  const changes = json.status_changes ?? [];
+  const last = changes[changes.length - 1];
+  const ended = [...changes].reverse().find((c) => c.code === "call_ended");
   const rec = json.recordings?.[json.recordings.length - 1];
   return {
     code: last?.code ?? null,
     subCode: last?.sub_code ?? null,
+    endedSubCode: ended?.sub_code ?? null,
     recordingId: rec?.id ?? null,
     recordingStatus: rec?.status?.code ?? null,
     transcriptId: rec?.media_shortcuts?.transcript?.id ?? null,
