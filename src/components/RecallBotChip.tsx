@@ -69,13 +69,22 @@ export function RecallBotChip({
           title={
             status === "pending_auto"
               ? "A notetaker will be sent to this Meet about 40 minutes before the session starts."
-              : `Recall bot status: ${status}`
+              : status === "in_waiting_room"
+                ? "The notetaker is in the Meet lobby. Click Admit in Meet — it gives up after 20 minutes."
+                : status === "not_admitted"
+                  ? "The notetaker waited in the Meet lobby and was never admitted, so nothing was recorded. Next time click Admit when it knocks."
+                  : status === "no_recording"
+                    ? "The call ended without anything to transcribe."
+                    : `Recall bot status: ${status}`
           }
         >
           {label}
         </span>
         {/* Cancel only useful when the bot hasn't already finished. */}
-        {!status.startsWith("done") && !status.startsWith("fatal") && (
+        {!status.startsWith("done") &&
+          !status.startsWith("fatal") &&
+          status !== "not_admitted" &&
+          status !== "no_recording" && (
           <button
             type="button"
             disabled={pending || optimistic === "cancelling"}
@@ -181,7 +190,11 @@ function labelForStatus(code: string): string {
     case "joining_call":
       return "Bot joining…";
     case "in_waiting_room":
-      return "Bot in lobby…";
+      return "Knocking — admit it in Meet";
+    case "not_admitted":
+      return "Not let in — no recording";
+    case "no_recording":
+      return "Ended — nothing recorded";
     case "in_call_not_recording":
       return "Bot in call";
     case "in_call_recording":

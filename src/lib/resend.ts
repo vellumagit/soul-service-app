@@ -771,7 +771,11 @@ export async function sendSessionWalkInNudgeEmail(input: {
     : "";
   const text = `Your session with ${input.clientName} starts in about 10 minutes (${input.whenLabel}).${bringing}
 
-${input.isMeetLink ? `Open the room:\n${input.walkInUrl}` : `Walk in:\n${input.walkInUrl}`}
+${input.isMeetLink ? `Open the room:\n${input.walkInUrl}` : `Walk in:\n${input.walkInUrl}`}${
+    input.isMeetLink
+      ? "\n\nWhen \"Notetaker wants to join\" pops up, click Admit — it knocks right at the start and gives up after 20 minutes."
+      : ""
+  }
 
 Take a breath. See you in there.`;
   const html = `
@@ -788,6 +792,11 @@ Take a breath. See you in there.`;
           : ""
       }
       <a href="${escapeHtml(input.walkInUrl)}" style="display:inline-block;background:#5a3f4f;color:#fdf9f1;text-decoration:none;font-size:15px;font-weight:500;padding:14px 26px;border-radius:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">${input.isMeetLink ? "Open the room →" : "Walk in →"}</a>
+      ${
+        input.isMeetLink
+          ? `<p style="margin:18px 0 0 0;font-size:13px;line-height:1.55;color:#786b60;">When &ldquo;Notetaker wants to join&rdquo; pops up, click <strong>Admit</strong> &mdash; it knocks right at the start and gives up after 20 minutes.</p>`
+          : ""
+      }
       <p style="margin:22px 0 0 0;font-size:14px;color:#564a42;font-style:italic;">Take a breath. See you in there.</p>
     </div>
   </body>
@@ -1979,4 +1988,46 @@ I've left ${what} in your space.${input.link ? `\n\n${input.link}` : ""}
   </body>
 </html>`.trim();
   await sendEmail({ to: input.to, subject, html, text });
+}
+
+
+/** The notetaker knocked on the Meet and was never let in, so nothing was
+ *  recorded. Sent once, when the cron poll discovers it. */
+export async function sendNotetakerNotAdmittedEmail(input: {
+  to: string;
+  clientName: string;
+  whenLabel: string;
+  sessionId: string;
+}): Promise<void> {
+  const base = resolveAppOrigin();
+  const href = `${base}/sessions/${input.sessionId}/prep`;
+  const subject = `No recording — the notetaker wasn't let into ${input.clientName}'s session`;
+  const text = `The notetaker joined the Google Meet for ${input.clientName} (${input.whenLabel}) but sat in the lobby and was never admitted, so it gave up after 20 minutes. There is no recording or transcript for this session.
+
+Next time: when "Notetaker wants to join" pops up in Meet, click Admit. It knocks right at the start time.
+
+If you took notes yourself, they're safe — this only affects the automatic transcript. You can also paste a transcript from anywhere into the session card.`;
+  const html = `
+<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#faf6f0;font-family:Georgia,'Times New Roman',serif;color:#3d342e;">
+    <div style="max-width:480px;margin:48px auto;padding:32px;background:#fdf9f1;border-radius:12px;border:1px solid #ead9c1;">
+      <p style="margin:0 0 6px 0;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#b05c36;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">No recording</p>
+      <p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;color:#564a42;">The notetaker joined the Google Meet for <strong>${escapeHtml(input.clientName)}</strong> (${escapeHtml(input.whenLabel)}) but sat in the lobby and was never admitted, so it gave up after 20 minutes. There is no recording or transcript for this session.</p>
+      <p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;color:#564a42;"><strong>Next time:</strong> when &ldquo;Notetaker wants to join&rdquo; pops up in Meet, click <strong>Admit</strong>. It knocks right at the start time.</p>
+      <p style="margin:0 0 20px 0;font-size:14px;line-height:1.6;color:#786b60;">If you took notes yourself they're safe &mdash; this only affects the automatic transcript. You can also paste a transcript from anywhere into the session card.</p>
+      <a href="${escapeHtml(href)}" style="display:inline-block;background:#5a3f4f;color:#fdf9f1;text-decoration:none;font-size:14px;font-weight:500;padding:12px 22px;border-radius:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">Open the session</a>
+    </div>
+  </body>
+</html>`.trim();
+  await sendEmail({ to: input.to, subject, html, text });
+}
+
+function resolveAppOrigin(): string {
+  return (
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    process.env.APP_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "") ||
+    "https://app.svit.live"
+  );
 }

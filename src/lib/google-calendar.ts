@@ -417,9 +417,15 @@ export type CalendarEventInput = {
 function attendeeList(
   input: CalendarEventInput
 ): { email: string }[] | undefined {
+  // RECALL_BOT_EMAIL: the Google account Recall's bots sign in with (set up
+  // in Recall's dashboard under Google Meet login). Invited guests join a
+  // Meet without knocking, which is the only way the notetaker gets in
+  // without her clicking Admit. Unset = no change.
+  const botEmail = process.env.RECALL_BOT_EMAIL?.trim();
   const emails = [
     ...(input.attendeeEmail ? [input.attendeeEmail] : []),
     ...(input.attendeeEmails ?? []),
+    ...(botEmail && (input.attendeeEmail || input.attendeeEmails) ? [botEmail] : []),
   ]
     .map((e) => e.trim().toLowerCase())
     .filter((e) => e.includes("@"));

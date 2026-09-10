@@ -20,8 +20,8 @@ import crypto from "node:crypto";
 import { db } from "@/db";
 import { sessions, clients } from "@/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
-import { createAsyncTranscript, fetchTranscriptText } from "@/lib/recall";
-import { generateNotesFromTranscript } from "@/lib/ai-notes";
+import { createAsyncTranscript } from "@/lib/recall";
+import { attachTranscriptToSession } from "@/lib/recall-transcript";
 
 export const dynamic = "force-dynamic";
 // Transcripts can take a while to process — give Vercel room.
@@ -236,82 +236,16 @@ export async function POST(req: Request) {
           break;
         }
 
-        // Fetch transcript text from Recall.
-        const fetched = await fetchTranscriptText(transcriptId);
-        if (fetched.text.trim().length < 50) {
-          console.warn(
-            `[recall webhook] transcript too short (${fetched.text.length} chars) for sessionId="${sessionId}"`
-          );
-          break;
-        }
-
-        // Persist the verbatim transcript FIRST, before the (fallible) Claude
-        // step — so the full transcript is saved even if summarization errors
-        // out. Not idempotency-gated: overwriting with the same text on a
-        // retry is harmless. The summary + "done" marker are written only
-        // after Claude succeeds, below.
-        await db
-          .update(sessions)
-          .set({ transcript: fetched.text, updatedAt: new Date() })
-          .where(
-            and(
-              eq(sessions.accountId, accountId),
-              eq(sessions.id, sessionId),
-              isNull(sessions.recallTranscriptReceivedAt)
-            )
-          );
-
-        // Look up client context for the Claude prompt.
-        const [client] = await db
-          .select()
-          .from(clients)
-          .where(
-            and(
-              eq(clients.accountId, accountId),
-              eq(clients.id, row.clientId)
-            )
-          )
-          .limit(1);
-
-        const generated = await generateNotesFromTranscript({
-          transcript: fetched.text,
-          clientFirstName:
-            client?.fullName.split(" ")[0] ?? client?.fullName ?? null,
-          clientWorkingOn: client?.workingOn ?? null,
-          sessionType: row.type,
+        // Shared with the cron's status poll — see recall-transcript.ts.
+        const attached = await attachTranscriptToSession({
+          accountId,
+          sessionId,
+          transcriptId,
         });
-
-        // Write the three notetaker fields — kept SEPARATE from `notes`
-        // (her own writing), which we never touch here.
-        //
-        // Atomic write — gate on transcriptReceivedAt STILL being null at
-        // the moment of UPDATE. The earlier `if (row.transcriptReceivedAt)`
-        // check catches the common case, but the SELECT and UPDATE are two
-        // separate round-trips. If a Recall retry lands between them, both
-        // handlers run the (expensive) Claude work and both attempt to
-        // UPDATE. Adding `IS NULL` here makes the row-write serializable at
-        // the Postgres level — the second writer sees 0 rows affected and
-        // we log + bail.
-        const updated = await db
-          .update(sessions)
-          .set({
-            transcript: fetched.text,
-            aiSummary: generated.notes,
-            aiSummaryTldr: generated.tldr || null,
-            recallTranscriptReceivedAt: new Date(),
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(sessions.accountId, accountId),
-              eq(sessions.id, sessionId),
-              isNull(sessions.recallTranscriptReceivedAt)
-            )
-          )
-          .returning({ id: sessions.id });
-        if (updated.length === 0) {
-          console.warn(
-            `[recall webhook] transcript.done sessionId="${sessionId}" — concurrent write already attached notes; skipping this handler's output`
+        if (!attached.ok) throw new Error(attached.error);
+        if (!attached.attached) {
+          console.log(
+            `[recall webhook] transcript.done sessionId="${sessionId}" — not attached (${attached.reason})`
           );
         }
         break;

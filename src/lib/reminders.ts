@@ -1470,7 +1470,7 @@ Your next session is coming up:
 · Client: ${input.clientName}
 · Type: ${input.sessionType}
 · When: ${when}
-· Length: ${input.durationMinutes} minutes${input.meetUrl ? `\n· Meet: ${input.meetUrl}` : ""}${input.intention ? `\n· They wanted: "${input.intention}"` : ""}
+· Length: ${input.durationMinutes} minutes${input.meetUrl ? `\n· Meet: ${input.meetUrl}` : ""}${input.intention ? `\n· They wanted: "${input.intention}"` : ""}${input.meetUrl ? "\n\nThe notetaker will knock when the session starts — click Admit in Meet so it can record." : ""}
 
 Take a breath. See you in there.`;
 

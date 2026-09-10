@@ -51,6 +51,17 @@ export async function GET(request: Request) {
     degraded.push(`recallBots: ${err instanceof Error ? err.message : String(err)}`);
   }
 
+  // Mirror the truth about every unfinished bot (webhooks are not enough —
+  // see syncRecallBotStatuses). Attaches transcripts the webhook missed.
+  let recallPoll = { polled: 0, updated: 0, attached: 0, notAdmitted: 0, errors: [] as string[] };
+  try {
+    const { syncRecallBotStatuses } = await import("@/lib/recall-scheduler");
+    recallPoll = await syncRecallBotStatuses();
+  } catch (err) {
+    console.error("[cron] recall status poll failed", err);
+    degraded.push(`recallPoll: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
   // Lead-magnet follow-up "flow" — nurture emails due since the last tick.
   // Cheap when nobody has set one up (early-returns after one small query), so
   // it rides every tick without adding Neon wake cost. Best-effort.
@@ -111,6 +122,7 @@ export async function GET(request: Request) {
     degraded,
     ...stats,
     recallBots,
+    recallPoll,
     leadMagnetFollowups,
     recurringCircles,
     prunedCircles,

@@ -389,3 +389,57 @@ export async function fetchTranscriptText(
     speakerCount: speakers.size,
   };
 }
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// getBotSnapshot — the bot's CURRENT state straight from Recall. The cron
+// polls this for every bot that hasn't finished, because webhooks proved
+// unreliable in practice (September 2026: nothing after "joining_call"
+// arrived, so the app never learned the bot had been left knocking on the
+// Meet door for 20 minutes and given up).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type BotSnapshot = {
+  /** Last status_changes code, e.g. "in_waiting_room", "call_ended", "done". */
+  code: string | null;
+  /** Its sub_code, e.g. "timeout_exceeded_waiting_room". */
+  subCode: string | null;
+  recordingId: string | null;
+  /** "done" once the recording has been processed. */
+  recordingStatus: string | null;
+  transcriptId: string | null;
+  /** "done" once a transcript exists for the recording. */
+  transcriptStatus: string | null;
+};
+
+export async function getBotSnapshot(botId: string): Promise<BotSnapshot> {
+  const res = await fetch(`${getApiBase()}/bot/${botId}/`, {
+    method: "GET",
+    headers: { Authorization: getAuthHeader() },
+    signal: AbortSignal.timeout(RECALL_TIMEOUT_MS),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Recall get bot failed (${res.status}): ${text.slice(0, 300)}`);
+  }
+  const json = (await res.json()) as {
+    status_changes?: Array<{ code?: string; sub_code?: string | null }>;
+    recordings?: Array<{
+      id?: string;
+      status?: { code?: string };
+      media_shortcuts?: {
+        transcript?: { id?: string; status?: { code?: string } };
+      };
+    }>;
+  };
+  const last = json.status_changes?.[json.status_changes.length - 1];
+  const rec = json.recordings?.[json.recordings.length - 1];
+  return {
+    code: last?.code ?? null,
+    subCode: last?.sub_code ?? null,
+    recordingId: rec?.id ?? null,
+    recordingStatus: rec?.status?.code ?? null,
+    transcriptId: rec?.media_shortcuts?.transcript?.id ?? null,
+    transcriptStatus: rec?.media_shortcuts?.transcript?.status?.code ?? null,
+  };
+}
