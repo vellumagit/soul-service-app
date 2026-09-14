@@ -136,8 +136,15 @@ async function handleSessionPayment(
 
 export async function POST(req: Request): Promise<Response> {
   if (!isStripeConfigured()) {
-    // Dormant until keys are set — don't 500, just acknowledge.
-    return NextResponse.json({ ok: false, error: "stripe not configured" }, { status: 200 });
+    // 500, not 200: a 200 tells Stripe the event was consumed and it stops
+    // retrying — a transient env gap would then drop real payments for good.
+    return NextResponse.json({ ok: false, error: "stripe not configured" }, { status: 500 });
+  }
+  let webhookSecret: string;
+  try {
+    webhookSecret = getWebhookSecret();
+  } catch {
+    return NextResponse.json({ ok: false, error: "webhook secret not configured" }, { status: 500 });
   }
 
   const sig = req.headers.get("stripe-signature");
@@ -150,7 +157,7 @@ export async function POST(req: Request): Promise<Response> {
   let event: Stripe.Event;
   try {
     const stripe = getStripe();
-    event = stripe.webhooks.constructEvent(rawBody, sig, getWebhookSecret());
+    event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
   } catch (err) {
     console.error("[stripe webhook] signature verification failed:", err);
     return NextResponse.json({ ok: false, error: "bad signature" }, { status: 400 });

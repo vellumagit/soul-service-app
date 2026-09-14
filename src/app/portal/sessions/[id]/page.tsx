@@ -81,6 +81,21 @@ async function submitRescheduleRequest(formData: FormData): Promise<void> {
     .limit(1);
   if (owned.length === 0) return;
 
+  // One open ask per session — a double-submit or back button used to stack
+  // rows in Requests and email her once per row.
+  const open = await db
+    .select({ id: rescheduleRequests.id })
+    .from(rescheduleRequests)
+    .where(
+      and(
+        eq(rescheduleRequests.sessionId, sessionIdRaw),
+        eq(rescheduleRequests.accountId, portalSession.accountId),
+        eq(rescheduleRequests.status, "pending")
+      )
+    )
+    .limit(1);
+  if (open.length > 0) redirect(`/portal/sessions/${sessionIdRaw}?submitted=1`);
+
   await db.insert(rescheduleRequests).values({
     accountId: portalSession.accountId,
     clientId: portalSession.clientId,

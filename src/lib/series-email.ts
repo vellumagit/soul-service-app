@@ -236,6 +236,9 @@ export async function sendTimeOffEmail(input: {
   practitionerName: string | null;
   replyTo?: string;
   timeZone: string;
+  /** The block's first/last DAYS are practice-zone days; formatting them in
+   *  the client's zone shifted the range by a day for anyone east or west. */
+  practiceTimeZone?: string;
   language: Lang;
   from: Date;
   to_: Date;
@@ -262,7 +265,12 @@ export async function sendTimeOffEmail(input: {
       minute: "2-digit",
       timeZone: tz,
     }).format(d);
-  const range = `${day(input.from)} – ${dayYear(input.to_)}`;
+  const ptz = input.practiceTimeZone ?? tz;
+  const dayIn = (d: Date) =>
+    new Intl.DateTimeFormat(loc, { month: "short", day: "numeric", timeZone: ptz }).format(d);
+  const dayYearIn = (d: Date) =>
+    new Intl.DateTimeFormat(loc, { month: "short", day: "numeric", year: "numeric", timeZone: ptz }).format(d);
+  const range = `${dayIn(input.from)} – ${dayYearIn(input.to_)}`;
   const n = input.cancelledDates.length;
   const countLabel =
     lang === "uk"

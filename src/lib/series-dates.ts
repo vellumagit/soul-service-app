@@ -42,11 +42,15 @@ export function computeDates(
   if (!w) return [];
   const dates: Date[] = [];
   for (let i = 0; i < count; i++) {
+    const monthLast =
+      frequency === "monthly"
+        ? new Date(Date.UTC(w.year, w.month0 + i + 1, 0)).getUTCDate()
+        : 31;
     const step = new Date(
       Date.UTC(
         w.year,
         w.month0 + (frequency === "monthly" ? i : 0),
-        w.day +
+        (frequency === "monthly" ? Math.min(w.day, monthLast) : w.day) +
           (frequency === "weekly" ? i * 7 : frequency === "biweekly" ? i * 14 : 0)
       )
     );

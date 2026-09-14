@@ -28,6 +28,7 @@ import { useMemo, useState } from "react";
 import type { Session } from "@/db/schema";
 import { fullDate, shortTime } from "@/lib/format";
 import { useTimeZone } from "./TimeZoneProvider";
+import { zonedYearMonthDay } from "@/lib/timezone";
 
 type TimelinePoint = {
   id: string;
@@ -106,16 +107,22 @@ export function JourneyTimeline({
   // total length. Cap at ~8 visible to avoid clutter.
   const monthTicks = useMemo(() => {
     const months: { date: Date; label: string }[] = [];
-    const cursor = new Date(firstAt.getFullYear(), firstAt.getMonth(), 1);
+    // Practice-zone months on a UTC-noon anchor, fixed locale — the local
+    // Date math here rendered one tick count on the server and another in
+    // the browser (hydration mismatch) for evening first sessions.
+    const first = zonedYearMonthDay(firstAt, tz);
+    const thisYear = zonedYearMonthDay(today, tz).year;
+    const cursor = new Date(Date.UTC(first.year, first.month0, 1, 12));
     while (cursor <= endAt) {
       months.push({
         date: new Date(cursor),
-        label: cursor.toLocaleDateString(undefined, {
+        label: cursor.toLocaleDateString("en-US", {
+          timeZone: "UTC",
           month: "short",
-          year: cursor.getFullYear() !== today.getFullYear() ? "2-digit" : undefined,
+          year: cursor.getUTCFullYear() !== thisYear ? "2-digit" : undefined,
         }),
       });
-      cursor.setMonth(cursor.getMonth() + 1);
+      cursor.setUTCMonth(cursor.getUTCMonth() + 1);
     }
     const stride = Math.max(1, Math.ceil(months.length / 8));
     return months.filter((_, i) => i % stride === 0);

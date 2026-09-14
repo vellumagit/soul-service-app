@@ -51,6 +51,7 @@ export default async function PortalBillingPage({
         paymentMethod: sessions.paymentMethod,
         paidAt: sessions.paidAt,
         paymentAmountCents: sessions.paymentAmountCents,
+        refundedAt: sessions.refundedAt,
       })
       .from(sessions)
       .where(
@@ -93,7 +94,7 @@ export default async function PortalBillingPage({
     (s) => s.status === "completed"
   );
   const unpaid = completedSessions.filter(
-    (s) => !s.paid && (s.paymentAmountCents ?? 0) > 0
+    (s) => !s.paid && !s.refundedAt && (s.paymentAmountCents ?? 0) > 0
   );
   const paid = completedSessions.filter(
     (s) => s.paid && (s.paymentAmountCents ?? 0) > 0

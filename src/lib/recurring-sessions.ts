@@ -68,8 +68,10 @@ export function occurrenceInstant(
   const i = index - 1;
   let cal: Date;
   if (frequency === "monthly") {
-    // Same day-of-month each month; Date handles overflow (Jan 31 → Mar 3).
-    cal = new Date(Date.UTC(year, month0 + i, day));
+    // Same day-of-month each month, clamped to the month's length — plain
+    // overflow turned a Jan 31 series into Mar 3 / Mar 31 / May 1 …
+    const lastDay = new Date(Date.UTC(year, month0 + i + 1, 0)).getUTCDate();
+    cal = new Date(Date.UTC(year, month0 + i, Math.min(day, lastDay)));
   } else {
     const stepDays = frequency === "biweekly" ? 14 : 7;
     cal = new Date(Date.UTC(year, month0, day) + i * stepDays * 86_400_000);

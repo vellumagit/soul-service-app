@@ -1,5 +1,8 @@
 "use client";
 
+import { zonedYearMonthDay } from "@/lib/timezone";
+import { useTimeZone } from "./TimeZoneProvider";
+
 import Link from "next/link";
 import { useState } from "react";
 import type { Client } from "@/db/schema";
@@ -47,7 +50,8 @@ export function ClientHeader({
   togetherSince: Date | null;
 }) {
   const anchorDate = togetherSince ?? client.createdAt;
-  const togetherLine = formatTogetherSince(anchorDate);
+  const tz = useTimeZone();
+  const togetherLine = formatTogetherSince(anchorDate, tz);
   const [promotingLead, setPromotingLead] = useState(false);
 
   // Find referrer name for the small "via …" line (no extra query — already
@@ -302,7 +306,7 @@ export function ClientHeader({
  *  1-11 months → "Together 4 months"
  *  12+ months → "Together 1 year" / "Together 2 years"
  *  On the actual anniversary day → adds " · anniversary today" */
-function formatTogetherSince(date: Date | null): string | null {
+function formatTogetherSince(date: Date | null, tz: string): string | null {
   if (!date) return null;
   const start = new Date(date);
   if (Number.isNaN(start.getTime())) return null;
@@ -317,8 +321,9 @@ function formatTogetherSince(date: Date | null): string | null {
   const years = Math.floor(days / 365.25);
 
   // Mark anniversary day specifically.
-  const isAnniversary =
-    now.getMonth() === start.getMonth() && now.getDate() === start.getDate();
+  const a = zonedYearMonthDay(now, tz);
+  const b = zonedYearMonthDay(start, tz);
+  const isAnniversary = a.month0 === b.month0 && a.day === b.day;
   const tail = isAnniversary && years > 0 ? " · anniversary today" : "";
 
   if (years >= 1) {

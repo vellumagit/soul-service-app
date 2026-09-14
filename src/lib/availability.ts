@@ -153,10 +153,11 @@ export async function checkConflict(
     if (!hours) return { status: "outside-hours" };
     const { fromMin, toMin } = parseHours(hours);
     const startClock = zonedClock(startAt, cfg.timezone);
-    const endClock = zonedClock(endAt, cfg.timezone);
     const startMin = startClock.hour * 60 + startClock.minute;
-    const endMin = endClock.hour * 60 + endClock.minute;
-    if (startMin < fromMin || endMin > toMin) {
+    // End as minutes past the SAME midnight — re-reading the end instant's
+    // clock wrapped a 23:00 + 2h session to 01:00 and called it in-hours.
+    const endMin = startMin + durationMinutes;
+    if (startMin < fromMin || endMin > toMin || endMin > 24 * 60) {
       return { status: "outside-hours" };
     }
   }

@@ -260,7 +260,6 @@ function SubmissionRow({
                       return;
                     }
                     setHidden(true);
-                  bumpCounts();
                     bumpCounts();
                   })
                 }

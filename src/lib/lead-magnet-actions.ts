@@ -264,6 +264,7 @@ export async function saveLeadMagnet(
   }
 
   revalidatePath("/lead-magnets");
+  revalidatePath("/");
   revalidatePath(`/free/${slug}`);
   return { ok: true, id: savedId, slug };
 }
@@ -279,6 +280,7 @@ export async function setLeadMagnetPublished(
     .where(and(eq(leadMagnets.id, id), eq(leadMagnets.accountId, accountId)))
     .returning({ slug: leadMagnets.slug });
   revalidatePath("/lead-magnets");
+  revalidatePath("/");
   if (rows[0]) revalidatePath(`/free/${rows[0].slug}`);
 }
 
@@ -299,6 +301,7 @@ export async function deleteLeadMagnet(id: string): Promise<void> {
     }
   }
   revalidatePath("/lead-magnets");
+  revalidatePath("/");
   if (gone) revalidatePath(`/free/${gone.slug}`);
 }
 
@@ -331,6 +334,7 @@ export async function setFeaturedLeadMagnet(
       });
     revalidatePath("/lead-magnets");
     revalidatePath("/");
+    revalidatePath("/");
     return { ok: true };
   } catch (err) {
     return {
@@ -345,7 +349,7 @@ export async function setFeaturedLeadMagnet(
 // asset by email. No auth. Anti-abuse mirrors submitQuizLead.
 // ─────────────────────────────────────────────────────────────────────────────
 export type LeadMagnetOptinResult =
-  | { ok: true; assetUrl: string; assetLabel: string }
+  | { ok: true; assetUrl: string; assetLabel: string; delivered: boolean }
   | { ok: false; error: string };
 
 export async function submitLeadMagnetOptin(input: {
@@ -357,7 +361,7 @@ export async function submitLeadMagnetOptin(input: {
 }): Promise<LeadMagnetOptinResult> {
   if ((input._hp ?? "").trim().length > 0) {
     // Bot — pretend success, do nothing.
-    return { ok: true, assetUrl: "#", assetLabel: "" };
+    return { ok: true, assetUrl: "#", assetLabel: "", delivered: false };
   }
 
   const lang: "en" | "uk" = input.lang === "uk" ? "uk" : "en";
@@ -506,6 +510,7 @@ export async function submitLeadMagnetOptin(input: {
       .where(eq(leadMagnets.id, magnet.id));
   }
 
+  let delivered = false;
   // Deliver the asset + notify her. Best-effort — the lead is already saved,
   // so a mail hiccup must never fail the opt-in or hide it from her inbox.
   try {
@@ -529,6 +534,7 @@ export async function submitLeadMagnetOptin(input: {
       const notifyTo = acct?.email || pset?.businessEmail || null;
 
       try {
+        delivered = true;
         await sendLeadMagnetDeliveryEmail({
           to: email,
           name,
@@ -542,6 +548,7 @@ export async function submitLeadMagnetOptin(input: {
           replyTo,
         });
       } catch (err) {
+        delivered = false;
         console.error("[lead-magnet] delivery email failed:", err);
       }
 
@@ -564,5 +571,5 @@ export async function submitLeadMagnetOptin(input: {
     console.error("[lead-magnet] notification block failed:", err);
   }
 
-  return { ok: true, assetUrl: magnet.assetUrl, assetLabel };
+  return { ok: true, assetUrl: magnet.assetUrl, assetLabel , delivered };
 }

@@ -26,7 +26,7 @@ import {
   sendCircleReservationNotifyEmail,
   asCircleEmailLang,
 } from "./resend";
-import { formatSessionLong, resolveTimeZone } from "./timezone";
+import { formatSessionLong, resolveTimeZone, zonedYearMonthDay } from "./timezone";
 import { circleCancelUrl } from "./circle-cancel-token";
 
 /** Resolve the meeting link for a circle: the session's own meet_url wins,
@@ -89,11 +89,21 @@ export async function convertAttendeeToLead(
   if (existing) return; // already known — don't duplicate or downgrade
 
   const when = new Date(row.scheduledAt);
+  // Evening Circles landed on the NEXT day in UTC.
+  const [tzRow] = await db
+    .select({ timezone: practitionerSettings.timezone })
+    .from(practitionerSettings)
+    .where(eq(practitionerSettings.accountId, row.accountId))
+    .limit(1);
+  const tz = resolveTimeZone(tzRow?.timezone);
   const dateLabel = when.toLocaleDateString("en-US", {
+    timeZone: tz,
     year: "numeric",
     month: "short",
     day: "numeric",
   });
+  const ymd = zonedYearMonthDay(when, tz);
+  const metOn = `${ymd.year}-${String(ymd.month0 + 1).padStart(2, "0")}-${String(ymd.day).padStart(2, "0")}`;
 
   await db.insert(clients).values({
     accountId: row.accountId,
@@ -103,7 +113,7 @@ export async function convertAttendeeToLead(
     isLead: true,
     status: "new",
     howTheyFoundMe: `Circle · ${row.groupName} (${dateLabel})`,
-    metOn: when.toISOString().slice(0, 10), // YYYY-MM-DD
+    metOn,
   });
 }
 

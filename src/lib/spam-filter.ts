@@ -23,7 +23,9 @@ export type SpamVerdict = {
   reasons: string[];
 };
 
-const SPAM_THRESHOLD = 3;
+// 4, not 3: one link plus one everyday phrase ("your website") scored
+// exactly 3 and binned genuine enquiries with nothing on screen to say so.
+const SPAM_THRESHOLD = 4;
 
 // Phrases that appear in marketing/SEO cold-pitch spam and essentially never
 // in a genuine "I'd like to work with you" note. Lowercase substrings.

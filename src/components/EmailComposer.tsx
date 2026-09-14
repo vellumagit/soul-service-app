@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Modal } from "./Modal";
+import { useTimeZone } from "./TimeZoneProvider";
 import { Field, inputCls } from "./Form";
 import { logCommunication, sendClientEmail } from "@/lib/actions";
 import { rethrowIfRedirect } from "@/lib/redirect-error";
@@ -17,13 +18,18 @@ function render(
     nextSession?: Session | null;
     lastSession?: Session | null;
     paymentInstructions?: string | null;
+    /** Recipient's zone (their own if known, else the practice's). */
+    timeZone: string;
+    locale: string;
   }
 ) {
   const firstName = ctx.client.fullName.split(" ")[0] ?? "";
   const fullName = ctx.client.fullName;
   const email = ctx.client.email ?? "";
   const nextSessionWhen = ctx.nextSession
-    ? new Date(ctx.nextSession.scheduledAt).toLocaleString("en-US", {
+    ? new Date(ctx.nextSession.scheduledAt).toLocaleString(ctx.locale, {
+        timeZone: ctx.timeZone,
+        timeZoneName: "short",
         weekday: "long",
         month: "long",
         day: "numeric",
@@ -35,7 +41,8 @@ function render(
     ? `${ctx.nextSession.durationMinutes} minutes`
     : "";
   const lastSessionDate = ctx.lastSession
-    ? new Date(ctx.lastSession.scheduledAt).toLocaleDateString("en-US", {
+    ? new Date(ctx.lastSession.scheduledAt).toLocaleDateString(ctx.locale, {
+        timeZone: ctx.timeZone,
         month: "long",
         day: "numeric",
       })
@@ -79,6 +86,12 @@ export function EmailComposer({
   resendConfigured?: boolean;
   trigger?: (open: () => void) => React.ReactNode;
 }) {
+  // Times in templates are rendered for the RECIPIENT: their own zone when
+  // known (else the practice zone), in their preferred language.
+  const practiceTz = useTimeZone();
+  const recipientTz = (client as { timezone?: string | null }).timezone || practiceTz;
+  const recipientLocale =
+    (client as { preferredLanguage?: string | null }).preferredLanguage === "uk" ? "uk-UA" : "en-US";
   const [open, setOpen] = useState(false);
   const [templateId, setTemplateId] = useState<string>("");
   const [subject, setSubject] = useState("");
@@ -111,6 +124,8 @@ export function EmailComposer({
     lastSession,
     paymentInstructions,
     templates,
+    timeZone: recipientTz,
+    locale: recipientLocale,
   });
   renderCtxRef.current = {
     client,
@@ -118,6 +133,8 @@ export function EmailComposer({
     lastSession,
     paymentInstructions,
     templates,
+    timeZone: recipientTz,
+    locale: recipientLocale,
   };
   useEffect(() => {
     if (!templateId) return;
@@ -157,11 +174,12 @@ export function EmailComposer({
         }
         setOpen(false);
       } else {
-        // Mailto fallback — log first, then open the user's mail app.
+        // Mailto fallback — we hand off to her mail app and can't know
+        // whether she sent it, so log a draft, not a send.
         const fd = new FormData();
         fd.append("clientId", client.id);
-        fd.append("kind", "email_sent");
-        fd.append("subject", subject);
+        fd.append("kind", "note");
+        fd.append("subject", `Email drafted: ${subject}`);
         fd.append("body", body);
         if (templateId) fd.append("templateId", templateId);
         await logCommunication(fd);

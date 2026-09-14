@@ -127,7 +127,7 @@ export default async function PaymentsPage({
                     className={`chip ${
                       s.paid
                         ? "bg-green-50 text-green-700"
-                        : s.paymentMethod === "gifted"
+                        : s.refundedAt || s.paymentMethod === "gifted"
                         ? "bg-ink-100 text-ink-600"
                         : s.status === "scheduled"
                         ? "bg-plum-100 text-plum-700"
@@ -136,6 +136,8 @@ export default async function PaymentsPage({
                   >
                     {s.paid
                       ? "PAID"
+                      : s.refundedAt
+                      ? "REFUNDED"
                       : s.paymentMethod === "gifted"
                       ? "FREE"
                       : s.status === "scheduled"

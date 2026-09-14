@@ -256,6 +256,9 @@ export async function POST(req: Request) {
         // then fires `transcript.done` (handled above) when it's ready. Without
         // this step, no transcript.done ever arrives and no notes are written.
         if (row.transcriptReceivedAt) break; // already processed — nothing to do
+        // A redelivery inside the transcription window would order (and pay
+        // for) a second transcript — the status flip below is the stamp.
+        if (row.currentStatus === "transcribing") break;
         const recordingId = payload.data?.recording?.id;
         if (!recordingId) {
           console.warn(

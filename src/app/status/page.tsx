@@ -99,7 +99,7 @@ export default async function StatusPage({
         ? "ok"
         : "warn",
       detail: !stripePlatformReady
-        ? "Card payments need the platform keys first. Ask Brian to set STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, and STRIPE_CONNECT_CLIENT_ID in Vercel, and register a Stripe Connect webhook at https://www.svit.live/api/webhooks/stripe (events: checkout.session.completed, checkout.session.expired, account.updated)."
+        ? "Card payments need the platform keys first. Ask Brian to set STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, and STRIPE_CONNECT_CLIENT_ID in Vercel, and register a Stripe Connect webhook at https://www.svit.live/api/webhooks/stripe (events: checkout.session.completed, checkout.session.expired, charge.refunded, account.updated, account.application.deauthorized)."
         : !stripeConnected
         ? "Connect your Stripe account so clients can pay for a Circle seat by card. It's one click — Stripe walks you through adding your bank and verifying your identity, and the money goes straight to YOUR account. (The manual Venmo/cash lane keeps working alongside it.)"
         : !stripeChargesEnabled

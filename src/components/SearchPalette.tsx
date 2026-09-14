@@ -38,7 +38,9 @@ const KIND_LABEL: Record<string, string> = {
 function dateResultsFromQuery(query: string): SearchResult[] {
   const parsed = parseDateQuery(query);
   if (parsed) {
-    const iso = parsed.toISOString();
+    // A bare practice-day key, not an instant — a local-midnight instant
+    // resolved to the previous Saturday from any browser east of her.
+    const iso = `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`;
     return [
       {
         kind: "date",

@@ -217,7 +217,7 @@ export function SessionCard({
               setSubmitting(true);
               setError(null);
               try {
-                await updateSession(fd);
+                const saved = await updateSession(fd);
                 // Save succeeded — clear the dirty flag so collapsing /
                 // navigating away no longer prompts.
                 setDirty(false);
@@ -226,6 +226,14 @@ export function SessionCard({
                   title: isMarkComplete ? "Session marked complete" : "Session saved",
                   ttlMs: 2500,
                 });
+                if (saved?.invoiceError) {
+                  notify({
+                    kind: "warning",
+                    title: "Invoice didn't generate",
+                    body: saved.invoiceError,
+                    ttlMs: 8000,
+                  });
+                }
                 // If she just marked it complete AND hasn't done the closing
                 // ritual on this session yet, open the ritual modal. The
                 // ritual is opt-in (Skip for now is a valid choice) — it

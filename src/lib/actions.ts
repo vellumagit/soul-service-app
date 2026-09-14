@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import {
+  accounts,
   clients,
   sessions,
   sessionSeries,
@@ -79,6 +80,21 @@ const PAYMENT_METHODS = [
   "other",
 ] as const;
 type PaymentMethodValue = (typeof PAYMENT_METHODS)[number];
+const CLIENT_STATUSES = ["active", "new", "dormant", "archived"] as const;
+function clientStatusValue(form: FormData, key: string): (typeof CLIENT_STATUSES)[number] {
+  const v = str(form, key);
+  return (CLIENT_STATUSES as readonly string[]).includes(v ?? "")
+    ? (v as (typeof CLIENT_STATUSES)[number])
+    : "active";
+}
+const COMMUNICATION_KINDS = ["email_sent", "email_received", "call_logged", "sms_sent", "note"] as const;
+function communicationKindValue(form: FormData, key: string): (typeof COMMUNICATION_KINDS)[number] {
+  const v = str(form, key);
+  return (COMMUNICATION_KINDS as readonly string[]).includes(v ?? "")
+    ? (v as (typeof COMMUNICATION_KINDS)[number])
+    : "note";
+}
+
 function paymentMethodValue(
   form: FormData,
   key: string
@@ -113,6 +129,30 @@ function tagsFromString(input: string | null): string[] {
         .filter(Boolean)
     )
   );
+}
+
+/** Every clientId that arrives from a form is checked against the signed-in
+ *  account before anything is written — otherwise a foreign id would create
+ *  rows (and send emails) pointing at another practitioner's client. */
+/** Bot statuses after which there is nothing left to call off. */
+const RECALL_FINISHED = ["done", "transcribing", "not_admitted", "no_recording", "fatal", "cancelled"];
+
+async function accountEmail(accountId: string): Promise<string | null> {
+  const [row] = await db
+    .select({ email: accounts.email })
+    .from(accounts)
+    .where(eq(accounts.id, accountId))
+    .limit(1);
+  return row?.email ?? null;
+}
+
+async function assertClientOwned(accountId: string, clientId: string): Promise<void> {
+  const [row] = await db
+    .select({ id: clients.id })
+    .from(clients)
+    .where(and(eq(clients.accountId, accountId), eq(clients.id, clientId)))
+    .limit(1);
+  if (!row) throw new Error("That client isn't in your practice.");
 }
 
 function required<T>(value: T | null, fieldName: string): T {
@@ -285,13 +325,7 @@ export async function updateClient(formData: FormData) {
       sensitivities: tagsFromString(str(formData, "sensitivities")),
       emergencyName: str(formData, "emergencyName"),
       emergencyPhone: str(formData, "emergencyPhone"),
-      status:
-        (str(formData, "status") as
-          | "active"
-          | "new"
-          | "dormant"
-          | "archived"
-          | null) ?? "active",
+      status: clientStatusValue(formData, "status"),
       // portalEnabled is deliberately NOT written here. It's owned by the
       // Portal card on the client's profile (connect / disconnect), not by
       // this form. Writing it from a checkbox that no longer exists would
@@ -1101,6 +1135,14 @@ export async function acceptLeadSubmission(
       }
     }
 
+    // Claim it first (status pending → accepted) so a double-click can't
+    // create two people for one submission. promotedClientId is set below.
+    const claimed = await db
+      .update(leadSubmissions)
+      .set({ status: "accepted", reviewedAt: new Date() })
+      .where(and(eq(leadSubmissions.id, sub.id), eq(leadSubmissions.status, "pending")))
+      .returning({ id: leadSubmissions.id });
+    if (claimed.length === 0) return { ok: false, error: "Already accepted" };
     let clientId: string;
     if (existingClientId) {
       clientId = existingClientId;
@@ -1515,9 +1557,10 @@ export async function scheduleSession(
 ): Promise<ScheduleSessionResult> {
   const { accountId } = await requireSession();
   const clientId = required(str(formData, "clientId"), "Client");
+  await assertClientOwned(accountId, clientId);
   const type = str(formData, "type") ?? "Session";
   const scheduledAtRaw = required(str(formData, "scheduledAt"), "Date / time");
-  const durationMinutes = num(formData, "durationMinutes") ?? 60;
+  const durationMinutes = Math.max(5, Math.min(180, num(formData, "durationMinutes") ?? 60));
   const manualMeetUrl = str(formData, "meetUrl");
   // In-person sessions skip Meet generation + the Recall bot; she records in
   // the room with the "Record session" button instead.
@@ -2246,6 +2289,7 @@ export async function correctSessionDate(
     const { accountId } = await requireSession();
     const id = required(str(formData, "id"), "Session id");
     const clientId = required(str(formData, "clientId"), "Client id");
+    await assertClientOwned(accountId, clientId);
     const newAt = new Date(required(str(formData, "scheduledAt"), "Date / time"));
     if (Number.isNaN(newAt.getTime())) {
       return { ok: false, error: "Couldn't read that date and time." };
@@ -2576,8 +2620,8 @@ export async function applyTimeOff(formData: FormData): Promise<ApplyTimeOffResu
               .set({ googleRecurringEventId: null })
               .where(and(eq(sessions.accountId, accountId), eq(sessions.id, h.sessionId)));
           } else if (h.googleEventId) {
-            await deleteSessionFromGoogle(accountId, h.googleEventId, { notify: false });
-            await db
+            const gone = await deleteSessionFromGoogle(accountId, h.googleEventId, { notify: false });
+            if (gone) await db
               .update(sessions)
               .set({ googleEventId: null })
               .where(and(eq(sessions.accountId, accountId), eq(sessions.id, h.sessionId)));
@@ -2672,6 +2716,7 @@ export async function applyTimeOff(formData: FormData): Promise<ApplyTimeOffResu
               practitionerName: settings?.practitionerName ?? null,
               replyTo: settings?.businessEmail ?? undefined,
               timeZone: resolveTimeZone(c.timezone, settings?.practiceTz),
+              practiceTimeZone: resolveTimeZone(settings?.practiceTz),
               language: c.language === "uk" ? "uk" : "en",
               from,
               to_: to,
@@ -3214,9 +3259,10 @@ export async function scheduleSessionSeries(
   try {
     const { accountId } = await requireSession();
     const clientId = required(str(formData, "clientId"), "Client");
+    await assertClientOwned(accountId, clientId);
     const type = str(formData, "type") ?? "Session";
     const firstAtRaw = required(str(formData, "firstAt"), "First session date/time");
-    const durationMinutes = num(formData, "durationMinutes") ?? 60;
+    const durationMinutes = Math.max(5, Math.min(180, num(formData, "durationMinutes") ?? 60));
     const intention = str(formData, "intention");
     // Online (Meet + notetaker) or in person (no Meet, no bot — she records in
     // the room). Same rule as a single session. Stored on the series so rows
@@ -3745,6 +3791,7 @@ export async function editSessionSeries(
     const { accountId } = await requireSession();
     const seriesId = required(str(formData, "seriesId"), "Series");
     const clientId = required(str(formData, "clientId"), "Client");
+    await assertClientOwned(accountId, clientId);
     const type = str(formData, "type") ?? "Session";
     const durationMinutes = Math.max(
       5,
@@ -4283,9 +4330,10 @@ export async function cancelSessionSeries(
 export async function logPastSession(formData: FormData) {
   const { accountId } = await requireSession();
   const clientId = required(str(formData, "clientId"), "Client");
+  await assertClientOwned(accountId, clientId);
   const type = str(formData, "type") ?? "Session";
   const scheduledAtRaw = required(str(formData, "scheduledAt"), "Date / time");
-  const durationMinutes = num(formData, "durationMinutes") ?? 60;
+  const durationMinutes = Math.max(5, Math.min(180, num(formData, "durationMinutes") ?? 60));
   const paid = bool(formData, "paid");
 
   const [created] = await db
@@ -4321,6 +4369,7 @@ export async function updateSession(formData: FormData) {
   const { accountId } = await requireSession();
   const id = required(str(formData, "id"), "Session id");
   const clientId = required(str(formData, "clientId"), "Client id");
+  await assertClientOwned(accountId, clientId);
 
   // Read existing session to detect title/intention changes worth syncing
   const existingRows = await db
@@ -4344,11 +4393,14 @@ export async function updateSession(formData: FormData) {
 
   const isMarkComplete = str(formData, "markComplete") === "true";
   if (isMarkComplete) updates.status = "completed";
+  let invoiceError: string | null = null;
 
-  await db
+  const written = await db
     .update(sessions)
     .set(updates)
-    .where(and(eq(sessions.accountId, accountId), eq(sessions.id, id)));
+    .where(and(eq(sessions.accountId, accountId), eq(sessions.id, id)))
+    .returning({ id: sessions.id });
+  if (written.length === 0) throw new Error("That session isn't in your practice.");
 
   // Push edited title/intention to Google (only if event exists and something
   // user-visible changed). Skip on completion — past events don't need sync.
@@ -4391,7 +4443,23 @@ export async function updateSession(formData: FormData) {
       console.error("[complete] couldn't stamp the session amount:", err);
     }
 
-    await runOnSessionCompleted(id, clientId);
+    // A session completed while its notetaker is still queued would have the
+    // bot dial into an empty room later. Call it off.
+    if (existing?.recallBotId && !RECALL_FINISHED.includes(existing.recallBotStatus ?? "")) {
+      try {
+        const { cancelBot } = await import("./recall");
+        await cancelBot(existing.recallBotId);
+        await db
+          .update(sessions)
+          .set({ recallBotStatus: "cancelled", updatedAt: new Date() })
+          .where(and(eq(sessions.accountId, accountId), eq(sessions.id, id)));
+      } catch (err) {
+        console.warn("[complete] couldn't call off the notetaker:", err);
+      }
+    }
+
+    const hooks = await runOnSessionCompleted(id, clientId);
+    if (hooks.invoiceError) invoiceError = hooks.invoiceError;
   }
 
   revalidatePath(`/clients/${clientId}`);
@@ -4399,6 +4467,7 @@ export async function updateSession(formData: FormData) {
   revalidatePath("/today");
   // Completing creates a new unpaid row.
   revalidatePath("/payments");
+  return { invoiceError };
 }
 
 // Reschedule = change scheduledAt (and optionally durationMinutes). Pushes to Google.
@@ -4406,6 +4475,7 @@ export async function rescheduleSession(formData: FormData) {
   const { accountId } = await requireSession();
   const id = required(str(formData, "id"), "Session id");
   const clientId = required(str(formData, "clientId"), "Client id");
+  await assertClientOwned(accountId, clientId);
   const scheduledAtRaw = required(
     str(formData, "scheduledAt"),
     "Date / time"
@@ -4424,6 +4494,10 @@ export async function rescheduleSession(formData: FormData) {
     .from(sessions)
     .where(and(eq(sessions.accountId, accountId), eq(sessions.id, id)))
     .limit(1);
+  const nextAt = new Date(scheduledAtRaw);
+  if (Number.isNaN(nextAt.getTime())) {
+    throw new Error("Pick a valid date and time.");
+  }
   if (pre?.botId) {
     // Don't swallow — if cancel fails (Recall returns 5xx), the bot is
     // still scheduled for the OLD time. If we proceeded silently we'd
@@ -4437,7 +4511,7 @@ export async function rescheduleSession(formData: FormData) {
   }
 
   const updates: Record<string, unknown> = {
-    scheduledAt: new Date(scheduledAtRaw),
+    scheduledAt: nextAt,
     updatedAt: new Date(),
     // Clear reminder bookkeeping so the moved session gets fresh reminders
     // for the new time.
@@ -4600,12 +4674,12 @@ export async function cancelSession(
         and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId))
       );
   } else {
-    await deleteSessionFromGoogle(
+    const gone = await deleteSessionFromGoogle(
       accountId,
       existingRows[0]?.googleEventId ?? null,
       { notify: notifyClient }
     );
-    if (existingRows[0]?.googleEventId) {
+    if (gone && existingRows[0]?.googleEventId) {
       await db
         .update(sessions)
         .set({ googleEventId: null })
@@ -4764,6 +4838,7 @@ export async function markSessionPaid(formData: FormData) {
   const { accountId } = await requireSession();
   const id = required(str(formData, "id"), "Session id");
   const clientId = required(str(formData, "clientId"), "Client id");
+  await assertClientOwned(accountId, clientId);
 
   // "This one's on me" — a gift / comp. Recorded as gifted (paid=false, amount
   // 0) so it drops out of the unpaid nags + revenue totals without being faked
@@ -4805,6 +4880,22 @@ export async function markSessionPaid(formData: FormData) {
     })
     .where(and(eq(sessions.accountId, accountId), eq(sessions.id, id)));
 
+  // The stored PDF was rendered while unpaid ("Total due / How to pay").
+  // Re-render it so the link the client holds shows Paid. Best-effort.
+  try {
+    const [inv] = await db
+      .select({ invoiceUrl: sessions.invoiceUrl })
+      .from(sessions)
+      .where(and(eq(sessions.accountId, accountId), eq(sessions.id, id)))
+      .limit(1);
+    if (inv?.invoiceUrl) {
+      const { generateInvoiceForSession } = await import("./invoices");
+      await generateInvoiceForSession(id, accountId);
+    }
+  } catch (err) {
+    console.warn("[markPaid] invoice re-render failed:", err);
+  }
+
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/payments");
   revalidatePath("/today");
@@ -4837,6 +4928,7 @@ export async function markSessionUnpaid(sessionId: string, clientId: string) {
 export async function addGoal(formData: FormData) {
   const { accountId } = await requireSession();
   const clientId = required(str(formData, "clientId"), "Client id");
+  await assertClientOwned(accountId, clientId);
   const label = required(str(formData, "label"), "Goal label");
   const progress = Math.max(0, Math.min(100, num(formData, "progress") ?? 0));
   const note = str(formData, "note");
@@ -4930,14 +5022,8 @@ export async function deleteTask(taskId: string, clientId: string | null) {
 export async function logCommunication(formData: FormData) {
   const { accountId } = await requireSession();
   const clientId = required(str(formData, "clientId"), "Client id");
-  const kind =
-    (str(formData, "kind") as
-      | "email_sent"
-      | "email_received"
-      | "call_logged"
-      | "sms_sent"
-      | "note"
-      | null) ?? "note";
+  await assertClientOwned(accountId, clientId);
+  const kind = communicationKindValue(formData, "kind");
   const subject = str(formData, "subject");
   const body = str(formData, "body");
   const templateId = str(formData, "templateId");
@@ -4980,6 +5066,7 @@ export type SendEmailResult = { ok: true } | { ok: false; message: string };
 export async function sendClientEmail(formData: FormData): Promise<SendEmailResult> {
   const { accountId } = await requireSession();
   const clientId = required(str(formData, "clientId"), "Client id");
+  await assertClientOwned(accountId, clientId);
   const to = required(str(formData, "to"), "Recipient");
   const subject = required(str(formData, "subject"), "Subject");
   const body = required(str(formData, "body"), "Body");
@@ -5005,7 +5092,7 @@ export async function sendClientEmail(formData: FormData): Promise<SendEmailResu
       subject,
       html,
       text: body,
-      replyTo: settings?.businessEmail ?? undefined,
+      replyTo: settings?.businessEmail || (await accountEmail(accountId)) || undefined,
     });
   } catch (err) {
     const message =
@@ -5348,7 +5435,10 @@ export async function deleteNoteTemplate(id: string) {
 // AUTO-RULES — runs when a session is marked complete
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function runOnSessionCompleted(sessionId: string, _clientId: string) {
+async function runOnSessionCompleted(
+  sessionId: string,
+  _clientId: string
+): Promise<{ invoiceError?: string }> {
   // requireSession is already called by the parent action (logPastSession /
   // updateSession), so calling it again here uses the React `cache()` and
   // doesn't re-decrypt the JWT.
@@ -5358,11 +5448,13 @@ async function runOnSessionCompleted(sessionId: string, _clientId: string) {
   if (settings.autoInvoiceOnComplete) {
     try {
       const { generateInvoiceForSession } = await import("./invoices");
-      await generateInvoiceForSession(sessionId);
+      await generateInvoiceForSession(sessionId, accountId);
     } catch (e) {
       console.warn("Auto-invoice generation failed:", e);
+      return { invoiceError: e instanceof Error ? e.message : "Invoice didn't generate." };
     }
   }
+  return {};
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -5372,6 +5464,7 @@ async function runOnSessionCompleted(sessionId: string, _clientId: string) {
 export async function addImportantPerson(formData: FormData) {
   const { accountId } = await requireSession();
   const clientId = required(str(formData, "clientId"), "Client id");
+  await assertClientOwned(accountId, clientId);
   const name = required(str(formData, "name"), "Name");
   const relationship = required(str(formData, "relationship"), "Relationship");
   const notes = str(formData, "notes");
@@ -5403,6 +5496,7 @@ export async function updateImportantPerson(formData: FormData) {
   const { accountId } = await requireSession();
   const id = required(str(formData, "id"), "id");
   const clientId = required(str(formData, "clientId"), "Client id");
+  await assertClientOwned(accountId, clientId);
 
   await db
     .update(importantPeople)
@@ -5445,6 +5539,7 @@ export async function deleteImportantPerson(
 export async function addTheme(formData: FormData) {
   const { accountId } = await requireSession();
   const clientId = required(str(formData, "clientId"), "Client id");
+  await assertClientOwned(accountId, clientId);
   const label = required(str(formData, "label"), "Theme");
   await db.insert(themes).values({ accountId, clientId, label });
   revalidatePath(`/clients/${clientId}`);
@@ -5465,6 +5560,7 @@ export async function deleteTheme(themeId: string, clientId: string) {
 export async function addObservation(formData: FormData) {
   const { accountId } = await requireSession();
   const clientId = required(str(formData, "clientId"), "Client id");
+  await assertClientOwned(accountId, clientId);
   const body = required(str(formData, "body"), "Observation");
   await db.insert(observations).values({ accountId, clientId, body });
   revalidatePath(`/clients/${clientId}`);
@@ -5922,17 +6018,22 @@ async function syncSessionToGoogle(
   }
 }
 
+/** Returns true when the event is gone (deleted, or never existed). Callers
+ *  only clear googleEventId on true — clearing it after a failed delete left
+ *  the entry on both calendars with nothing in the app pointing at it. */
 async function deleteSessionFromGoogle(
   accountId: string,
   googleEventId: string | null,
   opts?: { notify?: boolean }
-) {
-  if (!googleEventId) return;
+): Promise<boolean> {
+  if (!googleEventId) return true;
   try {
     const { deleteCalendarEvent } = await import("./google-calendar");
     await deleteCalendarEvent(accountId, googleEventId, opts);
+    return true;
   } catch (err) {
     console.warn("Google Calendar delete failed:", err);
+    return false;
   }
 }
 
@@ -6044,9 +6145,9 @@ export async function generateNotesForSession(
 export async function generateInvoice(sessionId: string, clientId: string) {
   // requireSession isn't strictly needed here (the invoices helper looks up
   // the session itself), but call it so unauthenticated requests still bounce.
-  await requireSession();
+  const { accountId } = await requireSession();
   const { generateInvoiceForSession } = await import("./invoices");
-  await generateInvoiceForSession(sessionId);
+  await generateInvoiceForSession(sessionId, accountId);
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/payments");
 }

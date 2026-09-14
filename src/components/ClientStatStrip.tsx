@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { fullDate, money, relativeTime } from "@/lib/format";
+import { zonedYearMonthDay } from "@/lib/timezone";
 
 type Stats = {
   sessionsHeld: number;
@@ -37,7 +38,7 @@ export function ClientStatStrip({
       />
       <Cell
         label="Together since"
-        value={shortMonth(stats.togetherSince)}
+        value={shortMonth(stats.togetherSince, timeZone)}
         sub={monthsSinceLabel(monthsSince)}
       />
       <Cell
@@ -79,10 +80,10 @@ export function ClientStatStrip({
   );
 }
 
-function monthsBetween(start: Date, end: Date): number {
-  const months =
-    (end.getFullYear() - start.getFullYear()) * 12 +
-    (end.getMonth() - start.getMonth());
+function monthsBetween(start: Date, end: Date, tz?: string): number {
+  const a = zonedYearMonthDay(start, tz ?? "UTC");
+  const b = zonedYearMonthDay(end, tz ?? "UTC");
+  const months = (b.year - a.year) * 12 + (b.month0 - a.month0);
   return Math.max(months, 0);
 }
 
@@ -107,8 +108,8 @@ function avgIntervalLabel(sessions: number, months: number): string {
   return "every few months";
 }
 
-function shortMonth(d: Date): string {
-  return d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+function shortMonth(d: Date, tz?: string): string {
+  return d.toLocaleDateString("en-US", { timeZone: tz, month: "short", year: "numeric" });
 }
 
 function Cell({

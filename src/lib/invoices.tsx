@@ -12,7 +12,8 @@ import {
 import { put } from "@vercel/blob";
 import { db } from "@/db";
 import { sessions, clients, practitionerSettings } from "@/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
+import { resolveTimeZone } from "./timezone";
 
 const styles = StyleSheet.create({
   page: { padding: 48, fontSize: 11, color: "#1c1917", fontFamily: "Helvetica" },
@@ -115,6 +116,8 @@ const styles = StyleSheet.create({
 });
 
 type InvoiceData = {
+  /** Practice zone — an evening session was dated one day late in UTC. */
+  timeZone?: string;
   invoiceNumber: string;
   issuedAt: Date;
   dueAt?: Date | null;
@@ -149,8 +152,9 @@ function formatCurrency(cents: number, currency: string): string {
   }).format(cents / 100);
 }
 
-function formatDate(d: Date): string {
+function formatDate(d: Date, timeZone?: string): string {
   return d.toLocaleDateString("en-US", {
+    timeZone,
     year: "numeric",
     month: "long",
     day: "numeric",
@@ -183,9 +187,9 @@ function InvoiceDocument({ data }: { data: InvoiceData }) {
           <View style={styles.invoiceMeta}>
             <Text style={styles.invoiceLabel}>Invoice</Text>
             <Text style={styles.invoiceNumber}>{data.invoiceNumber}</Text>
-            <Text style={styles.meta}>Issued {formatDate(data.issuedAt)}</Text>
+            <Text style={styles.meta}>Issued {formatDate(data.issuedAt, data.timeZone)}</Text>
             {data.dueAt && (
-              <Text style={styles.meta}>Due {formatDate(data.dueAt)}</Text>
+              <Text style={styles.meta}>Due {formatDate(data.dueAt, data.timeZone)}</Text>
             )}
             {data.paid && (
               <Text
@@ -222,7 +226,7 @@ function InvoiceDocument({ data }: { data: InvoiceData }) {
                 {data.description}
               </Text>
               <Text style={styles.rowSub}>
-                Session date · {formatDate(data.sessionDate)}
+                Session date · {formatDate(data.sessionDate, data.timeZone)}
               </Text>
             </View>
             <Text style={styles.rowAmount}>
@@ -253,17 +257,23 @@ function InvoiceDocument({ data }: { data: InvoiceData }) {
 
 // Generate (or regenerate) the invoice PDF for a session.
 // Uploads to Vercel Blob and saves the URL + invoice number on the session row.
-export async function generateInvoiceForSession(sessionId: string) {
+export async function generateInvoiceForSession(sessionId: string, accountId?: string) {
   if (!process.env.BLOB_READ_WRITE_TOKEN) {
     throw new Error(
       "BLOB_READ_WRITE_TOKEN is not set — connect Vercel Blob to enable invoice generation."
     );
   }
 
+  // Scoped to the caller's account when known — an unscoped lookup let a
+  // signed-in user render (and overwrite) another practice's invoice.
   const sessionRow = await db
     .select()
     .from(sessions)
-    .where(eq(sessions.id, sessionId))
+    .where(
+      accountId
+        ? and(eq(sessions.id, sessionId), eq(sessions.accountId, accountId))
+        : eq(sessions.id, sessionId)
+    )
     .limit(1);
   const session = sessionRow[0];
   if (!session) throw new Error("Session not found");
@@ -337,6 +347,7 @@ export async function generateInvoiceForSession(sessionId: string) {
 
     description: `${session.type} (${session.durationMinutes} min)`,
     sessionDate: session.scheduledAt,
+    timeZone: resolveTimeZone(settings.timezone),
     amountCents,
     currency: settings.defaultCurrency,
     paid: session.paid,

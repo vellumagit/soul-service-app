@@ -377,13 +377,18 @@ export function LeadFormsManager({
             </div>
             <button
               type="button"
-              onClick={() => {
-                navigator.clipboard.writeText(revealed.token);
-                notify({
-                  kind: "success",
-                  title: "Copied",
-                  ttlMs: 1500,
-                });
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(revealed.token);
+                  notify({ kind: "success", title: "Copied", ttlMs: 1500 });
+                } catch {
+                  notify({
+                    kind: "warning",
+                    title: "Couldn't copy",
+                    body: "Select the token above and copy it by hand — it isn't shown again after this dialog closes.",
+                    ttlMs: 8000,
+                  });
+                }
               }}
               className="text-xs text-plum-700 hover:underline"
             >
@@ -484,13 +489,14 @@ function FormRow({
             confirmLabel="Yes, rotate it"
             onConfirm={onRotate}
           />
-          <AsyncButton
-            pendingLabel="Archiving…"
-            onClick={onArchive}
-            className="text-xs text-ink-500 hover:text-amber-700 disabled:opacity-50"
-          >
-            Archive
-          </AsyncButton>
+          <ConfirmButton
+            label="Archive"
+            destructive={false}
+            className="text-xs text-ink-500 hover:text-amber-700"
+            message={`Archive "${form.name}"? It stops accepting submissions straight away — any embed or Make.com scenario posting to it will start failing. You can restore it from the archived list.`}
+            confirmLabel="Yes, archive it"
+            onConfirm={onArchive}
+          />
         </div>
       </div>
     </li>

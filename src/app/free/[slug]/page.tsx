@@ -3,6 +3,7 @@
 // and the lead lands in /network/inbox. No auth (see proxy.ts PUBLIC_PREFIXES).
 
 import type { Metadata } from "next";
+import { PublicBrandLink } from "@/components/PublicBrandLink";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, eq, isNull } from "drizzle-orm";
@@ -94,19 +95,7 @@ export default async function FreeResourcePage({
             textAlign: "center",
           }}
         >
-          <Link
-            href="/"
-            style={{
-              fontFamily: "var(--font-serif, serif)",
-              fontSize: 18,
-              fontWeight: 500,
-              letterSpacing: "0.04em",
-              color: "var(--land-clay-deep)",
-              textDecoration: "none",
-            }}
-          >
-            Svitlana
-          </Link>
+          <PublicBrandLink />
         </header>
 
         <section className="circles" style={{ padding: "44px 24px 90px" }}>

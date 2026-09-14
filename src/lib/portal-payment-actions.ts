@@ -63,6 +63,7 @@ export async function createSessionPaymentCheckout(
       id: sessions.id,
       status: sessions.status,
       paid: sessions.paid,
+      refundedAt: sessions.refundedAt,
       amountCents: sessions.paymentAmountCents,
       scheduledAt: sessions.scheduledAt,
       type: sessions.type,
@@ -89,6 +90,9 @@ export async function createSessionPaymentCheckout(
   if (!row) return { ok: false, error: UNAVAILABLE };
   if (row.paid) {
     return { ok: false, error: "This session is already marked paid." };
+  }
+  if (row.refundedAt) {
+    return { ok: false, error: "This session was refunded — nothing is owed for it." };
   }
   if (row.status !== "completed") {
     return {

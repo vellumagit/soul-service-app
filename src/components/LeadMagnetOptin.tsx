@@ -32,7 +32,7 @@ export function LeadMagnetOptin({
   const [hp, setHp] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<{ url: string; label: string } | null>(null);
+  const [done, setDone] = useState<{ url: string; label: string; delivered: boolean } | null>(null);
 
   const t =
     lang === "uk"
@@ -77,7 +77,7 @@ export function LeadMagnetOptin({
         setError(res.error);
         return;
       }
-      setDone({ url: res.assetUrl, label: res.assetLabel });
+      setDone({ url: res.assetUrl, label: res.assetLabel, delivered: res.delivered });
     } catch {
       setError(t.errGeneric);
     } finally {
@@ -109,11 +109,13 @@ export function LeadMagnetOptin({
         >
           {t.doneTitle}
         </p>
-        <p style={{ fontSize: 14, lineHeight: 1.6, margin: "0 0 20px 0" }}>
-          {t.donePre}
-          <strong>{email}</strong>
-          {t.donePost}
-        </p>
+        {done.delivered && (
+          <p style={{ fontSize: 14, lineHeight: 1.6, margin: "0 0 20px 0" }}>
+            {t.donePre}
+            <strong>{email}</strong>
+            {t.donePost}
+          </p>
+        )}
         <a
           href={done.url}
           target="_blank"

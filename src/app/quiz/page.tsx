@@ -6,6 +6,7 @@
 // can never render blank the way the scroll-reveal pages could.
 
 import type { Metadata } from "next";
+import { PublicBrandLink } from "@/components/PublicBrandLink";
 import Link from "next/link";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
@@ -69,19 +70,7 @@ export default async function QuizPage() {
               textAlign: "center",
             }}
           >
-            <Link
-              href="/"
-              style={{
-                fontFamily: "var(--font-serif, serif)",
-                fontSize: 18,
-                fontWeight: 500,
-                letterSpacing: "0.04em",
-                color: "var(--land-clay-deep)",
-                textDecoration: "none",
-              }}
-            >
-              Svitlana
-            </Link>
+            <PublicBrandLink />
           </header>
           <section className="circles" style={{ padding: "64px 24px 96px" }}>
             <div className="wrap narrow" style={{ textAlign: "center" }}>

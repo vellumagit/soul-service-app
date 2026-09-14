@@ -3,6 +3,7 @@
 // the database level via `AND account_id = ?`. Pages call requireSession()
 // (which returns the current accountId) and pass it through.
 import { db } from "./index";
+import { fullDate } from "@/lib/format";
 import {
   clients,
   sessions,
@@ -49,11 +50,7 @@ import {
   inArray,
   ne,
 } from "drizzle-orm";
-import {
-  resolveTimeZone,
-  zonedDayBounds,
-  zonedWeekRange,
-} from "@/lib/timezone";
+import { resolveTimeZone, zonedDayBounds, zonedWeekRange, zonedWallTimeToUtc, zonedYearMonthDay } from "@/lib/timezone";
 
 /** Practice timezone for an account — the anchor for every "today"/"this
  *  week" window below. The server runs UTC; computing day bounds with
@@ -133,6 +130,17 @@ export async function getSetupStatus(accountId: string): Promise<SetupStatus> {
 // Settings — one row per account, lazy-create on first read
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** The practice's IANA zone — every "today / this month / this year" that
+ *  she reads must be computed in it, never in the server's UTC. */
+async function practiceTz(accountId: string): Promise<string> {
+  const [row] = await db
+    .select({ timezone: practitionerSettings.timezone })
+    .from(practitionerSettings)
+    .where(eq(practitionerSettings.accountId, accountId))
+    .limit(1);
+  return resolveTimeZone(row?.timezone);
+}
+
 export async function getSettings(
   accountId: string
 ): Promise<PractitionerSettings> {
@@ -190,7 +198,7 @@ export async function listClients(
       sessionCount: sql<number>`(SELECT COUNT(*)::int FROM sessions WHERE sessions.client_id = clients.id AND sessions.status = 'completed')`,
       attachmentCount: sql<number>`(SELECT COUNT(*)::int FROM attachments WHERE attachments.client_id = clients.id)`,
       lifetimeCents: sql<number>`COALESCE((SELECT SUM(sessions.payment_amount_cents)::int FROM sessions WHERE sessions.client_id = clients.id AND sessions.paid = true), 0)`,
-      unpaidCents: sql<number>`COALESCE((SELECT SUM(COALESCE(sessions.payment_amount_cents, 0))::int FROM sessions WHERE sessions.client_id = clients.id AND sessions.paid = false AND sessions.status = 'completed' AND sessions.payment_method::text IS DISTINCT FROM 'gifted'), 0)`,
+      unpaidCents: sql<number>`COALESCE((SELECT SUM(COALESCE(sessions.payment_amount_cents, 0))::int FROM sessions WHERE sessions.client_id = clients.id AND sessions.paid = false AND sessions.status = 'completed' AND sessions.payment_method::text IS DISTINCT FROM 'gifted' AND sessions.refunded_at IS NULL), 0)`,
       lastSessionAt: sql<Date | null>`(SELECT MAX(sessions.scheduled_at) FROM sessions WHERE sessions.client_id = clients.id AND sessions.status = 'completed')`,
       // `>= now()` matters: a session left on 'scheduled' after its date has
       // passed (never marked complete) would otherwise surface as this
@@ -1074,6 +1082,7 @@ export async function listAllSessionsForPayments(accountId: string) {
       // surfaced as a "review" flag on /payments so a double charge isn't
       // invisible in-app.
       duplicateChargePaymentIntentId: sessions.duplicateChargePaymentIntentId,
+      refundedAt: sessions.refundedAt,
     })
     .from(sessions)
     .innerJoin(clients, eq(sessions.clientId, clients.id))
@@ -1293,6 +1302,7 @@ export async function search(
 ): Promise<SearchResult[]> {
   const q = query.trim();
   if (q.length < 2) return [];
+  const searchTz = await practiceTz(accountId);
   const wildcard = `%${q}%`;
 
   const [matchedClients, matchedSessions, matchedFiles, matchedTasks] =
@@ -1396,7 +1406,7 @@ export async function search(
       title: `${s.type} · ${s.clientName}`,
       subtitle: s.notes
         ? s.notes.slice(0, 80) + (s.notes.length > 80 ? "…" : "")
-        : s.scheduledAt.toLocaleDateString(),
+        : fullDate(s.scheduledAt, searchTz),
       href: `/clients/${s.clientId}?tab=sessions#${s.id}`,
     });
   }
@@ -1450,10 +1460,13 @@ export type AnniversaryEvent =
 export async function getTodaysAnniversaries(
   accountId: string
 ): Promise<AnniversaryEvent[]> {
-  const today = new Date();
-  const todayMonth = today.getMonth(); // 0-11
-  const todayDate = today.getDate();
-  const thisYear = today.getFullYear();
+  // Her calendar day, not UTC's — birthdays were showing from 6 PM the
+  // evening before and vanishing at 6 PM on the day.
+  const tz = await practiceTz(accountId);
+  const t = zonedYearMonthDay(new Date(), tz);
+  const todayMonth = t.month0; // 0-11
+  const todayDate = t.day;
+  const thisYear = t.year;
 
   // Pull every non-archived client with a dob OR a first session, in one
   // round-trip. Cheap for any practitioner's lifetime client count.
@@ -1504,17 +1517,17 @@ export async function getTodaysAnniversaries(
 
     // First-session anniversary — same calendar day, earlier year
     if (c.firstSessionAt) {
-      const fs = new Date(c.firstSessionAt);
+      const fs = zonedYearMonthDay(new Date(c.firstSessionAt), tz);
       if (
-        fs.getMonth() === todayMonth &&
-        fs.getDate() === todayDate &&
-        fs.getFullYear() < thisYear
+        fs.month0 === todayMonth &&
+        fs.day === todayDate &&
+        fs.year < thisYear
       ) {
         events.push({
           kind: "first-session",
           clientId: c.id,
           clientName: c.fullName,
-          yearsTogether: thisYear - fs.getFullYear(),
+          yearsTogether: thisYear - fs.year,
         });
       }
     }
@@ -1633,6 +1646,8 @@ export async function getLooseEnds(accountId: string): Promise<LooseEnds> {
       notes: sessions.notes,
       closingCompletedAt: sessions.closingCompletedAt,
       paid: sessions.paid,
+      paymentMethod: sessions.paymentMethod,
+      refundedAt: sessions.refundedAt,
       recallBotId: sessions.recallBotId,
       recallBotStatus: sessions.recallBotStatus,
     })
@@ -1684,7 +1699,13 @@ export async function getLooseEnds(accountId: string): Promise<LooseEnds> {
     )
     .map(toRow);
   const needPayment = rows
-    .filter((r) => r.status === "completed" && r.paid === false)
+    .filter(
+      (r) =>
+        r.status === "completed" &&
+        r.paid === false &&
+        r.paymentMethod !== "gifted" &&
+        !r.refundedAt
+    )
     .map(toRow);
   const needIntention = rows
     .filter(
@@ -2098,8 +2119,9 @@ export async function getYearInReview(
   accountId: string,
   year: number
 ): Promise<YearInReview> {
-  const yearStart = new Date(year, 0, 1);
-  const yearEnd = new Date(year + 1, 0, 1);
+  const tz = await practiceTz(accountId);
+  const yearStart = zonedWallTimeToUtc(year, 0, 1, 0, 0, tz);
+  const yearEnd = zonedWallTimeToUtc(year + 1, 0, 1, 0, 0, tz);
 
   // All sessions IN this year (any status), joined to clients for names
   const sessionRows = await db
@@ -2129,12 +2151,11 @@ export async function getYearInReview(
   const sessionsHeld = held.length;
   const clientsSeen = new Set(held.map((s) => s.clientId)).size;
   const totalMinutes = completed.reduce((sum, s) => sum + s.durationMinutes, 0);
-  const monthsActive = new Set(
-    held.map((s) => new Date(s.scheduledAt).getMonth())
-  ).size;
+  const monthOf = (d: Date) => zonedYearMonthDay(new Date(d), tz).month0;
+  const monthsActive = new Set(held.map((s) => monthOf(s.scheduledAt))).size;
 
   const monthlyRhythm = Array.from({ length: 12 }, () => 0);
-  for (const s of held) monthlyRhythm[new Date(s.scheduledAt).getMonth()]++;
+  for (const s of held) monthlyRhythm[monthOf(s.scheduledAt)]++;
 
   // Themes: pull every theme for every client she met this year. Count by
   // label (case-insensitive), tally distinct clients.
@@ -2342,7 +2363,8 @@ export async function getDashboardData(accountId: string) {
           eq(sessions.accountId, accountId),
           eq(sessions.status, "completed"),
           eq(sessions.paid, false),
-          sql`${sessions.paymentMethod}::text IS DISTINCT FROM 'gifted'`
+          sql`${sessions.paymentMethod}::text IS DISTINCT FROM 'gifted'`,
+          isNull(sessions.refundedAt)
         )
       )
       .orderBy(desc(sessions.scheduledAt))
@@ -2420,9 +2442,13 @@ export async function getDashboardData(accountId: string) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function getPaymentTotals(accountId: string) {
-  const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const startOfYear = new Date(now.getFullYear(), 0, 1);
+  // Month and year boundaries in HER zone — UTC's rolled over at 6 PM on the
+  // last day of the month, so the "This month" tile emptied out early.
+  const tz = await practiceTz(accountId);
+  const ymd = zonedYearMonthDay(new Date(), tz);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const startOfMonth = `${ymd.year}-${pad(ymd.month0 + 1)}-01`;
+  const startOfYear = `${ymd.year}-01-01`;
 
   const [paidThisMonth, paidThisYear, unpaidTotal] = await Promise.all([
     db
@@ -2435,7 +2461,7 @@ export async function getPaymentTotals(accountId: string) {
           eq(sessions.accountId, accountId),
           eq(sessions.paid, true),
           isNotNull(sessions.paidAt),
-          sql`${sessions.paidAt} >= ${startOfMonth.toISOString().slice(0, 10)}`
+          sql`${sessions.paidAt} >= ${startOfMonth}`
         )
       ),
     db
@@ -2448,7 +2474,7 @@ export async function getPaymentTotals(accountId: string) {
           eq(sessions.accountId, accountId),
           eq(sessions.paid, true),
           isNotNull(sessions.paidAt),
-          sql`${sessions.paidAt} >= ${startOfYear.toISOString().slice(0, 10)}`
+          sql`${sessions.paidAt} >= ${startOfYear}`
         )
       ),
     db
@@ -2462,7 +2488,8 @@ export async function getPaymentTotals(accountId: string) {
           eq(sessions.accountId, accountId),
           eq(sessions.paid, false),
           eq(sessions.status, "completed"),
-          sql`${sessions.paymentMethod}::text IS DISTINCT FROM 'gifted'`
+          sql`${sessions.paymentMethod}::text IS DISTINCT FROM 'gifted'`,
+          isNull(sessions.refundedAt)
         )
       ),
   ]);

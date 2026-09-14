@@ -150,6 +150,12 @@ export function SetupChecklist({
               and let it draft your notes for you.
             </div>
           </div>
+          <Link
+            href="/clients"
+            className="text-xs text-plum-700 hover:underline font-medium shrink-0"
+          >
+            Open a client →
+          </Link>
         </ChecklistRow>
       </div>
     </div>

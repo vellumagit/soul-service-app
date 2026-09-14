@@ -24,6 +24,7 @@ import {
   practitionerSettings,
 } from "@/db/schema";
 import { checkRateLimit } from "./rate-limit";
+import { resolveTimeZone } from "./timezone";
 import { scoreLandingLead } from "./spam-filter";
 import { resolveStorefrontAccountId } from "./storefront-account";
 import {
@@ -196,6 +197,7 @@ export async function submitLandingLead(
         .select({
           practitionerName: practitionerSettings.practitionerName,
           businessEmail: practitionerSettings.businessEmail,
+          timezone: practitionerSettings.timezone,
         })
         .from(practitionerSettings)
         .where(eq(practitionerSettings.accountId, accountId))
@@ -209,7 +211,11 @@ export async function submitLandingLead(
       if (preferredWindowIso) {
         const d = new Date(preferredWindowIso);
         if (Number.isFinite(d.getTime())) {
+          // Her zone, labelled — the server's UTC put a 9 AM slot in her
+          // inbox as "3:00 PM".
           preferredWhenLabel = d.toLocaleString("en-US", {
+            timeZone: resolveTimeZone(pset?.timezone),
+            timeZoneName: "short",
             weekday: "short",
             month: "short",
             day: "numeric",
