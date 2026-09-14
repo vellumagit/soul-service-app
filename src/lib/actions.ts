@@ -146,6 +146,19 @@ async function accountEmail(accountId: string): Promise<string | null> {
   return row?.email ?? null;
 }
 
+/** Does this client's arrangement make every session free? */
+async function clientSessionsAreFree(accountId: string, clientId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ free: clients.freeSessions })
+    .from(clients)
+    .where(and(eq(clients.accountId, accountId), eq(clients.id, clientId)))
+    .limit(1);
+  return row?.free === true;
+}
+
+/** The fields that record a session as free / gifted. */
+const GIFTED = { paymentMethod: "gifted" as const, paymentAmountCents: 0 };
+
 async function assertClientOwned(accountId: string, clientId: string): Promise<void> {
   const [row] = await db
     .select({ id: clients.id })
@@ -207,6 +220,7 @@ export async function createClient(formData: FormData) {
       emergencyName: str(formData, "emergencyName"),
       emergencyPhone: str(formData, "emergencyPhone"),
       status: "active",
+      freeSessions: bool(formData, "freeSessions"),
     })
     .returning({ id: clients.id });
 
@@ -237,6 +251,7 @@ export async function createClient(formData: FormData) {
         status: isPast ? "completed" : "scheduled",
         scheduledAt: firstSessionDate,
         timezone: bookingTz,
+        ...(bool(formData, "freeSessions") ? GIFTED : {}),
         durationMinutes: (await getSettings(accountId))?.defaultSessionMinutes ?? 60,
       })
       .returning({ id: sessions.id });
@@ -341,6 +356,7 @@ export async function updateClient(formData: FormData) {
       emergencyName: str(formData, "emergencyName"),
       emergencyPhone: str(formData, "emergencyPhone"),
       status: clientStatusValue(formData, "status"),
+      freeSessions: bool(formData, "freeSessions"),
       // portalEnabled is deliberately NOT written here. It's owned by the
       // Portal card on the client's profile (connect / disconnect), not by
       // this form. Writing it from a checkbox that no longer exists would
@@ -1597,6 +1613,8 @@ export async function scheduleSession(
       timezone: bookingTz,
       intention: str(formData, "intention"),
       locationType,
+      // Free at booking time: the dialog's tick, or the client's arrangement.
+      ...((bool(formData, "free") || (await clientSessionsAreFree(accountId, clientId))) ? GIFTED : {}),
       // No Meet link for in-person; otherwise the pasted fallback (used when
       // Google isn't connected).
       meetUrl: isInPerson ? null : manualMeetUrl,
@@ -3418,6 +3436,7 @@ export async function scheduleSessionSeries(
     // months out would otherwise have no row to hang any of that on.
     const firstFutureIndex =
       dates.findIndex((d) => d.getTime() > now.getTime()) + 1; // 0 = none
+    const seriesFree = await clientSessionsAreFree(accountId, clientId);
     const sessionRows = dates
       .map((scheduledAt, i) => ({ scheduledAt, index: i + 1 }))
       .filter(
@@ -3440,6 +3459,7 @@ export async function scheduleSessionSeries(
         seriesId: seriesRow.id,
         occurrenceIndex: index,
         locationType,
+        ...(seriesFree ? GIFTED : {}),
       }));
 
     const inserted = await db
@@ -4350,6 +4370,7 @@ export async function logPastSession(formData: FormData) {
   const scheduledAtRaw = required(str(formData, "scheduledAt"), "Date / time");
   const durationMinutes = Math.max(5, Math.min(180, num(formData, "durationMinutes") ?? 60));
   const paid = bool(formData, "paid");
+  const free = bool(formData, "free") || (await clientSessionsAreFree(accountId, clientId));
 
   const [created] = await db
     .insert(sessions)
@@ -4364,10 +4385,14 @@ export async function logPastSession(formData: FormData) {
       arrivedAs: str(formData, "arrivedAs"),
       leftAs: str(formData, "leftAs"),
       notes: str(formData, "notes"),
-      paid,
-      paymentMethod: paid ? paymentMethodValue(formData, "paymentMethod") : null,
-      paymentAmountCents: paid ? amountCents(formData, "paymentAmount") : null,
-      paidAt: paid ? new Date().toISOString().slice(0, 10) : null,
+      ...(free
+        ? { paid: false, ...GIFTED, paidAt: null }
+        : {
+            paid,
+            paymentMethod: paid ? paymentMethodValue(formData, "paymentMethod") : null,
+            paymentAmountCents: paid ? amountCents(formData, "paymentAmount") : null,
+            paidAt: paid ? new Date().toISOString().slice(0, 10) : null,
+          }),
     })
     .returning();
 
@@ -4442,7 +4467,21 @@ export async function updateSession(formData: FormData) {
     try {
       const settings = await getSettings(accountId);
       const rate = settings?.defaultRateCents ?? 0;
-      if (rate > 0) {
+      if (await clientSessionsAreFree(accountId, clientId)) {
+        // A free client: record the session as gifted so it never lands in
+        // "Payments to mark".
+        await db
+          .update(sessions)
+          .set({ ...GIFTED, updatedAt: new Date() })
+          .where(
+            and(
+              eq(sessions.accountId, accountId),
+              eq(sessions.id, id),
+              eq(sessions.paid, false),
+              isNull(sessions.paymentMethod)
+            )
+          );
+      } else if (rate > 0) {
         await db
           .update(sessions)
           .set({ paymentAmountCents: rate, updatedAt: new Date() })
@@ -6276,4 +6315,20 @@ export async function checkSessionSlot(
   } catch {
     return { ok: false };
   }
+}
+
+
+/** "Free" on the session card — one tap, no dialog. Records the session as
+ *  gifted (no charge) so it drops out of every owed figure. Undo = Charge
+ *  instead, which returns it to "not yet recorded". */
+export async function markSessionFree(sessionId: string, clientId: string) {
+  const { accountId } = await requireSession();
+  await db
+    .update(sessions)
+    .set({ paid: false, ...GIFTED, paidAt: null, updatedAt: new Date() })
+    .where(and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId)));
+  revalidatePath(`/clients/${clientId}`);
+  revalidatePath("/payments");
+  revalidatePath("/today");
+  revalidatePath("/requests", "layout");
 }

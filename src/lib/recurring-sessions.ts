@@ -32,7 +32,7 @@ import "server-only";
 
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { sessions, sessionSeries, practitionerSettings } from "@/db/schema";
+import { sessions, sessionSeries, practitionerSettings, clients } from "@/db/schema";
 import {
   resolveTimeZone,
   zonedClock,
@@ -119,6 +119,8 @@ type SeriesRow = {
   locationType: string;
   intention: string | null;
   practiceTz: string | null;
+  /** clients.free_sessions — every occurrence records as gifted. */
+  clientFree?: boolean | null;
 };
 
 async function ensureForSeries(
@@ -182,6 +184,8 @@ async function ensureForSeries(
       googleRecurringEventId,
       meetUrl,
       locationType: series.locationType,
+      // A free client's occurrences record as gifted from the start.
+      ...(series.clientFree ? { paymentMethod: "gifted" as const, paymentAmountCents: 0 } : {}),
     });
     if (toInsert.length >= MAX_CREATE_PER_TICK) break;
   }
@@ -235,12 +239,14 @@ export async function ensureSeriesSessions(opts?: {
       locationType: sessionSeries.locationType,
       intention: sessionSeries.intention,
       practiceTz: practitionerSettings.timezone,
+      clientFree: clients.freeSessions,
     })
     .from(sessionSeries)
     .leftJoin(
       practitionerSettings,
       eq(practitionerSettings.accountId, sessionSeries.accountId)
     )
+    .leftJoin(clients, eq(clients.id, sessionSeries.clientId))
     .where(and(...conds));
 
   const now = new Date();

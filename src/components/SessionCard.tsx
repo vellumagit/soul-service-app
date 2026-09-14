@@ -7,6 +7,7 @@ import {
   cancelSessionSeries,
   deleteSession,
   markSessionUnpaid,
+  markSessionFree,
   setSessionLocation,
   restoreSession,
   markNoShow,
@@ -477,10 +478,28 @@ export function SessionCard({
                   }
                 />
               </>
+            ) : session.paymentMethod === "gifted" ? (
+              <>
+                <span className="chip bg-ink-100 text-ink-600">FREE</span>
+                <span className="text-ink-500 text-xs">No charge for this one</span>
+                <div className="flex-1" />
+                <ConfirmButton
+                  destructive={false}
+                  label={
+                    <span className="text-xs text-ink-500 hover:text-ink-900">
+                      Charge instead
+                    </span>
+                  }
+                  message="Put this session back to unpaid so you can record a payment?"
+                  confirmLabel="Yes, charge for it"
+                  onConfirm={() => markSessionUnpaid(session.id, session.clientId)}
+                />
+              </>
             ) : (
               <>
                 <span className="text-xs text-ink-500">Not yet recorded</span>
                 <div className="flex-1" />
+                <FreeButton sessionId={session.id} clientId={session.clientId} />
                 <MarkPaidDialog
                   sessionId={session.id}
                   clientId={session.clientId}
@@ -957,5 +976,37 @@ function ClosingLine({ label, body }: { label: string; body: string }) {
         {body}
       </div>
     </div>
+  );
+}
+
+
+// One tap to make a session free. Sits beside Mark paid so "this one's on
+// me" no longer means opening the payment dialog first.
+function FreeButton({ sessionId, clientId }: { sessionId: string; clientId: string }) {
+  const [pending, start] = useTransition();
+  return (
+    <button
+      type="button"
+      disabled={pending}
+      aria-busy={pending}
+      onClick={() =>
+        start(async () => {
+          try {
+            await markSessionFree(sessionId, clientId);
+            notify({ kind: "success", title: "Marked free", body: "No charge — it won't show as owed.", ttlMs: 3000 });
+          } catch (err) {
+            notify({
+              kind: "warning",
+              title: "Couldn't mark it free",
+              body: err instanceof Error ? err.message : "Try again.",
+            });
+          }
+        })
+      }
+      className="inline-flex items-center min-h-8 px-2.5 rounded-md border border-ink-200 bg-white text-xs text-ink-600 font-medium hover:bg-ink-50 disabled:opacity-60"
+      title="No charge for this session"
+    >
+      Free
+    </button>
   );
 }

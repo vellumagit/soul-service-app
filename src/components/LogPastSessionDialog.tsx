@@ -47,6 +47,7 @@ export function LogPastSessionDialog({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paid, setPaid] = useState(false);
+  const [free, setFree] = useState(false);
   const practiceTz = useTimeZone();
 
   const noClients = clients.length === 0;
@@ -199,7 +200,22 @@ export function LogPastSessionDialog({
               <textarea name="notes" rows={5} className={inputCls} />
             </Field>
 
-            <div className="border-t border-ink-100 pt-4">
+            <div className="border-t border-ink-100 pt-4 space-y-2">
+              <label className="flex items-center gap-2 text-sm font-medium text-ink-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  name="free"
+                  value="true"
+                  checked={free}
+                  onChange={(e) => {
+                    setFree(e.target.checked);
+                    if (e.target.checked) setPaid(false);
+                  }}
+                  className="accent-plum-600 w-4 h-4"
+                />
+                Free — no charge
+              </label>
+              {!free && (
               <label className="flex items-center gap-2 text-sm font-medium text-ink-700 cursor-pointer">
                 <input
                   type="checkbox"
@@ -210,7 +226,8 @@ export function LogPastSessionDialog({
                 />
                 Already paid
               </label>
-              {paid && (
+              )}
+              {paid && !free && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
                   <Field label="Method">
                     <select

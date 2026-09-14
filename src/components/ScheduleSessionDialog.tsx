@@ -363,6 +363,10 @@ export function ScheduleSessionDialog({
                 />
               </Field>
             </div>
+            <label className="inline-flex items-center gap-2 text-sm text-ink-700 cursor-pointer">
+              <input type="checkbox" name="free" value="true" className="rounded border-ink-300" />
+              Free — no charge for this session
+            </label>
             {slotNote && (
               <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded p-2 -mt-2">
                 {slotNote}

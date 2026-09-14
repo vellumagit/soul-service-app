@@ -323,6 +323,24 @@ export function NewClientDialog({
             </Field>
           </div>
 
+<div className="border-t border-ink-100 pt-4 mt-2">
+            <label className="inline-flex items-start gap-2 text-sm text-ink-700">
+              <input
+                type="checkbox"
+                name="freeSessions"
+                value="true"
+                className="rounded border-ink-300 mt-0.5"
+              />
+              <span>
+                Sessions are free for this client
+                <span className="block text-[11px] text-ink-500 italic mt-0.5 leading-snug">
+                  Every session records as no charge — nothing to mark paid,
+                  nothing shows as owed. For family, trades, pro bono.
+                </span>
+              </span>
+            </label>
+          </div>
+
           {/* Opening their portal from here. Off by default on purpose:
               ticking it sends a real email to a real person the moment you
               hit Save, and adding someone to your roster isn't always the

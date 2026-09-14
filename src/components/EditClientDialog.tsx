@@ -413,6 +413,25 @@ export function EditClientDialog({
             </Field>
           </div>
 
+<div className="border-t border-ink-100 pt-4 mt-2">
+            <label className="inline-flex items-start gap-2 text-sm text-ink-700">
+              <input
+                type="checkbox"
+                name="freeSessions"
+                value="true"
+                defaultChecked={client.freeSessions}
+                className="rounded border-ink-300 mt-0.5"
+              />
+              <span>
+                Sessions are free for this client
+                <span className="block text-[11px] text-ink-500 italic mt-0.5 leading-snug">
+                  Every session records as no charge — nothing to mark paid,
+                  nothing shows as owed. For family, trades, pro bono.
+                </span>
+              </span>
+            </label>
+          </div>
+
           <Field label="Status">
             <select
               name="status"

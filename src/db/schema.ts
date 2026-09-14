@@ -158,6 +158,9 @@ export const clients = pgTable(
     // link. Default OFF so existing clients don't accidentally get access
     // until the practitioner consciously enables it for each one.
     portalEnabled: boolean("portal_enabled").default(false).notNull(),
+    // Every session for this client records as gifted (no charge) — a
+    // pro-bono, family or trade arrangement. She never marks them paid.
+    freeSessions: boolean("free_sessions").default(false).notNull(),
     lastPortalVisitAt: timestamp("last_portal_visit_at"),
 
     createdAt: timestamp("created_at").defaultNow().notNull(),
