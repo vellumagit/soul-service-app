@@ -2,6 +2,7 @@
 
 import { useId, useState } from "react";
 import { Modal } from "./Modal";
+import { notify } from "./FlashNotifier";
 import { Field, inputCls } from "./Form";
 import { rescheduleSession } from "@/lib/actions";
 import { rethrowIfRedirect } from "@/lib/redirect-error";
@@ -95,6 +96,12 @@ export function RescheduleDialog({
             try {
               await rescheduleSession(fd);
               setOpen(false);
+              notify({
+                kind: "success",
+                title: "Moved — the client was emailed",
+                body: "If they had asked to reschedule, that request is cleared.",
+                ttlMs: 4500,
+              });
             } catch (err) {
               rethrowIfRedirect(err);
               setError(err instanceof Error ? err.message : "Failed");

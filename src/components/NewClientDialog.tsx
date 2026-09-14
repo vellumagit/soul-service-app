@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { Modal } from "./Modal";
+import { useTimeZone } from "./TimeZoneProvider";
 import { Field, inputCls } from "./Form";
 import { createClient } from "@/lib/actions";
 import { LOCALE_LABELS, LOCALES } from "@/lib/i18n";
@@ -29,6 +30,7 @@ export function NewClientDialog({
   // "+ New" menu, the page-level button). A shared static id made the footer
   // "Add client" button's form= target the wrong (closed) instance → dud.
   const newClientFormId = useId();
+  const practiceTz = useTimeZone();
 
   // Autosave the whole form to localStorage as she types. Keyed by
   // "new-client" (only one new-client form can be open at a time). Hook
@@ -293,17 +295,23 @@ export function NewClientDialog({
 
           <div className="border-t border-ink-100 pt-4 mt-2">
             <Field
-              label="First session date"
-              required
-              hint="Locks in the follow-up rhythm: 1 week, 1 month, and 3 months after this date. Past or future is fine."
+              label="First session (optional)"
+              hint="Leave blank to add them without booking anything. With a date it books the session and sets the follow-up rhythm (1 week, 1 month, 3 months). Past or future is fine."
             >
-              <input
-                name="firstSessionDate"
-                type="date"
-                required
-                defaultValue={new Date().toISOString().slice(0, 10)}
-                className={inputCls}
-              />
+              <div className="grid grid-cols-2 gap-3">
+                <input
+                  name="firstSessionDate"
+                  type="date"
+                  className={inputCls}
+                />
+                <input
+                  name="firstSessionTime"
+                  type="time"
+                  defaultValue="12:00"
+                  className={inputCls}
+                />
+              </div>
+              <input type="hidden" name="bookingTimezone" value={practiceTz} readOnly />
             </Field>
             <Field label="First session type">
               <input

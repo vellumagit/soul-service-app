@@ -3,14 +3,19 @@
 import { useEffect, useId, useState } from "react";
 import { Modal } from "./Modal";
 import { Field, inputCls } from "./Form";
-import { scheduleSession } from "@/lib/actions";
+import { checkSessionSlot, scheduleSession } from "@/lib/actions";
+import { localToIso } from "@/lib/series-dates";
 import { rethrowIfRedirect } from "@/lib/redirect-error";
 import { LocalDateTimeInput } from "./LocalDateTimeInput";
 import { useTimeZone } from "./TimeZoneProvider";
 import { zonedLocalInputValue } from "@/lib/timezone";
 import { notify } from "./FlashNotifier";
 
-type ClientOption = { id: string; fullName: string };
+type ClientOption = {
+  id: string;
+  fullName: string;
+  primarySessionType?: string | null;
+};
 
 // Default to the next round hour — expressed as HER local wall clock, since
 // that's the zone the picker reads back.
@@ -49,11 +54,17 @@ export function ScheduleSessionDialog({
   trigger,
   sabbathDays = [],
   respondToShortcut = true,
+  defaultDurationMinutes,
+  openOnMount = false,
 }: {
   clients: ClientOption[];
   defaultClientId?: string;
   defaultType?: string | null;
   trigger?: (open: () => void) => React.ReactNode;
+  /** Settings → default session length. Falls back to 60. */
+  defaultDurationMinutes?: number | null;
+  /** Open immediately (a request's "Schedule it →" lands here). */
+  openOnMount?: boolean;
   /** Lowercase ISO weekday names she's marked as sacred-off. When the picked
    *  date falls on one, a quiet amber hint reminds her — never blocks. */
   sabbathDays?: string[];
@@ -76,6 +87,30 @@ export function ScheduleSessionDialog({
   // The current value of the datetime-local picker — used to detect when
   // the chosen day is one she's marked off.
   const [pickedWhen, setPickedWhen] = useState<string>(initialWhen);
+  const [pickedClientId, setPickedClientId] = useState<string>(defaultClientId ?? "");
+  const [typeValue, setTypeValue] = useState<string>(defaultType ?? "Session");
+  const [durationValue, setDurationValue] = useState<number>(defaultDurationMinutes ?? 60);
+  // "You already have Vlado at 2:00" — a quiet line, never a block.
+  const [slotNote, setSlotNote] = useState<string | null>(null);
+  useEffect(() => {
+    if (openOnMount) setOpen(true);
+  }, [openOnMount]);
+  useEffect(() => {
+    if (!open) return;
+    const iso = localToIso(pickedWhen, practiceTz);
+    if (!iso) {
+      setSlotNote(null);
+      return;
+    }
+    let cancelled = false;
+    checkSessionSlot(iso, durationValue).then((r) => {
+      if (cancelled) return;
+      setSlotNote(r.ok ? r.note : null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, pickedWhen, durationValue, practiceTz]);
   // Online (Google Meet + remote notetaker) vs in-person (no Meet/bot; she
   // records in the room with the "Record session" button on the card).
   const [locationType, setLocationType] = useState<"online" | "in_person">(
@@ -209,7 +244,9 @@ export function ScheduleSessionDialog({
                   notify({
                     kind: "success",
                     title: "Session scheduled",
-                    ttlMs: 3500,
+                    ttlMs: 6000,
+                    actionHref: `/clients/${String(fd.get("clientId") ?? "")}?tab=sessions#${result.sessionId}`,
+                    actionLabel: "Open it",
                   });
                 }
               } catch (err) {
@@ -238,7 +275,15 @@ export function ScheduleSessionDialog({
               <select
                 name="clientId"
                 required
-                defaultValue={defaultClientId ?? ""}
+                value={pickedClientId}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  setPickedClientId(id);
+                  // Their usual session type follows the pick — she was
+                  // retyping it from the + New menu every time.
+                  const usual = clients.find((c) => c.id === id)?.primarySessionType;
+                  if (usual) setTypeValue(usual);
+                }}
                 className={inputCls}
               >
                 {!defaultClientId && <option value="">— choose —</option>}
@@ -253,7 +298,8 @@ export function ScheduleSessionDialog({
             <Field label="Session type">
               <input
                 name="type"
-                defaultValue={defaultType ?? "Session"}
+                value={typeValue}
+                onChange={(e) => setTypeValue(e.target.value)}
                 className={inputCls}
                 placeholder="Whatever you call this kind of session"
               />
@@ -308,7 +354,8 @@ export function ScheduleSessionDialog({
                 <input
                   name="durationMinutes"
                   type="number"
-                  defaultValue={60}
+                  value={durationValue}
+                  onChange={(e) => setDurationValue(Number(e.target.value) || 60)}
                   min={5}
                   max={180}
                   step={5}
@@ -316,6 +363,11 @@ export function ScheduleSessionDialog({
                 />
               </Field>
             </div>
+            {slotNote && (
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded p-2 -mt-2">
+                {slotNote}
+              </p>
+            )}
 
             {/* Sabbath gentle reminder — never blocks, just notices. Only
                 shows when the picked weekday matches one she's marked off. */}
@@ -340,7 +392,7 @@ export function ScheduleSessionDialog({
             )}
 
             {locationType === "online" && (
-              <Field label="Google Meet link" hint="Paste the link after creating it in Google Meet">
+              <Field label="Google Meet link" hint="Leave blank — Google makes one when you save. Paste only if you use Zoom or your own room.">
                 <input
                   name="meetUrl"
                   type="url"

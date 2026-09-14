@@ -30,7 +30,7 @@ import {
   occurrenceInstant,
   ruleInstant,
 } from "./recurring-sessions";
-import { isValidTimeZone, resolveTimeZone } from "./timezone";
+import { isValidTimeZone, resolveTimeZone, zonedWallTimeToUtc } from "./timezone";
 import { safeCurrency } from "./format";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -212,7 +212,21 @@ export async function createClient(formData: FormData) {
 
   // If a first session date was given, create the session + follow-up tasks.
   if (firstSessionDateRaw) {
-    const firstSessionDate = new Date(firstSessionDateRaw + "T12:00:00");
+    // Booked at the chosen wall-clock time in HER zone — the old bare
+    // "T12:00:00" was parsed in the server's clock (UTC on Vercel).
+    const dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(firstSessionDateRaw);
+    if (!dm) throw new Error("Pick a valid first-session date.");
+    const tm = /^(\d{1,2}):(\d{2})$/.exec(str(formData, "firstSessionTime") ?? "12:00");
+    const tzRaw = str(formData, "bookingTimezone");
+    const bookingTz = isValidTimeZone(tzRaw) ? tzRaw : resolveTimeZone((await getSettings(accountId))?.timezone);
+    const firstSessionDate = zonedWallTimeToUtc(
+      Number(dm[1]),
+      Number(dm[2]) - 1,
+      Number(dm[3]),
+      tm ? Number(tm[1]) : 12,
+      tm ? Number(tm[2]) : 0,
+      bookingTz
+    );
     const isPast = firstSessionDate < new Date();
     const [firstSession] = await db
       .insert(sessions)
@@ -222,7 +236,8 @@ export async function createClient(formData: FormData) {
         type: firstSessionType,
         status: isPast ? "completed" : "scheduled",
         scheduledAt: firstSessionDate,
-        durationMinutes: 60,
+        timezone: bookingTz,
+        durationMinutes: (await getSettings(accountId))?.defaultSessionMinutes ?? 60,
       })
       .returning({ id: sessions.id });
 
@@ -6147,9 +6162,10 @@ export async function generateInvoice(sessionId: string, clientId: string) {
   // the session itself), but call it so unauthenticated requests still bounce.
   const { accountId } = await requireSession();
   const { generateInvoiceForSession } = await import("./invoices");
-  await generateInvoiceForSession(sessionId, accountId);
+  const out = await generateInvoiceForSession(sessionId, accountId);
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/payments");
+  return { invoiceUrl: out.url, invoiceNumber: out.invoiceNumber };
 }
 
 export type ShareNoteResult =
@@ -6217,5 +6233,47 @@ export async function shareSessionNote(
   } catch (err) {
     console.error("[share note] failed:", err);
     return { ok: false, error: "Couldn't save that note." };
+  }
+}
+
+
+/** "You already have Vlado at 2:00" — what the Schedule dialog shows under the
+ *  time picker. Advisory only; booking is never blocked. */
+export async function checkSessionSlot(
+  startIso: string,
+  durationMinutes: number
+): Promise<{ ok: true; note: string | null } | { ok: false }> {
+  try {
+    const { accountId } = await requireSession();
+    const startAt = new Date(startIso);
+    if (Number.isNaN(startAt.getTime())) return { ok: true, note: null };
+    const { checkConflict } = await import("./availability");
+    const r = await checkConflict(accountId, startAt, Math.max(5, Math.min(180, durationMinutes || 60)));
+    if (r.status === "free") return { ok: true, note: null };
+    if (r.status === "sabbath-day") return { ok: true, note: "That's one of your days off." };
+    if (r.status === "time-off") return { ok: true, note: "That falls inside your time off." };
+    if (r.status === "outside-hours") return { ok: true, note: "That's outside your working hours." };
+    if (r.status === "conflict") {
+      const settings = await getSettings(accountId);
+      const tz = resolveTimeZone(settings?.timezone);
+      const [who] = await db
+        .select({ name: clients.fullName })
+        .from(sessions)
+        .innerJoin(clients, eq(clients.id, sessions.clientId))
+        .where(
+          and(
+            eq(sessions.accountId, accountId),
+            eq(sessions.status, "scheduled"),
+            sql`${sessions.scheduledAt} < ${new Date(startAt.getTime() + durationMinutes * 60000).toISOString()}`,
+            sql`${sessions.scheduledAt} + (${sessions.durationMinutes} || ' minutes')::interval > ${startAt.toISOString()}`
+          )
+        )
+        .limit(1);
+      const at = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz }).format(r.busyStart);
+      return { ok: true, note: who ? `You already have ${who.name.split(" ")[0]} at ${at}.` : `Your calendar is busy at ${at}.` };
+    }
+    return { ok: true, note: null };
+  } catch {
+    return { ok: false };
   }
 }

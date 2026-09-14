@@ -39,7 +39,7 @@ export function MarkPaidDialog({
       ) : (
         <button
           onClick={() => setOpen(true)}
-          className="text-xs text-green-700 hover:underline font-medium"
+          className="inline-flex items-center min-h-8 px-2.5 rounded-md border border-green-200 bg-white text-xs text-green-700 font-medium hover:bg-green-50"
         >
           Mark paid
         </button>

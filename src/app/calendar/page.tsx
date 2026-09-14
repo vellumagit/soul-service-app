@@ -301,6 +301,7 @@ export default async function CalendarPage({
         <ScheduleSessionDialog
           clients={clients}
           respondToShortcut={false}
+          defaultDurationMinutes={settings.defaultSessionMinutes}
           sabbathDays={(settings.sabbathDays ?? []) as string[]}
         />
         <TimeOffDialog />

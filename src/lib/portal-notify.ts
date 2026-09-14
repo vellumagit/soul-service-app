@@ -68,7 +68,10 @@ export async function notifyPractitionerOfPortalRequest(input: {
       sessionWhenLabel: input.sessionWhenLabel ?? null,
       preferredTimes: input.preferredTimes ?? null,
       message: input.message,
-      link: base ? `${base}/clients/${input.clientId}` : null,
+      // The row with Reply / Move / Resolve on it, not the profile.
+      link: base
+        ? `${base}/requests/${input.kind === "booking" ? "sessions" : "reschedules"}`
+        : null,
     });
   } catch (err) {
     console.error("[portal] request notify email failed:", err);

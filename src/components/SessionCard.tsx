@@ -86,6 +86,10 @@ export function SessionCard({
   const [open, setOpen] = useState(
     defaultOpen ?? session.status === "scheduled"
   );
+  // A deep link (#sessionId) arrives after mount — open when asked.
+  useEffect(() => {
+    if (defaultOpen) setOpen(true);
+  }, [defaultOpen]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // The Closing Ritual modal. Opens automatically when she marks a session

@@ -95,6 +95,7 @@ export function SessionsLog({
   // A journey-timeline marker links to #<sessionId>. If that session sits
   // below the first page, reveal up to it and scroll there — otherwise the
   // click silently did nothing.
+  const [hashId, setHashId] = useState<string | null>(null);
   useEffect(() => {
     const id = window.location.hash.slice(1);
     if (!id) return;
@@ -104,6 +105,7 @@ export function SessionsLog({
       setVisibleCount(Math.ceil((idx + 1) / PAGE_SIZE) * PAGE_SIZE);
       return;
     }
+    setHashId(id); // the card opens itself, not just scrolls into view
     document.getElementById(id)?.scrollIntoView({ block: "start" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visibleCount]);
@@ -157,7 +159,7 @@ export function SessionsLog({
                 autoUploadAiNotes={autoUploadAiNotes}
                 clientPortalEnabled={clientPortalEnabled}
                 defaultRateCents={defaultRateCents}
-                defaultOpen={s.id === firstOpenId}
+                defaultOpen={s.id === firstOpenId || s.id === hashId}
               />
             ))}
           </div>

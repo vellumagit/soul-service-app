@@ -50,7 +50,7 @@ import {
   inArray,
   ne,
 } from "drizzle-orm";
-import { resolveTimeZone, zonedDayBounds, zonedWeekRange, zonedWallTimeToUtc, zonedYearMonthDay } from "@/lib/timezone";
+import { resolveTimeZone, zonedAddDays, zonedDayBounds, zonedWeekRange, zonedWallTimeToUtc, zonedYearMonthDay } from "@/lib/timezone";
 
 /** Practice timezone for an account — the anchor for every "today"/"this
  *  week" window below. The server runs UTC; computing day bounds with
@@ -476,6 +476,7 @@ export async function listClientsForPicker(accountId: string) {
       id: clients.id,
       fullName: clients.fullName,
       avatarUrl: clients.avatarUrl,
+      primarySessionType: clients.primarySessionType,
     })
     .from(clients)
     .where(
@@ -2303,6 +2304,8 @@ export async function getDashboardData(accountId: string) {
   const now = new Date();
   const tz = await practiceTimeZone(accountId);
   const { start: startOfToday, end: endOfToday } = zonedDayBounds(now, tz);
+  // Tomorrow, so the evening glance at Today can be a glance at tomorrow.
+  const { end: endOfTomorrow } = zonedDayBounds(zonedAddDays(now, 1, tz), tz);
   const { start: startOfWeek, end: endOfWeek } = zonedWeekRange(now, tz);
 
   const fourteenDaysAgo = new Date(now);
@@ -2310,6 +2313,7 @@ export async function getDashboardData(accountId: string) {
 
   const [
     todays,
+    tomorrows,
     thisWeek,
     unpaidSessions,
     missingNotes,
@@ -2335,6 +2339,28 @@ export async function getDashboardData(accountId: string) {
           eq(sessions.accountId, accountId),
           gte(sessions.scheduledAt, startOfToday),
           lt(sessions.scheduledAt, endOfToday)
+        )
+      )
+      .orderBy(asc(sessions.scheduledAt)),
+    db
+      .select({
+        id: sessions.id,
+        clientId: sessions.clientId,
+        clientName: clients.fullName,
+        type: sessions.type,
+        scheduledAt: sessions.scheduledAt,
+        durationMinutes: sessions.durationMinutes,
+        intention: sessions.intention,
+        clientStatedIntention: sessions.clientStatedIntention,
+      })
+      .from(sessions)
+      .innerJoin(clients, eq(sessions.clientId, clients.id))
+      .where(
+        and(
+          eq(sessions.accountId, accountId),
+          eq(sessions.status, "scheduled"),
+          gte(sessions.scheduledAt, endOfToday),
+          lt(sessions.scheduledAt, endOfTomorrow)
         )
       )
       .orderBy(asc(sessions.scheduledAt)),
@@ -2428,6 +2454,7 @@ export async function getDashboardData(accountId: string) {
 
   return {
     todaySessions: todays,
+    tomorrowSessions: tomorrows,
     thisWeekCount: thisWeek[0]?.count ?? 0,
     unpaidSessions,
     missingNotes,

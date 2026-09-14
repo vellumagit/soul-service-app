@@ -24,10 +24,20 @@ export function LogPastSessionDialog({
   clients,
   defaultClientId,
   trigger,
+  defaultType,
+  defaultDurationMinutes,
+  defaultRateCents,
 }: {
   clients: ClientOption[];
   defaultClientId?: string;
   trigger?: (open: () => void) => React.ReactNode;
+  /** The client's usual session type (profile). */
+  defaultType?: string | null;
+  /** Settings → default session length. */
+  defaultDurationMinutes?: number | null;
+  /** Settings → default rate; pre-fills the amount so a paid session is
+   *  never recorded as worth nothing (the box used to open empty). */
+  defaultRateCents?: number | null;
 }) {
   // Per-instance form id: the footer button binds to THIS form, never
   // to the first same-named form in the document (a hidden or sibling
@@ -132,7 +142,7 @@ export function LogPastSessionDialog({
             <Field label="Session type">
               <input
                 name="type"
-                defaultValue="Session"
+                defaultValue={defaultType ?? "Session"}
                 className={inputCls}
                 placeholder="Whatever you call this kind of session"
               />
@@ -151,7 +161,7 @@ export function LogPastSessionDialog({
                 <input
                   name="durationMinutes"
                   type="number"
-                  defaultValue={60}
+                  defaultValue={defaultDurationMinutes ?? 60}
                   min={5}
                   max={180}
                   step={5}
@@ -222,7 +232,8 @@ export function LogPastSessionDialog({
                       type="number"
                       step="1"
                       min={0}
-                      placeholder="135"
+                      defaultValue={defaultRateCents ? Math.round(defaultRateCents / 100) : undefined}
+                      placeholder="0"
                       className={inputCls}
                     />
                   </Field>

@@ -286,14 +286,23 @@ export default async function ThresholdPage({
             )}
           </section>
 
-          {/* A breath, then a quiet footer link back to the full file */}
-          <div className="pt-6 text-center">
+          {/* After the session: straight to this session's card to write it
+              up. Before, the only exits here were back to the profile. */}
+          <div className="pt-6 text-center space-y-3">
             <Link
-              href={`/clients/${client.id}?tab=sessions`}
-              className="text-[11px] text-ink-400 hover:text-ink-700 italic"
+              href={`/clients/${client.id}?tab=sessions#${session.id}`}
+              className="inline-flex items-center justify-center min-h-10 px-4 rounded-md bg-plum-700 text-white text-sm font-medium hover:bg-plum-600"
             >
-              Open their full file →
+              Session's done — write it up →
             </Link>
+            <div>
+              <Link
+                href={`/clients/${client.id}?tab=sessions`}
+                className="text-[11px] text-ink-400 hover:text-ink-700 italic"
+              >
+                Open their full file →
+              </Link>
+            </div>
           </div>
         </article>
       </main>

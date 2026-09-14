@@ -84,7 +84,7 @@ export function BookingRequestRowActions({
         )}
         <span className="text-ink-300">·</span>
         <Link
-          href={`/clients/${clientId}`}
+          href={`/clients/${clientId}?tab=sessions&schedule=1`}
           className="text-plum-700 hover:underline font-medium"
         >
           Schedule it →

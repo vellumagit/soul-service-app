@@ -33,6 +33,8 @@ export function ClientHeader({
   sabbathDays = [],
   resendConfigured = false,
   togetherSince,
+  defaultDurationMinutes = null,
+  defaultRateCents = null,
 }: {
   client: Client;
   emailTemplates: EmailTemplate[];
@@ -43,6 +45,8 @@ export function ClientHeader({
   /** Days she has marked off — the Schedule dialog warns when a pick lands
    *  on one. Without this the header dialog never warned. */
   sabbathDays?: string[];
+  defaultDurationMinutes?: number | null;
+  defaultRateCents?: number | null;
   resendConfigured?: boolean;
   /** First non-cancelled session date for this client. Falls back to
    *  client.createdAt if she hasn't had a session yet. Drives the small
@@ -237,9 +241,13 @@ export function ClientHeader({
                 defaultType={client.primarySessionType}
                 sabbathDays={sabbathDays}
                 respondToShortcut={false}
+                defaultDurationMinutes={defaultDurationMinutes}
               />
               <LogPastSessionDialog
                 clients={allClients}
+                defaultType={client.primarySessionType}
+                defaultDurationMinutes={defaultDurationMinutes}
+                defaultRateCents={defaultRateCents}
                 defaultClientId={client.id}
               />
               <EmailComposer

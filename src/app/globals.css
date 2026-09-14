@@ -906,3 +906,13 @@ body {
 .ctl-row:not(:has(.ctl-val > *)) {
   display: none;
 }
+
+
+/* Hover-revealed controls (edit / delete on tasks, goals, people, themes)
+   are invisible on a phone — there is no hover. Show them wherever the
+   device can't hover. */
+@media (hover: none) {
+  .opacity-0.group-hover\:opacity-100 {
+    opacity: 1;
+  }
+}

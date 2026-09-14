@@ -1,5 +1,7 @@
 "use client";
 
+import { notify } from "./FlashNotifier";
+
 import { useState, useTransition } from "react";
 import { generateInvoice } from "@/lib/actions";
 import { rethrowIfRedirect } from "@/lib/redirect-error";
@@ -74,7 +76,14 @@ export function GenerateInvoiceButton({
           setError(null);
           start(async () => {
             try {
-              await generateInvoice(sessionId, clientId);
+              const r = await generateInvoice(sessionId, clientId);
+              notify({
+                kind: "success",
+                title: `Invoice ${r.invoiceNumber} ready`,
+                ttlMs: 6000,
+                actionHref: r.invoiceUrl,
+                actionLabel: "Open PDF",
+              });
             } catch (e) {
               rethrowIfRedirect(e);
               setError(e instanceof Error ? e.message : "Failed");

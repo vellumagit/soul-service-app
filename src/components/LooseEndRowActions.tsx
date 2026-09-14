@@ -19,6 +19,7 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { ClosingRitualDialog } from "./ClosingRitualDialog";
+import { MarkPaidDialog } from "./MarkPaidDialog";
 import { addBotToSessionNow } from "@/lib/actions";
 import { notify } from "./FlashNotifier";
 import type { LooseEndRow } from "@/db/queries";
@@ -29,16 +30,22 @@ export function LooseEndRowActions({
   fallbackLabel,
   showReflectInline,
   showRetryBot,
+  showMarkPaidInline = false,
 }: {
   row: LooseEndRow;
   fallbackHref: string;
   fallbackLabel: string;
   showReflectInline: boolean;
   showRetryBot: boolean;
+  showMarkPaidInline?: boolean;
 }) {
   const [closingOpen, setClosingOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [retried, setRetried] = useState(false);
+
+  if (showMarkPaidInline) {
+    return <MarkPaidDialog sessionId={row.sessionId} clientId={row.clientId} />;
+  }
 
   if (showReflectInline) {
     return (

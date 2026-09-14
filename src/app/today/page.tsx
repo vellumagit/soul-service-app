@@ -61,6 +61,8 @@ export default async function HomePage() {
   const upcomingToday = data.todaySessions.filter(
     (s) => s.status === "scheduled"
   );
+  const owingClientIds = new Set(data.unpaidSessions.map((s) => s.clientId));
+  const noNotesClientIds = new Set(data.missingNotes.map((s) => s.clientId));
 
   return (
     <AppShell
@@ -84,7 +86,7 @@ export default async function HomePage() {
           A quiet sidebar pill wasn't enough. */}
       {pendingApprovals > 0 && (
         <Link
-          href="/requests"
+          href="/requests/circle-signups"
           className="block mb-6 rounded-lg p-4 border-l-4 no-underline hover:brightness-[0.98] transition"
           style={{
             background: "var(--color-honey-50, #fbf3e4)",
@@ -273,8 +275,16 @@ export default async function HomePage() {
                         {shortTime(s.scheduledAt, practiceTz)}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-ink-900">
+                        <div className="text-sm font-medium text-ink-900 flex items-center gap-2 flex-wrap">
                           {s.clientName}
+                          {/* What she'd want to know as they walk in — the
+                              data was already on this page, further down. */}
+                          {owingClientIds.has(s.clientId) && (
+                            <span className="chip bg-amber-50 text-amber-700">UNPAID</span>
+                          )}
+                          {noNotesClientIds.has(s.clientId) && (
+                            <span className="chip bg-ink-100 text-ink-600">NO NOTES</span>
+                          )}
                         </div>
                         <div className="text-xs text-ink-500">
                           {s.type} · {s.durationMinutes}m
@@ -290,6 +300,35 @@ export default async function HomePage() {
               )}
             </Section>
 
+            {/* Tomorrow — so the evening glance at Today is also the prep
+                for tomorrow. Compact: time, name, what they're bringing. */}
+            {data.tomorrowSessions.length > 0 && (
+              <Section title="Tomorrow" count={data.tomorrowSessions.length}>
+                <div className="-mx-5 -mb-5 overflow-hidden divide-y divide-ink-100">
+                  {data.tomorrowSessions.map((s) => (
+                    <Link
+                      key={s.id}
+                      href={`/sessions/${s.id}/prep`}
+                      className="flex items-center gap-3 px-5 py-2.5 hover:bg-ink-50"
+                    >
+                      <div className="font-mono text-xs text-ink-500 w-20 shrink-0">
+                        {shortTime(s.scheduledAt, practiceTz)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm text-ink-900">{s.clientName}</div>
+                        {(s.clientStatedIntention || s.intention) && (
+                          <div className="text-xs text-ink-500 truncate italic">
+                            “{s.clientStatedIntention || s.intention}”
+                          </div>
+                        )}
+                      </div>
+                      <span className="text-[11px] text-plum-700 shrink-0">Prep →</span>
+                    </Link>
+                  ))}
+                </div>
+              </Section>
+            )}
+
             {/* Needs attention */}
             {(data.unpaidSessions.length > 0 ||
               data.missingNotes.length > 0 ||
@@ -304,7 +343,7 @@ export default async function HomePage() {
                       text={
                         <>
                           <Link
-                            href={`/clients/${s.clientId}`}
+                            href={`/clients/${s.clientId}?tab=sessions#${s.id}`}
                             className="font-medium text-ink-900 hover:underline"
                           >
                             {s.clientName}
@@ -335,7 +374,7 @@ export default async function HomePage() {
                         <>
                           Notes pending for{" "}
                           <Link
-                            href={`/clients/${s.clientId}`}
+                            href={`/clients/${s.clientId}?tab=sessions#${s.id}`}
                             className="font-medium text-ink-900 hover:underline"
                           >
                             {s.clientName}
@@ -348,7 +387,7 @@ export default async function HomePage() {
                       }
                       action={
                         <Link
-                          href={`/clients/${s.clientId}?tab=sessions`}
+                          href={`/clients/${s.clientId}?tab=sessions#${s.id}`}
                           className="text-xs text-plum-700 hover:underline font-medium"
                         >
                           Write notes →

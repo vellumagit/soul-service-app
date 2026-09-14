@@ -190,6 +190,7 @@ function renderSection(
           count={ends.needPayment.length}
           rows={ends.needPayment}
           actionLabel="Open session →"
+          showMarkPaidInline
           timeZone={tz}
         />
       );

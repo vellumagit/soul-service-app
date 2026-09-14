@@ -141,7 +141,10 @@ export function ClosingRitualDialog({
           kind: "success",
           title: "Closing saved",
           body: "These will sit alongside your notes for this session.",
-          ttlMs: 3500,
+          ttlMs: 5000,
+          // The moment after completion is the moment payment is due.
+          actionHref: `#${sessionId}`,
+          actionLabel: "Mark it paid",
         });
       }
     } catch (err) {

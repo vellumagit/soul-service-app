@@ -51,11 +51,11 @@ export default async function ClientProfilePage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; schedule?: string }>;
 }) {
   const { email, accountId } = await requireSession();
   const { id } = await params;
-  const { tab = "overview" } = await searchParams;
+  const { tab = "overview", schedule } = await searchParams;
 
   const [file, allClients, activity, digest, emailTpls, noteTpls, settings] =
     await Promise.all([
@@ -127,6 +127,8 @@ export default async function ClientProfilePage({
         paymentInstructions={settings.paymentInstructions}
         allClients={allClients}
         sabbathDays={(settings.sabbathDays ?? []) as string[]}
+        defaultDurationMinutes={settings.defaultSessionMinutes}
+        defaultRateCents={settings.defaultRateCents}
         resendConfigured={!!process.env.RESEND_API_KEY}
         togetherSince={
           file.sessions
@@ -446,6 +448,8 @@ export default async function ClientProfilePage({
               // The header copy (always mounted) answers the `s` shortcut;
               // both answering opened two stacked dialogs.
               respondToShortcut={false}
+              defaultDurationMinutes={settings.defaultSessionMinutes}
+              openOnMount={schedule === "1"}
             />
             <ScheduleSeriesDialog
               clients={allClients}
@@ -455,6 +459,9 @@ export default async function ClientProfilePage({
             />
             <LogPastSessionDialog
               clients={allClients}
+              defaultType={client.primarySessionType}
+              defaultDurationMinutes={settings.defaultSessionMinutes}
+              defaultRateCents={settings.defaultRateCents}
               defaultClientId={client.id}
             />
           </div>

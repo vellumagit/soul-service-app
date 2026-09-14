@@ -318,6 +318,7 @@ export function Section({
   actionLabel,
   showReflectInline,
   showRetryBot,
+  showMarkPaidInline,
   timeZone,
 }: {
   title: string;
@@ -328,6 +329,7 @@ export function Section({
   actionLabel: string;
   showReflectInline?: boolean;
   showRetryBot?: boolean;
+  showMarkPaidInline?: boolean;
   timeZone?: string;
 }) {
   const isWarning = tone === "warning";
@@ -378,6 +380,7 @@ export function Section({
               fallbackLabel={actionLabel}
               showReflectInline={!!showReflectInline}
               showRetryBot={!!showRetryBot}
+              showMarkPaidInline={!!showMarkPaidInline}
             />
           </li>
         ))}
