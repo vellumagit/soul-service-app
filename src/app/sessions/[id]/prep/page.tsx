@@ -6,7 +6,8 @@
 // column, generous spacing, Fraunces serif. Reads like the opening page
 // of someone's chapter.
 //
-// Pulled up via "Walk in →" links on Today, ClientHeader, WalkInCard.
+// Pulled up via "Walk in →" links on Today, the session card, WalkInCard on
+// the client file, and the week calendar (mobile rows + desktop block hover).
 // Direct URL: /sessions/<id>/prep.
 //
 // Designed for phone but works at any width.
@@ -15,7 +16,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { requireSession } from "@/lib/session-cookies";
 import { getSessionPrep, getSettings } from "@/db/queries";
-import { fullDate, shortTime, relativeTime } from "@/lib/format";
+import { fullDate, shortDate, shortTime, relativeTime } from "@/lib/format";
 import { resolveTimeZone } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
@@ -41,7 +42,16 @@ export default async function ThresholdPage({
     redirect(`/clients/${prep.client.id}`);
   }
 
-  const { session, client, lastSession, themes } = prep;
+  const {
+    session,
+    client,
+    lastSession,
+    themes,
+    openTasks,
+    goals,
+    people,
+    reflectionsSinceLast,
+  } = prep;
   const firstName = client.fullName.split(" ")[0] ?? client.fullName;
   const startsRelative = relativeTime(session.scheduledAt);
 
@@ -228,6 +238,39 @@ export default async function ThresholdPage({
             </section>
           )}
 
+          {/* What they wrote in the gap. Their own words, unprompted, from
+              between the two meetings — the thing they chose to say when
+              nobody asked. It used to sit silently in a tab on their file;
+              the doorway is the one moment it's worth the most. */}
+          {reflectionsSinceLast.length > 0 && (
+            <section className="space-y-3">
+              <div className="text-[10px] uppercase tracking-wider text-ink-500 font-semibold text-center">
+                {firstName} wrote since
+              </div>
+              <div className="space-y-3 max-w-prose mx-auto">
+                {reflectionsSinceLast.map((r) => (
+                  <div
+                    key={r.id}
+                    className="rounded-md p-4"
+                    style={{
+                      background: "var(--color-honey-50)",
+                      border: "1px solid var(--color-honey-100)",
+                    }}
+                  >
+                    <div className="text-[10px] font-mono text-honey-700 mb-2 tracking-wide">
+                      {fullDate(r.createdAt, practiceTz)}
+                      <span className="text-ink-300 mx-1.5">·</span>
+                      {relativeTime(r.createdAt)}
+                    </div>
+                    <p className="serif-italic text-[15px] text-ink-800 leading-relaxed whitespace-pre-wrap">
+                      {r.body}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
           {/* Themes still alive */}
           {themes.length > 0 && (
             <section className="space-y-2">
@@ -241,6 +284,97 @@ export default async function ThresholdPage({
                   </span>
                 ))}
               </div>
+            </section>
+          )}
+
+          {/* What the work is pointed at. Themes are texture; goals are
+              direction — without them the doorway only held the last hour. */}
+          {goals.length > 0 && (
+            <section className="space-y-2">
+              <div className="text-[10px] uppercase tracking-wider text-ink-500 font-semibold text-center">
+                Pointed at
+              </div>
+              <div className="max-w-sm mx-auto space-y-2.5">
+                {goals.map((g) => (
+                  <div key={g.id}>
+                    <div className="flex items-baseline justify-between gap-3 mb-1">
+                      <span className="text-sm text-ink-700 leading-snug">
+                        {g.label}
+                      </span>
+                      <span className="font-mono text-[10px] text-ink-400 shrink-0">
+                        {g.progress}%
+                      </span>
+                    </div>
+                    <div className="bar">
+                      <span style={{ width: `${g.progress}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* The names. The worst thing to get wrong out loud is a person —
+              especially one who has died. Living people read as plain chips;
+              the ones who are gone are marked, quietly. */}
+          {people.length > 0 && (
+            <section className="space-y-2">
+              <div className="text-[10px] uppercase tracking-wider text-ink-500 font-semibold text-center">
+                In their world
+              </div>
+              <div className="flex flex-wrap justify-center gap-1.5">
+                {people.map((p) => (
+                  <span
+                    key={p.id}
+                    className={`chip ${
+                      p.isAlive
+                        ? "bg-ink-100 text-ink-700"
+                        : "bg-ink-50 text-ink-500"
+                    }`}
+                    title={
+                      p.isAlive
+                        ? `${p.name} — ${p.relationship}`
+                        : `${p.name} — ${p.relationship} · no longer living`
+                    }
+                  >
+                    {p.name}
+                    <span className="opacity-60"> · {p.relationship}</span>
+                    {!p.isAlive && (
+                      <span className="opacity-60"> · in memory</span>
+                    )}
+                  </span>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Anything she promised herself about this person. Open tasks used
+              to live only in the Today rail, which is the wrong room — the
+              moment to remember "follow up about her sister" is now. */}
+          {openTasks.length > 0 && (
+            <section className="space-y-2">
+              <div className="text-[10px] uppercase tracking-wider text-ink-500 font-semibold text-center">
+                Still open
+              </div>
+              <ul className="max-w-sm mx-auto space-y-1.5 list-none p-0 m-0">
+                {openTasks.map((t) => (
+                  <li
+                    key={t.id}
+                    className="flex items-baseline gap-2.5 text-sm text-ink-700"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="shrink-0 w-1.5 h-1.5 rounded-full bg-plum-400 translate-y-[-2px]"
+                    />
+                    <span className="flex-1 leading-snug">{t.title}</span>
+                    {t.dueAt && (
+                      <span className="font-mono text-[10px] text-ink-400 shrink-0">
+                        {shortDate(t.dueAt, practiceTz)}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
             </section>
           )}
 

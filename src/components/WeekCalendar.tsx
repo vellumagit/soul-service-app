@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { fullDate, shortDate, shortTime, zoneAbbrev, toneFor } from "@/lib/format";
 import { zonedClock, zonedDateKey } from "@/lib/timezone";
 import { useTimeZone } from "./TimeZoneProvider";
+import { WalkInButton } from "./WalkInButton";
+import { JoinMeetButton } from "./JoinMeetButton";
 
 type CalSession = {
   id: string;
@@ -17,7 +19,23 @@ type CalSession = {
   scheduledAt: string;
   durationMinutes: number;
   paid: boolean;
+  /** Resolved meeting link, if there is one. Lets a block be a doorway
+   *  instead of a signpost pointing at the client file. */
+  meetUrl?: string | null;
 };
+
+/** Where a block's click lands: the session's own row on the client file,
+ *  not the bare profile. Circles carry their own `href` (a group has no
+ *  client) and are left alone. */
+function sessionHref(s: CalSession) {
+  return s.href ?? `/clients/${s.clientId}?tab=sessions#${s.id}`;
+}
+
+/** A Circle has no client and no Threshold view — `href` is the marker.
+ *  Only a real, still-upcoming 1-on-1 gets a "Walk in". */
+function canWalkIn(s: CalSession) {
+  return !s.href && s.status === "scheduled";
+}
 
 // Default visible window. The grid widens when a session falls outside it
 // (a 7:30am or 9:30pm booking used to render nothing while the header
@@ -225,11 +243,19 @@ export function WeekCalendar({
               ) : (
                 <div className="space-y-1.5">
                   {daySessions.map((s) => (
-                    <Link
+                    // A div with a stretched link, not a <Link> wrapping the
+                    // row: Walk in / Join are links themselves, and an <a>
+                    // inside an <a> is invalid HTML. Same pattern as Today's
+                    // session rows.
+                    <div
                       key={s.id}
-                      href={s.href ?? `/clients/${s.clientId}`}
-                      className="block border border-ink-200 rounded-md p-3 bg-white hover:bg-ink-50"
+                      className="relative border border-ink-200 rounded-md p-3 bg-white hover:bg-ink-50"
                     >
+                      <Link
+                        href={sessionHref(s)}
+                        className="absolute inset-0 rounded-md"
+                        aria-label={`Open ${s.clientName}`}
+                      />
                       <div className="flex items-center gap-3">
                         <span className="font-mono text-sm text-plum-700 font-medium">
                           {shortTime(s.scheduledAt, tz)}
@@ -253,8 +279,17 @@ export function WeekCalendar({
                             {s.paid ? "PAID" : "UNPAID"}
                           </span>
                         )}
+                        {/* The doorway, on the surface she actually taps on
+                            a phone. Before this, every row here was a link to
+                            the client file and nothing else. */}
+                        {(canWalkIn(s) || s.meetUrl) && (
+                          <span className="relative z-[1] flex items-center gap-2 shrink-0">
+                            {canWalkIn(s) && <WalkInButton sessionId={s.id} />}
+                            {s.meetUrl && <JoinMeetButton href={s.meetUrl} />}
+                          </span>
+                        )}
                       </div>
-                    </Link>
+                    </div>
                   ))}
                 </div>
               )}
@@ -371,11 +406,22 @@ export function WeekCalendar({
                   // the name never showed. Render ONE line instead: start
                   // time + name, vertically centred, ellipsised.
                   const compact = height < 30;
+                  // Under 30px there is only the one line, and a block
+                  // sharing its column with another is too narrow to hold
+                  // two labels without clipping them. Both stay plain links.
+                  const showActions =
+                    !compact &&
+                    lane.lanes === 1 &&
+                    (canWalkIn(s) || Boolean(s.meetUrl));
+                  const unpaid = s.status === "completed" && !s.paid;
                   return (
-                    <Link
+                    // A div with a stretched link rather than a <Link>
+                    // wrapper, so Walk in / Join can live inside it without
+                    // nesting anchors. The block keeps its own absolute
+                    // positioning and tone styling.
+                    <div
                       key={s.id}
-                      href={s.href ?? `/clients/${s.clientId}`}
-                      className={`cal-block tone-${tone}${compact ? " compact" : ""}`}
+                      className={`cal-block tone-${tone}${compact ? " compact" : ""}${showActions ? " has-actions" : ""}`}
                       style={{
                         top,
                         height,
@@ -385,8 +431,13 @@ export function WeekCalendar({
                         width: `calc((100% - 8px) / ${lane.lanes} - ${lane.lanes > 1 ? 2 : 0}px)`,
                         right: "auto",
                       }}
-                      title={`${shortTime(startInstant, tz)}–${shortTime(endInstant, tz)} · ${s.clientName} · ${s.type} · ${s.durationMinutes}m`}
+                      title={`${shortTime(startInstant, tz)}–${shortTime(endInstant, tz)} · ${s.clientName} · ${s.type} · ${s.durationMinutes}m${unpaid ? " · unpaid" : ""}`}
                     >
+                      <Link
+                        href={sessionHref(s)}
+                        className="absolute inset-0"
+                        aria-label={`Open ${s.clientName}`}
+                      />
                       {compact ? (
                         <div className="one">
                           <span className="t">{shortTime(startInstant, tz)}</span>{" "}
@@ -401,7 +452,41 @@ export function WeekCalendar({
                           {height > 44 && <div className="m">{s.type}</div>}
                         </>
                       )}
-                    </Link>
+                      {/* Money still owed, visible from the grid. The week
+                          view knew this and showed it only on mobile. */}
+                      {unpaid && (
+                        <span
+                          className="cal-unpaid"
+                          aria-label="Unpaid"
+                          title="Unpaid"
+                        />
+                      )}
+                      {showActions && (
+                        <span className="cal-actions">
+                          {/* Siblings of the stretched link, not nested
+                              inside it — so no stopPropagation is needed
+                              here, unlike WalkInButton's own case. */}
+                          {canWalkIn(s) && (
+                            <Link
+                              href={`/sessions/${s.id}/prep`}
+                              title="Open the prep view for this session"
+                            >
+                              Walk in
+                            </Link>
+                          )}
+                          {s.meetUrl && (
+                            <a
+                              href={s.meetUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              title="Join the meeting"
+                            >
+                              Join
+                            </a>
+                          )}
+                        </span>
+                      )}
+                    </div>
                   );
                 })}
                 {isToday && (

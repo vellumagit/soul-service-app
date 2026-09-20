@@ -16,6 +16,7 @@ import { ScheduleSeriesDialog } from "@/components/ScheduleSeriesDialog";
 import { TimeOffDialog } from "@/components/TimeOffDialog";
 import { TimeOffList } from "@/components/TimeOffList";
 import { CalendarJumpToDate } from "@/components/CalendarJumpToDate";
+import { resolveCircleMeetingUrl } from "@/lib/circle-fulfillment";
 import { requireSession } from "@/lib/session-cookies";
 import { asLocale, t } from "@/lib/i18n";
 import {
@@ -114,6 +115,7 @@ export default async function CalendarPage({
         scheduledAt: groupSessions.scheduledAt,
         durationMinutes: groupSessions.durationMinutes,
         status: groupSessions.status,
+        meetUrl: groupSessions.meetUrl,
       })
       .from(groupSessions)
       .innerJoin(groups, eq(groups.id, groupSessions.groupId))
@@ -162,6 +164,9 @@ export default async function CalendarPage({
       scheduledAt: s.scheduledAt.toISOString(),
       durationMinutes: s.durationMinutes,
       paid: s.paid,
+      // The calendar used to drop this on the floor, so a block here was a
+      // dead end — she'd land on the client file and hunt for the link.
+      meetUrl: s.meetUrl,
     })),
     ...circleRows.map((c) => ({
       id: c.id,
@@ -175,6 +180,12 @@ export default async function CalendarPage({
       scheduledAt: c.scheduledAt.toISOString(),
       durationMinutes: c.durationMinutes,
       paid: true,
+      // A Circle falls back to the standing room when the occurrence has no
+      // link of its own — same resolution Today uses for the Circle card.
+      meetUrl: resolveCircleMeetingUrl(
+        c.meetUrl,
+        settings.circleRoomUrl ?? null
+      ),
     })),
   ];
 

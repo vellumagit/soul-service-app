@@ -16,6 +16,9 @@ type CalSession = {
   scheduledAt: string;
   durationMinutes: number;
   paid: boolean;
+  /** Carried so both calendars share one session shape; the month grid is
+   *  too small to render a Join button, so it's unused here. */
+  meetUrl?: string | null;
 };
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -178,6 +181,10 @@ export function MonthCalendar({
               {visible.map((s) => {
                 const tone = toneFor(s.type);
                 const cancelled = s.status === "cancelled";
+                // Completed and unpaid. A month is exactly the span over
+                // which "who still owes me?" is a real question, and the
+                // grid answered it with nothing.
+                const unpaid = s.status === "completed" && !s.paid;
                 return (
                   <Link
                     key={s.id}
@@ -188,8 +195,14 @@ export function MonthCalendar({
                       cancelled ? "opacity-50 line-through" : "",
                       isPast && !cancelled ? "opacity-75" : "",
                     ].join(" ")}
-                    title={`${s.clientName} · ${s.type} · ${shortTime(s.scheduledAt, tz)}`}
+                    title={`${s.clientName} · ${s.type} · ${shortTime(s.scheduledAt, tz)}${unpaid ? " · unpaid" : ""}`}
                   >
+                    {/* Leading bead, not a corner dot: the chip truncates
+                        with an ellipsis, so anything pinned to its right
+                        edge would sit on top of that. */}
+                    {unpaid && (
+                      <span className="cal-unpaid-inline" aria-label="Unpaid" />
+                    )}
                     <span className="font-mono text-[9px] opacity-70">
                       {shortTime(s.scheduledAt, tz)}
                     </span>{" "}

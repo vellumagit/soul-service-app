@@ -420,6 +420,86 @@ body {
   margin-top: 0;
 }
 
+/* Walk in / Join, revealed on a week block when you hover it. Hidden at rest
+   so the grid still reads as a calendar, then the block becomes a doorway
+   instead of a signpost. Keyboard users get it via :focus-within — tabbing to
+   the link reveals the rail it lives in.
+
+   It takes the TIME ROW's slot rather than sitting at the bottom, and hides
+   the time while it's up. A 60-minute block is only ~44px tall: a rail pinned
+   to the bottom lands on the tail of a long client name, which is the one
+   thing on the block worth reading. The block's position in the grid already
+   says when it is, and the hover tooltip carries the exact range — so the
+   time is what can afford to step aside. */
+.cal-block .cal-actions {
+  position: absolute;
+  right: 3px;
+  /* Sized to sit WITHIN the time row it replaces (~12px). Any taller and it
+     laps over the top of the client name on a 60-minute block. */
+  top: 2px;
+  display: flex;
+  gap: 3px;
+  opacity: 0;
+  transition: opacity 80ms;
+  pointer-events: none;
+  z-index: 2;
+}
+.cal-block:hover .cal-actions,
+.cal-block:focus-within .cal-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+.cal-block.has-actions:hover .t,
+.cal-block.has-actions:focus-within .t {
+  visibility: hidden;
+}
+.cal-block .cal-actions > * {
+  font-size: 9px;
+  line-height: 1;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 1px 5px;
+  border-radius: 4px;
+  text-decoration: none;
+  /* Sits over the block's own text, so it needs its own ground. */
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid currentColor;
+  color: inherit;
+  white-space: nowrap;
+}
+.cal-block .cal-actions > *:hover {
+  background: #fff;
+}
+/* Completed and not yet paid — a small amber bead, readable from across the
+   grid without adding a word to the block. Corner-pinned on week blocks;
+   inline-leading on month chips, which truncate with an ellipsis. */
+.cal-unpaid-inline {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  /* Tailwind amber-600 — matches the UNPAID chip used everywhere else. */
+  background: #d97706;
+  margin-right: 3px;
+  vertical-align: 1px;
+}
+/* Bottom-right, out of the action rail's way — the rail owns the top-right
+   corner now. An unpaid session is completed, so it never has actions
+   anyway, but the two shouldn't be able to land on each other. */
+.cal-block .cal-unpaid {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  /* Tailwind amber-600 — matches the UNPAID chip used everywhere else. */
+  background: #d97706;
+  box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.85);
+  z-index: 2;
+  pointer-events: none;
+}
+
 /* Tone variants for calendar blocks + chips — softened to match the palette.
    Less primary-color saturation, more "dusk garden" hues. */
 .tone-plum   { background: #faf3f5; border-color: #8d6378; color: #5a3f4f; }

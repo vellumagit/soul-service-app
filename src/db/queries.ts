@@ -17,6 +17,7 @@ import {
   importantPeople,
   themes,
   observations,
+  clientReflections,
   leadForms,
   leadSubmissions,
   rescheduleRequests,
@@ -1150,6 +1151,24 @@ export type SessionPrep = {
   } | null;
   /** Active themes (tag-cloud) — gives her the "still alive" texture. */
   themes: { id: string; label: string }[];
+  /** Open tasks tied to this client. She writes "follow up about her sister"
+   *  on the session card and then only ever sees it in the Today rail — the
+   *  doorway is where it actually needs to be in her hands. */
+  openTasks: { id: string; title: string; dueAt: Date | null }[];
+  /** Live (unarchived) goals — what the work is pointed at, so the doorway
+   *  holds the arc and not just the last hour. */
+  goals: { id: string; label: string; progress: number }[];
+  /** The people in their life. Names she'd be embarrassed to blank on, and
+   *  the ones who've died — the single worst thing to get wrong out loud. */
+  people: {
+    id: string;
+    name: string;
+    relationship: string;
+    isAlive: boolean;
+  }[];
+  /** Anything the client wrote in their own portal since the last completed
+   *  session — their voice, unprompted, in the gap between meetings. */
+  reflectionsSinceLast: { id: string; body: string; createdAt: Date }[];
 };
 
 export async function getSessionPrep(
@@ -1183,14 +1202,87 @@ export async function getSessionPrep(
     .limit(1);
 
   // Recent themes (up to 12), newest-first by creation.
-  const themeRows = await db
-    .select({ id: themes.id, label: themes.label })
-    .from(themes)
-    .where(
-      and(eq(themes.accountId, accountId), eq(themes.clientId, c.id))
-    )
-    .orderBy(desc(themes.createdAt))
-    .limit(12);
+  // Everything else the doorway needs, in parallel — one round of queries so
+  // the Threshold still opens in a single beat.
+  const [themeRows, taskRows, goalRows, peopleRows, reflectionRows] =
+    await Promise.all([
+      db
+        .select({ id: themes.id, label: themes.label })
+        .from(themes)
+        .where(
+          and(eq(themes.accountId, accountId), eq(themes.clientId, c.id))
+        )
+        .orderBy(desc(themes.createdAt))
+        .limit(12),
+      db
+        .select({ id: tasks.id, title: tasks.title, dueAt: tasks.dueAt })
+        .from(tasks)
+        .where(
+          and(
+            eq(tasks.accountId, accountId),
+            eq(tasks.clientId, c.id),
+            isNull(tasks.completedAt)
+          )
+        )
+        // Dated tasks first, soonest first; undated trail behind.
+        .orderBy(asc(tasks.dueAt), asc(tasks.createdAt))
+        .limit(6),
+      db
+        .select({
+          id: goals.id,
+          label: goals.label,
+          progress: goals.progress,
+        })
+        .from(goals)
+        .where(
+          and(
+            eq(goals.accountId, accountId),
+            eq(goals.clientId, c.id),
+            eq(goals.archived, false)
+          )
+        )
+        .orderBy(asc(goals.position), asc(goals.createdAt))
+        .limit(5),
+      db
+        .select({
+          id: importantPeople.id,
+          name: importantPeople.name,
+          relationship: importantPeople.relationship,
+          isAlive: importantPeople.isAlive,
+        })
+        .from(importantPeople)
+        .where(
+          and(
+            eq(importantPeople.accountId, accountId),
+            eq(importantPeople.clientId, c.id)
+          )
+        )
+        .orderBy(asc(importantPeople.position), asc(importantPeople.createdAt))
+        .limit(8),
+      // Reflections the client wrote in their own portal SINCE the last
+      // completed session. Before this they landed silently in a tab on the
+      // client file — she was invited to write, and nothing was listening.
+      // Bounded to what's new so the doorway shows their voice from the gap,
+      // not their whole archive.
+      db
+        .select({
+          id: clientReflections.id,
+          body: clientReflections.body,
+          createdAt: clientReflections.createdAt,
+        })
+        .from(clientReflections)
+        .where(
+          and(
+            eq(clientReflections.accountId, accountId),
+            eq(clientReflections.clientId, c.id),
+            last
+              ? gt(clientReflections.createdAt, last.scheduledAt)
+              : sql`true`
+          )
+        )
+        .orderBy(desc(clientReflections.createdAt))
+        .limit(3),
+    ]);
 
   return {
     session: {
@@ -1227,6 +1319,10 @@ export async function getSessionPrep(
         }
       : null,
     themes: themeRows,
+    openTasks: taskRows,
+    goals: goalRows,
+    people: peopleRows,
+    reflectionsSinceLast: reflectionRows,
   };
 }
 
