@@ -1052,6 +1052,11 @@ export async function listSessionsInRange(
       durationMinutes: sessions.durationMinutes,
       meetUrl: sessions.meetUrl,
       paid: sessions.paid,
+      // `paid` alone can't tell "you're owed for this" from "this was free"
+      // or "this was refunded" — the calendar needs all three to flag the
+      // right sessions. Same three /payments and Today already use.
+      paymentMethod: sessions.paymentMethod,
+      refundedAt: sessions.refundedAt,
     })
     .from(sessions)
     .innerJoin(clients, eq(sessions.clientId, clients.id))

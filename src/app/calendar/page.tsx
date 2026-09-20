@@ -164,6 +164,8 @@ export default async function CalendarPage({
       scheduledAt: s.scheduledAt.toISOString(),
       durationMinutes: s.durationMinutes,
       paid: s.paid,
+      paymentMethod: s.paymentMethod,
+      refundedAt: s.refundedAt ? s.refundedAt.toISOString() : null,
       // The calendar used to drop this on the floor, so a block here was a
       // dead end — she'd land on the client file and hunt for the link.
       meetUrl: s.meetUrl,
@@ -179,7 +181,11 @@ export default async function CalendarPage({
       status: c.status,
       scheduledAt: c.scheduledAt.toISOString(),
       durationMinutes: c.durationMinutes,
+      // A Circle is billed per seat, not per session — it can never be
+      // "owed" as a whole, so it never carries a payment bead.
       paid: true,
+      paymentMethod: null,
+      refundedAt: null,
       // A Circle falls back to the standing room when the occurrence has no
       // link of its own — same resolution Today uses for the Circle card.
       meetUrl: resolveCircleMeetingUrl(

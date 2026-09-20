@@ -444,14 +444,20 @@ body {
   pointer-events: none;
   z-index: 2;
 }
-.cal-block:hover .cal-actions,
-.cal-block:focus-within .cal-actions {
-  opacity: 1;
-  pointer-events: auto;
-}
-.cal-block.has-actions:hover .t,
-.cal-block.has-actions:focus-within .t {
-  visibility: hidden;
+/* Only where the column is actually wide enough to hold the labels. The week
+   grid divides (content − 56px) by seven, so just above the md breakpoint a
+   column is ~63px against a ~76px rail — "Walk in" would render clipped. The
+   block stays a plain deep link until there's room. */
+@media (min-width: 1024px) {
+  .cal-block:hover .cal-actions,
+  .cal-block:focus-within .cal-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .cal-block.has-actions:hover .t,
+  .cal-block.has-actions:focus-within .t {
+    visibility: hidden;
+  }
 }
 .cal-block .cal-actions > * {
   font-size: 9px;

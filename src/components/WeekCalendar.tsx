@@ -19,6 +19,9 @@ type CalSession = {
   scheduledAt: string;
   durationMinutes: number;
   paid: boolean;
+  /** Needed to tell "unpaid" apart from "free" and "refunded" — see isOwed. */
+  paymentMethod?: string | null;
+  refundedAt?: string | null;
   /** Resolved meeting link, if there is one. Lets a block be a doorway
    *  instead of a signpost pointing at the client file. */
   meetUrl?: string | null;
@@ -35,6 +38,26 @@ function sessionHref(s: CalSession) {
  *  Only a real, still-upcoming 1-on-1 gets a "Walk in". */
 function canWalkIn(s: CalSession) {
   return !s.href && s.status === "scheduled";
+}
+
+/** A meeting link alone isn't enough to offer "Join": a cancelled session
+ *  keeps its meetUrl, and a Circle always resolves to the standing room, so
+ *  gating on the link alone would put her in an empty room for something
+ *  that was called off — or finished weeks ago. */
+function canJoin(s: CalSession) {
+  return s.status === "scheduled" && Boolean(s.meetUrl);
+}
+
+/** Actually owed money. `!paid` is not the same thing: a session gifted as
+ *  "Free — no charge" and one refunded through Stripe are both unpaid and
+ *  neither is owed. Matches how /payments and Today decide. */
+function isOwed(s: CalSession) {
+  return (
+    s.status === "completed" &&
+    !s.paid &&
+    s.paymentMethod !== "gifted" &&
+    !s.refundedAt
+  );
 }
 
 // Default visible window. The grid widens when a session falls outside it
@@ -268,7 +291,10 @@ export function WeekCalendar({
                             {s.type} · {s.durationMinutes}m
                           </div>
                         </div>
-                        {s.status === "completed" && (
+                        {/* Only PAID or genuinely OWED earns a chip. A free
+                            or refunded session is neither, and this row used
+                            to call both of them UNPAID. */}
+                        {s.status === "completed" && (s.paid || isOwed(s)) && (
                           <span
                             className={`chip shrink-0 ${
                               s.paid
@@ -282,10 +308,12 @@ export function WeekCalendar({
                         {/* The doorway, on the surface she actually taps on
                             a phone. Before this, every row here was a link to
                             the client file and nothing else. */}
-                        {(canWalkIn(s) || s.meetUrl) && (
+                        {(canWalkIn(s) || canJoin(s)) && (
                           <span className="relative z-[1] flex items-center gap-2 shrink-0">
                             {canWalkIn(s) && <WalkInButton sessionId={s.id} />}
-                            {s.meetUrl && <JoinMeetButton href={s.meetUrl} />}
+                            {canJoin(s) && (
+                              <JoinMeetButton href={s.meetUrl!} />
+                            )}
                           </span>
                         )}
                       </div>
@@ -412,8 +440,8 @@ export function WeekCalendar({
                   const showActions =
                     !compact &&
                     lane.lanes === 1 &&
-                    (canWalkIn(s) || Boolean(s.meetUrl));
-                  const unpaid = s.status === "completed" && !s.paid;
+                    (canWalkIn(s) || canJoin(s));
+                  const unpaid = isOwed(s);
                   return (
                     // A div with a stretched link rather than a <Link>
                     // wrapper, so Walk in / Join can live inside it without
@@ -474,9 +502,9 @@ export function WeekCalendar({
                               Walk in
                             </Link>
                           )}
-                          {s.meetUrl && (
+                          {canJoin(s) && (
                             <a
-                              href={s.meetUrl}
+                              href={s.meetUrl!}
                               target="_blank"
                               rel="noreferrer"
                               title="Join the meeting"

@@ -16,6 +16,9 @@ type CalSession = {
   scheduledAt: string;
   durationMinutes: number;
   paid: boolean;
+  /** Needed to tell "unpaid" apart from "free" and "refunded". */
+  paymentMethod?: string | null;
+  refundedAt?: string | null;
   /** Carried so both calendars share one session shape; the month grid is
    *  too small to render a Join button, so it's unused here. */
   meetUrl?: string | null;
@@ -181,10 +184,16 @@ export function MonthCalendar({
               {visible.map((s) => {
                 const tone = toneFor(s.type);
                 const cancelled = s.status === "cancelled";
-                // Completed and unpaid. A month is exactly the span over
-                // which "who still owes me?" is a real question, and the
-                // grid answered it with nothing.
-                const unpaid = s.status === "completed" && !s.paid;
+                // Genuinely OWED — not merely unpaid. A session gifted as
+                // "Free — no charge", or refunded through Stripe, is unpaid
+                // and owes nothing; flagging either would re-create exactly
+                // the nag the free-sessions work removed. A month is the
+                // span over which "who still owes me?" is a real question.
+                const unpaid =
+                  s.status === "completed" &&
+                  !s.paid &&
+                  s.paymentMethod !== "gifted" &&
+                  !s.refundedAt;
                 return (
                   <Link
                     key={s.id}
