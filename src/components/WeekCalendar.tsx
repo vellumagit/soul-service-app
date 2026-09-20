@@ -449,7 +449,7 @@ export function WeekCalendar({
                     // positioning and tone styling.
                     <div
                       key={s.id}
-                      className={`cal-block tone-${tone}${compact ? " compact" : ""}${showActions ? " has-actions" : ""}`}
+                      className={`cal-block tone-${tone}${compact ? " compact" : ""}${showActions ? " has-actions" : ""}${unpaid ? " has-bead" : ""}`}
                       style={{
                         top,
                         height,

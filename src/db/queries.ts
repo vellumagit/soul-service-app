@@ -1117,6 +1117,11 @@ export async function getSessionWithClient(accountId: string, id: string) {
   return { session: rows[0].sessions, client: rows[0].clients };
 }
 
+/** How much of a client's reflection the doorway shows before handing off to
+ *  their file. Long enough to carry a real thought, short enough that three
+ *  of them don't turn a five-minute settling page into a scroll. */
+const REFLECTION_EXCERPT_CHARS = 400;
+
 /** Everything she needs in the doorway, in one query. Used by /sessions/[id]/prep
  *  — the full-bleed "Threshold" view she pulls up 5 min before walking into a
  *  session. Returns null if the session doesn't belong to her account. */
@@ -1172,8 +1177,16 @@ export type SessionPrep = {
     isAlive: boolean;
   }[];
   /** Anything the client wrote in their own portal since the last completed
-   *  session — their voice, unprompted, in the gap between meetings. */
-  reflectionsSinceLast: { id: string; body: string; createdAt: Date }[];
+   *  session — their voice, unprompted, in the gap between meetings.
+   *  `body` is an EXCERPT: a reflection can run to 5,000 characters and three
+   *  of them would bury the doorway (and push Join Meet off the screen). Same
+   *  idea as lastSession.notesExcerpt; the full text is on their file. */
+  reflectionsSinceLast: {
+    id: string;
+    body: string;
+    truncated: boolean;
+    createdAt: Date;
+  }[];
 };
 
 export async function getSessionPrep(
@@ -1327,7 +1340,15 @@ export async function getSessionPrep(
     openTasks: taskRows,
     goals: goalRows,
     people: peopleRows,
-    reflectionsSinceLast: reflectionRows,
+    reflectionsSinceLast: reflectionRows.map((r) => ({
+      id: r.id,
+      body:
+        r.body.length > REFLECTION_EXCERPT_CHARS
+          ? r.body.slice(0, REFLECTION_EXCERPT_CHARS).trimEnd()
+          : r.body,
+      truncated: r.body.length > REFLECTION_EXCERPT_CHARS,
+      createdAt: r.createdAt,
+    })),
   };
 }
 

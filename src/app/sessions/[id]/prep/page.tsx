@@ -264,7 +264,16 @@ export default async function ThresholdPage({
                     </div>
                     <p className="serif-italic text-[15px] text-ink-800 leading-relaxed whitespace-pre-wrap">
                       {r.body}
+                      {r.truncated && <span className="text-ink-400">…</span>}
                     </p>
+                    {r.truncated && (
+                      <Link
+                        href={`/clients/${client.id}?tab=reflections`}
+                        className="text-[11px] text-honey-700 hover:underline not-italic mt-2 inline-block"
+                      >
+                        Read the rest →
+                      </Link>
+                    )}
                   </div>
                 ))}
               </div>
