@@ -56,6 +56,18 @@ export const REQUEST_SECTIONS: RequestSection[] = [
   },
 
   // ── Her own threads. Nobody is blocked; these are for a quiet moment. ──
+  //
+  // "Did this happen?" leads them on purpose: every other thread below is
+  // gated on a session being `completed`, so an unanswered one here is
+  // holding its own notes, closing and payment out of those piles too.
+  {
+    slug: "held",
+    title: "Did this happen?",
+    blurb:
+      "Sessions whose time has passed that you never marked. Until you say, they're not counted anywhere — including what you're owed.",
+    group: "threads",
+    count: (e) => e.needsOutcome.length,
+  },
   {
     slug: "notetaker",
     title: "Notetaker didn't show",

@@ -21,7 +21,7 @@ import {
   leadForms,
   leadSubmissions,
 } from "@/db/schema";
-import { asc, and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { asc, and, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { getSettings } from "@/db/queries";
 import { requireSession } from "./session-cookies";
 import { reportError } from "./observability";
@@ -2267,6 +2267,73 @@ export async function restoreSession(
   }
 }
 
+/** "Yes, this happened" — mark a session held, from anywhere.
+ *
+ *  A session booked for the future and never ticked afterwards sits at
+ *  `scheduled` forever, and EVERY ledger in the app keys on `completed`:
+ *  notes, the Closing, Payments to mark, Today's needs-attention, the
+ *  calendar's unpaid bead, /payments, the payments export, and the client's
+ *  own portal billing. So a session she held but forgot to tick went
+ *  unrecorded and — worse — unbilled, with nothing anywhere to tell her.
+ *  /requests → "Did this happen?" surfaces those, and this is its one tap.
+ *
+ *  Runs the same completion tail as the session card (applySessionCompletion)
+ *  so the two routes can't diverge. */
+export async function markSessionHeld(
+  sessionId: string,
+  clientId: string
+): Promise<{ ok: true; invoiceError: string | null } | { ok: false; error: string }> {
+  try {
+    const { accountId } = await requireSession();
+    const [row] = await db
+      .select({
+        status: sessions.status,
+        recallBotId: sessions.recallBotId,
+        recallBotStatus: sessions.recallBotStatus,
+      })
+      .from(sessions)
+      .where(and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId)))
+      .limit(1);
+    if (!row) return { ok: false, error: "Session not found." };
+
+    // Flip to completed ONLY from a non-completed state, and let the database
+    // decide the winner. A plain read-then-write would let two tabs (or a
+    // double-tap) both see 'scheduled' and both run the completion tail —
+    // which generates an invoice and fires her automations. Zero rows back
+    // means someone else got there first; that's a success, not an error.
+    const claimed = await db
+      .update(sessions)
+      .set({ status: "completed", updatedAt: new Date() })
+      .where(
+        and(
+          eq(sessions.accountId, accountId),
+          eq(sessions.id, sessionId),
+          ne(sessions.status, "completed")
+        )
+      )
+      .returning({ id: sessions.id });
+    if (claimed.length === 0) return { ok: true, invoiceError: null };
+
+    const done = await applySessionCompletion(accountId, sessionId, clientId, {
+      recallBotId: row.recallBotId,
+      recallBotStatus: row.recallBotStatus,
+    });
+
+    revalidatePath(`/clients/${clientId}`);
+    revalidatePath("/calendar");
+    revalidatePath("/today");
+    revalidatePath("/payments");
+    revalidatePath("/requests", "layout");
+    return { ok: true, invoiceError: done.invoiceError };
+  } catch (err) {
+    return {
+      ok: false,
+      error:
+        err instanceof Error ? err.message : "Couldn't mark the session held.",
+    };
+  }
+}
+
 /** The client didn't turn up. Keeps the row (and its payment tracking — a
  *  no-show may be billable) and calls off any notetaker bot. */
 export async function markNoShow(
@@ -2302,6 +2369,9 @@ export async function markNoShow(
     revalidatePath("/calendar");
     revalidatePath("/today");
     revalidatePath("/payments");
+    // A no-show is one of the three answers to "Did this happen?", so the
+    // row has to leave that pile straight away.
+    revalidatePath("/requests", "layout");
     return { ok: true };
   } catch (err) {
     return {
@@ -4405,6 +4475,89 @@ export async function logPastSession(formData: FormData) {
   revalidatePath("/today");
 }
 
+/** Everything that has to happen the moment a session becomes `completed`,
+ *  in one place so every route into completion behaves identically.
+ *
+ *  It is deliberately NOT the status write — the caller does that, because
+ *  updateSession folds it into a larger save. This is the tail: price it,
+ *  call off the notetaker, run the automations.
+ *
+ *  Extracted when "Did this happen?" gave completion a second entry point.
+ *  Left inline it would have been copied, and the copy would have drifted —
+ *  the amount-stamping below is subtle enough that a session completed from
+ *  the new route would silently have shown $0 owed. */
+async function applySessionCompletion(
+  accountId: string,
+  id: string,
+  clientId: string,
+  existing: { recallBotId: string | null; recallBotStatus: string | null }
+): Promise<{ invoiceError: string | null }> {
+  // Stamp what the session is worth, from her Settings default rate.
+  //
+  // Settings has said "Default rate — used when no amount is set on a
+  // session" since the beginning, but only invoice generation ever read it.
+  // Nothing wrote it onto the session, so payment_amount_cents stayed NULL
+  // on every session ever completed: the Clients list showed $0 paid and $0
+  // unpaid, the client's Billing tab showed nothing owed, and the portal's
+  // card-pay button could never appear (it requires an amount > 0).
+  //
+  // Only fills a NULL — a session she priced by hand, or deliberately set to
+  // 0 for a gifted session, is never overwritten.
+  try {
+    const settings = await getSettings(accountId);
+    const rate = settings?.defaultRateCents ?? 0;
+    if (await clientSessionsAreFree(accountId, clientId)) {
+      // A free client: record the session as gifted so it never lands in
+      // "Payments to mark".
+      await db
+        .update(sessions)
+        .set({ ...GIFTED, updatedAt: new Date() })
+        .where(
+          and(
+            eq(sessions.accountId, accountId),
+            eq(sessions.id, id),
+            eq(sessions.paid, false),
+            isNull(sessions.paymentMethod)
+          )
+        );
+    } else if (rate > 0) {
+      await db
+        .update(sessions)
+        .set({ paymentAmountCents: rate, updatedAt: new Date() })
+        .where(
+          and(
+            eq(sessions.accountId, accountId),
+            eq(sessions.id, id),
+            isNull(sessions.paymentAmountCents)
+          )
+        );
+    }
+  } catch (err) {
+    console.error("[complete] couldn't stamp the session amount:", err);
+  }
+
+  // A session completed while its notetaker is still queued would have the
+  // bot dial into an empty room later. Call it off.
+  if (
+    existing.recallBotId &&
+    !RECALL_FINISHED.includes(existing.recallBotStatus ?? "")
+  ) {
+    try {
+      const { cancelBot } = await import("./recall");
+      await cancelBot(existing.recallBotId);
+      await db
+        .update(sessions)
+        .set({ recallBotStatus: "cancelled", updatedAt: new Date() })
+        .where(and(eq(sessions.accountId, accountId), eq(sessions.id, id)));
+    } catch (err) {
+      console.warn("[complete] couldn't call off the notetaker:", err);
+    }
+  }
+
+  const hooks = await runOnSessionCompleted(id, clientId);
+  return { invoiceError: hooks.invoiceError ?? null };
+}
+
 export async function updateSession(formData: FormData) {
   const { accountId } = await requireSession();
   const id = required(str(formData, "id"), "Session id");
@@ -4453,67 +4606,11 @@ export async function updateSession(formData: FormData) {
   }
 
   if (isMarkComplete) {
-    // Stamp what the session is worth, from her Settings default rate.
-    //
-    // Settings has said "Default rate — used when no amount is set on a
-    // session" since the beginning, but only invoice generation ever read it.
-    // Nothing wrote it onto the session, so payment_amount_cents stayed NULL
-    // on every session ever completed: the Clients list showed $0 paid and $0
-    // unpaid, the client's Billing tab showed nothing owed, and the portal's
-    // card-pay button could never appear (it requires an amount > 0).
-    //
-    // Only fills a NULL — a session she priced by hand, or deliberately set to
-    // 0 for a gifted session, is never overwritten.
-    try {
-      const settings = await getSettings(accountId);
-      const rate = settings?.defaultRateCents ?? 0;
-      if (await clientSessionsAreFree(accountId, clientId)) {
-        // A free client: record the session as gifted so it never lands in
-        // "Payments to mark".
-        await db
-          .update(sessions)
-          .set({ ...GIFTED, updatedAt: new Date() })
-          .where(
-            and(
-              eq(sessions.accountId, accountId),
-              eq(sessions.id, id),
-              eq(sessions.paid, false),
-              isNull(sessions.paymentMethod)
-            )
-          );
-      } else if (rate > 0) {
-        await db
-          .update(sessions)
-          .set({ paymentAmountCents: rate, updatedAt: new Date() })
-          .where(
-            and(
-              eq(sessions.accountId, accountId),
-              eq(sessions.id, id),
-              isNull(sessions.paymentAmountCents)
-            )
-          );
-      }
-    } catch (err) {
-      console.error("[complete] couldn't stamp the session amount:", err);
-    }
-
-    // A session completed while its notetaker is still queued would have the
-    // bot dial into an empty room later. Call it off.
-    if (existing?.recallBotId && !RECALL_FINISHED.includes(existing.recallBotStatus ?? "")) {
-      try {
-        const { cancelBot } = await import("./recall");
-        await cancelBot(existing.recallBotId);
-        await db
-          .update(sessions)
-          .set({ recallBotStatus: "cancelled", updatedAt: new Date() })
-          .where(and(eq(sessions.accountId, accountId), eq(sessions.id, id)));
-      } catch (err) {
-        console.warn("[complete] couldn't call off the notetaker:", err);
-      }
-    }
-
-    const hooks = await runOnSessionCompleted(id, clientId);
-    if (hooks.invoiceError) invoiceError = hooks.invoiceError;
+    const done = await applySessionCompletion(accountId, id, clientId, {
+      recallBotId: existing?.recallBotId ?? null,
+      recallBotStatus: existing?.recallBotStatus ?? null,
+    });
+    if (done.invoiceError) invoiceError = done.invoiceError;
   }
 
   revalidatePath(`/clients/${clientId}`);

@@ -135,6 +135,19 @@ function renderSection(
       );
     case "circle-signups":
       return <GroupSignupsSection rows={ends.groupSignups} timeZone={tz} />;
+    case "held":
+      return (
+        <Section
+          title="Did this happen?"
+          hint="These sessions came and went without you saying how they landed. Nothing counts them until you do — not your notes, not the Closing, not what you're owed. One tap each."
+          count={ends.needsOutcome.length}
+          tone="warning"
+          rows={ends.needsOutcome}
+          actionLabel="Open session →"
+          timeZone={tz}
+          showOutcomeInline
+        />
+      );
     case "notetaker":
       return (
         <Section

@@ -1738,6 +1738,13 @@ export type CircleRefundRequestRow = {
 };
 
 export type LooseEnds = {
+  /** Sessions whose time has passed while still marked `scheduled` — she
+   *  never said whether they happened. Everything downstream keys on
+   *  `completed`, so until she answers, these are absent from notes, the
+   *  Closing, Payments to mark, /payments, the payments export, Today, the
+   *  calendar's unpaid bead and the client's own portal billing. Unbilled
+   *  and unrecorded, with nothing anywhere to say so. */
+  needsOutcome: LooseEndRow[];
   botFailed: LooseEndRow[];
   needReflection: LooseEndRow[];
   needNotes: LooseEndRow[];
@@ -1757,6 +1764,11 @@ export type LooseEnds = {
 
 export async function getLooseEnds(accountId: string): Promise<LooseEnds> {
   const now = new Date();
+  // A session doesn't become a question the instant it was due to end — she
+  // may still be in the room, or writing it up. Six hours after the START is
+  // long enough to clear even a long session plus the write-up, and short
+  // enough that it's still the same day's work when it appears.
+  const outcomeCutoff = new Date(now.getTime() - 6 * 60 * 60 * 1000);
   const rows = await db
     .select({
       id: sessions.id,
@@ -1794,6 +1806,15 @@ export async function getLooseEnds(accountId: string): Promise<LooseEnds> {
             AND ${sessions.scheduledAt} > ${now}
             AND (${sessions.intention} IS NULL OR ${sessions.intention} = '')
           )
+          OR (
+            -- Its time has passed and she never said whether it happened.
+            -- This branch was the hole: a past 'scheduled' session matched
+            -- nothing above, so it fell out of every pile in the app.
+            -- Given a grace period so a session still running (or just
+            -- finished) isn't nagging her before she's out of the room.
+            ${sessions.status} = 'scheduled'
+            AND ${sessions.scheduledAt} < ${outcomeCutoff}
+          )
           OR ${sessions.recallBotStatus} = 'fatal'
         )`
       )
@@ -1810,6 +1831,15 @@ export async function getLooseEnds(accountId: string): Promise<LooseEnds> {
     recallBotStatus: r.recallBotStatus,
   });
 
+  // Past its time and still 'scheduled'. Newest first (the orderBy above) —
+  // the one she most likely just held is the one she's best placed to answer.
+  const needsOutcome = rows
+    .filter(
+      (r) =>
+        r.status === "scheduled" &&
+        new Date(r.scheduledAt) < outcomeCutoff
+    )
+    .map(toRow);
   const botFailed = rows.filter((r) => r.recallBotStatus === "fatal").map(toRow);
   const needReflection = rows
     .filter((r) => r.status === "completed" && r.closingCompletedAt === null)
@@ -2019,6 +2049,7 @@ export async function getLooseEnds(accountId: string): Promise<LooseEnds> {
   // distinct things need her attention, not how many TOTAL tasks.
   const allIds = new Set<string>();
   for (const list of [
+    needsOutcome,
     botFailed,
     needReflection,
     needNotes,
@@ -2039,6 +2070,7 @@ export async function getLooseEnds(accountId: string): Promise<LooseEnds> {
     refundRequestList.length;
 
   return {
+    needsOutcome,
     botFailed,
     needReflection,
     needNotes,

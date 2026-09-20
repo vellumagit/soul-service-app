@@ -319,6 +319,7 @@ export function Section({
   showReflectInline,
   showRetryBot,
   showMarkPaidInline,
+  showOutcomeInline,
   timeZone,
 }: {
   title: string;
@@ -330,6 +331,8 @@ export function Section({
   showReflectInline?: boolean;
   showRetryBot?: boolean;
   showMarkPaidInline?: boolean;
+  /** Three one-tap answers in place of a link: held / no-show / didn't happen. */
+  showOutcomeInline?: boolean;
   timeZone?: string;
 }) {
   const isWarning = tone === "warning";
@@ -381,6 +384,7 @@ export function Section({
               showReflectInline={!!showReflectInline}
               showRetryBot={!!showRetryBot}
               showMarkPaidInline={!!showMarkPaidInline}
+              showOutcomeInline={!!showOutcomeInline}
             />
           </li>
         ))}
