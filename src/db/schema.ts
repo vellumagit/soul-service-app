@@ -1269,6 +1269,15 @@ export const groupSessions = pgTable(
     meetUrl: text("meet_url"),
     googleEventId: text("google_event_id"),
     notes: text("notes"),
+    /** DELIBERATELY UNUSED — do not wire these up.
+     *
+     *  A migration added them in anticipation of a Circle notetaker; the
+     *  feature was declined on 2026-09-22 ("no note taker needed in circle").
+     *  Nothing reads or writes them, which makes the table look half-finished
+     *  to anyone auditing the schema — it isn't. Recording a whole group is a
+     *  different consent question than recording a 1-on-1, and the answer was
+     *  no. See docs/backlog.md item J. The 1-on-1 notetaker on `sessions` is
+     *  unrelated and very much alive. */
     recallBotId: text("recall_bot_id"),
     recallBotStatus: text("recall_bot_status"),
     recallTranscriptReceivedAt: timestamp("recall_transcript_received_at"),
