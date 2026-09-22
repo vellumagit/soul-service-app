@@ -2568,17 +2568,40 @@ export async function getDashboardData(accountId: string) {
       )
       .orderBy(desc(sessions.scheduledAt))
       .limit(10),
+    // Who's drifting. Filtered, ordered and capped in SQL — this used to run
+    // a correlated MAX() per active client, fetch every one of them, then
+    // filter and slice(0,5) in JS.
+    //
+    // The ordering was the real problem: sorted by NAME and then truncated to
+    // five, the card showed the first five dormant clients ALPHABETICALLY.
+    // With six or more drifting, someone quiet for eight months could sit
+    // behind five names quiet for a fortnight and never appear — the people
+    // the card exists to catch were the ones it hid. Longest-quiet first now.
+    //
+    // HAVING MAX(...) < cutoff also drops clients with no sessions at all
+    // (NULL < x is NULL, never true), which is the behaviour the old JS
+    // guard had: someone who has never booked isn't "drifting" yet.
     db
       .select({
         id: clients.id,
         fullName: clients.fullName,
-        lastSessionAt: sql<Date | null>`(SELECT MAX(sessions.scheduled_at) FROM sessions WHERE sessions.client_id = clients.id)`,
+        lastSessionAt: sql<Date | null>`MAX(${sessions.scheduledAt})`,
       })
       .from(clients)
+      .leftJoin(
+        sessions,
+        and(
+          eq(sessions.clientId, clients.id),
+          eq(sessions.accountId, accountId)
+        )
+      )
       .where(
         and(eq(clients.accountId, accountId), eq(clients.status, "active"))
       )
-      .orderBy(asc(clients.fullName)),
+      .groupBy(clients.id, clients.fullName)
+      .having(sql`MAX(${sessions.scheduledAt}) < ${fourteenDaysAgo}`)
+      .orderBy(sql`MAX(${sessions.scheduledAt}) ASC`)
+      .limit(5),
     db
       .select({ count: sql<number>`COUNT(*)::int` })
       .from(clients)
@@ -2601,18 +2624,13 @@ export async function getDashboardData(accountId: string) {
       .limit(15),
   ]);
 
-  const dormant = dormantClients.filter((c) => {
-    if (!c.lastSessionAt) return false;
-    return new Date(c.lastSessionAt) < fourteenDaysAgo;
-  });
-
   return {
     todaySessions: todays,
     tomorrowSessions: tomorrows,
     thisWeekCount: thisWeek[0]?.count ?? 0,
     unpaidSessions,
     missingNotes,
-    dormantClients: dormant.slice(0, 5),
+    dormantClients,
     totalClients: totalClients[0]?.count ?? 0,
     openTasks,
   };

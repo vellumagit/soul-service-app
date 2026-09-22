@@ -1021,3 +1021,15 @@ body {
     opacity: 1;
   }
 }
+
+/* …and invisible to the keyboard everywhere else. The rule above fixed touch;
+   on a laptop these stayed at opacity 0 while still being focusable, so
+   tabbing landed on a control that showed nothing — including the DELETE on a
+   goal, a person, or a task. Reveal on focus, the same way hover does.
+   (`:focus-within` covers the ones that are a form wrapping a button.) */
+.opacity-0.group-hover\:opacity-100:focus,
+.opacity-0.group-hover\:opacity-100:focus-visible,
+.opacity-0.group-hover\:opacity-100:focus-within,
+.group:focus-within .opacity-0.group-hover\:opacity-100 {
+  opacity: 1;
+}
