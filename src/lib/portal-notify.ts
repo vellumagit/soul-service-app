@@ -105,6 +105,7 @@ export async function notifyClientOfPortalUpdate(input: {
         name: clients.fullName,
         email: clients.email,
         portalEnabled: clients.portalEnabled,
+        emailOptOuts: clients.emailOptOuts,
       })
       .from(clients)
       .where(
@@ -112,6 +113,8 @@ export async function notifyClientOfPortalUpdate(input: {
       )
       .limit(1);
     if (!row?.portalEnabled) return;
+    const { emailAllowed } = await import("./email-prefs");
+    if (!emailAllowed(row.emailOptOuts, "portal")) return;
     if (!row.email || !row.email.includes("@")) return;
 
     const [pset] = await db

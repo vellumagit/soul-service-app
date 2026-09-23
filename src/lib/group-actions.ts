@@ -11,6 +11,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { and, eq, gte, isNull, isNotNull, sql, inArray } from "drizzle-orm";
 import { resolveCircleMeetingUrl } from "./circle-fulfillment";
+import { emailAllowedForAddress } from "./email-prefs";
 import { headers } from "next/headers";
 import { db } from "@/db";
 import {
@@ -508,7 +509,7 @@ export async function rescheduleGroupSession(
         for (const g of ctx.guests) {
           if (!g.email || !g.email.includes("@")) continue;
           try {
-            await sendCircleMovedEmail({
+            if (await emailAllowedForAddress(accountId, g.email, "essential")) await sendCircleMovedEmail({
               to: g.email,
               attendeeName: g.name,
               circleName: ctx.circleName,
@@ -605,7 +606,7 @@ export async function restoreGroupSession(
         for (const g of ctx.guests) {
           if (!g.email || !g.email.includes("@")) continue;
           try {
-            await sendCircleMovedEmail({
+            if (await emailAllowedForAddress(accountId, g.email, "essential")) await sendCircleMovedEmail({
               to: g.email,
               attendeeName: g.name,
               circleName: ctx.circleName,
@@ -821,7 +822,7 @@ export async function cancelGroupSession(
         }
         if (a.email && a.email.includes("@") && isResendConfigured()) {
           try {
-            await sendCircleCancelledEmail({
+            if (await emailAllowedForAddress(accountId, a.email, "essential")) await sendCircleCancelledEmail({
               to: a.email,
               attendeeName: a.name,
               circleName: meta?.name ?? "the Circle",
@@ -1803,7 +1804,7 @@ export async function approveCircleRefund(
             .limit(1);
           if (d?.email && d.email.includes("@") && isResendConfigured()) {
             const lang = asCircleEmailLang(d.groupLanguage);
-            await sendCircleRefundEmail({
+            if (await emailAllowedForAddress(accountId, d.email, "essential")) await sendCircleRefundEmail({
               to: d.email,
               attendeeName: d.name,
               circleName: d.groupName,

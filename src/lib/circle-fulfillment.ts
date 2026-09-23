@@ -12,6 +12,7 @@ import "server-only";
 
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
+import { emailAllowedForAddress } from "./email-prefs";
 import {
   accounts,
   groupAttendees,
@@ -210,7 +211,7 @@ export async function fulfillCircleSeat(
   const lang = asCircleEmailLang(row.groupLanguage);
 
   try {
-    await sendCircleWelcomeEmail({
+    if (await emailAllowedForAddress(row.accountId, row.email, "essential")) await sendCircleWelcomeEmail({
       to: row.email,
       attendeeName: row.name,
       circleName: row.groupName,
@@ -341,7 +342,7 @@ export async function refundCircleSeatByPaymentIntent(
   try {
     if (row.email && row.email.includes("@")) {
       const lang = asCircleEmailLang(row.groupLanguage);
-      await sendCircleRefundEmail({
+      if (await emailAllowedForAddress(row.accountId, row.email, "essential")) await sendCircleRefundEmail({
         to: row.email,
         attendeeName: row.name,
         circleName: row.groupName,

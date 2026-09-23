@@ -161,6 +161,9 @@ export const clients = pgTable(
     // Every session for this client records as gifted (no charge) — a
     // pro-bono, family or trade arrangement. She never marks them paid.
     freeSessions: boolean("free_sessions").default(false).notNull(),
+    // Kinds of automated email this person should NOT get — see
+    // src/lib/email-prefs.ts. Empty = everything on; "all" = nothing automated.
+    emailOptOuts: text("email_opt_outs").array().default([]).notNull(),
     lastPortalVisitAt: timestamp("last_portal_visit_at"),
 
     createdAt: timestamp("created_at").defaultNow().notNull(),

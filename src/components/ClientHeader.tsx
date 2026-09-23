@@ -125,6 +125,14 @@ export function ClientHeader({
                   NETWORK
                 </span>
               )}
+              {(client.emailOptOuts?.length ?? 0) > 0 && (
+                <span
+                  className="chip border bg-ink-100 text-ink-600 border-ink-200"
+                  title="Some automatic emails are switched off for this person — see Edit profile."
+                >
+                  {client.emailOptOuts.includes("all") ? "NO EMAILS" : "SOME EMAILS OFF"}
+                </span>
+              )}
               <div className="flex-1" />
               <EditClientDialog client={client} referrerOptions={allClients} />
               <MergeClientDialog

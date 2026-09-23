@@ -32,6 +32,7 @@ import {
 } from "@/db";
 import { groupSessions, groupAttendees, groups } from "@/db/schema";
 import { resolveCircleMeetingUrl } from "./circle-fulfillment";
+import { emailAllowed, emailAllowedForAddress } from "./email-prefs";
 import { circleCancelUrl, circleBaseUrl } from "./circle-cancel-token";
 import {
   resolveTimeZone,
@@ -229,6 +230,7 @@ export async function sendImmediateSessionReminders(
       clientEmail: clients.email,
       clientTimezone: clients.timezone,
       clientLanguage: clients.preferredLanguage,
+      clientEmailOptOuts: clients.emailOptOuts,
     })
     .from(sessions)
     .innerJoin(clients, eq(sessions.clientId, clients.id))
@@ -272,7 +274,9 @@ export async function sendImmediateSessionReminders(
         and(eq(sessions.id, sessionId), isNull(sessions.clientReminderSentAt))
       )
       .returning({ id: sessions.id });
-    if (claimed.length > 0) {
+    // Claimed even when she's switched reminders off for this person, so the
+    // cron treats it as handled rather than re-checking it every tick.
+    if (claimed.length > 0 && emailAllowed(row.clientEmailOptOuts, "reminders")) {
       try {
         const timeZone = resolveTimeZone(
           row.clientTimezone,
@@ -392,6 +396,7 @@ async function sendDueClientReminders(
       clientEmail: clients.email,
       clientTimezone: clients.timezone,
       clientLanguage: clients.preferredLanguage,
+      clientEmailOptOuts: clients.emailOptOuts,
       scheduledAt: sessions.scheduledAt,
       durationMinutes: sessions.durationMinutes,
       sessionType: sessions.type,
@@ -429,6 +434,8 @@ async function sendDueClientReminders(
       )
       .returning({ id: sessions.id });
     if (claimed.length === 0) continue;
+    // Switched off for this person: the claim marks it handled; send nothing.
+    if (!emailAllowed(row.clientEmailOptOuts, "reminders")) continue;
 
     try {
       const { sendEmail } = await import("./resend");
@@ -650,6 +657,7 @@ async function sendDueCircleReminders(
         )
         .returning({ id: groupAttendees.id });
       if (claimed.length === 0) continue;
+      if (!(await emailAllowedForAddress(accountId, row.email, "circles"))) continue;
 
       try {
         const { sendCircleReminderEmail, asCircleEmailLang } = await import(
@@ -884,6 +892,7 @@ async function sendDuePostCircleEmails(
         )
         .returning({ id: groupAttendees.id });
       if (claimed.length === 0) continue;
+      if (!(await emailAllowedForAddress(accountId, a.email, "circles"))) continue;
       try {
         const { sendCirclePostEmail, asCircleEmailLang } = await import(
           "./resend"
@@ -1016,6 +1025,7 @@ async function sendDueClientWalkInNudges(
       meetUrl: sessions.meetUrl,
       clientName: clients.fullName,
       clientEmail: clients.email,
+      clientEmailOptOuts: clients.emailOptOuts,
     })
     .from(sessions)
     .innerJoin(clients, eq(sessions.clientId, clients.id))
@@ -1044,6 +1054,7 @@ async function sendDueClientWalkInNudges(
       )
       .returning({ id: sessions.id });
     if (claimed.length === 0) continue;
+    if (!emailAllowed(row.clientEmailOptOuts, "reminders")) continue;
 
     try {
       const { sendClientWalkInEmail } = await import("./resend");
@@ -1205,6 +1216,7 @@ async function sendDueCircleGuestWalkInNudges(
       )
       .returning({ id: groupAttendees.id });
     if (claimed.length === 0) continue;
+    if (!(await emailAllowedForAddress(accountId, row.email, "circles"))) continue;
     try {
       const { sendCircleGuestWalkInEmail, asCircleEmailLang } = await import(
         "./resend"
@@ -1334,6 +1346,7 @@ async function sendDueCircleDeeperInvites(
       )
       .returning({ id: groupAttendees.id });
     if (claimed.length === 0) continue;
+    if (!(await emailAllowedForAddress(accountId, row.email, "circles"))) continue;
     try {
       const { sendCircleDeeperInviteEmail, asCircleEmailLang } = await import(
         "./resend"

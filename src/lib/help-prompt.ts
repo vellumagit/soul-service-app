@@ -57,6 +57,7 @@ Soul Service is built specifically for Svitlana, a sole practitioner who holds o
 
 If you ask "what's new?" / "что нового?" / "що нового?", lead with the highlights from this list. Most recent first.
 
+- **Choose which emails each person gets.** In a client's **Edit profile**, under the free-sessions tick, there's a new **"Send automatic emails to this person"** section. Untick it to stop every automatic email to them, or leave it on and untick just the kinds they shouldn't get: **Session reminders**, **Booking updates** (which also stops Google Calendar invites), **Portal notices**, or **Circles & follow-ups**. Anyone with something switched off shows a small **SOME EMAILS OFF** or **NO EMAILS** chip next to their name. Emails you write yourself still go.
 - **A double-click can't book the same thing twice anymore.** Clicking Schedule (or Save, Add client, Mark paid, Reschedule — any form in the app) twice in quick succession used to quietly save it twice: two identical sessions, each sending its own calendar invite, or two copies of a new client. Now the second click is ignored while the first is still saving. If you spot a leftover pair from before, **Merge duplicate…** on the client's header folds two profiles into one, and cancelling the extra session (untick "Email the client" to keep it quiet) cleans up a doubled booking.
 - **Merge duplicate… works again.** It could stop partway with a "Failed query … lead_submissions" error. That's fixed — and if a merge was interrupted before, just run it again on the same two profiles and it finishes cleanly.
 - **If something breaks, the app says so kindly now instead of showing a browser error.** Any page that hits a problem shows a calm card — "Something went wrong / Щось пішло не так", a **Try again** button, and a way back home — in place of the stark white "Application error" screen with a code on it. Same for a link that leads nowhere (an old Circle link someone saved, say): a proper 404 card rather than an unstyled page. Both appear in English and Ukrainian together, because either you or a visitor to your website might be the one reading them. If a small grey **ref** code shows at the bottom, that's the only detail worth passing on to Brian — it's how he finds that exact failure in the logs.
@@ -486,6 +487,18 @@ If you ask "what's new?" / "что нового?" / "що нового?", lead w
 - If not configured: falls back to opening your local mail app with the draft pre-filled.
 - Templates support per-language tagging (en/ru/uk) — when you open the composer for a client, templates filter to that client's preferred language.
 
+## Which emails each person gets (per-person email settings)
+- On any client: **Edit profile** → **"Send automatic emails to this person"**. Everyone starts with everything on; nothing changes until you untick something.
+- The master tick stops **every** automatic email to them — including Circle seat confirmations, moves, cancellations and refund notices, and their place on a Circle's Google invite. The four kinds below it are dimmed while it's off, and come back exactly as you left them when you tick it again.
+- The four kinds, each switchable on its own:
+  - **Session reminders** — the reminder before a session and the 10-minute "join now" email.
+  - **Booking updates** — booking and series confirmations, "your session moved" / "it's back on", cancellations, and time-off notices. This one ALSO keeps them off the **Google Calendar invite**, so Google doesn't email them either; switching it off quietly takes them off invites for sessions already booked (one-off sessions — a recurring series' invite stays as it is).
+  - **Portal notices** — "something new in your space" when you share a note.
+  - **Circles & follow-ups** — Circle reminders, the Circle "walk in now", the thank-you afterwards, the "go deeper one-to-one" invitation, and the follow-up emails after someone downloads a free resource. These are matched by email address, so they apply to the person even when they signed up for a Circle before becoming your client.
+- **Always sent, whatever the settings:** emails you write yourself (the composer, replies to their requests), portal sign-in links they ask for, and the automatic reply when someone fills in a form on your website. The per-cancel "Email the client" checkboxes still work on top — either one saying "don't" means no email.
+- Anyone with something switched off shows a small **SOME EMAILS OFF** or **NO EMAILS** chip next to their name at the top of their file, so a missing reminder is never a mystery.
+- There's no unsubscribe link in the emails yet — you're the one who switches these.
+
 ## Templates
 - Settings → Email templates and Note templates.
 - Starter templates were seeded when you first signed in — for you to rename, edit, or delete however you like. They sign off with "— [Your name]" so you fills in your own closing.
@@ -523,7 +536,7 @@ If you ask "what's new?" / "что нового?" / "що нового?", lead w
 - Automatic emails to the client (default 24h before) and to you (default 1h before).
 - Configurable per-account in Settings → Automations.
 - Set to 0 to disable that audience.
-- **Plus a T-10 "walk in now" nudge, ten minutes before**, to both of you. Yours names the client, carries what they said they were bringing, and links straight to the Meet room (or to your prep page when the session is in person). Theirs is a short "we're beginning" with the join link, and is **only sent when the session has a Meet link** — an in-person session has nothing to link to, so the client gets nothing. This nudge is NOT tied to your reminder-hours setting; it always fires. Rescheduling a session resets both nudges so the moved session gets a fresh one.
+- **Plus a T-10 "walk in now" nudge, ten minutes before**, to both of you. Yours names the client, carries what they said they were bringing, and links straight to the Meet room (or to your prep page when the session is in person). Theirs is a short "we're beginning" with the join link, and is **only sent when the session has a Meet link** — an in-person session has nothing to link to, so the client gets nothing. This nudge is NOT tied to your reminder-hours setting; it always fires — unless you've switched **Session reminders** off for that person in their Edit profile, which stops both their reminder and their nudge (yours still come). Rescheduling a session resets both nudges so the moved session gets a fresh one.
 - Sends via Resend if RESEND_API_KEY is set. The cron runs **every 5 minutes** on Vercel (\`vercel.json\` → \`/api/cron/reminders\`), which is what makes a 10-minute nudge possible at all — an hourly cron has no 4:50 run for a 5:00 session.
 - Every reminder is claimed in the database *before* it's sent, so a cron run that overlaps itself can't email the same person twice; if the send fails the claim is released and the next tick retries.
 

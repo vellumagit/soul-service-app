@@ -32,6 +32,7 @@ import {
 } from "./recurring-sessions";
 import { isValidTimeZone, resolveTimeZone, zonedWallTimeToUtc } from "./timezone";
 import { safeCurrency } from "./format";
+import { emailAllowed, emailAllowedForClient, optOutsFromForm } from "./email-prefs";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Form helpers
@@ -332,6 +333,13 @@ export async function updateClient(formData: FormData) {
   const { accountId } = await requireSession();
   const id = required(str(formData, "id"), "Client id");
 
+  // Read before the write, to catch booking updates being switched off.
+  const [before] = await db
+    .select({ emailOptOuts: clients.emailOptOuts })
+    .from(clients)
+    .where(and(eq(clients.accountId, accountId), eq(clients.id, id)))
+    .limit(1);
+
   await db
     .update(clients)
     .set({
@@ -357,6 +365,11 @@ export async function updateClient(formData: FormData) {
       emergencyPhone: str(formData, "emergencyPhone"),
       status: clientStatusValue(formData, "status"),
       freeSessions: bool(formData, "freeSessions"),
+      // Only when the form carries the email section — unticked checkboxes
+      // send nothing, so a form without it would otherwise read as "all off".
+      ...(formData.get("emailPrefs") === "1"
+        ? { emailOptOuts: optOutsFromForm(formData) }
+        : {}),
       // portalEnabled is deliberately NOT written here. It's owned by the
       // Portal card on the client's profile (connect / disconnect), not by
       // this form. Writing it from a checkbox that no longer exists would
@@ -365,6 +378,34 @@ export async function updateClient(formData: FormData) {
       updatedAt: new Date(),
     })
     .where(and(eq(clients.accountId, accountId), eq(clients.id, id)));
+
+  // Booking updates just switched off: take them off the Google invites for
+  // sessions already booked, silently. A re-sync without them as a guest
+  // removes them without Google emailing anyone. (Recurring series events are
+  // left as they are — their per-occurrence changes are already silent.)
+  if (
+    formData.get("emailPrefs") === "1" &&
+    before &&
+    emailAllowed(before.emailOptOuts, "bookings") &&
+    !emailAllowed(optOutsFromForm(formData), "bookings")
+  ) {
+    const upcoming = await db
+      .select({ id: sessions.id })
+      .from(sessions)
+      .where(
+        and(
+          eq(sessions.accountId, accountId),
+          eq(sessions.clientId, id),
+          eq(sessions.status, "scheduled"),
+          sql`${sessions.scheduledAt} > now()`,
+          sql`${sessions.googleEventId} IS NOT NULL`,
+          isNull(sessions.googleRecurringEventId)
+        )
+      );
+    for (const s of upcoming) {
+      await syncSessionToGoogle(s.id, { notify: false });
+    }
+  }
 
   revalidatePath(`/clients/${id}`);
   revalidatePath("/clients");
@@ -1821,6 +1862,7 @@ async function maybeSendSeriesConfirmation(
       .select({
         clientName: clients.fullName,
         clientEmail: clients.email,
+        clientEmailOptOuts: clients.emailOptOuts,
         clientTimezone: clients.timezone,
         clientLanguage: clients.preferredLanguage,
         sessionType: sessionSeries.type,
@@ -1845,6 +1887,7 @@ async function maybeSendSeriesConfirmation(
       )
       .limit(1);
     if (!row?.clientEmail) return;
+    if (!emailAllowed(row.clientEmailOptOuts, "bookings")) return; // switched off for this person
     // The client's own zone if known, else the practice zone.
     const clientZone = resolveTimeZone(row.clientTimezone, row.practiceTimezone);
     const { sendSeriesBookingConfirmationEmail } = await import("./series-email");
@@ -1885,6 +1928,7 @@ async function maybeSendBookingConfirmation(
       .select({
         clientName: clients.fullName,
         clientEmail: clients.email,
+        clientEmailOptOuts: clients.emailOptOuts,
         clientTimezone: clients.timezone,
         scheduledAt: sessions.scheduledAt,
         durationMinutes: sessions.durationMinutes,
@@ -1905,7 +1949,8 @@ async function maybeSendBookingConfirmation(
       .where(and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId)))
       .limit(1);
 
-    if (!row?.clientEmail) return; // can't confirm someone with no address
+    if (!row?.clientEmail) return;
+    if (!emailAllowed(row.clientEmailOptOuts, "bookings")) return; // switched off for this person // can't confirm someone with no address
 
     // This email goes to the CLIENT → show THEIR local time: their own zone
     // if known, else the zone she booked in, else the practice zone.
@@ -2795,11 +2840,13 @@ export async function applyTimeOff(formData: FormData): Promise<ApplyTimeOffResu
                 fullName: clients.fullName,
                 timezone: clients.timezone,
                 language: clients.preferredLanguage,
+                emailOptOuts: clients.emailOptOuts,
               })
               .from(clients)
               .where(and(eq(clients.accountId, accountId), eq(clients.id, clientId)))
               .limit(1);
             if (!c?.email) continue;
+            if (!emailAllowed(c.emailOptOuts, "bookings")) continue;
             const [next] = await db
               .select({ at: sessions.scheduledAt })
               .from(sessions)
@@ -4781,6 +4828,7 @@ export async function cancelSession(
       googleRecurringEventId: sessions.googleRecurringEventId,
       scheduledAt: sessions.scheduledAt,
       recallBotId: sessions.recallBotId,
+      clientId: sessions.clientId,
     })
     .from(sessions)
     .where(and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId)))
@@ -4833,7 +4881,11 @@ export async function cancelSession(
     const gone = await deleteSessionFromGoogle(
       accountId,
       existingRows[0]?.googleEventId ?? null,
-      { notify: notifyClient }
+      {
+        notify:
+          notifyClient &&
+          (await emailAllowedForClient(existingRows[0]?.clientId, "bookings")),
+      }
     );
     if (gone && existingRows[0]?.googleEventId) {
       await db
@@ -4880,6 +4932,7 @@ async function maybeSendCancellationEmail(
       .select({
         clientName: clients.fullName,
         clientEmail: clients.email,
+        clientEmailOptOuts: clients.emailOptOuts,
         clientTimezone: clients.timezone,
         scheduledAt: sessions.scheduledAt,
         sessionType: sessions.type,
@@ -4898,6 +4951,7 @@ async function maybeSendCancellationEmail(
       .where(and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId)))
       .limit(1);
     if (!row?.clientEmail) return;
+    if (!emailAllowed(row.clientEmailOptOuts, "bookings")) return; // switched off for this person
     const clientZone = resolveTimeZone(
       row.clientTimezone,
       row.sessionTimezone,
@@ -4928,6 +4982,7 @@ export async function deleteSession(sessionId: string, clientId: string) {
       googleRecurringEventId: sessions.googleRecurringEventId,
       scheduledAt: sessions.scheduledAt,
       invoiceUrl: sessions.invoiceUrl,
+      clientId: sessions.clientId,
     })
     .from(sessions)
     .where(and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId)))
@@ -4966,7 +5021,9 @@ export async function deleteSession(sessionId: string, clientId: string) {
       console.error("[deleteSession] cancel series occurrence failed:", err);
     }
   } else {
-    await deleteSessionFromGoogle(accountId, existing?.googleEventId ?? null);
+    await deleteSessionFromGoogle(accountId, existing?.googleEventId ?? null, {
+      notify: await emailAllowedForClient(existing?.clientId, "bookings"),
+    });
   }
 
   // Best-effort Blob cleanup. The DB cascade already deleted the attachment
@@ -5989,7 +6046,12 @@ async function syncSeriesToGoogle(
         startAt: session.scheduledAt,
         durationMinutes: session.durationMinutes,
         timeZone: resolveTimeZone(session.timezone, settings?.timezone),
-        attendeeEmail: client.email,
+        // Booking updates switched off for this person → not on the invite at
+        // all, so Google has no one to email. The empty list is what REMOVES
+        // them from an event they're already on; leaving it out keeps them.
+        ...(emailAllowed(client.emailOptOuts, "bookings")
+          ? { attendeeEmail: client.email }
+          : { attendeeEmail: null, attendeeEmails: [] }),
         practitionerEmail: settings?.googleCalendarEmail ?? null,
         // One invite email to the client for the whole series, not per session.
         notify: true,
@@ -6057,7 +6119,12 @@ async function syncSessionToGoogle(
       // Pin the event's display zone to the session's zone (falling back to the
       // practice zone), so Google never renders it in the calendar's default.
       timeZone: resolveTimeZone(session.timezone, settings?.timezone),
-      attendeeEmail: client.email,
+      // Booking updates switched off for this person → not on the invite at
+      // all, so Google has no one to email. The empty list is what REMOVES
+      // them from an event they're already on; leaving it out keeps them.
+      ...(emailAllowed(client.emailOptOuts, "bookings")
+        ? { attendeeEmail: client.email }
+        : { attendeeEmail: null, attendeeEmails: [] }),
       practitionerEmail: settings?.googleCalendarEmail ?? null,
       // Default to notifying (single bookings/reschedules email the client as
       // before); a bulk caller like a series passes notify:false to avoid a

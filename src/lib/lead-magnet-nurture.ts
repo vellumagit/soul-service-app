@@ -22,6 +22,7 @@ import {
   type LeadMagnetFollowup,
 } from "@/db/schema";
 import { isResendConfigured, sendLeadMagnetFollowupEmail } from "./resend";
+import { emailAllowedForAddress } from "./email-prefs";
 
 export type NurtureStats = { candidates: number; sent: number };
 
@@ -164,6 +165,13 @@ export async function processLeadMagnetFollowups(): Promise<NurtureStats> {
     if (!fu) continue;
 
     const delay = fu.delayHours ?? 0;
+    // She's switched follow-ups off for this person (they're a client with
+    // that address). Mark it done: switching back on later shouldn't fire a
+    // days-stale "still thinking about it?" at them.
+    if (!(await emailAllowedForAddress(sub.accountId, sub.email, "circles"))) {
+      await markSent(sub.id, fields, already, delay);
+      continue;
+    }
     const subject = applyVars(
       pickLang(fu.subjectEn, fu.subjectUk, lang),
       sub.name

@@ -16,6 +16,7 @@ import {
 import { notify } from "./FlashNotifier";
 import { describeSaveError } from "@/lib/save-error";
 import { useSubmitOnce } from "@/lib/useSubmitOnce";
+import { EmailPrefsFields } from "./EmailPrefsFields";
 
 export function EditClientDialog({
   client,
@@ -60,6 +61,10 @@ export function EditClientDialog({
     const fd = new FormData(formRef.current);
     const obj: Record<string, string> = {};
     for (const [k, v] of fd.entries()) {
+      // The email switches aren't client columns, so they'd always read as
+      // "differs from saved" and nag with the restore banner — and restore
+      // can't tick a checkbox anyway.
+      if (k === "emailPrefs" || k === "emailAll" || k.startsWith("email_")) continue;
       if (typeof v === "string") obj[k] = v;
     }
     draft.saveDraft(obj);
@@ -433,6 +438,8 @@ export function EditClientDialog({
               </span>
             </label>
           </div>
+
+          <EmailPrefsFields optOuts={client.emailOptOuts ?? []} />
 
           <Field label="Status">
             <select

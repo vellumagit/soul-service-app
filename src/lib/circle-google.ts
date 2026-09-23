@@ -46,6 +46,7 @@ import {
   deleteCalendarEvent,
 } from "./google-calendar";
 import { resolveTimeZone } from "./timezone";
+import { emailAllowedForAddress } from "./email-prefs";
 
 export type CircleSyncResult =
   | { ok: true; meetUrl: string | null; created: boolean }
@@ -101,13 +102,21 @@ export async function syncCircleToGoogle(
         eq(groupAttendees.status, "confirmed")
       )
     );
-  const attendeeEmails = [
+  const allEmails = [
     ...new Set(
       attendees
         .map((a) => (a.email ?? "").trim().toLowerCase())
         .filter((e) => e.includes("@"))
     ),
   ];
+  // Someone she's set to "no emails at all" isn't put on the invite — Google
+  // would email them for it.
+  const attendeeEmails: string[] = [];
+  for (const e of allEmails) {
+    if (await emailAllowedForAddress(row.accountId, e, "essential")) {
+      attendeeEmails.push(e);
+    }
+  }
 
   const tz = resolveTimeZone(row.practiceTz);
   const input = {
