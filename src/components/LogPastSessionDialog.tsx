@@ -8,6 +8,7 @@ import { rethrowIfRedirect } from "@/lib/redirect-error";
 import { LocalDateTimeInput } from "./LocalDateTimeInput";
 import { useTimeZone } from "./TimeZoneProvider";
 import { zonedLocalInputValue } from "@/lib/timezone";
+import { useSubmitOnce } from "@/lib/useSubmitOnce";
 
 type ClientOption = { id: string; fullName: string };
 
@@ -43,6 +44,7 @@ export function LogPastSessionDialog({
   // to the first same-named form in the document (a hidden or sibling
   // instance of this dialog).
   const formId = useId();
+  const submitOnce = useSubmitOnce();
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -97,7 +99,7 @@ export function LogPastSessionDialog({
         ) : (
           <form
             id={formId}
-            action={async (fd) => {
+            {...submitOnce(async (fd) => {
               setSubmitting(true);
               setError(null);
               try {
@@ -111,7 +113,7 @@ export function LogPastSessionDialog({
               } finally {
                 setSubmitting(false);
               }
-            }}
+            })}
             className="space-y-4"
           >
             <p className="text-xs text-ink-500">

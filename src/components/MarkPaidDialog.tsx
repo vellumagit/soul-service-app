@@ -5,6 +5,7 @@ import { Modal } from "./Modal";
 import { Field, inputCls } from "./Form";
 import { markSessionPaid } from "@/lib/actions";
 import { rethrowIfRedirect } from "@/lib/redirect-error";
+import { useSubmitOnce } from "@/lib/useSubmitOnce";
 
 export function MarkPaidDialog({
   sessionId,
@@ -26,6 +27,7 @@ export function MarkPaidDialog({
   // to the first same-named form in the document (a hidden or sibling
   // instance of this dialog).
   const formId = useId();
+  const submitOnce = useSubmitOnce();
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -72,7 +74,7 @@ export function MarkPaidDialog({
       >
         <form
           id={formId}
-          action={async (fd) => {
+          {...submitOnce(async (fd) => {
             setSubmitting(true);
             setError(null);
             try {
@@ -86,7 +88,7 @@ export function MarkPaidDialog({
             } finally {
               setSubmitting(false);
             }
-          }}
+          })}
           className="space-y-4"
         >
           <input type="hidden" name="id" value={sessionId} />

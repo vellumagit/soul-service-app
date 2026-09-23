@@ -6,6 +6,7 @@ import type { Goal } from "@/db/schema";
 import { ConfirmButton } from "./ConfirmButton";
 import { Field, inputCls } from "./Form";
 import { rethrowIfRedirect } from "@/lib/redirect-error";
+import { useSubmitOnce } from "@/lib/useSubmitOnce";
 
 export function GoalsBlock({
   clientId,
@@ -189,11 +190,12 @@ function AddGoalForm({
   clientId: string;
   onDone: () => void;
 }) {
+  const submitOnce = useSubmitOnce();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   return (
     <form
-      action={async (fd) => {
+      {...submitOnce(async (fd) => {
         setSubmitting(true);
         setError(null);
         try {
@@ -205,7 +207,7 @@ function AddGoalForm({
         } finally {
           setSubmitting(false);
         }
-      }}
+      })}
       className="border border-ink-200 rounded-md p-3 space-y-3 bg-white"
     >
       <input type="hidden" name="clientId" value={clientId} />

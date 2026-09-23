@@ -25,6 +25,7 @@ import {
   parseWall,
   type SeriesFrequency,
 } from "@/lib/series-dates";
+import { useSubmitOnce } from "@/lib/useSubmitOnce";
 
 const MAX_OCCURRENCES = 52;
 
@@ -41,6 +42,7 @@ export function EditSeriesDialog({
   triggerClassName?: string;
 }) {
   const formId = useId();
+  const submitOnce = useSubmitOnce();
   const [open, setOpen] = useState(false);
   const [loading, startLoad] = useTransition();
   const [ctx, setCtx] = useState<Loaded | null>(null);
@@ -157,7 +159,7 @@ export function EditSeriesDialog({
           <form
             id={formId}
             noValidate
-            action={async (fd) => {
+            {...submitOnce(async (fd) => {
               setError(null);
               if (!parseWall(firstLocal)) {
                 setError("Pick the next session's date and time.");
@@ -192,7 +194,7 @@ export function EditSeriesDialog({
               } finally {
                 setSubmitting(false);
               }
-            }}
+            })}
             className="space-y-4"
           >
             <input type="hidden" name="seriesId" value={seriesId} readOnly />

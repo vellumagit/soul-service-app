@@ -16,6 +16,7 @@ import { shortDateTime } from "@/lib/format";
 import { LocalDateTimeInput } from "./LocalDateTimeInput";
 import { useTimeZone } from "./TimeZoneProvider";
 import { rethrowIfRedirect } from "@/lib/redirect-error";
+import { useSubmitOnce } from "@/lib/useSubmitOnce";
 
 // Loose row type — TasksBlock works for both full Task rows and slim
 // dashboard rows that only carry the fields it actually uses.
@@ -270,6 +271,7 @@ function AddTaskInline({ clientId }: { clientId?: string }) {
   // to the first same-named form in the document (a hidden or sibling
   // instance of this dialog).
   const formId = useId();
+  const submitOnce = useSubmitOnce();
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -313,7 +315,7 @@ function AddTaskInline({ clientId }: { clientId?: string }) {
     >
       <form
         id={formId}
-        action={async (fd) => {
+        {...submitOnce(async (fd) => {
           setSubmitting(true);
           setError(null);
           try {
@@ -325,7 +327,7 @@ function AddTaskInline({ clientId }: { clientId?: string }) {
           } finally {
             setSubmitting(false);
           }
-        }}
+        })}
         className="space-y-3"
       >
         {clientId && (

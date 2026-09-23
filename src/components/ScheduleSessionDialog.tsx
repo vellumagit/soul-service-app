@@ -10,6 +10,7 @@ import { LocalDateTimeInput } from "./LocalDateTimeInput";
 import { useTimeZone } from "./TimeZoneProvider";
 import { zonedLocalInputValue } from "@/lib/timezone";
 import { notify } from "./FlashNotifier";
+import { useSubmitOnce } from "@/lib/useSubmitOnce";
 
 type ClientOption = {
   id: string;
@@ -72,6 +73,7 @@ export function ScheduleSessionDialog({
    *  the always-mounted QuickActions copy so it doesn't double-open. */
   respondToShortcut?: boolean;
 }) {
+  const submitOnce = useSubmitOnce();
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -209,7 +211,7 @@ export function ScheduleSessionDialog({
             // Our own checks with VISIBLE messages — the browser's bubbles
             // can't be seen inside the scrolling modal on a phone.
             noValidate
-            action={async (fd) => {
+            {...submitOnce(async (fd) => {
               setError(null);
               if (!String(fd.get("clientId") ?? "")) {
                 setError("Choose a client.");
@@ -255,7 +257,7 @@ export function ScheduleSessionDialog({
               } finally {
                 setSubmitting(false);
               }
-            }}
+            })}
             className="space-y-4"
           >
             <input type="hidden" name="timezone" value={practiceTz} readOnly />

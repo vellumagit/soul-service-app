@@ -20,6 +20,7 @@ import {
 } from "@/lib/actions";
 import type { LeadFormRow } from "@/db/queries";
 import { notify } from "./FlashNotifier";
+import { useSubmitOnce } from "@/lib/useSubmitOnce";
 
 export function LeadFormsManager({
   forms,
@@ -33,6 +34,7 @@ export function LeadFormsManager({
   const uid = useId();
   const newFormId = uid + "-new";
   const editFormId = uid + "-edit";
+  const submitOnce = useSubmitOnce();
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<LeadFormRow | null>(null);
   // The cleartext token surfaced after create / rotate. Cleared when the
@@ -199,7 +201,7 @@ export function LeadFormsManager({
       >
         <form
           id={newFormId}
-          action={async (fd) => {
+          {...submitOnce(async (fd) => {
             const r = await createLeadForm(fd);
             if (!r.ok) {
               notify({
@@ -214,7 +216,7 @@ export function LeadFormsManager({
             const formName =
               (fd.get("name") as string) ?? "Lead form";
             setRevealed({ formName, token: r.token });
-          }}
+          })}
           className="space-y-4"
         >
           <Field label="Form name" required>
@@ -290,7 +292,7 @@ export function LeadFormsManager({
         >
           <form
             id={editFormId}
-            action={async (fd) => {
+            {...submitOnce(async (fd) => {
               const r = await updateLeadForm(editing.id, {
                 name: (fd.get("name") as string) ?? editing.name,
                 defaultIntent:
@@ -308,7 +310,7 @@ export function LeadFormsManager({
               }
               setEditing(null);
               notify({ kind: "success", title: "Saved", ttlMs: 2000 });
-            }}
+            })}
             className="space-y-4"
           >
             <Field label="Form name" required>

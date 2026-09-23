@@ -14,6 +14,7 @@ import { rethrowIfRedirect } from "@/lib/redirect-error";
 import { notify } from "./FlashNotifier";
 import { useTimeZone } from "./TimeZoneProvider";
 import { zonedWallTimeToUtc } from "@/lib/timezone";
+import { useSubmitOnce } from "@/lib/useSubmitOnce";
 
 function dayBoundsIso(fromDate: string, toDate: string, tz: string) {
   const f = /^(\d{4})-(\d{2})-(\d{2})$/.exec(fromDate);
@@ -28,6 +29,7 @@ function dayBoundsIso(fromDate: string, toDate: string, tz: string) {
 export function TimeOffDialog() {
   const formId = useId();
   const tz = useTimeZone();
+  const submitOnce = useSubmitOnce();
   const [open, setOpen] = useState(false);
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
@@ -118,7 +120,7 @@ export function TimeOffDialog() {
         <form
           id={formId}
           noValidate
-          action={async (fd) => {
+          {...submitOnce(async (fd) => {
             setError(null);
             if (!bounds) {
               setError("Pick a start and an end date.");
@@ -150,7 +152,7 @@ export function TimeOffDialog() {
             } finally {
               setSubmitting(false);
             }
-          }}
+          })}
           className="space-y-4"
         >
           <input type="hidden" name="from" value={bounds?.from ?? ""} readOnly />

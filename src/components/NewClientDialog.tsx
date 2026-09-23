@@ -12,6 +12,7 @@ import {
   DraftRestoreBanner,
   SaveStatusChip,
 } from "./DraftRestoreBanner";
+import { useSubmitOnce } from "@/lib/useSubmitOnce";
 
 export function NewClientDialog({
   trigger,
@@ -23,6 +24,7 @@ export function NewClientDialog({
    *  a page-level instance. */
   respondToShortcut?: boolean;
 }) {
+  const submitOnce = useSubmitOnce();
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -138,7 +140,7 @@ export function NewClientDialog({
           // Autosave the whole form on every input event. Debounced inside
           // useDraft so we don't hammer localStorage.
           onInput={snapshotForm}
-          action={async (fd) => {
+          {...submitOnce(async (fd) => {
             setSubmitting(true);
             setError(null);
             try {
@@ -163,7 +165,7 @@ export function NewClientDialog({
             } finally {
               setSubmitting(false);
             }
-          }}
+          })}
           className="space-y-4"
         >
           <p className="text-xs text-ink-500">

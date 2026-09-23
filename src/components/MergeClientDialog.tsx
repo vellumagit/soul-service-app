@@ -11,6 +11,7 @@ import { Field, inputCls } from "./Form";
 import { getMergePreview, mergeClients, type MergePreview } from "@/lib/actions";
 import { rethrowIfRedirect } from "@/lib/redirect-error";
 import { notify } from "./FlashNotifier";
+import { useSubmitOnce } from "@/lib/useSubmitOnce";
 
 const LABELS: Record<string, string> = {
   sessions: "sessions",
@@ -36,6 +37,7 @@ export function MergeClientDialog({
 }) {
   const formId = useId();
   const router = useRouter();
+  const submitOnce = useSubmitOnce();
   const [open, setOpen] = useState(false);
   const [otherId, setOtherId] = useState("");
   // "keep" = this profile absorbs the other; "fold" = this one is the duplicate.
@@ -109,7 +111,7 @@ export function MergeClientDialog({
         <form
           id={formId}
           noValidate
-          action={async () => {
+          {...submitOnce(async () => {
             setError(null);
             if (!otherId) {
               setError("Pick the duplicate profile.");
@@ -137,7 +139,7 @@ export function MergeClientDialog({
             } finally {
               setSubmitting(false);
             }
-          }}
+          })}
           className="space-y-4"
         >
           {error && (

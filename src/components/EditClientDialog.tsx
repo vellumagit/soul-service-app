@@ -15,6 +15,7 @@ import {
 } from "./DraftRestoreBanner";
 import { notify } from "./FlashNotifier";
 import { describeSaveError } from "@/lib/save-error";
+import { useSubmitOnce } from "@/lib/useSubmitOnce";
 
 export function EditClientDialog({
   client,
@@ -29,6 +30,7 @@ export function EditClientDialog({
   // to the first same-named form in the document (a hidden or sibling
   // instance of this dialog).
   const formId = useId();
+  const submitOnce = useSubmitOnce();
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -140,7 +142,7 @@ export function EditClientDialog({
           id={formId}
           ref={formRef}
           onInput={snapshotForm}
-          action={async (fd) => {
+          {...submitOnce(async (fd) => {
             setSubmitting(true);
             setError(null);
             try {
@@ -170,7 +172,7 @@ export function EditClientDialog({
             } finally {
               setSubmitting(false);
             }
-          }}
+          })}
           className="space-y-4"
         >
           <input type="hidden" name="id" value={client.id} />

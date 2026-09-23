@@ -14,6 +14,7 @@ import {
 } from "@/lib/actions";
 import { rethrowIfRedirect } from "@/lib/redirect-error";
 import { LOCALE_LABELS, LOCALE_SHORT, LOCALES, asLocale } from "@/lib/i18n";
+import { useSubmitOnce } from "@/lib/useSubmitOnce";
 
 type Tpl = {
   id: string;
@@ -136,6 +137,7 @@ function TemplateForm({
   // to the first same-named form in the document (a hidden or sibling
   // instance of this dialog).
   const formId = useId();
+  const submitOnce = useSubmitOnce();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isNew = !template;
@@ -176,7 +178,7 @@ function TemplateForm({
     >
       <form
         id={formId}
-        action={async (fd) => {
+        {...submitOnce(async (fd) => {
           setSubmitting(true);
           setError(null);
           try {
@@ -188,7 +190,7 @@ function TemplateForm({
           } finally {
             setSubmitting(false);
           }
-        }}
+        })}
         className="space-y-3"
       >
         {!isNew && (

@@ -15,6 +15,7 @@ import { notify } from "./FlashNotifier";
 import { rethrowIfRedirect } from "@/lib/redirect-error";
 import { shortDate } from "@/lib/format";
 import { useTimeZone } from "./TimeZoneProvider";
+import { useSubmitOnce } from "@/lib/useSubmitOnce";
 
 // A theme chip's label: click to rename in place. Enter saves, Escape or an
 // unchanged blur cancels.
@@ -285,6 +286,7 @@ function ThemesBlock({
   clientId: string;
   themes: Theme[];
 }) {
+  const submitOnce = useSubmitOnce();
   const [adding, setAdding] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [pending, start] = useTransition();
@@ -315,7 +317,7 @@ function ThemesBlock({
 
       {adding ? (
         <form
-          action={async (fd) => {
+          {...submitOnce(async (fd) => {
             setSubmitting(true);
             try {
               await addTheme(fd);
@@ -330,7 +332,7 @@ function ThemesBlock({
             } finally {
               setSubmitting(false);
             }
-          }}
+          })}
           className="flex items-center gap-1"
         >
           <input type="hidden" name="clientId" value={clientId} />
@@ -379,6 +381,7 @@ function ObservationsBlock({
   clientId: string;
   observations: Observation[];
 }) {
+  const submitOnce = useSubmitOnce();
   const [adding, setAdding] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [pending, start] = useTransition();
@@ -412,7 +415,7 @@ function ObservationsBlock({
 
       {adding ? (
         <form
-          action={async (fd) => {
+          {...submitOnce(async (fd) => {
             setSubmitting(true);
             try {
               await addObservation(fd);
@@ -427,7 +430,7 @@ function ObservationsBlock({
             } finally {
               setSubmitting(false);
             }
-          }}
+          })}
           className="border border-ink-200 rounded p-3 mt-3 bg-white space-y-2"
         >
           <input type="hidden" name="clientId" value={clientId} />

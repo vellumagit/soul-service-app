@@ -5,6 +5,7 @@ import { ConfirmButton } from "./ConfirmButton";
 import { startGoogleConnect, disconnectGoogleAction } from "@/lib/actions";
 import { fullDate } from "@/lib/format";
 import { useTimeZone } from "./TimeZoneProvider";
+import { useSubmitOnce } from "@/lib/useSubmitOnce";
 
 type Props = {
   connected: boolean;
@@ -18,6 +19,7 @@ type Props = {
 
 export function GoogleCalendarSection(props: Props) {
   const tz = useTimeZone();
+  const submitOnce = useSubmitOnce();
   const [connecting, setConnecting] = useState(false);
 
   return (
@@ -80,10 +82,10 @@ export function GoogleCalendarSection(props: Props) {
       ) : (
         <div className="flex items-center gap-3 flex-wrap">
           <form
-            action={async () => {
+            {...submitOnce(async () => {
               setConnecting(true);
               await startGoogleConnect();
-            }}
+            })}
           >
             <button
               type="submit"

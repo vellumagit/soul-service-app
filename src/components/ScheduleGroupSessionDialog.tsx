@@ -13,6 +13,7 @@ import { useTimeZone } from "./TimeZoneProvider";
 import { zonedYearMonthDay } from "@/lib/timezone";
 import { rethrowIfRedirect } from "@/lib/redirect-error";
 import { notify } from "./FlashNotifier";
+import { useSubmitOnce } from "@/lib/useSubmitOnce";
 
 interface Props {
   groupId: string;
@@ -37,6 +38,7 @@ export function ScheduleGroupSessionDialog({
   defaultDurationMinutes,
   defaultCapacity,
 }: Props) {
+  const submitOnce = useSubmitOnce();
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -73,7 +75,7 @@ export function ScheduleGroupSessionDialog({
         size="md"
       >
         <form
-          action={async (fd) => {
+          {...submitOnce(async (fd) => {
             // Wrapped (rather than handing the server action straight to
             // `action=`) so the dialog can actually respond: close on success,
             // show the reason on failure. Before this, every outcome looked
@@ -100,7 +102,7 @@ export function ScheduleGroupSessionDialog({
             } finally {
               setSubmitting(false);
             }
-          }}
+          })}
           className="space-y-4"
         >
           <input type="hidden" name="groupId" value={groupId} />

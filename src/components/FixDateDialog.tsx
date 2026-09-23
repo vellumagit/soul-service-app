@@ -14,6 +14,7 @@ import { LocalDateTimeInput } from "./LocalDateTimeInput";
 import { zonedLocalInputValue } from "@/lib/timezone";
 import { useTimeZone } from "./TimeZoneProvider";
 import { notify } from "./FlashNotifier";
+import { useSubmitOnce } from "@/lib/useSubmitOnce";
 
 export function FixDateDialog({
   sessionId,
@@ -30,6 +31,7 @@ export function FixDateDialog({
   triggerClassName?: string;
 }) {
   const formId = useId();
+  const submitOnce = useSubmitOnce();
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,7 +82,7 @@ export function FixDateDialog({
         <form
           id={formId}
           noValidate
-          action={async (fd) => {
+          {...submitOnce(async (fd) => {
             setError(null);
             setSubmitting(true);
             try {
@@ -97,7 +99,7 @@ export function FixDateDialog({
             } finally {
               setSubmitting(false);
             }
-          }}
+          })}
           className="space-y-4"
         >
           <input type="hidden" name="id" value={sessionId} readOnly />

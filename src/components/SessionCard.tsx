@@ -42,6 +42,7 @@ import { WalkInButton } from "./WalkInButton";
 import { RecordSessionDialog } from "./RecordSessionDialog";
 import { MeetLinkEditor } from "./MeetLinkEditor";
 import { EditSeriesDialog } from "./EditSeriesDialog";
+import { useSubmitOnce } from "@/lib/useSubmitOnce";
 
 const STATUS_CHIP: Record<string, string> = {
   scheduled: "bg-plum-100 text-plum-700",
@@ -84,6 +85,7 @@ export function SessionCard({
    *  future caller still gets sensible behavior. */
   defaultOpen?: boolean;
 }) {
+  const submitOnce = useSubmitOnce();
   const [open, setOpen] = useState(
     defaultOpen ?? session.status === "scheduled"
   );
@@ -217,7 +219,7 @@ export function SessionCard({
       {open && (
         <div className="border-t border-ink-100 px-4 py-4 bg-ink-50/40 space-y-4">
           <form
-            action={async (fd) => {
+            {...submitOnce(async (fd) => {
               const isMarkComplete = fd.get("markComplete") === "true";
               setSubmitting(true);
               setError(null);
@@ -261,7 +263,7 @@ export function SessionCard({
               } finally {
                 setSubmitting(false);
               }
-            }}
+            })}
             onInput={() => {
               if (!dirty) setDirty(true);
             }}

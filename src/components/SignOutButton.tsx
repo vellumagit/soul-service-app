@@ -3,16 +3,18 @@
 import { useState } from "react";
 import { signOutAction } from "@/lib/auth-actions";
 import { useT } from "./LocaleProvider";
+import { useSubmitOnce } from "@/lib/useSubmitOnce";
 
 // Tiny "sign out" link for the sidebar footer. Calls the signOutAction server
 // action which clears the session cookie and redirects to /signin.
 export function SignOutButton() {
+  const submitOnce = useSubmitOnce();
   const [pending, setPending] = useState(false);
   const t = useT();
 
   return (
     <form
-      action={async () => {
+      {...submitOnce(async () => {
         setPending(true);
         try {
           await signOutAction();
@@ -21,7 +23,7 @@ export function SignOutButton() {
           // restore state if it ever fails.
           setPending(false);
         }
-      }}
+      })}
     >
       <button
         type="submit"

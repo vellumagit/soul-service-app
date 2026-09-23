@@ -12,6 +12,7 @@ import { Field, inputCls } from "./Form";
 import { getClientOptions, moveSessionToClient } from "@/lib/actions";
 import { rethrowIfRedirect } from "@/lib/redirect-error";
 import { notify } from "./FlashNotifier";
+import { useSubmitOnce } from "@/lib/useSubmitOnce";
 
 export function MoveSessionDialog({
   sessionId,
@@ -30,6 +31,7 @@ export function MoveSessionDialog({
   triggerClassName?: string;
 }) {
   const formId = useId();
+  const submitOnce = useSubmitOnce();
   const [open, setOpen] = useState(false);
   const [loading, startLoad] = useTransition();
   const [options, setOptions] = useState<{ id: string; fullName: string }[] | null>(null);
@@ -93,7 +95,7 @@ export function MoveSessionDialog({
         <form
           id={formId}
           noValidate
-          action={async () => {
+          {...submitOnce(async () => {
             setError(null);
             if (!target) {
               setError("Pick the client it belongs to.");
@@ -114,7 +116,7 @@ export function MoveSessionDialog({
             } finally {
               setSubmitting(false);
             }
-          }}
+          })}
           className="space-y-4"
         >
           {error && (

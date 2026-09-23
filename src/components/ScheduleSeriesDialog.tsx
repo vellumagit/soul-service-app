@@ -7,6 +7,7 @@ import { scheduleSessionSeries } from "@/lib/actions";
 import { rethrowIfRedirect } from "@/lib/redirect-error";
 import { useTimeZone } from "./TimeZoneProvider";
 import { zonedWallTimeToUtc, zonedYearMonthDay } from "@/lib/timezone";
+import { useSubmitOnce } from "@/lib/useSubmitOnce";
 
 type ClientOption = { id: string; fullName: string };
 
@@ -110,6 +111,7 @@ export function ScheduleSeriesDialog({
   // to the first same-named form in the document (a hidden or sibling
   // instance of this dialog).
   const formId = useId();
+  const submitOnce = useSubmitOnce();
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -239,7 +241,7 @@ export function ScheduleSeriesDialog({
             // validation bubbles can't be seen inside the scrolling modal on
             // a phone, which made a blocked submit look like a dead button.
             noValidate
-            action={async (fd) => {
+            {...submitOnce(async (fd) => {
               setError(null);
               if (!parseWall(firstAt)) {
                 setError("Pick the first session's date and time.");
@@ -267,7 +269,7 @@ export function ScheduleSeriesDialog({
               } finally {
                 setSubmitting(false);
               }
-            }}
+            })}
             className="space-y-4"
           >
             <input type="hidden" name="timezone" value={practiceTz} readOnly />

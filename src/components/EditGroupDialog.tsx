@@ -11,6 +11,7 @@ import { Modal } from "./Modal";
 import { updateGroup } from "@/lib/group-actions";
 import { rethrowIfRedirect } from "@/lib/redirect-error";
 import { notify } from "./FlashNotifier";
+import { useSubmitOnce } from "@/lib/useSubmitOnce";
 
 const CURRENCIES = [
   { v: "USD", label: "USD $" },
@@ -35,6 +36,7 @@ export function EditGroupDialog({
     language: string;
   };
 }) {
+  const submitOnce = useSubmitOnce();
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,7 +58,7 @@ export function EditGroupDialog({
         size="md"
       >
         <form
-          action={async (fd) => {
+          {...submitOnce(async (fd) => {
             // Wrapped so the dialog closes on success and shows the reason on
             // failure — updateGroup revalidates in place (no redirect), so
             // handing it straight to `action=` left the dialog open forever.
@@ -78,7 +80,7 @@ export function EditGroupDialog({
             } finally {
               setSubmitting(false);
             }
-          }}
+          })}
           className="space-y-4"
         >
           <input type="hidden" name="id" value={group.id} />

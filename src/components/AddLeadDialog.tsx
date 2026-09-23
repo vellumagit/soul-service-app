@@ -23,6 +23,7 @@ import {
   SaveStatusChip,
 } from "./DraftRestoreBanner";
 import { notify } from "./FlashNotifier";
+import { useSubmitOnce } from "@/lib/useSubmitOnce";
 
 export function AddLeadDialog({
   trigger,
@@ -39,6 +40,7 @@ export function AddLeadDialog({
   // instance of this dialog).
   const formId = useId();
   const router = useRouter();
+  const submitOnce = useSubmitOnce();
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -139,7 +141,7 @@ export function AddLeadDialog({
           id={formId}
           ref={formRef}
           onInput={snapshotForm}
-          action={async (fd) => {
+          {...submitOnce(async (fd) => {
             setSubmitting(true);
             setError(null);
             try {
@@ -162,7 +164,7 @@ export function AddLeadDialog({
             } finally {
               setSubmitting(false);
             }
-          }}
+          })}
           className="space-y-4"
         >
           <p className="text-xs text-ink-500 leading-relaxed">

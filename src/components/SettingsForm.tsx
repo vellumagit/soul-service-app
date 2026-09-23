@@ -28,6 +28,7 @@ import {
   t,
   type Locale,
 } from "@/lib/i18n";
+import { useSubmitOnce } from "@/lib/useSubmitOnce";
 
 export function SettingsForm({
   settings,
@@ -49,6 +50,7 @@ export function SettingsForm({
    *  placeholders. Order/visibility and words both save themselves. */
   sections: SectionItem[];
 }) {
+  const submitOnce = useSubmitOnce();
   const [submitting, setSubmitting] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +62,7 @@ export function SettingsForm({
 
   return (
     <form
-      action={async (fd) => {
+      {...submitOnce(async (fd) => {
         setSubmitting(true);
         setError(null);
         try {
@@ -73,7 +75,7 @@ export function SettingsForm({
         } finally {
           setSubmitting(false);
         }
-      }}
+      })}
       className="space-y-6"
     >
       {/* Language — first so it's easy to find */}

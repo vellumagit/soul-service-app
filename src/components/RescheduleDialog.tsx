@@ -9,6 +9,7 @@ import { rethrowIfRedirect } from "@/lib/redirect-error";
 import { LocalDateTimeInput } from "./LocalDateTimeInput";
 import { zonedLocalInputValue } from "@/lib/timezone";
 import { useTimeZone } from "./TimeZoneProvider";
+import { useSubmitOnce } from "@/lib/useSubmitOnce";
 
 // Reschedule a session — change date/time and optionally duration. If Google
 // Calendar is connected, the event is updated and the client is notified.
@@ -26,6 +27,7 @@ export function RescheduleDialog({
   /** Override the trigger button styling (the session card control panel). */
   triggerClassName?: string;
 }) {
+  const submitOnce = useSubmitOnce();
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -86,7 +88,7 @@ export function RescheduleDialog({
         <form
           id={formId}
           noValidate
-          action={async (fd) => {
+          {...submitOnce(async (fd) => {
             setError(null);
             if (!String(fd.get("scheduledAt") ?? "")) {
               setError("Pick the new date and time.");
@@ -108,7 +110,7 @@ export function RescheduleDialog({
             } finally {
               setSubmitting(false);
             }
-          }}
+          })}
           className="space-y-4"
         >
           <input type="hidden" name="id" value={sessionId} />
