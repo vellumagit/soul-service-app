@@ -3058,11 +3058,16 @@ export async function mergeClients(
     const s = await import("@/db/schema");
     const moved: Record<string, number> = {};
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const reassign = async (name: string, table: any) => {
+    // `column` is the property that points at the client — `clientId` almost
+    // everywhere, but lead submissions link via `promotedClientId`. A wrong
+    // name here doesn't fail typechecking: Drizzle drops the unknown key and
+    // emits an empty `SET`, which killed a real merge halfway through.
+    const reassign = async (name: string, table: any, column = "clientId") => {
+      if (!(column in table)) throw new Error(`merge: ${name} has no ${column} column`);
       const rows = await db
         .update(table)
-        .set({ clientId: keepId })
-        .where(eq(table.clientId, mergeId))
+        .set({ [column]: keepId })
+        .where(eq(table[column], mergeId))
         .returning({ id: table.id });
       moved[name] = rows.length;
     };
@@ -3080,7 +3085,7 @@ export async function mergeClients(
     await reassign("bookingRequests", s.clientBookingRequests);
     await reassign("portalTokens", s.clientPortalTokens);
     await reassign("portalSessions", s.clientPortalSessions);
-    await reassign("leadSubmissions", s.leadSubmissions);
+    await reassign("leadSubmissions", s.leadSubmissions, "promotedClientId");
     await reassign("circleSeats", s.groupAttendees);
     // Other clients who were "met via" the duplicate now point at the kept one.
     const via = await db
