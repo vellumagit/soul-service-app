@@ -7,6 +7,7 @@
 import { Fragment, type ReactNode } from "react";
 import Link from "next/link";
 import { TimeOfDayProvider } from "@/components/TimeOfDayProvider";
+import { GoogleAnalytics } from "@/components/GoogleAnalytics";
 import {
   LandingLeadForm,
   type LandingWindow,
@@ -645,6 +646,7 @@ export default async function LandingPage() {
   return (
     <>
       <TimeOfDayProvider />
+      <GoogleAnalytics />
       <LandingReveal />
       <div className="landing-root">
         {/* nav */}

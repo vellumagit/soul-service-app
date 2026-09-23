@@ -12,6 +12,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { practitionerSettings } from "@/db/schema";
 import { TimeOfDayProvider } from "@/components/TimeOfDayProvider";
+import { GoogleAnalytics } from "@/components/GoogleAnalytics";
 import { Quiz } from "@/components/Quiz";
 import { resolveStorefrontAccountId } from "@/lib/storefront-account";
 import { listUpcomingPublicGroupSessions } from "@/lib/group-actions";
@@ -61,6 +62,7 @@ export default async function QuizPage() {
     return (
       <>
         <TimeOfDayProvider />
+        <GoogleAnalytics />
         <main className="landing-root">
           <header
             style={{
@@ -118,6 +120,7 @@ export default async function QuizPage() {
   return (
     <>
       <TimeOfDayProvider />
+      <GoogleAnalytics />
       <main className="landing-root">
         <header
           style={{

@@ -23,6 +23,7 @@ import {
   practitionerSettings,
 } from "@/db/schema";
 import { TimeOfDayProvider } from "@/components/TimeOfDayProvider";
+import { GoogleAnalytics } from "@/components/GoogleAnalytics";
 import { CircleSignupForm } from "@/components/CircleSignupForm";
 import { PublicBrandLink } from "@/components/PublicBrandLink";
 import { CirclePurchaseForm } from "@/components/CirclePurchaseForm";
@@ -183,6 +184,7 @@ export default async function CircleSignupPage({
   return (
     <>
       <TimeOfDayProvider />
+      <GoogleAnalytics />
       <main className="landing-root">
         <header
           style={{

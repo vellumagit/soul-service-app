@@ -10,6 +10,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { leadMagnets, type LeadMagnet } from "@/db/schema";
 import { TimeOfDayProvider } from "@/components/TimeOfDayProvider";
+import { GoogleAnalytics } from "@/components/GoogleAnalytics";
 import { LeadMagnetOptin } from "@/components/LeadMagnetOptin";
 import { resolveStorefrontAccountId } from "@/lib/storefront-account";
 import { getLandingLang } from "@/lib/landing-lang";
@@ -86,6 +87,7 @@ export default async function FreeResourcePage({
   return (
     <>
       <TimeOfDayProvider />
+      <GoogleAnalytics />
       <main className="landing-root">
         <header
           style={{
