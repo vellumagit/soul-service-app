@@ -8,6 +8,7 @@ import { Fragment, type ReactNode } from "react";
 import Link from "next/link";
 import { TimeOfDayProvider } from "@/components/TimeOfDayProvider";
 import { GoogleAnalytics } from "@/components/GoogleAnalytics";
+import { LegalLinks } from "@/components/LegalLinks";
 import {
   LandingLeadForm,
   type LandingWindow,
@@ -686,6 +687,7 @@ export default async function LandingPage() {
           <Link href="/signin" className="signin-link">
             {c.footer.signin}
           </Link>
+          <LegalLinks lang={lang} />
         </footer>
       </div>
     </>

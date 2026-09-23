@@ -37,6 +37,8 @@ const PUBLIC_PREFIXES = [
 const PUBLIC_PATHS = new Set<string>([
   "/", // marketing homepage — ALWAYS public
   "/quiz", // public self-selection quiz (lead magnet) — no auth
+  "/privacy", // Privacy Policy — must be readable by anyone
+  "/terms", // Terms of Service — must be readable by anyone
   "/api/health", // DB-free liveness probe — point uptime monitors here
   "/api/version", // running deploy sha — UpdateBeacon polls it, no auth
   "/manifest.webmanifest", // PWA install manifest — fetched without cookies

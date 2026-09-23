@@ -13,6 +13,7 @@ import { db } from "@/db";
 import { practitionerSettings } from "@/db/schema";
 import { TimeOfDayProvider } from "@/components/TimeOfDayProvider";
 import { GoogleAnalytics } from "@/components/GoogleAnalytics";
+import { LegalLinks } from "@/components/LegalLinks";
 import { Quiz } from "@/components/Quiz";
 import { resolveStorefrontAccountId } from "@/lib/storefront-account";
 import { listUpcomingPublicGroupSessions } from "@/lib/group-actions";
@@ -92,6 +93,7 @@ export default async function QuizPage() {
               </Link>
             </div>
           </section>
+          <LegalLinks lang={lang} />
         </main>
       </>
     );
@@ -159,6 +161,7 @@ export default async function QuizPage() {
 
           <Quiz circleHref={circleHref} lang={lang} copy={c.quiz} />
         </section>
+        <LegalLinks lang={lang} />
       </main>
     </>
   );

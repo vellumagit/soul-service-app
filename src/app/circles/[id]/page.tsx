@@ -24,6 +24,7 @@ import {
 } from "@/db/schema";
 import { TimeOfDayProvider } from "@/components/TimeOfDayProvider";
 import { GoogleAnalytics } from "@/components/GoogleAnalytics";
+import { LegalLinks } from "@/components/LegalLinks";
 import { CircleSignupForm } from "@/components/CircleSignupForm";
 import { PublicBrandLink } from "@/components/PublicBrandLink";
 import { CirclePurchaseForm } from "@/components/CirclePurchaseForm";
@@ -476,6 +477,7 @@ export default async function CircleSignupPage({
               ))}
           </div>
         </section>
+        <LegalLinks lang={lang} />
       </main>
     </>
   );

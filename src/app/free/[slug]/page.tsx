@@ -11,6 +11,7 @@ import { db } from "@/db";
 import { leadMagnets, type LeadMagnet } from "@/db/schema";
 import { TimeOfDayProvider } from "@/components/TimeOfDayProvider";
 import { GoogleAnalytics } from "@/components/GoogleAnalytics";
+import { LegalLinks } from "@/components/LegalLinks";
 import { LeadMagnetOptin } from "@/components/LeadMagnetOptin";
 import { resolveStorefrontAccountId } from "@/lib/storefront-account";
 import { getLandingLang } from "@/lib/landing-lang";
@@ -147,6 +148,7 @@ export default async function FreeResourcePage({
             {privacy}
           </p>
         </section>
+        <LegalLinks lang={lang} />
       </main>
     </>
   );
