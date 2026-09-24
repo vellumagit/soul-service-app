@@ -4,12 +4,16 @@
 
 import Link from "next/link";
 import { getBrand } from "@/lib/brand";
+import type { LandingLang } from "@/lib/landing-copy";
+import { localePath } from "@/lib/storefront-seo";
 
-export async function PublicBrandLink() {
+// `lang` keeps a Ukrainian reader on the Ukrainian homepage; the Circle
+// pages (English URLs only) leave it off.
+export async function PublicBrandLink({ lang = "en" }: { lang?: LandingLang }) {
   const { logoUrl } = await getBrand();
   return (
     <Link
-      href="/"
+      href={localePath(lang, "/")}
       style={{
         display: "inline-block",
         fontFamily: "var(--font-serif, serif)",

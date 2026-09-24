@@ -15,6 +15,7 @@ import { LegalLinks } from "@/components/LegalLinks";
 import { LeadMagnetOptin } from "@/components/LeadMagnetOptin";
 import { resolveStorefrontAccountId } from "@/lib/storefront-account";
 import { getLandingLang } from "@/lib/landing-lang";
+import { storefrontAlternates } from "@/lib/storefront-seo";
 import "../../landing.css";
 
 export const dynamic = "force-dynamic";
@@ -55,7 +56,11 @@ export async function generateMetadata({
   if (!magnet) return { title: lang === "uk" ? "Матеріал" : "A free resource" };
   const title = pick(magnet.titleEn, magnet.titleUk, lang);
   const description = pick(magnet.subtitleEn, magnet.subtitleUk, lang);
-  return { title, description: description || undefined };
+  return {
+    title,
+    description: description || undefined,
+    alternates: storefrontAlternates(`/free/${slug}`, lang),
+  };
 }
 
 export default async function FreeResourcePage({
@@ -98,7 +103,7 @@ export default async function FreeResourcePage({
             textAlign: "center",
           }}
         >
-          <PublicBrandLink />
+          <PublicBrandLink lang={lang} />
         </header>
 
         <section className="circles" style={{ padding: "44px 24px 90px" }}>

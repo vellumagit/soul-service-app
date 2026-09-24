@@ -5,14 +5,15 @@
 import Link from "next/link";
 import { getLegalCopy } from "@/lib/legal-copy";
 import type { LandingLang } from "@/lib/landing-copy";
+import { localePath } from "@/lib/storefront-seo";
 
 export function LegalLinks({ lang }: { lang: LandingLang }) {
   const { chrome } = getLegalCopy(lang);
   return (
     <p className="legal-links">
-      <Link href="/privacy">{chrome.privacy}</Link>
+      <Link href={localePath(lang, "/privacy")}>{chrome.privacy}</Link>
       <span aria-hidden="true"> · </span>
-      <Link href="/terms">{chrome.terms}</Link>
+      <Link href={localePath(lang, "/terms")}>{chrome.terms}</Link>
     </p>
   );
 }

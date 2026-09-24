@@ -1,5 +1,5 @@
 // Shared layout for /privacy and /terms — storefront look, bilingual via the
-// same landing_lang cookie + EN·УКР toggle as the rest of the public site.
+// URL (/privacy ↔ /uk/privacy) + EN·УКР toggle as the rest of the public site.
 // All text comes from src/lib/legal-copy.ts.
 
 import Link from "next/link";
@@ -8,6 +8,7 @@ import { GoogleAnalytics } from "./GoogleAnalytics";
 import { LandingLangToggle } from "./LandingLangToggle";
 import { getLegalCopy, LEGAL_UPDATED } from "@/lib/legal-copy";
 import type { LandingLang } from "@/lib/landing-copy";
+import { localePath } from "@/lib/storefront-seo";
 
 export function LegalPage({ doc, lang }: { doc: "privacy" | "terms"; lang: LandingLang }) {
   const copy = getLegalCopy(lang);
@@ -26,7 +27,7 @@ export function LegalPage({ doc, lang }: { doc: "privacy" | "terms"; lang: Landi
       <GoogleAnalytics />
       <main className="landing-root legal">
         <header className="legal-head">
-          <Link href="/" className="legal-home">
+          <Link href={localePath(lang, "/")} className="legal-home">
             {copy.chrome.back}
           </Link>
           <LandingLangToggle current={lang} />
@@ -57,7 +58,7 @@ export function LegalPage({ doc, lang }: { doc: "privacy" | "terms"; lang: Landi
         <footer className="lfoot">
           <p>{copy.chrome.questions}</p>
           <p>
-            <Link href={`/${other}`} className="signin-link">
+            <Link href={localePath(lang, `/${other}`)} className="signin-link">
               {copy.chrome[other]}
             </Link>
           </p>

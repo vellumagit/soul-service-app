@@ -1,20 +1,18 @@
 import "server-only";
 
-// Storefront language preference. ENGLISH is the default; visitors can
-// switch to Ukrainian via the EN·УКР toggle, which sets the `landing_lang`
-// cookie (a plain preference cookie — not httponly, no security role). The
-// cookie persists across all storefront pages so the choice sticks.
+// Storefront language. The URL decides: /uk/* is Ukrainian, everything else is
+// English — so Google can index both versions (see storefront-seo.ts).
 //
-// Default logic: only an explicit "uk" cookie yields Ukrainian. No cookie
-// (first visit) or any other value → English. So the site greets everyone
-// in English, and anyone who toggles to Ukrainian stays there.
+// proxy.ts rewrites /uk/* onto the shared pages and passes the language in
+// the LANG_HEADER request header; this reads it. The `landing_lang` cookie
+// only remembers the visitor's last choice so proxy.ts can send a returning
+// Ukrainian reader from "/" to "/uk" — it no longer picks the language here.
 
-import { cookies } from "next/headers";
+import { headers } from "next/headers";
 import type { LandingLang } from "./landing-copy";
-
-export const LANDING_LANG_COOKIE = "landing_lang";
+import { LANG_HEADER } from "./storefront-seo";
 
 export async function getLandingLang(): Promise<LandingLang> {
-  const store = await cookies();
-  return store.get(LANDING_LANG_COOKIE)?.value === "uk" ? "uk" : "en";
+  const h = await headers();
+  return h.get(LANG_HEADER) === "uk" ? "uk" : "en";
 }

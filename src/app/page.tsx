@@ -1,10 +1,12 @@
 // Public landing page — the svit.live storefront. Always public, always
 // renders here (no auth redirect; see proxy.ts). Bilingual: English by
 // default, Ukrainian via the EN·УКР toggle in the nav. All visible copy
-// comes from src/lib/landing-copy.tsx; the chosen language is read from the
-// `landing_lang` cookie via getLandingLang().
+// comes from src/lib/landing-copy.tsx. The language comes from the URL —
+// "/" is English, "/uk" is Ukrainian (proxy.ts → getLandingLang()), so
+// Google indexes both; see storefront-seo.ts for titles, hreflang + schema.
 
 import { Fragment, type ReactNode } from "react";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { TimeOfDayProvider } from "@/components/TimeOfDayProvider";
 import { GoogleAnalytics } from "@/components/GoogleAnalytics";
@@ -48,6 +50,11 @@ import {
   type LandingSectionSlug,
 } from "@/lib/landing-sections";
 import { resolveTimeZone } from "@/lib/timezone";
+import {
+  homeMetadata,
+  localePath,
+  storefrontJsonLd,
+} from "@/lib/storefront-seo";
 import "./landing.css";
 
 function formatLandingWindowLabel(
@@ -67,6 +74,28 @@ function formatLandingWindowLabel(
 }
 
 export const dynamic = "force-dynamic";
+
+// Her portrait doubles as the link-preview image. Any DB hiccup just means
+// no preview image — never a failed page.
+async function storefrontPortraitUrl(): Promise<string | null> {
+  try {
+    const accountId = await resolveStorefrontAccountId();
+    if (!accountId) return null;
+    const [row] = await db
+      .select({ url: practitionerSettings.landingPortraitUrl })
+      .from(practitionerSettings)
+      .where(eq(practitionerSettings.accountId, accountId))
+      .limit(1);
+    return row?.url?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+export async function generateMetadata(): Promise<Metadata> {
+  const lang = await getLandingLang();
+  return homeMetadata(lang, await storefrontPortraitUrl());
+}
 
 export default async function LandingPage() {
   // The marketing homepage is ALWAYS public and ALWAYS renders here — it
@@ -182,7 +211,8 @@ export default async function LandingPage() {
             pickLM(m.subtitleEn, m.subtitleUk) ||
             pickLM(m.descriptionEn, m.descriptionUk).split(/\n{2,}/)[0]?.trim() ||
             "";
-          if (title) freebie = { title, blurb, href: `/free/${m.slug}` };
+          if (title)
+            freebie = { title, blurb, href: localePath(lang, `/free/${m.slug}`) };
         }
       }
       if (cfg?.showAvailability) {
@@ -252,7 +282,7 @@ export default async function LandingPage() {
   // Quiz is paused (see quiz-status.ts): drop any card that links to /quiz so
   // the storefront doesn't advertise a page that's on hold, and remove a row
   // left empty by that. Reverses cleanly when QUIZ_PAUSED flips back to false.
-  const ladder: RenderedRow[] = QUIZ_PAUSED
+  const unlocalizedLadder: RenderedRow[] = QUIZ_PAUSED
     ? rawLadder
         .map((row) => ({
           ...row,
@@ -260,6 +290,17 @@ export default async function LandingPage() {
         }))
         .filter((row) => row.offers.length > 0)
     : rawLadder;
+  // A Ukrainian reader's buttons stay in Ukrainian ("/quiz" → "/uk/quiz").
+  const ladder: RenderedRow[] = unlocalizedLadder.map((row) => ({
+    ...row,
+    offers: row.offers.map((o) => ({ ...o, href: localePath(lang, o.href) })),
+  }));
+
+  // What Google reads about her: who she is, the practice, and what it offers.
+  const jsonLd = storefrontJsonLd(lang, {
+    portraitUrl,
+    offers: ladder.flatMap((row) => row.offers),
+  });
 
   // Each storefront section as a named block. Rendered below in HER order
   // (Settings → Landing page), so moving or hiding one is a data change
@@ -646,6 +687,13 @@ export default async function LandingPage() {
 
   return (
     <>
+      <script
+        type="application/ld+json"
+        // Escaping "<" keeps any of her copy from closing the script tag early.
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c"),
+        }}
+      />
       <TimeOfDayProvider />
       <GoogleAnalytics />
       <LandingReveal />

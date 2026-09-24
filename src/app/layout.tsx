@@ -15,6 +15,8 @@ export const viewport: Viewport = {
 };
 import { BrandProvider } from "@/components/BrandProvider";
 import { getBrand } from "@/lib/brand";
+import { headers } from "next/headers";
+import { LANG_HEADER } from "@/lib/storefront-seo";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -75,9 +77,12 @@ export default async function RootLayout({
 }>) {
   // Same cached read generateMetadata used — one query for the whole request.
   const { logoUrl } = await getBrand();
+  // Ukrainian storefront pages (/uk/*) declare themselves as Ukrainian — the
+  // proxy sets this header; every other page, the workspace included, is "en".
+  const lang = (await headers()).get(LANG_HEADER) === "uk" ? "uk" : "en";
   return (
     <html
-      lang="en"
+      lang={lang}
       className={`${inter.variable} ${jetbrainsMono.variable} ${fraunces.variable} h-full antialiased`}
     >
       <body className="min-h-full text-ink-800">

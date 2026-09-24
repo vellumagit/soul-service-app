@@ -2,8 +2,9 @@
 // renamed the `middleware.ts` convention to `proxy.ts`. The exported
 // function is `proxy`, not `middleware`.
 //
-// Single responsibility: gate the practitioner workspace behind auth.
-// Everything public passes through untouched:
+// Two jobs: route the bilingual storefront (/uk/* → Ukrainian, see
+// routeStorefront below) and gate the practitioner workspace behind auth.
+// Everything public passes through the auth gate untouched:
 //   - the marketing homepage at "/" (ALWAYS public — never depends on an
 //     env var to be reachable; this is what makes svit.live land on the
 //     storefront every time)
@@ -20,6 +21,14 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE_NAME, getEmailFromToken } from "@/lib/session";
+import {
+  CANONICAL_ORIGIN,
+  LANG_COOKIE,
+  LANG_HEADER,
+  isLocalizedPath,
+  localePath,
+  splitLocale,
+} from "@/lib/storefront-seo";
 
 // Anything under these prefixes is public (no practitioner auth required).
 const PUBLIC_PREFIXES = [
@@ -53,8 +62,75 @@ function isPublic(pathname: string): boolean {
   return PUBLIC_PREFIXES.some((p) => pathname === p || pathname.startsWith(p));
 }
 
+// The storefront's one public home. app.svit.live serves the same deployment,
+// so its storefront pages 308 here — otherwise Google sees two copies of every
+// page. Only the bilingual storefront pages move; sign-in, the workspace and
+// the portal keep working on whichever host she uses.
+const CANONICAL_HOST = new URL(CANONICAL_ORIGIN).host;
+const ALIAS_HOSTS = new Set(["app.svit.live"]);
+
+/**
+ * Bilingual storefront routing (see storefront-seo.ts):
+ *   /uk/*  → rewritten onto the shared page with the language header "uk",
+ *            and the choice remembered in the landing_lang cookie.
+ *   /*     → English; but a visitor whose cookie says "uk" is sent to /uk/*
+ *            so a returning Ukrainian reader still lands in Ukrainian.
+ * Returns null for anything that isn't a storefront page.
+ */
+function routeStorefront(request: NextRequest): NextResponse | null {
+  const { pathname } = request.nextUrl;
+  const { lang, path } = splitLocale(pathname);
+  if (!isLocalizedPath(path)) {
+    // /uk/<something that isn't bilingual> has no page — let Next 404 it
+    // rather than bouncing a visitor to /signin.
+    return lang === "uk" ? NextResponse.next() : null;
+  }
+
+  const host = request.headers.get("host") ?? "";
+  if (ALIAS_HOSTS.has(host) && request.method === "GET") {
+    const url = request.nextUrl.clone();
+    url.host = CANONICAL_HOST;
+    url.protocol = "https";
+    url.port = "";
+    return NextResponse.redirect(url, 308);
+  }
+
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set(LANG_HEADER, lang);
+
+  if (lang === "uk") {
+    const url = request.nextUrl.clone();
+    url.pathname = path;
+    const res = NextResponse.rewrite(url, {
+      request: { headers: requestHeaders },
+    });
+    if (request.cookies.get(LANG_COOKIE)?.value !== "uk") {
+      res.cookies.set(LANG_COOKIE, "uk", {
+        path: "/",
+        maxAge: 60 * 60 * 24 * 365,
+        sameSite: "lax",
+      });
+    }
+    return res;
+  }
+
+  if (
+    request.method === "GET" &&
+    request.cookies.get(LANG_COOKIE)?.value === "uk"
+  ) {
+    const url = request.nextUrl.clone();
+    url.pathname = localePath("uk", path);
+    return NextResponse.redirect(url, 307);
+  }
+
+  return NextResponse.next({ request: { headers: requestHeaders } });
+}
+
 export async function proxy(request: NextRequest): Promise<NextResponse> {
   const { pathname, search } = request.nextUrl;
+
+  const storefront = routeStorefront(request);
+  if (storefront) return storefront;
 
   if (isPublic(pathname)) {
     return NextResponse.next();

@@ -21,13 +21,18 @@ import {
 } from "@/lib/quiz-content";
 import type { LandingCopy, LandingLang } from "@/lib/landing-copy";
 import { submitQuizLead } from "@/lib/quiz-actions";
+import { localePath } from "@/lib/storefront-seo";
 
 type QuizCopy = LandingCopy["quiz"];
 
-function doorHref(kind: QuizDoorKind, circleHref: string): string {
+function doorHref(
+  kind: QuizDoorKind,
+  circleHref: string,
+  lang: LandingLang
+): string {
   if (kind === "circle") return circleHref;
-  if (kind === "contact") return "/#contact";
-  return "/";
+  if (kind === "contact") return localePath(lang, "/#contact");
+  return localePath(lang, "/");
 }
 
 const clay = "var(--land-clay, #b05c36)";
@@ -75,6 +80,7 @@ export function Quiz({
         result={results[result]}
         resultKey={result}
         circleHref={circleHref}
+        lang={lang}
         copy={copy}
         onRestart={restart}
       />
@@ -188,12 +194,14 @@ function ResultView({
   result,
   resultKey,
   circleHref,
+  lang,
   copy,
   onRestart,
 }: {
   result: QuizResult;
   resultKey: QuizResultKey;
   circleHref: string;
+  lang: LandingLang;
   copy: QuizCopy;
   onRestart: () => void;
 }) {
@@ -270,7 +278,7 @@ function ResultView({
             {r.door.note}
           </p>
           <Link
-            href={doorHref(r.door.kind, circleHref)}
+            href={doorHref(r.door.kind, circleHref, lang)}
             className="cta"
             style={{ display: "inline-block" }}
           >

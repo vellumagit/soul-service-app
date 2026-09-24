@@ -20,23 +20,29 @@ import { listUpcomingPublicGroupSessions } from "@/lib/group-actions";
 import { getLandingLang } from "@/lib/landing-lang";
 import { getLandingCopy } from "@/lib/landing-copy";
 import { QUIZ_PAUSED } from "@/lib/quiz-status";
+import { localePath, storefrontAlternates } from "@/lib/storefront-seo";
 import "../landing.css";
 
 export const dynamic = "force-dynamic";
 
-// Bilingual: title + description follow the visitor's language cookie, so a
+// Bilingual: title + description follow the URL (/quiz or /uk/quiz), so a
 // Ukrainian visitor's browser tab and shared-link preview read in Ukrainian too.
 export async function generateMetadata(): Promise<Metadata> {
   const lang = await getLandingLang();
   // Paused: don't let a shared /quiz link preview as the live quiz — give it a
   // neutral title. Reverses when QUIZ_PAUSED flips back to false.
   if (QUIZ_PAUSED) {
-    return { title: lang === "uk" ? "Невеличка пауза" : "A short pause" };
+    // …and keep the pause note out of search results until it's back.
+    return {
+      title: lang === "uk" ? "Невеличка пауза" : "A short pause",
+      robots: { index: false },
+    };
   }
   const c = getLandingCopy(lang);
   return {
     title: c.quiz.metaTitle,
     description: c.quiz.metaDescription,
+    alternates: storefrontAlternates("/quiz", lang),
   };
 }
 
@@ -73,7 +79,7 @@ export default async function QuizPage() {
               textAlign: "center",
             }}
           >
-            <PublicBrandLink />
+            <PublicBrandLink lang={lang} />
           </header>
           <section className="circles" style={{ padding: "64px 24px 96px" }}>
             <div className="wrap narrow" style={{ textAlign: "center" }}>
@@ -82,7 +88,7 @@ export default async function QuizPage() {
                 {paused.body}
               </p>
               <Link
-                href="/"
+                href={localePath(lang, "/")}
                 style={{
                   color: "var(--land-clay)",
                   textDecoration: "underline",
@@ -101,7 +107,7 @@ export default async function QuizPage() {
 
   // Resolve the "keeper → Circle" door to the soonest bookable Circle when
   // sign-ups are open; otherwise fall back to the contact form.
-  let circleHref = "/#contact";
+  let circleHref = localePath(lang, "/#contact");
   try {
     const accountId = await resolveStorefrontAccountId();
     if (accountId) {
@@ -133,7 +139,7 @@ export default async function QuizPage() {
           }}
         >
           <Link
-            href="/"
+            href={localePath(lang, "/")}
             style={{
               fontFamily: "var(--font-serif, serif)",
               fontSize: 18,
