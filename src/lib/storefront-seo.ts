@@ -25,7 +25,16 @@ export const LANG_COOKIE = "landing_lang";
 
 /** Storefront pages that exist in both languages. `/free/<slug>` is matched
  *  by prefix. Anything else under /uk is a 404. */
-const LOCALIZED_EXACT = new Set(["/", "/quiz", "/privacy", "/terms"]);
+const LOCALIZED_EXACT = new Set([
+  "/",
+  "/quiz",
+  "/privacy",
+  "/terms",
+  // The offering pages (offering-pages.ts) — one per kind of work.
+  "/womens-circle",
+  "/private-sessions",
+  "/coaching",
+]);
 const LOCALIZED_PREFIXES = ["/free/"];
 
 export function isLocalizedPath(path: string): boolean {
@@ -96,38 +105,86 @@ export const HOME_SEO: Record<
   },
 };
 
+/** Title, description, canonical + hreflang and the social preview for one
+ *  bilingual storefront page. `path` is the English (unprefixed) path. */
+export function storefrontPageMetadata(opts: {
+  lang: StorefrontLang;
+  path: string;
+  title: string;
+  description: string;
+  imageUrl: string | null;
+}): Metadata {
+  const { lang, path, title, description, imageUrl } = opts;
+  const s = HOME_SEO[lang];
+  const alternates = storefrontAlternates(path, lang);
+  return {
+    title: { absolute: title },
+    description,
+    alternates,
+    openGraph: {
+      type: "website",
+      url: alternates.canonical as string,
+      siteName: s.siteName,
+      title,
+      description,
+      locale: s.locale,
+      alternateLocale: lang === "uk" ? "en_CA" : "uk_UA",
+      images: imageUrl ? [{ url: imageUrl }] : undefined,
+    },
+    twitter: {
+      card: imageUrl ? "summary_large_image" : "summary",
+      title,
+      description,
+      images: imageUrl ? [imageUrl] : undefined,
+    },
+  };
+}
+
 /** Full metadata for the homepage in one language. */
 export function homeMetadata(
   lang: StorefrontLang,
   imageUrl: string | null
 ): Metadata {
   const s = HOME_SEO[lang];
-  const alternates = storefrontAlternates("/", lang);
-  const images = imageUrl ? [{ url: imageUrl }] : undefined;
-  return {
-    title: { absolute: s.title },
+  return storefrontPageMetadata({
+    lang,
+    path: "/",
+    title: s.title,
     description: s.description,
-    alternates,
-    openGraph: {
-      type: "website",
-      url: alternates.canonical as string,
-      siteName: s.siteName,
-      title: s.title,
-      description: s.description,
-      locale: s.locale,
-      alternateLocale: lang === "uk" ? "en_CA" : "uk_UA",
-      images,
-    },
-    twitter: {
-      card: imageUrl ? "summary_large_image" : "summary",
-      title: s.title,
-      description: s.description,
-      images: imageUrl ? [imageUrl] : undefined,
-    },
-  };
+    imageUrl,
+  });
 }
 
 type OfferForSchema = { title: string; price: string; description: string };
+
+/** Her offers as schema.org Offers (CAD). Offers whose price isn't a number
+ *  ("Ask me", say) are left out rather than guessed. */
+export function schemaOffers(offers: OfferForSchema[]): Record<string, unknown>[] {
+  return offers.flatMap((o) => {
+    const price = parsePrice(o.price);
+    if (price === null) return [];
+    return [
+      {
+        "@type": "Offer",
+        price,
+        priceCurrency: "CAD",
+        itemOffered: {
+          "@type": "Service",
+          name: o.title,
+          description: o.description || undefined,
+        },
+      },
+    ];
+  });
+}
+
+/** The practice, as other pages refer to it (the full entity is on "/"). */
+export const PRACTICE_REF = {
+  "@type": "ProfessionalService",
+  "@id": `${CANONICAL_ORIGIN}/#practice`,
+  name: HOME_SEO.en.siteName,
+  url: CANONICAL_ORIGIN,
+};
 
 /** Schema.org graph for the homepage: who she is (Person), the practice
  *  (ProfessionalService, serving all of Canada online), and the website.
@@ -141,22 +198,7 @@ export function storefrontJsonLd(
   const businessId = `${CANONICAL_ORIGIN}/#practice`;
   const image = opts.portraitUrl?.startsWith("http") ? opts.portraitUrl : undefined;
 
-  const makesOffer = opts.offers
-    .map((o) => {
-      const price = parsePrice(o.price);
-      if (price === null) return null;
-      return {
-        "@type": "Offer",
-        price,
-        priceCurrency: "CAD",
-        itemOffered: {
-          "@type": "Service",
-          name: o.title,
-          description: o.description || undefined,
-        },
-      };
-    })
-    .filter(Boolean);
+  const makesOffer = schemaOffers(opts.offers);
 
   return {
     "@context": "https://schema.org",

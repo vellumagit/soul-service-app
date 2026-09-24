@@ -938,3 +938,185 @@
   color: var(--land-clay);
   text-decoration: underline;
 }
+
+/* ── Offering pages (/womens-circle, /private-sessions, /coaching) ─────── */
+.landing-root.offering .offering-home {
+  text-decoration: none;
+  color: inherit;
+}
+.landing-root.offering .hero h1 {
+  max-width: 18ch;
+}
+.landing-root.offering .hero .sub {
+  margin-bottom: 18px;
+}
+.landing-root.offering .hero .btns {
+  margin-top: 30px;
+}
+.landing-root.offering .offering-lane {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  max-width: 820px;
+  margin: 0 auto;
+}
+.landing-root.offering .offering-upcoming {
+  padding-top: 0;
+}
+.landing-root.offering .offering-dates {
+  list-style: none;
+  padding: 0;
+  margin: 28px 0 0;
+  display: grid;
+  gap: 12px;
+}
+.landing-root.offering .offering-dates li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 18px 22px;
+  border: 1px solid var(--land-line);
+  border-radius: 16px;
+}
+.landing-root.offering .offering-meta {
+  display: block;
+  font-size: 14px;
+  color: var(--land-ink-soft);
+  margin-top: 2px;
+}
+.landing-root.offering .cta,
+.landing-root.offering .offering-ask a,
+.landing-root.offering .offering-upcoming .p-lg a {
+  color: var(--land-clay);
+  font-weight: 600;
+  text-decoration: none;
+}
+.landing-root.offering .offering-body h2 {
+  font-size: clamp(26px, 4vw, 34px);
+  margin: 56px 0 18px;
+}
+.landing-root.offering .offering-body h2:first-child {
+  margin-top: 0;
+}
+.landing-root.offering .offering-list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.landing-root.offering .offering-list li {
+  position: relative;
+  padding-left: 26px;
+  font-size: 17px;
+  color: var(--land-ink-soft);
+}
+.landing-root.offering .offering-list li::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 0.62em;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--land-clay);
+  opacity: 0.8;
+}
+.landing-root.offering .offering-steps {
+  list-style: none;
+  padding: 0;
+  counter-reset: step;
+  display: grid;
+  gap: 18px;
+}
+.landing-root.offering .offering-steps li {
+  counter-increment: step;
+  position: relative;
+  padding-left: 48px;
+}
+.landing-root.offering .offering-steps li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--land-clay);
+  color: var(--land-clay);
+  font-family: var(--font-serif);
+  display: grid;
+  place-items: center;
+}
+.landing-root.offering .offering-steps h3 {
+  font-size: 21px;
+  margin-bottom: 4px;
+}
+.landing-root.offering .offering-steps p,
+.landing-root.offering .offering-faq p {
+  color: var(--land-ink-soft);
+  font-size: 16.5px;
+}
+.landing-root.offering .offering-faq details {
+  border-bottom: 1px solid var(--land-line);
+  padding: 18px 0;
+}
+.landing-root.offering .offering-faq summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+.landing-root.offering .offering-faq summary::-webkit-details-marker {
+  display: none;
+}
+.landing-root.offering .offering-faq summary::after {
+  content: "+";
+  color: var(--land-clay);
+  font-size: 22px;
+  line-height: 1;
+}
+.landing-root.offering .offering-faq details[open] summary::after {
+  content: "–";
+}
+.landing-root.offering .offering-faq h3 {
+  font-size: 19px;
+  line-height: 1.35;
+}
+.landing-root.offering .offering-faq p {
+  margin-top: 12px;
+}
+.landing-root.offering .offering-ask {
+  margin-top: 28px;
+  color: var(--land-ink-soft);
+}
+.landing-root.offering .offering-others {
+  text-align: center;
+}
+.landing-root.offering .offering-others h2 {
+  font-size: clamp(24px, 3.5vw, 30px);
+}
+.landing-root.offering .offering-others ul {
+  list-style: none;
+  padding: 0;
+  margin-top: 18px;
+  display: grid;
+  gap: 10px;
+}
+.landing-root.offering .offering-others a {
+  color: var(--land-clay-deep);
+  font-size: 18px;
+}
+
+/* "More about this →" under a homepage offer card that has its own page. */
+.landing-root .card .more {
+  font-size: 14px;
+  color: var(--land-ink-soft);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  margin: -6px 0 14px;
+  align-self: flex-start;
+}
+.landing-root .card .more:hover {
+  color: var(--land-clay);
+}

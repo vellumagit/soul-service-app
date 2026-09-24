@@ -27,6 +27,7 @@ import {
   moveOfferRow,
   deleteOfferRow,
 } from "@/lib/offer-actions";
+import { OFFER_PAGES } from "@/lib/landing-offers";
 
 export type OfferItem = {
   id: string;
@@ -46,6 +47,7 @@ export type OfferItem = {
   customHref: string | null;
   variant: string;
   rowId: string | null;
+  page: string | null;
   published: boolean;
   sortOrder: number;
 };
@@ -69,6 +71,12 @@ const LINK_LABELS: Record<string, string> = {
   circle: "The next Circle",
   contact: "Your contact form",
   custom: "A link you choose",
+};
+
+const PAGE_LABELS: Record<string, string> = {
+  "womens-circle": "The Circle page (/womens-circle)",
+  "private-sessions": "Private sessions page (/private-sessions)",
+  coaching: "Ongoing coaching page (/coaching)",
 };
 
 /** What a row is called in Settings when she hasn't given it a heading. */
@@ -230,6 +238,11 @@ export function OffersManager({
                           <span>
                             Button → {LINK_LABELS[o.linkKind] ?? o.linkKind}
                           </span>
+                          {o.page && PAGE_LABELS[o.page] && (
+                            <span className="px-1.5 py-0.5 rounded bg-ink-100 text-ink-600">
+                              On {PAGE_LABELS[o.page]}
+                            </span>
+                          )}
                           {o.variant === "feature" && (
                             <span className="px-1.5 py-0.5 rounded bg-plum-50 text-plum-700">
                               Highlighted
@@ -667,6 +680,24 @@ function OfferDialog({
               />
             </Field>
           )}
+
+          <Field
+            label="Its own page"
+            hint="Shows this offer's price on that page, and adds a “More about this” link under its card on your homepage."
+          >
+            <select
+              name="page"
+              defaultValue={offer?.page ?? ""}
+              className={inputCls}
+            >
+              <option value="">None — homepage only</option>
+              {OFFER_PAGES.map((pg) => (
+                <option key={pg} value={pg}>
+                  {PAGE_LABELS[pg]}
+                </option>
+              ))}
+            </select>
+          </Field>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Which row">

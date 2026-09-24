@@ -20,6 +20,19 @@ export const OFFER_LINK_KINDS: OfferLinkKind[] = [
 ];
 export const OFFER_VARIANTS: OfferVariant[] = ["plain", "free", "feature"];
 
+/** Public pages an offer can be featured on — one per kind of work. The
+ *  words on each page live in offering-pages.ts; the prices come from here. */
+export type OfferPage = "womens-circle" | "private-sessions" | "coaching";
+export const OFFER_PAGES: OfferPage[] = [
+  "womens-circle",
+  "private-sessions",
+  "coaching",
+];
+
+export function asOfferPage(v: string | null | undefined): OfferPage | null {
+  return (OFFER_PAGES as string[]).includes(v ?? "") ? (v as OfferPage) : null;
+}
+
 
 /** The stored columns any renderer needs. */
 export type OfferRow = {
@@ -40,6 +53,7 @@ export type OfferRow = {
   customHref: string | null;
   variant: string;
   rowId: string | null;
+  page?: string | null;
 };
 
 /** A row of the ladder, as stored. The heading is optional. */
@@ -69,6 +83,8 @@ export type RenderedOffer = {
   href: string;
   variant: OfferVariant;
   rowId: string | null;
+  /** Its own page, if she's given it one ("More about this →" on the card). */
+  page: OfferPage | null;
 };
 
 /** Pick the words for this language, falling back to the other one. */
@@ -127,6 +143,7 @@ export function offerForLang(
     href: resolveHref(row, circleHref),
     variant: asVariant(row.variant),
     rowId: row.rowId,
+    page: asOfferPage(row.page),
   };
 }
 
@@ -200,6 +217,7 @@ export function builtInOffers(
       href: "/quiz",
       variant: "free",
       rowId: "builtin-row-1",
+      page: null,
     },
     {
       id: "builtin-circle",
@@ -212,6 +230,7 @@ export function builtInOffers(
       href: circleHref,
       variant: "plain",
       rowId: "builtin-row-1",
+      page: "womens-circle",
     },
     {
       id: "builtin-single",
@@ -224,6 +243,7 @@ export function builtInOffers(
       href: "#contact",
       variant: "plain",
       rowId: "builtin-row-1",
+      page: "private-sessions",
     },
     {
       id: "builtin-retainer",
@@ -236,6 +256,7 @@ export function builtInOffers(
       href: "#contact",
       variant: "plain",
       rowId: "builtin-row-2",
+      page: "coaching",
     },
     {
       id: "builtin-journey",
@@ -248,6 +269,7 @@ export function builtInOffers(
       href: "#contact",
       variant: "feature",
       rowId: "builtin-row-2",
+      page: "coaching",
     },
     {
       id: "builtin-talk",
@@ -260,6 +282,7 @@ export function builtInOffers(
       href: "#contact",
       variant: "plain",
       rowId: "builtin-row-2",
+      page: null,
     },
   ];
 }

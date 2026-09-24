@@ -6,6 +6,7 @@ import type { MetadataRoute } from "next";
 import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { leadMagnets } from "@/db/schema";
+import { OFFER_PAGES } from "@/lib/landing-offers";
 import { QUIZ_PAUSED } from "@/lib/quiz-status";
 import { resolveStorefrontAccountId } from "@/lib/storefront-account";
 import { CANONICAL_ORIGIN, localePath } from "@/lib/storefront-seo";
@@ -15,6 +16,7 @@ export const dynamic = "force-dynamic";
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const pages: { path: string; lastModified?: Date; priority: number }[] = [
     { path: "/", priority: 1 },
+    ...OFFER_PAGES.map((p) => ({ path: `/${p}`, priority: 0.9 })),
     { path: "/privacy", priority: 0.2 },
     { path: "/terms", priority: 0.2 },
   ];

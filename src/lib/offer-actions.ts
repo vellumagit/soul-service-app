@@ -14,7 +14,11 @@ import { db } from "@/db";
 import { landingOffers, landingOfferRows } from "@/db/schema";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { requireSession } from "./session-cookies";
-import { OFFER_LINK_KINDS, OFFER_VARIANTS } from "./landing-offers";
+import {
+  OFFER_LINK_KINDS,
+  OFFER_VARIANTS,
+  asOfferPage,
+} from "./landing-offers";
 
 const MAX_SHORT = 160;
 const MAX_LONG = 1200;
@@ -142,6 +146,7 @@ export async function saveOffer(formData: FormData): Promise<void> {
     linkKind,
     customHref,
     variant: oneOf(str(formData, "variant", 40), OFFER_VARIANTS, "plain"),
+    page: asOfferPage(str(formData, "page", 40)),
     rowId: await resolveRowId(accountId, str(formData, "rowId", 100)),
     published: formData.get("published") != null,
     updatedAt: new Date(),

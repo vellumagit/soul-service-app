@@ -2772,6 +2772,7 @@ export async function listLandingOffers(
       descriptionUk: landingOffers.descriptionUk,
       ctaEn: landingOffers.ctaEn,
       ctaUk: landingOffers.ctaUk,
+      page: landingOffers.page,
       linkKind: landingOffers.linkKind,
       customHref: landingOffers.customHref,
       variant: landingOffers.variant,

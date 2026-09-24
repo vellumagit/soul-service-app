@@ -1539,6 +1539,11 @@ export const landingOffers = pgTable(
     linkKind: text("link_kind").notNull().default("contact"),
     customHref: text("custom_href"),
 
+    /** The public page this offer is featured on ('womens-circle' |
+     *  'private-sessions' | 'coaching'), or null for homepage-only. The page
+     *  shows its live price; the homepage card links to it. */
+    page: text("page"),
+
     /** 'plain' | 'free' | 'feature' — maps to the card classes. */
     variant: text("variant").notNull().default("plain"),
     /** Which row of the ladder it sits in. Nullable only for the brief window

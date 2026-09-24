@@ -55,6 +55,9 @@ import {
   localePath,
   storefrontJsonLd,
 } from "@/lib/storefront-seo";
+import { storefrontPortraitUrl } from "@/lib/storefront-portrait";
+import { JsonLd } from "@/components/JsonLd";
+import { OFFERING_CHROME } from "@/lib/offering-pages";
 import "./landing.css";
 
 function formatLandingWindowLabel(
@@ -74,23 +77,6 @@ function formatLandingWindowLabel(
 }
 
 export const dynamic = "force-dynamic";
-
-// Her portrait doubles as the link-preview image. Any DB hiccup just means
-// no preview image — never a failed page.
-async function storefrontPortraitUrl(): Promise<string | null> {
-  try {
-    const accountId = await resolveStorefrontAccountId();
-    if (!accountId) return null;
-    const [row] = await db
-      .select({ url: practitionerSettings.landingPortraitUrl })
-      .from(practitionerSettings)
-      .where(eq(practitionerSettings.accountId, accountId))
-      .limit(1);
-    return row?.url?.trim() || null;
-  } catch {
-    return null;
-  }
-}
 
 export async function generateMetadata(): Promise<Metadata> {
   const lang = await getLandingLang();
@@ -461,6 +447,17 @@ export default async function LandingPage() {
                         </div>
                       )}
                       {o.description && <p className="desc">{o.description}</p>}
+                      {/* Its own page (Settings → Offers → "Its own page"):
+                          the full story + FAQs, and a real link for Google
+                          to follow from the homepage. */}
+                      {o.page && (
+                        <Link
+                          href={localePath(lang, `/${o.page}`)}
+                          className="more"
+                        >
+                          {OFFERING_CHROME[lang].moreAbout}
+                        </Link>
+                      )}
                       {o.cta && (
                         <a href={o.href} className="cta">
                           {o.cta}
@@ -687,13 +684,7 @@ export default async function LandingPage() {
 
   return (
     <>
-      <script
-        type="application/ld+json"
-        // Escaping "<" keeps any of her copy from closing the script tag early.
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c"),
-        }}
-      />
+      <JsonLd data={jsonLd} />
       <TimeOfDayProvider />
       <GoogleAnalytics />
       <LandingReveal />
