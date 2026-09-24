@@ -6,6 +6,7 @@ import type { MetadataRoute } from "next";
 import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { leadMagnets } from "@/db/schema";
+import { publishedArticles } from "@/lib/journal";
 import { OFFER_PAGES } from "@/lib/landing-offers";
 import { QUIZ_PAUSED } from "@/lib/quiz-status";
 import { resolveStorefrontAccountId } from "@/lib/storefront-account";
@@ -20,6 +21,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { path: "/privacy", priority: 0.2 },
     { path: "/terms", priority: 0.2 },
   ];
+  // Published Journal articles (drafts are for her eyes only), and the index
+  // once there's something on it.
+  const articles = publishedArticles();
+  if (articles.length > 0) {
+    pages.push({ path: "/journal", priority: 0.6 });
+    for (const a of articles) {
+      pages.push({
+        path: `/journal/${a.slug}`,
+        lastModified: new Date(`${a.updated}T00:00:00Z`),
+        priority: 0.7,
+      });
+    }
+  }
   // While the quiz is paused its page is a "back soon" note — not worth indexing.
   if (!QUIZ_PAUSED) pages.push({ path: "/quiz", priority: 0.7 });
 

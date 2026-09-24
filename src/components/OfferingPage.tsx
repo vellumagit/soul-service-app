@@ -13,11 +13,9 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { practitionerSettings } from "@/db/schema";
 import { listLandingOffers } from "@/db/queries";
-import { BrandLockup } from "./BrandLockup";
 import { GoogleAnalytics } from "./GoogleAnalytics";
 import { JsonLd } from "./JsonLd";
-import { LandingLangToggle } from "./LandingLangToggle";
-import { LegalLinks } from "./LegalLinks";
+import { StorefrontFooter, StorefrontNav } from "./StorefrontChrome";
 import { TimeOfDayProvider } from "./TimeOfDayProvider";
 import { getLandingCopy, type LandingLang } from "@/lib/landing-copy";
 import { getLandingLang } from "@/lib/landing-lang";
@@ -30,6 +28,7 @@ import {
 } from "@/lib/landing-offers";
 import { listUpcomingPublicGroupSessions } from "@/lib/group-actions";
 import { OFFERING_CHROME, OFFERING_COPY } from "@/lib/offering-pages";
+import { publishedArticles } from "@/lib/journal";
 import { resolveStorefrontAccountId } from "@/lib/storefront-account";
 import { storefrontPortraitUrl } from "@/lib/storefront-portrait";
 import {
@@ -164,19 +163,7 @@ export async function OfferingPage({ slug }: { slug: OfferPage }) {
       <TimeOfDayProvider />
       <GoogleAnalytics />
       <div className="landing-root offering">
-        <nav className="lnav">
-          <div className="inner">
-            <Link href={localePath(lang, "/")} className="brand offering-home" aria-label={chrome.home}>
-              <BrandLockup subtitle={landing.footer.subtitle} markSize={44} />
-            </Link>
-            <div className="nav-actions">
-              <LandingLangToggle current={lang} />
-              <a href={contactHref} className="navcta">
-                {landing.nav.reachOut}
-              </a>
-            </div>
-          </div>
-        </nav>
+        <StorefrontNav lang={lang} />
 
         <header className="hero">
           <div className="wrap">
@@ -352,12 +339,7 @@ export async function OfferingPage({ slug }: { slug: OfferPage }) {
           </div>
         </section>
 
-        <footer className="lfoot">
-          <Link href={localePath(lang, "/")} className="signin-link">
-            {chrome.home}
-          </Link>
-          <LegalLinks lang={lang} />
-        </footer>
+        <StorefrontFooter lang={lang} showJournal={publishedArticles().length > 0} />
       </div>
     </>
   );
