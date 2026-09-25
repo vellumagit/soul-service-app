@@ -1,4 +1,4 @@
-import type { Article } from "../journal";
+import type { Article } from "@/lib/journal";
 
 // Targets "feeling lost in life" (210/mo, Canada) and "inner compass" (90/mo),
 // both her core metaphor. Leads to /private-sessions. Her story (came to

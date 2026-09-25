@@ -1,9 +1,10 @@
 // The Journal index: /journal and /uk/journal. Lists published articles only
 // (drafts stay reachable by direct link). Until something is published the
-// page is a quiet "on its way" note, kept out of search results.
+// page doesn't exist — a 404, not an empty shelf.
 
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { GoogleAnalytics } from "@/components/GoogleAnalytics";
 import { StorefrontFooter, StorefrontNav } from "@/components/StorefrontChrome";
 import { TimeOfDayProvider } from "@/components/TimeOfDayProvider";
@@ -34,6 +35,7 @@ export default async function JournalIndexPage() {
   const lang = await getLandingLang();
   const c = JOURNAL_CHROME[lang];
   const articles = publishedArticles();
+  if (articles.length === 0) notFound();
 
   return (
     <>

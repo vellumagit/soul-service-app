@@ -1,4 +1,4 @@
-import type { Article } from "../journal";
+import type { Article } from "@/lib/journal";
 
 // Targets "women's circle" / "what is a women's circle" (Canada) and leads to
 // /womens-circle. Facts about HER Circle only from the storefront + Terms:

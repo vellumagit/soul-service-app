@@ -2,19 +2,17 @@
 // /uk/journal/<slug> (Ukrainian). Each article lives in src/lib/journal/ as
 // one file holding BOTH languages; the slug is shared.
 //
-// Articles are written in her voice, so each one starts as a DRAFT: it opens
-// at its URL for her to read, but it's marked noindex, left out of the
-// sitemap and not listed on /journal. Once she's happy, flip `status` to
-// "published" (and set `published` to that day) — that's the whole release.
+// Articles are written in her voice, so nothing goes on the site until she's
+// approved it. Unapproved drafts are set aside in content/journal-drafts/ (not
+// imported, so they don't build) — see the README there for how to publish
+// one. A `status: "draft"` article in ARTICLES still opens at its URL but is
+// noindex, unlisted and left out of the sitemap.
 //
 // Body text is Markdown. Links inside a body are written per language
 // ("/womens-circle" in English, "/uk/womens-circle" in Ukrainian).
 
 import type { LandingLang } from "./landing-copy";
 import type { OfferPage } from "./landing-offers";
-import { womensCircle } from "./journal/what-is-a-womens-circle";
-import { feelingLost } from "./journal/feeling-lost-in-life";
-import { peoplePleasing } from "./journal/people-pleasing";
 
 export type ArticleText = {
   /** Page H1 and the card title on /journal. */
@@ -43,8 +41,8 @@ export type Article = {
   uk: ArticleText;
 };
 
-/** Newest first. */
-export const ARTICLES: Article[] = [womensCircle, feelingLost, peoplePleasing];
+/** Newest first. Empty until she approves the first article. */
+export const ARTICLES: Article[] = [];
 
 export function getArticle(slug: string): Article | null {
   return ARTICLES.find((a) => a.slug === slug) ?? null;

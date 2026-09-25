@@ -1,4 +1,4 @@
-import type { Article } from "../journal";
+import type { Article } from "@/lib/journal";
 
 // Targets "people pleasing" (2,400/mo, Canada) and "how to stop people
 // pleasing" (210/mo). The head term is held by big publishers, so the angle
