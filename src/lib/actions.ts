@@ -4729,6 +4729,27 @@ export async function rescheduleSession(formData: FormData) {
     // as a fresh schedule.
     recallBotId: null,
     recallBotStatus: null,
+    // ...and the NOTES from the occurrence that already happened, which used
+    // to ride along to the new date. Two separate failures came out of that:
+    //
+    //   1. The moved card showed the PREVIOUS meeting's notes. On 2026-10-01 a
+    //      session recorded 09-25 was moved to 10-02 and displayed its 09-25
+    //      transcript, while the 09-29 card sat blank.
+    //   2. Worse, the new recording could never attach at all. BOTH attachment
+    //      paths key on recallTranscriptReceivedAt: the webhook's idempotency
+    //      guard skips when it is set ("already processed"), and the status
+    //      poll filters on isNull(recallTranscriptReceivedAt). A stale value
+    //      locked the row out of its own transcript permanently — no webhook,
+    //      no retry, no sweep would ever fill it.
+    //
+    // Clearing is deliberate: a transcript belongs to the occurrence that
+    // produced it, and attachTranscriptToSession overwrites these fields
+    // anyway once a new one lands. To keep the old notes, duplicate the
+    // session before moving it.
+    recallTranscriptReceivedAt: null,
+    transcript: null,
+    aiSummary: null,
+    aiSummaryTldr: null,
   };
   if (durationMinutes !== null) updates.durationMinutes = durationMinutes;
   // Moving ONE occurrence of a recurring series DETACHES it: it becomes its own
