@@ -210,6 +210,9 @@ export const sessions = pgTable(
     intention: text("intention"), // client's stated intention, in their own words
     arrivedAs: text("arrived_as"), // how they showed up (free text)
     leftAs: text("left_as"), // how they left (free text)
+    // 1–10 "how they're feeling", set on the session card. Lifts the dot on
+    // the Journey arc so it shows change over time. Null = not rated.
+    feelingRating: integer("feeling_rating"),
     notes: text("notes"), // practitioner's session notes
 
     // The Closing — a quiet ritual the app offers after a session is marked

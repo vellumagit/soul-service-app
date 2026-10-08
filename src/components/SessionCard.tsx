@@ -43,6 +43,7 @@ import { RecordSessionDialog } from "./RecordSessionDialog";
 import { MeetLinkEditor } from "./MeetLinkEditor";
 import { EditSeriesDialog } from "./EditSeriesDialog";
 import { useSubmitOnce } from "@/lib/useSubmitOnce";
+import { FeelingRatingField } from "./FeelingRatingField";
 
 const STATUS_CHIP: Record<string, string> = {
   scheduled: "bg-plum-100 text-plum-700",
@@ -314,6 +315,8 @@ export function SessionCard({
                 />
               </Field>
             </div>
+
+            <FeelingRatingField defaultValue={session.feelingRating ?? null} />
 
             {(session.aiSummaryTldr ||
               session.aiSummary ||

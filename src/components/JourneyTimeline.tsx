@@ -41,10 +41,20 @@ type TimelinePoint = {
    *  milestone. Milestones get a diamond + visible label instead of just
    *  the dot, because they're explicitly-named anchor moments. */
   milestoneLabel: string | null;
+  /** 1–10 "how they're feeling" from the session card. Null = not rated. */
+  rating: number | null;
 };
 
 const MIN_DAYS_SPAN = 14; // ensure markers aren't all on top of each other
 const MARKER_SIZE = 10;
+
+// Vertical geometry. With no ratings the arc is the original flat line. Once
+// any session is rated it grows taller: rated sessions rise to their score
+// (10 at RATED_TOP, 1 at RATED_BOTTOM) and a line joins them, so the arc
+// shows change over time; unrated / upcoming / cancelled stay on the
+// baseline below.
+const FLAT = { baseline: 60, height: 96 };
+const RATED = { baseline: 142, height: 176, top: 40, bottom: 118 };
 
 export function JourneyTimeline({
   clientId,
@@ -71,6 +81,10 @@ export function JourneyTimeline({
         milestoneLabel:
           s.milestoneLabel && s.milestoneLabel.trim().length > 0
             ? s.milestoneLabel.trim()
+            : null,
+        rating:
+          s.status !== "cancelled" && s.feelingRating != null
+            ? s.feelingRating
             : null,
       }))
       .sort((a, b) => a.date.getTime() - b.date.getTime());
@@ -134,6 +148,19 @@ export function JourneyTimeline({
     ? points.find((p) => p.id === hoveredId)
     : null;
 
+  const rated = points.filter((p) => p.rating != null);
+  const hasRatings = rated.length > 0;
+  const baseline = hasRatings ? RATED.baseline : FLAT.baseline;
+  const height = hasRatings ? RATED.height : FLAT.height;
+  function yFor(rating: number | null): number {
+    if (rating == null) return baseline;
+    return RATED.bottom - ((rating - 1) / 9) * (RATED.bottom - RATED.top);
+  }
+  // In date order, so the line reads left → right as change over time.
+  const linePoints = rated
+    .map((p) => `${xPercent(p.date)},${yFor(p.rating).toFixed(2)}`)
+    .join(" ");
+
   return (
     <div className="paper-card p-5">
       <div className="flex items-baseline justify-between mb-1">
@@ -150,16 +177,62 @@ export function JourneyTimeline({
       </div>
       <div className="text-[11px] text-ink-500 mb-5">
         Began {fullDate(firstAt, tz)}.
+        {rated.length >= 2 && (
+          <>
+            {" "}
+            Feeling{" "}
+            <span className="text-plum-700 font-medium tabular-nums">
+              {rated[0].rating} → {rated[rated.length - 1].rating}
+            </span>{" "}
+            <span className="text-ink-400">(first → latest rated)</span>
+          </>
+        )}
       </div>
 
       {/* The arc itself — relative-positioned canvas; markers absolute.
           Taller now to make room for milestone labels above the line. */}
-      <div className="relative w-full" style={{ height: 96 }}>
+      <div className="relative w-full" style={{ height }}>
         {/* Baseline — pushed down so labels above have room. */}
         <div
           className="absolute left-0 right-0 bg-ink-200"
-          style={{ top: 60, height: 1 }}
+          style={{ top: baseline, height: 1 }}
         />
+
+        {/* Feeling scale — faint guides at 10 and 1, and the line through
+            every rated session. x is in % (viewBox 0–100), y in px. */}
+        {hasRatings && (
+          <>
+            {[10, 1].map((v) => (
+              <div key={v} className="absolute left-0 right-0 pointer-events-none" style={{ top: yFor(v) }}>
+                <div className="border-t border-dashed border-ink-100" />
+                <span
+                  className="absolute text-[9px] text-ink-300 font-mono tabular-nums"
+                  style={{ left: -16, top: -6 }}
+                >
+                  {v}
+                </span>
+              </div>
+            ))}
+            {rated.length >= 2 && (
+              <svg
+                className="absolute inset-0 w-full h-full pointer-events-none overflow-visible"
+                viewBox={`0 0 100 ${height}`}
+                preserveAspectRatio="none"
+                aria-hidden="true"
+              >
+                <polyline
+                  points={linePoints}
+                  fill="none"
+                  stroke="var(--color-plum-300)"
+                  strokeWidth={1.5}
+                  strokeLinejoin="round"
+                  strokeLinecap="round"
+                  vectorEffect="non-scaling-stroke"
+                />
+              </svg>
+            )}
+          </>
+        )}
 
         {/* Today tick — only shown if today is somewhere inside the span */}
         {today >= firstAt && today <= endAt && (
@@ -170,7 +243,7 @@ export function JourneyTimeline({
             <div className="absolute inset-y-0 w-px bg-plum-300" />
             <div
               className="absolute -translate-x-1/2 text-[9px] uppercase tracking-wider text-plum-600 font-semibold whitespace-nowrap"
-              style={{ top: 48 }}
+              style={{ top: baseline - 12 }}
             >
               now
             </div>
@@ -192,12 +265,12 @@ export function JourneyTimeline({
               onFocus={() => setHoveredId(p.id)}
               onBlur={() => setHoveredId(null)}
               aria-label={`${p.type} on ${fullDate(p.date, tz)}${
-                p.milestoneLabel ? ` — ${p.milestoneLabel}` : ""
-              }`}
+                p.rating != null ? `, feeling ${p.rating} out of 10` : ""
+              }${p.milestoneLabel ? ` — ${p.milestoneLabel}` : ""}`}
               className="absolute group"
               style={{
                 left: `calc(${left}% - ${MARKER_SIZE / 2}px)`,
-                top: 60 - MARKER_SIZE / 2,
+                top: yFor(p.rating) - MARKER_SIZE / 2,
                 width: MARKER_SIZE,
                 height: MARKER_SIZE,
               }}
@@ -268,7 +341,7 @@ export function JourneyTimeline({
             className="absolute text-[9px] text-ink-400 font-mono whitespace-nowrap"
             style={{
               left: `${xPercent(m.date)}%`,
-              top: 70,
+              top: baseline + 10,
               transform: "translateX(-50%)",
             }}
           >
@@ -294,6 +367,14 @@ export function JourneyTimeline({
               <span className="text-ink-600 font-normal">
                 {shortTime(hovered.date, tz)} · {hovered.type}
               </span>
+              {hovered.rating != null && (
+                <>
+                  <span className="text-ink-400 mx-1.5">·</span>
+                  <span className="text-plum-700 tabular-nums">
+                    feeling {hovered.rating}/10
+                  </span>
+                </>
+              )}
             </div>
             {hovered.neverForgetLine && (
               <div className="mt-1 text-ink-700 italic">
@@ -304,6 +385,7 @@ export function JourneyTimeline({
         ) : (
           <div className="text-[11px] text-ink-400 italic">
             Hover a dot to see what was there.
+            {hasRatings && <> Higher dots = feeling better (1–10).</>}
             {points.some((p) => p.milestoneLabel) && (
               <>
                 {" "}

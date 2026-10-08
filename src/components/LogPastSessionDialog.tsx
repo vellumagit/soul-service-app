@@ -9,6 +9,7 @@ import { LocalDateTimeInput } from "./LocalDateTimeInput";
 import { useTimeZone } from "./TimeZoneProvider";
 import { zonedLocalInputValue } from "@/lib/timezone";
 import { useSubmitOnce } from "@/lib/useSubmitOnce";
+import { FeelingRatingField } from "./FeelingRatingField";
 
 type ClientOption = { id: string; fullName: string };
 
@@ -197,6 +198,8 @@ export function LogPastSessionDialog({
                 />
               </Field>
             </div>
+
+            <FeelingRatingField defaultValue={null} />
 
             <Field label="Session notes" hint="Whatever you'd want to remember about this session">
               <textarea name="notes" rows={5} className={inputCls} />

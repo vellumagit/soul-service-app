@@ -45,6 +45,13 @@ function str(form: FormData, key: string): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+/** The session card's 1–10 feeling score: a whole number 1–10, else null
+ *  ("–" submits "" to clear it). */
+function feelingRating(form: FormData): number | null {
+  const n = num(form, "feelingRating");
+  return n !== null && Number.isInteger(n) && n >= 1 && n <= 10 ? n : null;
+}
+
 function num(form: FormData, key: string): number | null {
   const v = str(form, key);
   if (v === null) return null;
@@ -4506,6 +4513,7 @@ export async function logPastSession(formData: FormData) {
       intention: str(formData, "intention"),
       arrivedAs: str(formData, "arrivedAs"),
       leftAs: str(formData, "leftAs"),
+      feelingRating: feelingRating(formData),
       notes: str(formData, "notes"),
       ...(free
         ? { paid: false, ...GIFTED, paidAt: null }
@@ -4631,6 +4639,9 @@ export async function updateSession(formData: FormData) {
     intention: newIntention,
     arrivedAs: str(formData, "arrivedAs"),
     leftAs: str(formData, "leftAs"),
+    // Only when the form carries the field, so another caller of this action
+    // can't silently wipe a score it never showed.
+    ...(formData.has("feelingRating") ? { feelingRating: feelingRating(formData) } : {}),
     notes: str(formData, "notes"),
     type: newType ?? undefined,
     updatedAt: new Date(),
