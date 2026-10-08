@@ -213,6 +213,9 @@ export const sessions = pgTable(
     // 1–10 "how they're feeling", set on the session card. Lifts the dot on
     // the Journey arc so it shows change over time. Null = not rated.
     feelingRating: integer("feeling_rating"),
+    // A short note pinned to this session's dot on the Journey arc — edited
+    // from the arc's click card or the session card. Practitioner-only.
+    arcNote: text("arc_note"),
     notes: text("notes"), // practitioner's session notes
 
     // The Closing — a quiet ritual the app offers after a session is marked

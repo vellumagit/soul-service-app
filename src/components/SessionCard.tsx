@@ -318,6 +318,16 @@ export function SessionCard({
 
             <FeelingRatingField defaultValue={session.feelingRating ?? null} />
 
+            <Field label="Note on the arc" hint="One line pinned to this session's dot on “Your work together”">
+              <input
+                name="arcNote"
+                defaultValue={session.arcNote ?? ""}
+                maxLength={140}
+                className={inputCls}
+                placeholder="e.g. first real breakthrough · started the new job"
+              />
+            </Field>
+
             {(session.aiSummaryTldr ||
               session.aiSummary ||
               session.transcript) && (

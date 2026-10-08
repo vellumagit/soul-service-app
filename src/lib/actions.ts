@@ -33,6 +33,7 @@ import {
 import { isValidTimeZone, resolveTimeZone, zonedWallTimeToUtc } from "./timezone";
 import { safeCurrency } from "./format";
 import { emailAllowed, emailAllowedForClient, optOutsFromForm } from "./email-prefs";
+import { rethrowIfRedirect } from "./redirect-error";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Form helpers
@@ -50,6 +51,14 @@ function str(form: FormData, key: string): string | null {
 function feelingRating(form: FormData): number | null {
   const n = num(form, "feelingRating");
   return n !== null && Number.isInteger(n) && n >= 1 && n <= 10 ? n : null;
+}
+
+/** A Journey-arc note: trimmed, capped, blank → null. */
+const ARC_NOTE_MAX = 140;
+function arcNoteValue(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const t = v.trim().slice(0, ARC_NOTE_MAX);
+  return t.length > 0 ? t : null;
 }
 
 function num(form: FormData, key: string): number | null {
@@ -4642,6 +4651,7 @@ export async function updateSession(formData: FormData) {
     // Only when the form carries the field, so another caller of this action
     // can't silently wipe a score it never showed.
     ...(formData.has("feelingRating") ? { feelingRating: feelingRating(formData) } : {}),
+    ...(formData.has("arcNote") ? { arcNote: arcNoteValue(formData.get("arcNote")) } : {}),
     notes: str(formData, "notes"),
     type: newType ?? undefined,
     updatedAt: new Date(),
@@ -6532,4 +6542,39 @@ export async function markSessionFree(sessionId: string, clientId: string) {
   revalidatePath("/payments");
   revalidatePath("/today");
   revalidatePath("/requests", "layout");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// JOURNEY ARC — the click card on a dot edits that session's feeling score and
+// its short arc note in place. Only the fields passed are written, so saving a
+// note can never wipe a score (or the other way round).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function saveSessionArcFields(
+  sessionId: string,
+  patch: { arcNote?: string | null; feelingRating?: number | null }
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const { accountId } = await requireSession();
+    const set: Record<string, unknown> = {};
+    if ("arcNote" in patch) set.arcNote = arcNoteValue(patch.arcNote);
+    if ("feelingRating" in patch) {
+      const n = patch.feelingRating;
+      set.feelingRating =
+        typeof n === "number" && Number.isInteger(n) && n >= 1 && n <= 10 ? n : null;
+    }
+    if (Object.keys(set).length === 0) return { ok: true };
+    set.updatedAt = new Date();
+    const [row] = await db
+      .update(sessions)
+      .set(set)
+      .where(and(eq(sessions.accountId, accountId), eq(sessions.id, sessionId)))
+      .returning({ clientId: sessions.clientId });
+    if (!row) return { ok: false, error: "That session no longer exists." };
+    revalidatePath(`/clients/${row.clientId}`);
+    return { ok: true };
+  } catch (err) {
+    rethrowIfRedirect(err);
+    return { ok: false, error: err instanceof Error ? err.message : "Couldn't save that." };
+  }
 }

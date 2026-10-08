@@ -23,10 +23,10 @@
 // Quiet by design — this isn't a chart, it's a small arc on the page that
 // lets her glance at the SHAPE of someone's becoming.
 
-import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Session } from "@/db/schema";
-import { fullDate, shortTime } from "@/lib/format";
+import { ArcDotCard } from "./ArcDotCard";
+import { fullDate, shortDate, shortTime } from "@/lib/format";
 import { useTimeZone } from "./TimeZoneProvider";
 import { zonedYearMonthDay } from "@/lib/timezone";
 
@@ -43,7 +43,12 @@ type TimelinePoint = {
   milestoneLabel: string | null;
   /** 1–10 "how they're feeling" from the session card. Null = not rated. */
   rating: number | null;
+  /** One-line note pinned to this dot (sessions.arc_note). */
+  note: string | null;
 };
+
+type ArcEdit = { rating?: number | null; note?: string | null };
+const SHOW_NOTES_KEY = "journey:showNotes";
 
 const MIN_DAYS_SPAN = 14; // ensure markers aren't all on top of each other
 const MARKER_SIZE = 10;
@@ -66,11 +71,39 @@ export function JourneyTimeline({
   const tz = useTimeZone();
   // Hovered marker — drives the tooltip.
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  // The dot whose click card is open.
+  const [openId, setOpenId] = useState<string | null>(null);
+  // Edits made in the click card, shown immediately (the server revalidates
+  // the page behind them).
+  const [edits, setEdits] = useState<Record<string, ArcEdit>>({});
+  // "Show notes" — remembered per browser; a convenience, never required.
+  const [showNotes, setShowNotes] = useState(false);
+  useEffect(() => {
+    try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- read once after hydration
+      if (localStorage.getItem(SHOW_NOTES_KEY) === "1") setShowNotes(true);
+    } catch {}
+  }, []);
+  function toggleShowNotes() {
+    const next = !showNotes;
+    setShowNotes(next);
+    try {
+      localStorage.setItem(SHOW_NOTES_KEY, next ? "1" : "0");
+    } catch {}
+  }
+  const applyEdit = useCallback((id: string, patch: ArcEdit) => {
+    setEdits((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }));
+  }, []);
+  const closeCard = useCallback(() => setOpenId(null), []);
 
   // Sort once, derive the meaningful summary stats.
   const points = useMemo<TimelinePoint[]>(() => {
     return sessions
-      .map((s) => ({
+      .map((s) => {
+        const e = edits[s.id] ?? {};
+        const rating = "rating" in e ? (e.rating ?? null) : s.feelingRating;
+        const note = "note" in e ? (e.note ?? null) : s.arcNote;
+        return {
         id: s.id,
         date: new Date(s.scheduledAt),
         type: s.type,
@@ -82,13 +115,12 @@ export function JourneyTimeline({
           s.milestoneLabel && s.milestoneLabel.trim().length > 0
             ? s.milestoneLabel.trim()
             : null,
-        rating:
-          s.status !== "cancelled" && s.feelingRating != null
-            ? s.feelingRating
-            : null,
-      }))
+        rating: s.status !== "cancelled" && rating != null ? rating : null,
+        note: note && note.trim().length > 0 ? note.trim() : null,
+        };
+      })
       .sort((a, b) => a.date.getTime() - b.date.getTime());
-  }, [sessions]);
+  }, [sessions, edits]);
 
   if (points.length === 0) return null;
 
@@ -156,13 +188,21 @@ export function JourneyTimeline({
     if (rating == null) return baseline;
     return RATED.bottom - ((rating - 1) / 9) * (RATED.bottom - RATED.top);
   }
+  const openPoint = openId ? (points.find((p) => p.id === openId) ?? null) : null;
+  // Notes in date order, numbered for "Show notes" (badge on the dot ↔ list).
+  const noted = points.filter((p) => p.note);
+  const noteNumber = new Map(noted.map((p, i) => [p.id, i + 1]));
+
   // In date order, so the line reads left → right as change over time.
   const linePoints = rated
     .map((p) => `${xPercent(p.date)},${yFor(p.rating).toFixed(2)}`)
     .join(" ");
 
   return (
-    <div className="paper-card p-5">
+    // overflow-x-clip: the click card measures and nudges itself inside the
+    // arc, but for the instant before it does, a centred card near the end
+    // pokes past the screen — enough for a phone to widen the whole page.
+    <div className="paper-card p-5 overflow-x-clip">
       <div className="flex items-baseline justify-between mb-1">
         <div
           className="serif-italic text-base text-plum-700"
@@ -170,9 +210,21 @@ export function JourneyTimeline({
         >
           Your work together
         </div>
-        <div className="text-[10px] uppercase tracking-wider text-ink-400 font-mono">
-          {monthsActive} {monthsActive === 1 ? "month" : "months"} ·{" "}
-          {completedCount} held{totalCount > completedCount ? ` · ${totalCount - completedCount} ahead` : ""}
+        <div className="flex items-baseline gap-3">
+          {noted.length > 0 && (
+            <button
+              type="button"
+              onClick={toggleShowNotes}
+              aria-pressed={showNotes}
+              className="text-[11px] text-plum-700 hover:underline"
+            >
+              {showNotes ? "Hide notes" : `Show notes (${noted.length})`}
+            </button>
+          )}
+          <div className="text-[10px] uppercase tracking-wider text-ink-400 font-mono">
+            {monthsActive} {monthsActive === 1 ? "month" : "months"} ·{" "}
+            {completedCount} held{totalCount > completedCount ? ` · ${totalCount - completedCount} ahead` : ""}
+          </div>
         </div>
       </div>
       <div className="text-[11px] text-ink-500 mb-5">
@@ -257,17 +309,23 @@ export function JourneyTimeline({
           const isCompleted = p.status === "completed";
           const isMilestone = !!p.milestoneLabel;
           return (
-            <Link
+            <button
               key={p.id}
-              href={`/clients/${clientId}?tab=sessions#${p.id}`}
+              type="button"
+              data-arc-dot
+              onClick={() => setOpenId((cur) => (cur === p.id ? null : p.id))}
               onMouseEnter={() => setHoveredId(p.id)}
               onMouseLeave={() => setHoveredId(null)}
               onFocus={() => setHoveredId(p.id)}
               onBlur={() => setHoveredId(null)}
+              aria-haspopup="dialog"
+              aria-expanded={openId === p.id}
               aria-label={`${p.type} on ${fullDate(p.date, tz)}${
                 p.rating != null ? `, feeling ${p.rating} out of 10` : ""
-              }${p.milestoneLabel ? ` — ${p.milestoneLabel}` : ""}`}
-              className="absolute group"
+              }${p.milestoneLabel ? ` — ${p.milestoneLabel}` : ""}${
+                p.note ? `. Note: ${p.note}` : ""
+              }`}
+              className="absolute group p-0 border-0 bg-transparent cursor-pointer"
               style={{
                 left: `calc(${left}% - ${MARKER_SIZE / 2}px)`,
                 top: yFor(p.rating) - MARKER_SIZE / 2,
@@ -275,6 +333,26 @@ export function JourneyTimeline({
                 height: MARKER_SIZE,
               }}
             >
+              {/* Bigger invisible hit area — a 10px dot is a hard tap on an iPad. */}
+              <span aria-hidden="true" className="absolute -inset-[7px]" />
+              {/* Note mark: a small dot, or its number when "Show notes" is on. */}
+              {p.note &&
+                (showNotes ? (
+                  <span
+                    aria-hidden="true"
+                    className="absolute flex items-center justify-center rounded-full bg-plum-100 text-plum-800 font-semibold tabular-nums"
+                    style={{ left: 7, top: -11, minWidth: 13, height: 13, fontSize: 8, padding: "0 3px" }}
+                  >
+                    {noteNumber.get(p.id)}
+                  </span>
+                ) : (
+                  <span
+                    aria-hidden="true"
+                    className="absolute rounded-full bg-plum-300"
+                    style={{ left: 8, top: -5, width: 5, height: 5 }}
+                    title="Has a note"
+                  />
+                ))}
               {/* Milestone label + diamond — sit above the dot. The label is
                   always visible so the named anchors of the arc are readable
                   at a glance. */}
@@ -330,9 +408,24 @@ export function JourneyTimeline({
                   style={{ width: MARKER_SIZE, height: MARKER_SIZE }}
                 />
               )}
-            </Link>
+            </button>
           );
         })}
+
+        {/* Click card — opens just under its dot. Keyed by dot so switching
+            dots remounts it (and flushes the previous dot's pending note). */}
+        {openPoint && (
+          <ArcDotCard
+            key={openPoint.id}
+            dot={openPoint}
+            clientId={clientId}
+            tz={tz}
+            leftPercent={xPercent(openPoint.date)}
+            top={yFor(openPoint.rating) + MARKER_SIZE}
+            onChange={applyEdit}
+            onClose={closeCard}
+          />
+        )}
 
         {/* Month tick labels below the baseline */}
         {monthTicks.map((m, i) => (
@@ -376,6 +469,9 @@ export function JourneyTimeline({
                 </>
               )}
             </div>
+            {hovered.note && (
+              <div className="mt-1 text-ink-800">{hovered.note}</div>
+            )}
             {hovered.neverForgetLine && (
               <div className="mt-1 text-ink-700 italic">
                 &ldquo;{hovered.neverForgetLine}&rdquo;
@@ -384,7 +480,7 @@ export function JourneyTimeline({
           </div>
         ) : (
           <div className="text-[11px] text-ink-400 italic">
-            Hover a dot to see what was there.
+            Hover a dot to see what was there; click one to rate it or add a note.
             {hasRatings && <> Higher dots = feeling better (1–10).</>}
             {points.some((p) => p.milestoneLabel) && (
               <>
@@ -404,6 +500,33 @@ export function JourneyTimeline({
           </div>
         )}
       </div>
+
+      {/* "Show notes" — every arc note in date order, numbered to match the
+          badges on the dots. Reads as the story of the work; tap one to open
+          its dot. */}
+      {showNotes && noted.length > 0 && (
+        <ol className="mt-3 border-t border-ink-100 pt-3 space-y-1.5">
+          {noted.map((p) => (
+            <li key={p.id}>
+              <button
+                type="button"
+                data-arc-dot
+                onClick={() => setOpenId(p.id)}
+                className="w-full text-left flex gap-2 text-xs leading-snug hover:bg-plum-50 rounded px-1 py-0.5"
+              >
+                <span className="shrink-0 inline-flex items-center justify-center rounded-full bg-plum-100 text-plum-800 font-semibold tabular-nums text-[9px] min-w-[15px] h-[15px] px-1 mt-px">
+                  {noteNumber.get(p.id)}
+                </span>
+                <span className="shrink-0 text-ink-500 tabular-nums w-[74px]">
+                  {shortDate(p.date, tz)}
+                  {p.rating != null && <span className="text-plum-600"> · {p.rating}</span>}
+                </span>
+                <span className="text-ink-800">{p.note}</span>
+              </button>
+            </li>
+          ))}
+        </ol>
+      )}
     </div>
   );
 }
