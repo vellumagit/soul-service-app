@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Modal } from "./Modal";
 import { useTimeZone } from "./TimeZoneProvider";
 import { Field, inputCls } from "./Form";
+import { DateInput } from "./WhenPreview";
 import { createClient } from "@/lib/actions";
 import { LOCALE_LABELS, LOCALES } from "@/lib/i18n";
 import { isRedirectError } from "@/lib/redirect-error";
@@ -227,9 +228,8 @@ export function NewClientDialog({
             label="Birthday"
             hint="Optional. When it comes around, you'll see it on Today."
           >
-            <input
+            <DateInput
               name="dob"
-              type="date"
               className={`${inputCls} md:w-64`}
             />
           </Field>
@@ -301,9 +301,8 @@ export function NewClientDialog({
               hint="Leave blank to add them without booking anything. With a date it books the session and sets the follow-up rhythm (1 week, 1 month, 3 months). Past or future is fine."
             >
               <div className="grid grid-cols-2 gap-3">
-                <input
+                <DateInput
                   name="firstSessionDate"
-                  type="date"
                   className={inputCls}
                 />
                 <input

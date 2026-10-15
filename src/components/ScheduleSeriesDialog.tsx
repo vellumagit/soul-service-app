@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useId } from "react";
 import { Modal } from "./Modal";
 import { Field, inputCls } from "./Form";
+import { WhenPreview } from "./WhenPreview";
 import { scheduleSessionSeries } from "@/lib/actions";
 import { rethrowIfRedirect } from "@/lib/redirect-error";
 import { useTimeZone } from "./TimeZoneProvider";
@@ -348,6 +349,7 @@ export function ScheduleSeriesDialog({
                 onChange={(e) => setFirstAt(e.target.value)}
                 className={inputCls}
               />
+                <WhenPreview value={firstAt} />
               <input
                 type="hidden"
                 name="firstAt"

@@ -16,6 +16,7 @@ import { useEffect, useRef, useState, useId } from "react";
 import { useRouter } from "next/navigation";
 import { Modal } from "./Modal";
 import { Field, inputCls } from "./Form";
+import { DateInput } from "./WhenPreview";
 import { addLead } from "@/lib/actions";
 import { useDraft } from "@/lib/useDraft";
 import {
@@ -215,7 +216,7 @@ export function AddLeadDialog({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="When you met" hint="Optional">
-              <input name="metOn" type="date" className={inputCls} />
+              <DateInput name="metOn" className={inputCls} />
             </Field>
             {referrerOptions.length > 0 && (
               <Field

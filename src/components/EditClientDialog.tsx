@@ -3,6 +3,7 @@
 import { useRef, useState, useId } from "react";
 import { Modal } from "./Modal";
 import { Field, inputCls } from "./Form";
+import { DateInput } from "./WhenPreview";
 import { ConfirmButton } from "./ConfirmButton";
 import { updateClient, deleteClient } from "@/lib/actions";
 import type { Client } from "@/db/schema";
@@ -259,9 +260,8 @@ export function EditClientDialog({
             label="Birthday"
             hint="Optional. When it comes around, you'll see it on Today."
           >
-            <input
+            <DateInput
               name="dob"
-              type="date"
               defaultValue={
                 client.dob
                   ? typeof client.dob === "string"
@@ -323,9 +323,8 @@ export function EditClientDialog({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Date you met" hint="Optional — separate from the first session date.">
-              <input
+              <DateInput
                 name="metOn"
-                type="date"
                 defaultValue={client.metOn ?? ""}
                 className={inputCls}
               />

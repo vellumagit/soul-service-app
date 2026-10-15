@@ -19,12 +19,15 @@
 // So: the visible picker stays a native datetime-local (good UX), but the
 // wall-clock it shows is interpreted in `timeZone` — defaulting to the practice
 // zone from context — and mirrored into a hidden field as a true ISO instant.
-// A small zone badge sits next to it so the zone is never a guess.
+// A small zone badge sits next to it so the zone is never a guess, and the
+// picked moment is spelled out underneath ("Monday, September 14, 2026 ·
+// 7:00 PM") because Android's native picker shows no weekday at all.
 
 import { useState } from "react";
 import { zonedWallTimeToUtc } from "@/lib/timezone";
 import { zoneAbbrev } from "@/lib/format";
 import { useTimeZone } from "./TimeZoneProvider";
+import { WhenPreview } from "./WhenPreview";
 
 /** "2026-07-26T19:00" + zone → the true UTC instant for that wall clock. */
 function wallToIso(local: string, timeZone: string): string {
@@ -75,33 +78,36 @@ export function LocalDateTimeInput({
   const zoneLabel = zoneAbbrev(iso ? new Date(iso) : new Date(), tz);
 
   return (
-    <span className="inline-flex items-center gap-2 w-full">
-      <input
-        type="datetime-local"
-        value={local}
-        onChange={(e) => {
-          const next = e.target.value;
-          setLocal(next);
-          onChange?.(next, next ? wallToIso(next, tz) : "");
-        }}
-        required={required}
-        className={className}
-        min={min}
-        max={max}
-        disabled={disabled}
-      />
-      {/* The hidden field is what the form actually submits — a true instant.
-          The visible picker has no `name`, so its zone-less string never
-          reaches the server. */}
-      <input type="hidden" name={name} value={iso} />
-      {zoneLabel && (
-        <span
-          className="text-[10px] uppercase tracking-wide text-ink-400 font-mono shrink-0"
-          title={`Times are entered in your practice timezone (${tz})`}
-        >
-          {zoneLabel}
-        </span>
-      )}
+    <span className="block w-full">
+      <span className="inline-flex items-center gap-2 w-full">
+        <input
+          type="datetime-local"
+          value={local}
+          onChange={(e) => {
+            const next = e.target.value;
+            setLocal(next);
+            onChange?.(next, next ? wallToIso(next, tz) : "");
+          }}
+          required={required}
+          className={className}
+          min={min}
+          max={max}
+          disabled={disabled}
+        />
+        {/* The hidden field is what the form actually submits — a true instant.
+            The visible picker has no `name`, so its zone-less string never
+            reaches the server. */}
+        <input type="hidden" name={name} value={iso} />
+        {zoneLabel && (
+          <span
+            className="text-[10px] uppercase tracking-wide text-ink-400 font-mono shrink-0"
+            title={`Times are entered in your practice timezone (${tz})`}
+          >
+            {zoneLabel}
+          </span>
+        )}
+      </span>
+      <WhenPreview value={local} />
     </span>
   );
 }

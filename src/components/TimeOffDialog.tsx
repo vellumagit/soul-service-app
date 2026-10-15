@@ -9,6 +9,7 @@
 import { useEffect, useId, useState, useTransition } from "react";
 import { Modal } from "./Modal";
 import { Field, inputCls } from "./Form";
+import { WhenPreview } from "./WhenPreview";
 import { applyTimeOff, previewTimeOff, type TimeOffPreview } from "@/lib/actions";
 import { rethrowIfRedirect } from "@/lib/redirect-error";
 import { notify } from "./FlashNotifier";
@@ -173,6 +174,7 @@ export function TimeOffDialog() {
                 onChange={(e) => setFromDate(e.target.value)}
                 className={inputCls}
               />
+                <WhenPreview value={fromDate} />
             </Field>
             <Field label="Last day off" required>
               <input
@@ -181,6 +183,7 @@ export function TimeOffDialog() {
                 onChange={(e) => setToDate(e.target.value)}
                 className={inputCls}
               />
+                <WhenPreview value={toDate} />
             </Field>
           </div>
 

@@ -10,6 +10,7 @@
 import { useEffect, useId, useMemo, useState, useTransition } from "react";
 import { Modal } from "./Modal";
 import { Field, inputCls } from "./Form";
+import { WhenPreview } from "./WhenPreview";
 import {
   editSessionSeries,
   getSeriesEditContext,
@@ -233,6 +234,7 @@ export function EditSeriesDialog({
                 onChange={(e) => setFirstLocal(e.target.value)}
                 className={inputCls}
               />
+                <WhenPreview value={firstLocal} />
             </Field>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
