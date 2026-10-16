@@ -4658,6 +4658,17 @@ export async function updateSession(formData: FormData) {
   };
 
   const isMarkComplete = str(formData, "markComplete") === "true";
+  // A session that hasn't started can't be complete — and marking it so
+  // quietly switches off its reminders and the client's join-link email.
+  if (
+    isMarkComplete &&
+    existing &&
+    new Date(existing.scheduledAt).getTime() > Date.now()
+  ) {
+    throw new Error(
+      "This session hasn't started yet — you can mark it complete once it has. Your other changes weren't saved; press Save to keep them."
+    );
+  }
   if (isMarkComplete) updates.status = "completed";
   let invoiceError: string | null = null;
 

@@ -423,7 +423,12 @@ export function SessionCard({
                   Unsaved changes
                 </span>
               )}
-              {isScheduled && (
+              {/* Only once it has started. Offered on future sessions, this
+                  big green button read as "Save" — and marking a session
+                  complete early silently cancels its reminders and the
+                  client's join-link email. Wrapping up after the fact is
+                  what "Did this happen?" is for. */}
+              {isScheduled && new Date(session.scheduledAt).getTime() <= Date.now() && (
                 <button
                   type="submit"
                   name="markComplete"
