@@ -159,7 +159,44 @@ export default async function HomePage() {
           carries its own banner for Circle seat approvals just below, and
           merging the two would announce the same people twice on one screen.
           The sidebar count is the place that totals everything. */}
-      {portalRequests.total > 0 && (
+      {/* Someone wrote to her, unprompted, from inside their own space.
+          Deliberately its own card rather than folded into the requests
+          banner below: a reflection asks for nothing and has nothing to do
+          with her calendar, so "they asked for something — nothing has moved
+          yet" would be wrong on both halves. The action here is to read it,
+          not to decide anything. */}
+      {portalRequests.reflections > 0 && (
+        <Link
+          href="/requests/reflections"
+          className="block mb-6 rounded-lg p-4 border-l-4 no-underline hover:brightness-[0.98] transition"
+          style={{
+            background: "var(--color-honey-50, #fbf3e4)",
+            borderColor: "var(--color-honey-700, #b05c36)",
+          }}
+        >
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <div
+                className="text-base text-ink-900"
+                style={{ fontWeight: 600 }}
+              >
+                {portalRequests.reflections === 1
+                  ? "A client wrote something for you"
+                  : `${portalRequests.reflections} clients wrote something for you`}
+              </div>
+              <div className="text-[13px] text-ink-600 mt-0.5">
+                Written between sessions, in their own space. Nothing is being
+                asked of you.
+              </div>
+            </div>
+            <span className="text-sm font-medium text-honey-700 whitespace-nowrap">
+              Read it →
+            </span>
+          </div>
+        </Link>
+      )}
+
+      {portalRequests.reschedules + portalRequests.bookings > 0 && (
         <Link
           href="/requests"
           className="block mb-6 rounded-lg p-4 border-l-4 no-underline hover:brightness-[0.98] transition"
@@ -174,9 +211,9 @@ export default async function HomePage() {
                 className="text-base text-ink-900"
                 style={{ fontWeight: 600 }}
               >
-                {portalRequests.total === 1
+                {portalRequests.reschedules + portalRequests.bookings === 1
                   ? "1 client asked for something in their portal"
-                  : `${portalRequests.total} clients asked for something in their portals`}
+                  : `${portalRequests.reschedules + portalRequests.bookings} clients asked for something in their portals`}
               </div>
               <div className="text-[13px] text-ink-600 mt-0.5">
                 {[

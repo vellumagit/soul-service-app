@@ -1612,8 +1612,10 @@ export async function sendLeadMagnetFollowupEmail(input: {
 
 export async function sendPortalRequestNotifyEmail(input: {
   to: string;
-  /** "reschedule" → an existing session; "booking" → wants a new one. */
-  kind: "reschedule" | "booking";
+  /** "reschedule" → an existing session; "booking" → wants a new one;
+   *  "reflection" → they wrote something unprompted. The third is NOT a
+   *  request, and the copy below says so rather than implying a task. */
+  kind: "reschedule" | "booking" | "reflection";
   clientName: string;
   /** Set for replyTo so she can answer the client straight from her inbox. */
   clientEmail: string | null;
@@ -1627,12 +1629,26 @@ export async function sendPortalRequestNotifyEmail(input: {
   link?: string | null;
 }): Promise<void> {
   const isReschedule = input.kind === "reschedule";
+  const isReflection = input.kind === "reflection";
   const subject = isReschedule
     ? `${input.clientName} asked to reschedule`
+    : isReflection
+    ? `${input.clientName} wrote something`
     : `${input.clientName} asked for another session`;
   const lead = isReschedule
     ? `${input.clientName} sent a reschedule request from their portal.`
+    : isReflection
+    ? `${input.clientName} wrote a reflection in their portal.`
     : `${input.clientName} would like to book another session.`;
+  // A reflection asks nothing of her. Telling her "nothing has changed on
+  // your calendar" would imply something might have — it's someone's words,
+  // not a task, and the email shouldn't read like a to-do.
+  const closing = isReflection
+    ? "Nothing is being asked of you — they just wanted you to have it."
+    : "Nothing has changed on your calendar — this is a request, not an automatic move.";
+  const emptyNote = isReflection
+    ? "They didn&rsquo;t write anything."
+    : "They didn&rsquo;t add a note.";
 
   const details: string[] = [];
   if (isReschedule && input.sessionWhenLabel) {
@@ -1648,7 +1664,7 @@ ${details.length > 0 ? `${details.join("\n")}\n\n` : ""}${
     input.message
       ? `"${input.message}"\n\n`
       : "(They didn't add a note.)\n\n"
-  }Nothing has changed on your calendar — this is a request, not an automatic move. Open Requests in your workspace to act on it${
+  }${closing} Open Requests in your workspace${
     input.clientEmail ? ", or just hit Reply to answer them" : ""
   }.`;
 
@@ -1667,9 +1683,9 @@ ${details.length > 0 ? `${details.join("\n")}\n\n` : ""}${
       ${
         input.message
           ? `<div style="margin:16px 0;padding:14px 16px;background:#f6e6ce;border-radius:8px;font-family:Georgia,serif;font-style:italic;font-size:15px;line-height:1.55;color:#3d342e;">&ldquo;${escapeHtml(input.message)}&rdquo;</div>`
-          : `<p style="margin:16px 0;font-size:13px;color:#786b60;font-style:italic;">They didn&rsquo;t add a note.</p>`
+          : `<p style="margin:16px 0;font-size:13px;color:#786b60;font-style:italic;">${emptyNote}</p>`
       }
-      <p style="margin:20px 0 0 0;font-size:13px;color:#786b60;line-height:1.55;">Nothing has changed on your calendar — this is a request, not an automatic move.${
+      <p style="margin:20px 0 0 0;font-size:13px;color:#786b60;line-height:1.55;">${closing}${
         input.link
           ? ` <a href="${escapeHtml(input.link)}" style="color:#7a4a6b;">Open it in your workspace</a>.`
           : " Open Requests in your workspace to act on it."

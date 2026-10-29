@@ -15,6 +15,7 @@ import {
   type BookingRequestRow,
   type GroupSignupRow,
   type CircleRefundRequestRow as CircleRefundRequestData,
+  type UnreadReflectionRow,
 } from "@/db/queries";
 import { fullDate, shortTime } from "@/lib/format";
 import { LooseEndRowActions } from "@/components/LooseEndRowActions";
@@ -22,6 +23,7 @@ import { RescheduleRequestRowActions } from "@/components/RescheduleRequestRowAc
 import { BookingRequestRowActions } from "@/components/BookingRequestRowActions";
 import { GroupSignupRowActions } from "@/components/GroupSignupRowActions";
 import { CircleRefundRequestRow } from "@/components/CircleRefundRequestRow";
+import { ReflectionRowActions } from "@/components/ReflectionRowActions";
 
 export function RefundRequestsSection({
   rows,
@@ -300,6 +302,81 @@ export function RescheduleRequestsSection({
                 practitionerFirstName={practitionerFirstName}
                 askedFor={r.reason}
                 status={r.status}
+              />
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** "Something they wrote" — unread portal reflections.
+ *
+ *  Its own section rather than a LooseEndRow list because the row's whole
+ *  point is the words: the other sections key on a session and show a name
+ *  and a date, which for a reflection would hide the only part that matters.
+ *  Nothing is being asked of her, so the action is simply acknowledging it. */
+export function ReflectionsSection({
+  rows,
+  timeZone,
+}: {
+  rows: UnreadReflectionRow[];
+  timeZone?: string;
+}) {
+  return (
+    <section className="paper-card p-6">
+      <div className="flex items-baseline justify-between mb-1 flex-wrap gap-2">
+        <h2
+          className="serif-italic text-xl text-plum-700"
+          style={{ fontWeight: 400 }}
+        >
+          Something they wrote
+        </h2>
+        <span
+          className="text-[10px] uppercase tracking-wider font-mono px-2 py-0.5 rounded"
+          style={{
+            background: "var(--color-honey-50)",
+            color: "var(--color-honey-700)",
+          }}
+        >
+          {rows.length}
+        </span>
+      </div>
+      <p className="text-[13px] text-ink-500 italic mb-4 leading-relaxed">
+        Written in their own space, between sessions. Nothing is being asked of
+        you — read it, and mark it seen when you have.
+      </p>
+      <ul className="space-y-3">
+        {rows.map((r) => (
+          <li
+            key={r.id}
+            className="rounded-md p-4"
+            style={{
+              background: "var(--color-honey-50)",
+              border: "1px solid var(--color-honey-100)",
+            }}
+          >
+            <div className="flex items-baseline justify-between gap-3 flex-wrap mb-2">
+              <Link
+                href={`/clients/${r.clientId}?tab=reflections`}
+                className="text-sm text-ink-900 font-medium hover:text-plum-700"
+              >
+                {r.clientName}
+              </Link>
+              <span className="text-[11px] text-ink-500 font-mono">
+                {fullDate(r.createdAt, timeZone)}
+              </span>
+            </div>
+            <p className="serif-italic text-[15px] text-ink-800 leading-relaxed whitespace-pre-wrap">
+              {r.body}
+              {r.truncated && <span className="text-ink-400">…</span>}
+            </p>
+            <div className="mt-3">
+              <ReflectionRowActions
+                reflectionId={r.id}
+                clientId={r.clientId}
+                truncated={r.truncated}
               />
             </div>
           </li>

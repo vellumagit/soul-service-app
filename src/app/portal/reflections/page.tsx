@@ -17,6 +17,7 @@ import { and, desc, eq, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { clientReflections, sessions } from "@/db/schema";
 import { requirePortalSession } from "@/lib/portal-auth";
+import { notifyPractitionerOfPortalRequest } from "@/lib/portal-notify";
 import { fullDate } from "@/lib/format";
 import { getPortalTimeZone } from "@/lib/portal-timezone";
 import { ReflectionEntry } from "@/components/ReflectionEntry";
@@ -46,14 +47,32 @@ async function submitReflection(formData: FormData): Promise<void> {
       .limit(1);
     if (owned.length > 0) sessionId = sessionIdRaw;
   }
+  const stored = body.slice(0, 5000);
   await db.insert(clientReflections).values({
     accountId: portal.accountId,
     clientId: portal.clientId,
     sessionId,
-    body: body.slice(0, 5000),
+    body: stored,
   });
+
+  // Tell her. This used to write the row and stop — the client was invited to
+  // write between sessions and nothing was listening, so their words sat in a
+  // tab on their file until she happened to open it. Best-effort and
+  // non-throwing, like every other notify path: the row is already committed,
+  // so a Resend outage must never surface to the client as a failed save.
+  await notifyPractitionerOfPortalRequest({
+    accountId: portal.accountId,
+    clientId: portal.clientId,
+    kind: "reflection",
+    clientName: portal.clientFullName,
+    clientEmail: portal.clientEmail,
+    message: stored,
+  });
+
   revalidatePath("/portal/reflections");
   revalidatePath(`/clients/${portal.clientId}`);
+  revalidatePath("/today");
+  revalidatePath("/requests", "layout");
   redirect("/portal/reflections");
 }
 

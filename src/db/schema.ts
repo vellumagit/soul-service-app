@@ -1116,6 +1116,11 @@ export const clientReflections = pgTable(
       onDelete: "set null",
     }),
     body: text("body").notNull(),
+    /** When she marked it seen. NULL = unread, which is what drives the
+     *  Today banner and the Requests section. Without a read marker those
+     *  counts could never reach zero — a reflection has no "resolved"
+     *  state of its own the way a reschedule request does. */
+    readAt: timestamp("read_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },

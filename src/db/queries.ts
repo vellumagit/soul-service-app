@@ -1676,6 +1676,16 @@ export async function getTodaysAnniversaries(
 // dozens of rows here.
 // ─────────────────────────────────────────────────────────────────────────────
 
+export type UnreadReflectionRow = {
+  id: string;
+  clientId: string;
+  clientName: string;
+  /** Excerpted — see listUnreadReflections. */
+  body: string;
+  truncated: boolean;
+  createdAt: Date;
+};
+
 export type LooseEndRow = {
   sessionId: string;
   clientId: string;
@@ -1758,6 +1768,8 @@ export type LooseEnds = {
   groupSignups: GroupSignupRow[];
   /** Paid Circle attendees who asked to cancel + be refunded (one-tap approve). */
   refundRequests: CircleRefundRequestRow[];
+  /** Reflections a client wrote in their portal that she hasn't seen yet. */
+  unreadReflections: UnreadReflectionRow[];
   /** Sum across all categories — drives the empty state + the inbox badge. */
   totalCount: number;
 };
@@ -2063,13 +2075,19 @@ export async function getLooseEnds(accountId: string): Promise<LooseEnds> {
   // own — they're inherently unique attention points. Same for group
   // sign-ups and product purchases: each attendee/buyer waiting on
   // confirmation is a separate task.
+  // Reflections aren't tied to a session, so they can't dedupe into allIds —
+  // each one is its own distinct thing she hasn't seen.
+  const unreadReflections = await listUnreadReflections(accountId);
+
   const totalCount =
     allIds.size +
     bookingRequestList.length +
     groupSignupList.length +
-    refundRequestList.length;
+    refundRequestList.length +
+    unreadReflections.length;
 
   return {
+    unreadReflections,
     needsOutcome,
     botFailed,
     needReflection,
@@ -2120,8 +2138,13 @@ export async function getPendingCircleApprovalsCount(
  *  Loose ends. */
 export async function getPendingPortalRequestsCount(
   accountId: string
-): Promise<{ reschedules: number; bookings: number; total: number }> {
-  const [resched, booking] = await Promise.all([
+): Promise<{
+  reschedules: number;
+  bookings: number;
+  reflections: number;
+  total: number;
+}> {
+  const [resched, booking, reflections] = await Promise.all([
     db
       .select({ n: sql<number>`COUNT(*)::int` })
       .from(rescheduleRequests)
@@ -2140,10 +2163,57 @@ export async function getPendingPortalRequestsCount(
           eq(clientBookingRequests.status, "pending")
         )
       ),
+    // Reflections a client wrote that she hasn't marked seen. Unlike the two
+    // above this isn't a request — but it IS someone reaching out, and it
+    // used to be the one portal surface that told her nothing at all.
+    db
+      .select({ n: sql<number>`COUNT(*)::int` })
+      .from(clientReflections)
+      .where(
+        and(
+          eq(clientReflections.accountId, accountId),
+          isNull(clientReflections.readAt)
+        )
+      ),
   ]);
   const reschedules = resched[0]?.n ?? 0;
   const bookings = booking[0]?.n ?? 0;
-  return { reschedules, bookings, total: reschedules + bookings };
+  const unread = reflections[0]?.n ?? 0;
+  return {
+    reschedules,
+    bookings,
+    reflections: unread,
+    total: reschedules + bookings + unread,
+  };
+}
+
+/** Unread reflections, newest first — the /requests → "Something they wrote"
+ *  section. Body is excerpted: a reflection runs to 5,000 characters and the
+ *  row is a scan surface, not the place to read one in full. */
+export async function listUnreadReflections(accountId: string) {
+  const rows = await db
+    .select({
+      id: clientReflections.id,
+      clientId: clientReflections.clientId,
+      clientName: clients.fullName,
+      body: clientReflections.body,
+      createdAt: clientReflections.createdAt,
+    })
+    .from(clientReflections)
+    .innerJoin(clients, eq(clients.id, clientReflections.clientId))
+    .where(
+      and(
+        eq(clientReflections.accountId, accountId),
+        isNull(clientReflections.readAt)
+      )
+    )
+    .orderBy(desc(clientReflections.createdAt));
+
+  return rows.map((r) => ({
+    ...r,
+    body: r.body.length > 320 ? r.body.slice(0, 320).trimEnd() : r.body,
+    truncated: r.body.length > 320,
+  }));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

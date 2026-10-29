@@ -48,6 +48,14 @@ export const REQUEST_SECTIONS: RequestSection[] = [
     count: (e) => e.refundRequests.length,
   },
   {
+    slug: "reflections",
+    title: "Something they wrote",
+    blurb:
+      "A client wrote to you between sessions. Nothing is being asked — but someone said something and is waiting to be heard.",
+    group: "waiting",
+    count: (e) => e.unreadReflections.length,
+  },
+  {
     slug: "circle-signups",
     title: "Circle sign-ups",
     blurb: "People holding a seat on an upcoming Circle, waiting to be confirmed.",

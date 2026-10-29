@@ -20,6 +20,7 @@ import {
   observations,
   leadForms,
   leadSubmissions,
+  clientReflections,
 } from "@/db/schema";
 import { asc, and, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { getSettings } from "@/db/queries";
@@ -2324,6 +2325,44 @@ export async function restoreSession(
     return {
       ok: false,
       error: err instanceof Error ? err.message : "Couldn't restore the session.",
+    };
+  }
+}
+
+/** She's seen what a client wrote. Clears it from Today and from
+ *  /requests → "Something they wrote".
+ *
+ *  A reflection has no "resolved" state of its own — nothing was asked, so
+ *  there's nothing to approve or decline. Acknowledging it is the only
+ *  honest action, and without one the count could never reach zero. */
+export async function markReflectionRead(
+  reflectionId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const { accountId } = await requireSession();
+    const done = await db
+      .update(clientReflections)
+      .set({ readAt: new Date(), updatedAt: new Date() })
+      .where(
+        and(
+          eq(clientReflections.accountId, accountId),
+          eq(clientReflections.id, reflectionId),
+          isNull(clientReflections.readAt)
+        )
+      )
+      .returning({ id: clientReflections.id });
+    // Zero rows = another tab got there first, or it isn't hers. Either way
+    // the end state she wanted is the end state she has.
+    if (done.length === 0) return { ok: true };
+
+    revalidatePath("/today");
+    revalidatePath("/requests", "layout");
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error:
+        err instanceof Error ? err.message : "Couldn't mark that as read.",
     };
   }
 }

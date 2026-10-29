@@ -48,7 +48,7 @@ function workspaceBaseUrl(): string | null {
 export async function notifyPractitionerOfPortalRequest(input: {
   accountId: string;
   clientId: string;
-  kind: "reschedule" | "booking";
+  kind: "reschedule" | "booking" | "reflection";
   clientName: string;
   clientEmail: string | null;
   sessionWhenLabel?: string | null;
@@ -70,7 +70,13 @@ export async function notifyPractitionerOfPortalRequest(input: {
       message: input.message,
       // The row with Reply / Move / Resolve on it, not the profile.
       link: base
-        ? `${base}/requests/${input.kind === "booking" ? "sessions" : "reschedules"}`
+        ? `${base}/requests/${
+            input.kind === "booking"
+              ? "sessions"
+              : input.kind === "reflection"
+              ? "reflections"
+              : "reschedules"
+          }`
         : null,
     });
   } catch (err) {

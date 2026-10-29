@@ -19,6 +19,7 @@ import { asLocale } from "@/lib/i18n";
 import { findRequestSection } from "@/lib/request-sections";
 import {
   RefundRequestsSection,
+  ReflectionsSection,
   GroupSignupsSection,
   BookingRequestsSection,
   RescheduleRequestsSection,
@@ -132,6 +133,10 @@ function renderSection(
     case "refunds":
       return (
         <RefundRequestsSection rows={ends.refundRequests} timeZone={tz} />
+      );
+    case "reflections":
+      return (
+        <ReflectionsSection rows={ends.unreadReflections} timeZone={tz} />
       );
     case "circle-signups":
       return <GroupSignupsSection rows={ends.groupSignups} timeZone={tz} />;
