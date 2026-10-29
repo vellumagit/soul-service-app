@@ -20,7 +20,13 @@
 // gate themselves via requireSession().
 
 import { NextResponse, type NextRequest } from "next/server";
-import { SESSION_COOKIE_NAME, getEmailFromToken } from "@/lib/session";
+import {
+  SESSION_COOKIE_NAME,
+  getSessionFromToken,
+  sessionCookieOptions,
+  sessionNeedsRefresh,
+  signSessionToken,
+} from "@/lib/session";
 import {
   CANONICAL_ORIGIN,
   LANG_COOKIE,
@@ -143,9 +149,9 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   }
 
   const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
-  const email = await getEmailFromToken(token);
+  const session = await getSessionFromToken(token);
 
-  if (!email) {
+  if (!session) {
     const url = request.nextUrl.clone();
     url.pathname = "/signin";
     url.search = "";
@@ -155,7 +161,27 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     return NextResponse.redirect(url);
   }
 
-  return NextResponse.next();
+  const next = NextResponse.next();
+
+  // Slide the session. The cookie used to be written once at sign-in and
+  // never again, so it died 30 days later however much she'd been using the
+  // app. Being logged out is worst on the installed phone app: the obvious
+  // recovery is to tap an emailed sign-in link, but that opens in the
+  // BROWSER, which on iOS keeps its own cookie jar — so she'd sign in
+  // successfully and the app would still be signed out.
+  //
+  // Only past the half-life, so this is at most a couple of signings a
+  // month rather than an HMAC on every request. Several parallel requests
+  // can each mint one; they're all valid and the last write wins.
+  if (sessionNeedsRefresh(session.exp)) {
+    next.cookies.set(
+      SESSION_COOKIE_NAME,
+      await signSessionToken(session.email),
+      sessionCookieOptions()
+    );
+  }
+
+  return next;
 }
 
 // Skip proxy for Next internals + static files.

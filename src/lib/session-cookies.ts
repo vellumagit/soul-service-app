@@ -18,8 +18,8 @@ import { db } from "@/db";
 import { userMagicLinks } from "@/db/schema";
 import {
   SESSION_COOKIE_NAME,
-  SESSION_DAYS,
   getEmailFromToken,
+  sessionCookieOptions,
   signSessionToken,
 } from "./session";
 import { findAccountByEmail } from "./account";
@@ -29,15 +29,10 @@ export const USER_MAGIC_LINK_TTL_MIN = 30;
 /** Set the session cookie after a successful sign-in. */
 export async function setSessionCookie(email: string): Promise<void> {
   const token = await signSessionToken(email);
-  const expires = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
   const store = await cookies();
-  store.set(SESSION_COOKIE_NAME, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    expires,
-    path: "/",
-  });
+  // Attributes come from session.ts so this and proxy.ts's refresh write an
+  // identical cookie — see sessionCookieOptions.
+  store.set(SESSION_COOKIE_NAME, token, sessionCookieOptions());
 }
 
 /** Clear the session cookie (sign out). */
