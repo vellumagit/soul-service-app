@@ -294,6 +294,9 @@ export async function sendPortalMagicLinkEmail(input: {
   practitionerName: string | null;
   /** The client's preferred language (Edit profile). Default English. */
   language?: ClientEmailLang;
+  /** "This link doesn't work" is a real reply to a sign-in email, and the
+   *  person sending it is by definition locked out of the other channel. */
+  replyTo?: string;
   /** Reports whether the send was suppressed by EMAIL_RECIPIENT_ALLOWLIST, so
    *  the "Invite sent" confirmation on her side can stay honest. */
 }): Promise<{ suppressed: boolean }> {
@@ -307,7 +310,7 @@ export async function sendPortalMagicLinkEmail(input: {
     ? `${greeting}\n\nОсь посилання для входу у ваш простір:\n\n${input.url}\n\nВоно діє 30 хвилин. Якщо ви не очікували цього листа, просто проігноруйте його.\n\n— ${signoff}`
     : `${greeting}\n\nHere's a link to sign in to your space:\n\n${input.url}\n\nIt'll expire in 30 minutes. If you didn't expect this email, you can ignore it.\n\n— ${signoff}`;
   const html = portalMagicLinkHtml(input.url, greeting, signoff, uk);
-  const res = await sendEmail({ to: input.to, subject, html, text });
+  const res = await sendEmail({ to: input.to, subject, html, text, replyTo: input.replyTo });
   return { suppressed: res.suppressed === true };
 }
 
@@ -837,6 +840,9 @@ export async function sendClientWalkInEmail(input: {
   clientName: string;
   meetUrl: string;
   practitionerName: string | null;
+  /** "I'm running five minutes late" is the most likely reply any email this
+   *  app sends ever gets, and it used to go to the send-only From address. */
+  replyTo?: string;
 }): Promise<void> {
   const first = input.clientName.split(" ")[0] ?? input.clientName;
   const signoff = input.practitionerName ?? "Your practitioner";
@@ -864,7 +870,7 @@ See you in there.
     </div>
   </body>
 </html>`.trim();
-  await sendEmail({ to: input.to, subject, html, text });
+  await sendEmail({ to: input.to, subject, html, text, replyTo: input.replyTo });
 }
 
 /** T-10 "walk in now" nudge to the practitioner. The 1h heads-up tells her a
@@ -1996,6 +2002,9 @@ export async function sendPortalUpdateEmail(input: {
   practitionerName: string | null;
   kind: "note" | "recap";
   link: string | null;
+  /** She's just shared something with them; answering it is the natural next
+   *  move, so the reply has to reach her rather than the From address. */
+  replyTo?: string;
 }): Promise<void> {
   const first = input.clientName.split(" ")[0] ?? input.clientName;
   const signoff = input.practitionerName ?? "Your practitioner";
@@ -2028,7 +2037,7 @@ I've left ${what} in your space.${input.link ? `\n\n${input.link}` : ""}
     </div>
   </body>
 </html>`.trim();
-  await sendEmail({ to: input.to, subject, html, text });
+  await sendEmail({ to: input.to, subject, html, text, replyTo: input.replyTo });
 }
 
 

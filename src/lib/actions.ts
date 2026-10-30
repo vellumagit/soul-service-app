@@ -755,18 +755,26 @@ export async function sendPortalInvite(
     const settingsRows = await db
       .select({
         practitionerName: practitionerSettings.practitionerName,
+        businessEmail: practitionerSettings.businessEmail,
       })
       .from(practitionerSettings)
       .where(eq(practitionerSettings.accountId, accountId))
       .limit(1);
 
-    const { sendPortalMagicLinkEmail } = await import("./resend");
+    const { sendPortalMagicLinkEmail, practitionerReplyTo } = await import(
+      "./resend"
+    );
     const { suppressed } = await sendPortalMagicLinkEmail({
       to: client.email,
       url,
       clientFirstName: client.fullName.split(" ")[0] ?? null,
       practitionerName: settingsRows[0]?.practitionerName ?? null,
       language: client.preferredLanguage === "uk" ? "uk" : "en",
+      // Locked out of the portal, the only channel they have left is Reply.
+      replyTo: practitionerReplyTo(
+        settingsRows[0]?.businessEmail,
+        await accountEmail(accountId)
+      ),
     });
 
     revalidatePath(`/clients/${clientId}`);

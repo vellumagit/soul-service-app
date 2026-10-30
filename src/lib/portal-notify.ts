@@ -124,19 +124,30 @@ export async function notifyClientOfPortalUpdate(input: {
     if (!row.email || !row.email.includes("@")) return;
 
     const [pset] = await db
-      .select({ practitionerName: practitionerSettings.practitionerName })
+      .select({
+        practitionerName: practitionerSettings.practitionerName,
+        businessEmail: practitionerSettings.businessEmail,
+      })
       .from(practitionerSettings)
       .where(eq(practitionerSettings.accountId, input.accountId))
       .limit(1);
 
+    // She's just shared something with them; "thank you" or a question is the
+    // natural next move. resolveNotifyTo already knows which of her addresses
+    // is real — reuse it rather than letting the reply hit the From address.
+    const { to: herInbox } = await resolveNotifyTo(input.accountId);
+
     const base = workspaceBaseUrl();
-    const { sendPortalUpdateEmail } = await import("./resend");
+    const { sendPortalUpdateEmail, practitionerReplyTo } = await import(
+      "./resend"
+    );
     await sendPortalUpdateEmail({
       to: row.email,
       clientName: row.name,
       practitionerName: pset?.practitionerName ?? null,
       kind: input.kind,
       link: base ? `${base}/portal/sessions/${input.sessionId}` : null,
+      replyTo: practitionerReplyTo(pset?.businessEmail, herInbox),
     });
   } catch (err) {
     console.error("[portal] update notify failed:", err);

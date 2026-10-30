@@ -16,9 +16,9 @@ import "server-only";
 
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { clients, practitionerSettings } from "@/db/schema";
+import { accounts, clients, practitionerSettings } from "@/db/schema";
 import { createMagicLink } from "./portal-auth";
-import { sendPortalMagicLinkEmail } from "./resend";
+import { practitionerReplyTo, sendPortalMagicLinkEmail } from "./resend";
 
 export async function startPortalSignInByEmail(
   email: string,
@@ -57,9 +57,20 @@ export async function startPortalSignInByEmail(
   const url = `${base}/portal/sign-in/${cleartext}`;
 
   const settingsRows = await db
-    .select({ practitionerName: practitionerSettings.practitionerName })
+    .select({
+      practitionerName: practitionerSettings.practitionerName,
+      businessEmail: practitionerSettings.businessEmail,
+    })
     .from(practitionerSettings)
     .where(eq(practitionerSettings.accountId, match.accountId))
+    .limit(1);
+
+  // Her login email, as the reply-to floor when Settings has no business
+  // address — see practitionerReplyTo.
+  const accountRows = await db
+    .select({ email: accounts.email })
+    .from(accounts)
+    .where(eq(accounts.id, match.accountId))
     .limit(1);
 
   try {
@@ -69,6 +80,11 @@ export async function startPortalSignInByEmail(
       clientFirstName: match.fullName.split(" ")[0] ?? null,
       practitionerName: settingsRows[0]?.practitionerName ?? null,
       language: match.preferredLanguage === "uk" ? "uk" : "en",
+      // Locked out of the portal, the only channel they have left is Reply.
+      replyTo: practitionerReplyTo(
+        settingsRows[0]?.businessEmail,
+        accountRows[0]?.email ?? null
+      ),
     });
   } catch (err) {
     console.error("[portal sign-in] sendPortalMagicLinkEmail failed:", err);

@@ -137,7 +137,8 @@ export async function processReminders(): Promise<ReminderRunStats> {
       stats.clientRemindersSent += await sendDueClientWalkInNudges(
         account.id,
         settingsRow,
-        now
+        now,
+        account.email
       );
 
       // CIRCLE REMINDERS — fixed 24h + 1h before each group session, to
@@ -1021,7 +1022,10 @@ async function sendDueSessionWalkInNudges(
 async function sendDueClientWalkInNudges(
   accountId: string,
   settings: typeof practitionerSettings.$inferSelect,
-  now: Date
+  now: Date,
+  /** Her login email — the reply-to floor. "I am running five minutes late"
+   *  is the likeliest reply this app ever gets, and it used to go nowhere. */
+  loginEmail: string | null
 ): Promise<number> {
   const windowEnd = new Date(now.getTime() + 12 * 60 * 1000);
   const rows = await db
@@ -1062,12 +1066,15 @@ async function sendDueClientWalkInNudges(
     if (!emailAllowed(row.clientEmailOptOuts, "reminders")) continue;
 
     try {
-      const { sendClientWalkInEmail } = await import("./resend");
+      const { sendClientWalkInEmail, practitionerReplyTo } = await import(
+        "./resend"
+      );
       await sendClientWalkInEmail({
         to: row.clientEmail,
         clientName: row.clientName,
         meetUrl: row.meetUrl,
         practitionerName: settings.practitionerName ?? null,
+        replyTo: practitionerReplyTo(settings.businessEmail, loginEmail),
       });
       count++;
     } catch (err) {
