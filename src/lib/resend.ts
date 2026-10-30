@@ -26,6 +26,31 @@ function getResend(): Resend {
 }
 
 /** The default From address — must be a verified Resend sender domain. */
+/** Where a CLIENT's reply should land.
+ *
+ *  The From address is a Resend sender — it can deliver but nothing reads it,
+ *  so an email that goes out without a Reply-To is a dead end: the client
+ *  hits Reply, writes a real answer, and it falls on the floor with no
+ *  bounce to warn either of them.
+ *
+ *  That's exactly what happened with request replies, which used
+ *  `businessEmail ?? undefined` — correct whenever she'd filled that field
+ *  in, and silently a one-way street when she hadn't. Her login email always
+ *  exists and is by definition an inbox she reads, so it's the floor.
+ *
+ *  Returns undefined only if an account somehow has no email at all, which
+ *  can't happen for a signed-in practitioner.
+ *
+ *  NOTE: this is for mail going TO a client. Mail going to HER (a new
+ *  inquiry, a portal request) correctly sets the CLIENT's address as
+ *  reply-to instead, so she can answer from her inbox. */
+export function practitionerReplyTo(
+  businessEmail: string | null | undefined,
+  loginEmail: string | null | undefined
+): string | undefined {
+  return businessEmail?.trim() || loginEmail?.trim() || undefined;
+}
+
 function defaultFrom(): string {
   return (
     process.env.AUTH_EMAIL_FROM ||

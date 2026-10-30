@@ -103,7 +103,8 @@ export async function processReminders(): Promise<ReminderRunStats> {
           account.id,
           settingsRow,
           clientHours,
-          now
+          now,
+          account.email
         );
         stats.clientRemindersSent += sent;
       }
@@ -253,7 +254,7 @@ export async function sendImmediateSessionReminders(
     .where(eq(accounts.id, row.accountId))
     .limit(1);
 
-  const { sendEmail } = await import("./resend");
+  const { sendEmail, practitionerReplyTo } = await import("./resend");
 
   // CLIENT — only if inside the window, not already sent, and has an email.
   const clientHours = settings.clientReminderHours;
@@ -298,7 +299,7 @@ export async function sendImmediateSessionReminders(
           subject,
           html,
           text,
-          replyTo: settings.businessEmail ?? undefined,
+          replyTo: practitionerReplyTo(settings.businessEmail, account.email),
         });
       } catch (err) {
         console.error("[reminders] immediate client reminder failed:", err);
@@ -382,7 +383,11 @@ async function sendDueClientReminders(
   accountId: string,
   settings: typeof practitionerSettings.$inferSelect,
   reminderHours: number,
-  now: Date
+  now: Date,
+  /** Her login email — the reply-to floor when Settings has no business
+   *  address. Passed in because the caller already has it; see
+   *  practitionerReplyTo for why a reminder without one is a dead end. */
+  loginEmail: string | null
 ): Promise<number> {
   // "Due window": session is starting within the next reminderHours, but isn't
   // already in the past, and we haven't sent a client reminder yet.
@@ -438,7 +443,7 @@ async function sendDueClientReminders(
     if (!emailAllowed(row.clientEmailOptOuts, "reminders")) continue;
 
     try {
-      const { sendEmail } = await import("./resend");
+      const { sendEmail, practitionerReplyTo } = await import("./resend");
       // Client email → the CLIENT's local time: their zone if known, else the
       // zone she booked in, else the practice zone.
       const timeZone = resolveTimeZone(
@@ -462,7 +467,7 @@ async function sendDueClientReminders(
         subject,
         html,
         text,
-        replyTo: settings.businessEmail ?? undefined,
+        replyTo: practitionerReplyTo(settings.businessEmail, loginEmail),
       });
 
       count++;

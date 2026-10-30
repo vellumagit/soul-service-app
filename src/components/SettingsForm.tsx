@@ -124,12 +124,16 @@ export function SettingsForm({
               placeholder="Soul Service"
             />
           </Field>
-          <Field label="Business email">
+          <Field
+            label="Business email"
+            hint="Where a client's reply lands when they answer one of your emails. Leave it blank and replies go to your sign-in email instead — never to the address the email was sent from, which isn't an inbox."
+          >
             <input
               name="businessEmail"
               type="email"
               defaultValue={settings.businessEmail ?? ""}
               className={inputCls}
+              placeholder="you@yourdomain.com"
             />
           </Field>
           <Field label="Phone">

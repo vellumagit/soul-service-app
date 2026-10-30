@@ -566,7 +566,8 @@ export async function replyToRequest(input: {
       };
     }
 
-    const { isResendConfigured, sendEmail } = await import("./resend");
+    const { isResendConfigured, sendEmail, practitionerReplyTo } =
+      await import("./resend");
     if (!isResendConfigured()) {
       return { ok: false, error: "Email isn't configured yet." };
     }
@@ -576,8 +577,14 @@ export async function replyToRequest(input: {
       subject,
       html: bodyToHtml(body, settings?.businessName ?? null),
       text: body,
-      // Reply lands in her inbox, so the thread continues naturally.
-      replyTo: settings?.businessEmail ?? undefined,
+      // Reply lands in her inbox, so the thread continues naturally. Falls
+      // back to her login email: without it, a blank "business email" in
+      // Settings meant this went out with NO reply-to, and a client
+      // answering her reply was writing to the send-only From address.
+      replyTo: practitionerReplyTo(
+        settings?.businessEmail,
+        await accountEmail(accountId)
+      ),
     });
 
     // Mark acknowledged, never downgrading something already resolved.
@@ -1873,7 +1880,9 @@ async function maybeSendSeriesConfirmation(
   opts: { updated?: boolean } = {}
 ): Promise<void> {
   try {
-    const { isResendConfigured } = await import("./resend");
+    const { isResendConfigured, practitionerReplyTo } = await import(
+      "./resend"
+    );
     if (!isResendConfigured() || futureDates.length === 0) return;
     const [row] = await db
       .select({
@@ -1920,7 +1929,13 @@ async function maybeSendSeriesConfirmation(
       address: row.businessAddress ?? null,
       meetingUrl: row.meetUrl ?? null,
       practitionerName: row.practitionerName ?? null,
-      replyTo: row.businessEmail ?? undefined,
+      // Falls back to her login email — a blank "business email" in Settings
+      // used to send this with no reply-to at all, so a client hitting Reply
+      // was writing to the send-only From address.
+      replyTo: practitionerReplyTo(
+        row.businessEmail,
+        await accountEmail(accountId)
+      ),
       timeZone: clientZone,
       language: row.clientLanguage === "uk" ? "uk" : "en",
       updated: opts.updated === true,
@@ -1937,8 +1952,11 @@ async function maybeSendBookingConfirmation(
   moved = false
 ): Promise<void> {
   try {
-    const { isResendConfigured, sendSessionBookingConfirmationEmail } =
-      await import("./resend");
+    const {
+      isResendConfigured,
+      sendSessionBookingConfirmationEmail,
+      practitionerReplyTo,
+    } = await import("./resend");
     if (!isResendConfigured()) return;
 
     const [row] = await db
@@ -1986,7 +2004,13 @@ async function maybeSendBookingConfirmation(
       meetingUrl: row.meetUrl,
       language: row.clientLanguage === "uk" ? "uk" : "en",
       practitionerName: row.practitionerName ?? null,
-      replyTo: row.businessEmail ?? undefined,
+      // Falls back to her login email — a blank "business email" in Settings
+      // used to send this with no reply-to at all, so a client hitting Reply
+      // was writing to the send-only From address.
+      replyTo: practitionerReplyTo(
+        row.businessEmail,
+        await accountEmail(accountId)
+      ),
       timeZone: clientZone,
       moved,
     });
@@ -2876,7 +2900,9 @@ export async function applyTimeOff(formData: FormData): Promise<ApplyTimeOffResu
     let emailed = 0;
     if (notifyClients && byClient.size > 0) {
       try {
-        const { isResendConfigured } = await import("./resend");
+        const { isResendConfigured, practitionerReplyTo } = await import(
+          "./resend"
+        );
         if (isResendConfigured()) {
           const [settings] = await db
             .select({
@@ -2919,7 +2945,12 @@ export async function applyTimeOff(formData: FormData): Promise<ApplyTimeOffResu
               to: c.email,
               clientName: c.fullName,
               practitionerName: settings?.practitionerName ?? null,
-              replyTo: settings?.businessEmail ?? undefined,
+              // See practitionerReplyTo — without the login-email floor this
+              // went out with no reply-to whenever Settings had none.
+              replyTo: practitionerReplyTo(
+                settings?.businessEmail,
+                await accountEmail(accountId)
+              ),
               timeZone: resolveTimeZone(c.timezone, settings?.practiceTz),
               practiceTimeZone: resolveTimeZone(settings?.practiceTz),
               language: c.language === "uk" ? "uk" : "en",
@@ -5016,9 +5047,11 @@ async function maybeSendCancellationEmail(
   opts: { series?: boolean } = {}
 ): Promise<void> {
   try {
-    const { isResendConfigured, sendSessionCancelledEmail } = await import(
-      "./resend"
-    );
+    const {
+      isResendConfigured,
+      sendSessionCancelledEmail,
+      practitionerReplyTo,
+    } = await import("./resend");
     if (!isResendConfigured()) return;
     const [row] = await db
       .select({
@@ -5055,7 +5088,13 @@ async function maybeSendCancellationEmail(
       sessionType: row.sessionType,
       scheduledAt: new Date(row.scheduledAt),
       practitionerName: row.practitionerName ?? null,
-      replyTo: row.businessEmail ?? undefined,
+      // Falls back to her login email — a blank "business email" in Settings
+      // used to send this with no reply-to at all, so a client hitting Reply
+      // was writing to the send-only From address.
+      replyTo: practitionerReplyTo(
+        row.businessEmail,
+        await accountEmail(accountId)
+      ),
       timeZone: clientZone,
       series: opts.series === true,
       language: row.clientLanguage === "uk" ? "uk" : "en",
