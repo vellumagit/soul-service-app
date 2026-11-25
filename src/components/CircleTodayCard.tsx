@@ -16,6 +16,8 @@ export function CircleTodayCard({
 }) {
   const total = circle.attendees.length;
   const paid = circle.attendees.filter((a) => a.paid).length;
+  // A free Circle (everyone on a no-charge seat) has nothing to count.
+  const allFree = total > 0 && circle.attendees.every((a) => a.free);
 
   return (
     <section className="paper-card p-5 border-l-2 border-plum-300">
@@ -31,7 +33,8 @@ export function CircleTodayCard({
         </span>
       </div>
       <div className="text-[12px] text-ink-500 font-mono mb-3">
-        {whenLabel} · {total} {total === 1 ? "person" : "people"} · {paid} paid
+        {whenLabel} · {total} {total === 1 ? "person" : "people"}
+        {allFree ? " · free" : ` · ${paid} paid`}
       </div>
 
       {total > 0 ? (
@@ -39,8 +42,10 @@ export function CircleTodayCard({
           {circle.attendees.map((a, i) => (
             <span key={`${a.name}-${i}`}>
               {i > 0 && <span className="text-ink-300"> · </span>}
-              <span className={a.paid ? "" : "text-ink-500"}>{a.name}</span>
-              {!a.paid && (
+              <span className={a.paid || a.free ? "" : "text-ink-500"}>
+                {a.name}
+              </span>
+              {!a.paid && !a.free && (
                 <span className="text-[10px] text-honey-700 ml-1">unpaid</span>
               )}
             </span>

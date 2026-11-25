@@ -21,10 +21,13 @@ interface Props {
     paid: boolean;
     paidAt: Date | null;
     createdAt: Date;
+    /** "gifted" = a no-charge seat (gifted by her, or a free Circle sign-up). */
+    paymentMethod?: string | null;
   };
 }
 
 export function GroupAttendeeRow({ attendee }: Props) {
+  const isNoCharge = attendee.paymentMethod === "gifted";
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -77,7 +80,12 @@ export function GroupAttendeeRow({ attendee }: Props) {
           >
             {attendee.name}
           </span>
-          {isConfirmed && !attendee.paid && (
+          {isConfirmed && !attendee.paid && isNoCharge && (
+            <span className="text-[10px] uppercase tracking-wider font-mono px-1.5 py-0.5 rounded bg-sage-100 text-sage-700">
+              confirmed · free
+            </span>
+          )}
+          {isConfirmed && !attendee.paid && !isNoCharge && (
             <span className="text-[10px] uppercase tracking-wider font-mono px-1.5 py-0.5 rounded bg-honey-100 text-honey-700">
               confirmed · unpaid
             </span>
@@ -147,7 +155,7 @@ export function GroupAttendeeRow({ attendee }: Props) {
               Confirm only
             </button>
           )}
-          {isConfirmed && !attendee.paid && (
+          {isConfirmed && !attendee.paid && !isNoCharge && (
             <button
               type="button"
               onClick={() => handleConfirm(true)}

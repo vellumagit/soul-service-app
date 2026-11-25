@@ -121,14 +121,23 @@ export default async function CircleSignupPage({
   const locale = c.circles.dateLocale;
 
   const scheduledAt = new Date(session.scheduledAt);
-  const past = scheduledAt.getTime() < Date.now();
+  // A free Circle stays open until it ENDS (someone who finds the post a few
+  // minutes in can still drop their email and walk in); a paid one closes at
+  // the start, as before.
+  const isFree = session.priceCents <= 0;
+  const closesAt = isFree
+    ? scheduledAt.getTime() + session.durationMinutes * 60 * 1000
+    : scheduledAt.getTime();
+  const past = closesAt <= Date.now();
   const cancelled = session.status !== "scheduled";
   const spotsLeft = Math.max(0, session.capacity - session.takenCount);
   const open = !past && !cancelled && spotsLeft > 0;
   const justPaid = paid === "1";
   // Master switch — when sign-ups are closed, no one can reserve here; the
   // page shows a "reach out to join" message instead of the form.
-  const signupsOpen = session.circleSignupsOpen ?? false;
+  // Free Circles skip the switch: it exists because card payments weren't
+  // ready, and a free seat involves no payment at all.
+  const signupsOpen = isFree || (session.circleSignupsOpen ?? false);
   // Card payment available when the platform Stripe is wired, the practitioner
   // has connected her account and finished activation (charges enabled), AND
   // the circle has a price. Otherwise the manual (Venmo/cash) lane shows.
@@ -252,7 +261,9 @@ export default async function CircleSignupPage({
             >
               {session.durationMinutes}
               {c.circles.minShort} ·{" "}
-              {formatMoney(session.priceCents, session.currency, locale)}
+              {isFree
+                ? c.circles.free
+                : formatMoney(session.priceCents, session.currency, locale)}
               {open && (
                 <>
                   {" · "}
@@ -471,8 +482,12 @@ export default async function CircleSignupPage({
               ) : (
                 <CircleSignupForm
                   sessionId={session.sessionId}
-                  paymentInstructions={session.paymentInstructions}
+                  paymentInstructions={
+                    isFree ? null : session.paymentInstructions
+                  }
                   copy={formCopy}
+                  free={isFree}
+                  dateLocale={locale}
                 />
               ))}
           </div>

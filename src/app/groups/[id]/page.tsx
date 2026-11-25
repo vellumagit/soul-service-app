@@ -272,7 +272,9 @@ export default async function GroupDetailPage({
             <span>{group.defaultDurationMinutes}min</span>
             <span>·</span>
             <span>
-              {formatMoney(group.defaultPriceCents, group.defaultCurrency)}/seat
+              {group.defaultPriceCents <= 0
+                ? "Free"
+                : `${formatMoney(group.defaultPriceCents, group.defaultCurrency)}/seat`}
             </span>
           </div>
           {/* Anyone waiting on her, across every upcoming session — visible
@@ -389,7 +391,9 @@ export default async function GroupDetailPage({
                         </span>
                         <span>·</span>
                         <span>
-                          {s.paidCount}/{s.attendeeCount} paid
+                          {s.priceCents <= 0
+                            ? "free"
+                            : `${s.paidCount}/${s.attendeeCount} paid`}
                         </span>
                         {s.topic && (
                           <>

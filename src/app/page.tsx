@@ -619,12 +619,14 @@ export default async function LandingPage() {
                         <p className="desc">{circle.groupDescription}</p>
                       )}
                       <div className="price">
-                        {new Intl.NumberFormat(c.circles.dateLocale, {
-                          style: "currency",
-                          currency: circle.currency,
-                          minimumFractionDigits: 0,
-                          maximumFractionDigits: 2,
-                        }).format(circle.priceCents / 100)}
+                        {circle.priceCents <= 0
+                          ? c.circles.free
+                          : new Intl.NumberFormat(c.circles.dateLocale, {
+                              style: "currency",
+                              currency: circle.currency,
+                              minimumFractionDigits: 0,
+                              maximumFractionDigits: 2,
+                            }).format(circle.priceCents / 100)}
                       </div>
                       {spotsLeft > 0 ? (
                         <Link href={`/circles/${circle.sessionId}`} className="cta">

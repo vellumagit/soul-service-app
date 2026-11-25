@@ -211,6 +211,29 @@ export async function updateGroup(
     })
     .where(and(eq(groups.accountId, accountId), eq(groups.id, id)));
 
+  // Each session copies the price when it's scheduled, so editing the Circle
+  // never reached sessions already on the calendar — set a Circle to free
+  // and Friday's session still asked for $20. Carry the new price to every
+  // UPCOMING session where nobody has paid yet; a session with a paid seat
+  // keeps the price those guests actually paid.
+  await db
+    .update(groupSessions)
+    .set({ priceCents, updatedAt: new Date() })
+    .where(
+      and(
+        eq(groupSessions.accountId, accountId),
+        eq(groupSessions.groupId, id),
+        eq(groupSessions.status, "scheduled"),
+        gte(groupSessions.scheduledAt, new Date()),
+        sql`${groupSessions.priceCents} <> ${priceCents}`,
+        sql`NOT EXISTS (
+          SELECT 1 FROM group_attendees
+          WHERE group_attendees.group_session_id = ${groupSessions.id}
+            AND group_attendees.paid = TRUE
+        )`
+      )
+    );
+
   revalidatePath("/groups");
   revalidatePath(`/groups/${id}`);
   revalidatePath("/");
@@ -922,7 +945,18 @@ export async function deleteGroup(
 // ─────────────────────────────────────────────────────────────────────
 
 export type SignUpResult =
-  | { ok: true; pending: boolean }
+  | {
+      ok: true;
+      pending: boolean;
+      /** Set for a FREE Circle: the seat is confirmed on the spot, so the
+       *  thank-you screen can show when it is and (near start time) a Join
+       *  button. Absent for paid Circles, which still wait for her. */
+      free?: {
+        meetingUrl: string | null;
+        startsAt: string;
+        endsAt: string;
+      };
+    }
   | { ok: false; error: string };
 
 /**
@@ -1007,6 +1041,13 @@ export async function signUpForGroupSession(
   if (!session || !srow.published) {
     return { ok: false, error: pubMsg("unavailable", lang) };
   }
+  // A FREE Circle is the "post a link anywhere, people drop their email and
+  // get in" lane: no payment to wait for, so it skips the master sign-ups
+  // switch (that switch exists because card payments weren't ready), and the
+  // seat is confirmed and fulfilled on the spot instead of waiting for her.
+  const isFree = session.priceCents <= 0;
+  const endsAtMs =
+    session.scheduledAt.getTime() + session.durationMinutes * 60 * 1000;
   // Field checks live here, after the row is known, so they speak the
   // Circle's language like every other message on the page.
   if (!name) return { ok: false, error: pubMsg("nameRequired", lang) };
@@ -1019,13 +1060,15 @@ export async function signUpForGroupSession(
   const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
   const limit = checkRateLimit("group-signup", ip, { limit: 6, windowMs: 60_000 });
   if (!limit.ok) return { ok: false, error: pubMsg("slowDown", lang) };
-  if (!(srow.signupsOpen ?? false)) {
+  if (!isFree && !(srow.signupsOpen ?? false)) {
     return { ok: false, error: pubMsg("signupsClosed", lang) };
   }
   if (session.status !== "scheduled") {
     return { ok: false, error: pubMsg("notOpen", lang) };
   }
-  if (session.scheduledAt.getTime() < Date.now()) {
+  // Paid: closes at start. Free: open until it ENDS — someone who finds the
+  // post five minutes in can still drop their email and walk straight in.
+  if (Date.now() >= (isFree ? endsAtMs : session.scheduledAt.getTime())) {
     return { ok: false, error: pubMsg("started", lang) };
   }
 
@@ -1046,7 +1089,7 @@ export async function signUpForGroupSession(
 
   // Dedup by email per session — prevent accidental double-signup
   const [existing] = await db
-    .select({ id: groupAttendees.id })
+    .select({ id: groupAttendees.id, status: groupAttendees.status })
     .from(groupAttendees)
     .where(
       and(
@@ -1056,6 +1099,18 @@ export async function signUpForGroupSession(
     )
     .limit(1);
   if (existing) {
+    if (isFree) {
+      // Free: signing up again is how someone who lost the email gets back
+      // in — show them the same "you're in" screen. A seat they'd given up
+      // comes back (capacity was checked above).
+      if (existing.status === "cancelled") {
+        await db
+          .update(groupAttendees)
+          .set({ status: "confirmed", updatedAt: new Date() })
+          .where(eq(groupAttendees.id, existing.id));
+      }
+      return freeSeatResult(existing.id, session, endsAtMs);
+    }
     // Treat as success so they see the confirmation — no need to expose
     // "you're already signed up" via timing.
     return { ok: true, pending: true };
@@ -1070,8 +1125,11 @@ export async function signUpForGroupSession(
       email,
       phone,
       clientId: await findClientIdByEmail(session.accountId, email),
-      status: "pending",
+      status: isFree ? "confirmed" : "pending",
       paid: false,
+      // "gifted" is the existing no-charge seat marker: confirmed, never
+      // counted as paid, and never nagged about in Requests or on Today.
+      paymentMethod: isFree ? "gifted" : null,
       sourceIp: ip === "unknown" ? null : ip,
       userAgent: h.get("user-agent") ?? null,
     })
@@ -1102,7 +1160,59 @@ export async function signUpForGroupSession(
   revalidatePath("/groups");
   revalidatePath(`/circles/${groupSessionId}`);
 
+  if (isFree) {
+    // Welcome email with the Meet link, her heads-up, the Google invite and
+    // the Network lead — the same arrival a paid seat gets. Idempotent.
+    try {
+      await fulfillCircleSeat(inserted.id);
+    } catch (err) {
+      console.error("[circle] free-seat fulfillment failed", err);
+    }
+    revalidatePath("/today");
+    return freeSeatResult(inserted.id, session, endsAtMs);
+  }
+
   return { ok: true, pending: true };
+}
+
+/** The "you're in" payload for a free seat. Reads the meeting link AFTER
+ *  fulfillment, because fulfillment may have just created the Circle's
+ *  Google event and stored its Meet link on the session. */
+async function freeSeatResult(
+  attendeeId: string,
+  session: { id: string; accountId: string; scheduledAt: Date },
+  endsAtMs: number
+): Promise<SignUpResult> {
+  let meetingUrl: string | null = null;
+  try {
+    const [row] = await db
+      .select({
+        meetUrl: groupSessions.meetUrl,
+        circleRoomUrl: practitionerSettings.circleRoomUrl,
+      })
+      .from(groupSessions)
+      .leftJoin(
+        practitionerSettings,
+        eq(practitionerSettings.accountId, groupSessions.accountId)
+      )
+      .where(eq(groupSessions.id, session.id))
+      .limit(1);
+    meetingUrl = resolveCircleMeetingUrl(
+      row?.meetUrl ?? null,
+      row?.circleRoomUrl ?? null
+    );
+  } catch (err) {
+    console.error("[circle] free-seat link lookup failed for", attendeeId, err);
+  }
+  return {
+    ok: true,
+    pending: false,
+    free: {
+      meetingUrl,
+      startsAt: session.scheduledAt.toISOString(),
+      endsAt: new Date(endsAtMs).toISOString(),
+    },
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────

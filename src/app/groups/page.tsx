@@ -130,7 +130,9 @@ export default async function GroupsPage() {
                 <span>{g.defaultDurationMinutes}min</span>
                 <span>·</span>
                 <span>
-                  {formatMoney(g.defaultPriceCents, g.defaultCurrency)}/session
+                  {g.defaultPriceCents <= 0
+                    ? "Free"
+                    : `${formatMoney(g.defaultPriceCents, g.defaultCurrency)}/session`}
                 </span>
               </div>
               <div className="mt-3 text-[12px] text-plum-700">

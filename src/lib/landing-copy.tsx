@@ -55,6 +55,21 @@ export interface CircleFormCopy {
   stripeNote: string;
   showOtherWays: string;
   hideOtherWays: string;
+  // ── FREE Circles: confirmed instantly, link emailed, Join near start ──
+  emailPlaceholderFree: string;
+  freeSubmit: string;
+  freeSubmitting: string;
+  freeFootnote: string;
+  freeSuccessTitle: string;
+  freeWhenLabel: string;
+  /** Appended to the start time, which is shown in the VISITOR's timezone. */
+  freeYourTime: string;
+  freeLaterBody: string;
+  freeLaterHint: string;
+  freeSpam: string;
+  freeNowBody: string;
+  freeJoin: string;
+  freeNoLink: string;
 }
 
 export interface LandingCopy {
@@ -125,6 +140,8 @@ export interface LandingCopy {
     holdSeat: string;
     fullNextSoon: string;
     dateLocale: string;
+    /** Price label for a Circle that costs nothing — instead of "$0". */
+    free: string;
   };
   library: {
     tag: string;
@@ -397,6 +414,7 @@ const EN: LandingCopy = {
     holdSeat: "Hold a seat →",
     fullNextSoon: "Full · next one soon",
     dateLocale: "en-US",
+    free: "Free",
   },
   library: {
     tag: "On demand",
@@ -569,6 +587,22 @@ const EN: LandingCopy = {
       "Secure card payment via Stripe. Your welcome email + meeting link arrive right after.",
     showOtherWays: "or ask about other ways to pay",
     hideOtherWays: "Hide other ways to pay",
+    emailPlaceholderFree: "Where your Meet link will go",
+    freeSubmit: "Save my spot →",
+    freeSubmitting: "Saving your spot…",
+    freeFootnote:
+      "It's free. Your Google Meet link arrives by email straight away.",
+    freeSuccessTitle: "You're in.",
+    freeWhenLabel: "When",
+    freeYourTime: "(your time)",
+    freeLaterBody:
+      "Your Google Meet link is in your inbox now. We'll remind you again before it starts, with the same link — just click it then. Nothing else to do.",
+    freeLaterHint:
+      "If you keep this page open, a Join button will appear here 15 minutes before it starts.",
+    freeSpam: "Can't see the email? Check your spam folder.",
+    freeNowBody: "It's starting — come on in.",
+    freeJoin: "Join on Google Meet →",
+    freeNoLink: "Svitlana will email you the link before it starts.",
   },
 };
 
@@ -725,6 +759,7 @@ const UK: LandingCopy = {
     holdSeat: "Забронювати місце →",
     fullNextSoon: "Місць немає · наступне скоро",
     dateLocale: "uk-UA",
+    free: "Безкоштовно",
   },
   library: {
     tag: "На вимогу",
@@ -896,6 +931,22 @@ const UK: LandingCopy = {
       "Безпечна оплата карткою через Stripe. Вітальний лист і посилання на зустріч прийдуть одразу після оплати.",
     showOtherWays: "або запитайте про інші способи оплати",
     hideOtherWays: "Сховати інші способи оплати",
+    emailPlaceholderFree: "Сюди прийде посилання на Meet",
+    freeSubmit: "Зберегти місце →",
+    freeSubmitting: "Зберігаємо ваше місце…",
+    freeFootnote:
+      "Це безкоштовно. Посилання на Google Meet одразу прийде вам на пошту.",
+    freeSuccessTitle: "Ви з нами.",
+    freeWhenLabel: "Коли",
+    freeYourTime: "(за вашим часом)",
+    freeLaterBody:
+      "Посилання на Google Meet уже у вашій пошті. Перед початком ми ще раз нагадаємо — з тим самим посиланням, просто натисніть його. Більше нічого робити не треба.",
+    freeLaterHint:
+      "Якщо залишите цю сторінку відкритою, кнопка «Приєднатися» з’явиться тут за 15 хвилин до початку.",
+    freeSpam: "Не бачите листа? Перевірте папку «Спам».",
+    freeNowBody: "Уже починається — заходьте.",
+    freeJoin: "Приєднатися в Google Meet →",
+    freeNoLink: "Світлана надішле вам посилання до початку.",
   },
 };
 

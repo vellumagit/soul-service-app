@@ -2227,7 +2227,8 @@ export type TodayCircleRow = {
   scheduledAt: Date;
   /** The session's own link; caller falls back to her standing circle room. */
   meetUrl: string | null;
-  attendees: { name: string; paid: boolean }[];
+  /** `free` = a no-charge seat (gifted, or a free Circle) — never "unpaid". */
+  attendees: { name: string; paid: boolean; free: boolean }[];
 };
 
 /** Circles worth showing in the doorway: from 90 minutes ago (so she can still
@@ -2266,6 +2267,7 @@ export async function getCirclesForToday(
       groupSessionId: groupAttendees.groupSessionId,
       name: groupAttendees.name,
       paid: groupAttendees.paid,
+      paymentMethod: groupAttendees.paymentMethod,
     })
     .from(groupAttendees)
     .where(
@@ -2276,10 +2278,17 @@ export async function getCirclesForToday(
     )
     .orderBy(asc(groupAttendees.createdAt));
 
-  const bySession = new Map<string, { name: string; paid: boolean }[]>();
+  const bySession = new Map<
+    string,
+    { name: string; paid: boolean; free: boolean }[]
+  >();
   for (const p of people) {
     const list = bySession.get(p.groupSessionId) ?? [];
-    list.push({ name: p.name, paid: p.paid });
+    list.push({
+      name: p.name,
+      paid: p.paid,
+      free: p.paymentMethod === "gifted",
+    });
     bySession.set(p.groupSessionId, list);
   }
 
