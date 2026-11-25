@@ -1555,6 +1555,10 @@ export const landingOffers = pgTable(
      *  shows its live price; the homepage card links to it. */
     page: text("page"),
 
+    /** Its shareable address: svit.live/offer/<slug> (and /uk/offer/<slug>).
+     *  Unique per account. NULL only until the next save assigns one. */
+    slug: text("slug"),
+
     /** 'plain' | 'free' | 'feature' — maps to the card classes. */
     variant: text("variant").notNull().default("plain"),
     /** Which row of the ladder it sits in. Nullable only for the brief window
@@ -1571,6 +1575,9 @@ export const landingOffers = pgTable(
   },
   (t) => ({
     accountIdx: index("landing_offers_account_idx").on(t.accountId),
+    accountSlugIdx: uniqueIndex("landing_offers_account_slug_idx")
+      .on(t.accountId, t.slug)
+      .where(sql`${t.slug} IS NOT NULL`),
   })
 );
 

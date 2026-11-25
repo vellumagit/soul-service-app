@@ -12,12 +12,13 @@
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import { landingOffers, landingOfferRows } from "@/db/schema";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, ne, sql } from "drizzle-orm";
 import { requireSession } from "./session-cookies";
 import {
   OFFER_LINK_KINDS,
   OFFER_VARIANTS,
   asOfferPage,
+  slugifyOffer,
 } from "./landing-offers";
 
 const MAX_SHORT = 160;
@@ -54,9 +55,41 @@ function safeHref(raw: string): string | null {
   return null;
 }
 
+/**
+ * The offer's shareable address (/offer/<slug>). What she typed, cleaned up;
+ * blank → made from the name. Unique per account: a taken slug gets "-2",
+ * "-3"… (never another offer's link). `selfId` is excluded so re-saving an
+ * offer keeps its own slug.
+ */
+async function resolveOfferSlug(
+  accountId: string,
+  wanted: string,
+  fallbackName: string,
+  selfId: string | null
+): Promise<string> {
+  const base = slugifyOffer(wanted) || slugifyOffer(fallbackName) || "offer";
+  for (let n = 1; n < 100; n++) {
+    const candidate = n === 1 ? base : `${base.slice(0, 56)}-${n}`;
+    const [clash] = await db
+      .select({ id: landingOffers.id })
+      .from(landingOffers)
+      .where(
+        and(
+          eq(landingOffers.accountId, accountId),
+          eq(landingOffers.slug, candidate),
+          ...(selfId ? [ne(landingOffers.id, selfId)] : [])
+        )
+      )
+      .limit(1);
+    if (!clash) return candidate;
+  }
+  return `${base.slice(0, 50)}-${Date.now().toString(36)}`;
+}
+
 function revalidateStorefront() {
   revalidatePath("/");
   revalidatePath("/settings");
+  revalidatePath("/offer/[slug]", "page");
 }
 
 /**
@@ -148,6 +181,12 @@ export async function saveOffer(formData: FormData): Promise<void> {
     variant: oneOf(str(formData, "variant", 40), OFFER_VARIANTS, "plain"),
     page: asOfferPage(str(formData, "page", 40)),
     rowId: await resolveRowId(accountId, str(formData, "rowId", 100)),
+    slug: await resolveOfferSlug(
+      accountId,
+      str(formData, "slug", 100),
+      titleEn || titleUk,
+      id || null
+    ),
     published: formData.get("published") != null,
     updatedAt: new Date(),
   };

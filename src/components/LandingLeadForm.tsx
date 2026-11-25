@@ -39,11 +39,15 @@ export function LandingLeadForm({
   availableWindows = [],
   copy,
   lang = "en",
+  offerId,
 }: {
   availableWindows?: LandingWindow[];
   copy: LandingFormCopy;
   /** Page language — the action answers validation errors in it. */
   lang?: "en" | "uk";
+  /** Sent from an offer's own page (/offer/<slug>): tags the inquiry with
+   *  that offer so her Inbox says what they asked about. */
+  offerId?: string;
 }) {
   const [state, action, pending] = useActionState(
     submitLandingLead,
@@ -76,6 +80,7 @@ export function LandingLeadForm({
   return (
     <form action={action} className="space-y-4">
       <input type="hidden" name="lang" value={lang} />
+      {offerId && <input type="hidden" name="offerId" value={offerId} />}
       {/* Honeypot — visually hidden, accessibly hidden, but rendered. */}
       <div
         aria-hidden="true"

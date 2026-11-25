@@ -2839,6 +2839,7 @@ export async function listLandingOffers(
   return db
     .select({
       id: landingOffers.id,
+      slug: landingOffers.slug,
       stepEn: landingOffers.stepEn,
       stepUk: landingOffers.stepUk,
       titleEn: landingOffers.titleEn,

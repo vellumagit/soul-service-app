@@ -19,6 +19,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
   accounts,
+  landingOffers,
   leadForms,
   leadSubmissions,
   practitionerSettings,
@@ -157,7 +158,47 @@ export async function submitLandingLead(
   // a short personal note.
   const verdict = scoreLandingLead({ name, email, message });
 
-  const fields: Record<string, unknown> = {};
+  let offerFields: Record<string, unknown> = {};
+  // Sent from an offer's own page? Tag the inquiry with that offer — but only
+  // a real, published offer of THIS account (the id is user input).
+  let offerTitle: string | null = null;
+  const offerIdRaw = String(formData.get("offerId") ?? "").trim();
+  if (/^[0-9a-f-]{36}$/i.test(offerIdRaw)) {
+    try {
+      const [offer] = await db
+        .select({
+          id: landingOffers.id,
+          slug: landingOffers.slug,
+          titleEn: landingOffers.titleEn,
+          titleUk: landingOffers.titleUk,
+        })
+        .from(landingOffers)
+        .where(
+          and(
+            eq(landingOffers.id, offerIdRaw),
+            eq(landingOffers.accountId, accountId),
+            eq(landingOffers.published, true)
+          )
+        )
+        .limit(1);
+      if (offer) {
+        offerTitle = offer.titleEn.trim() || offer.titleUk.trim() || null;
+        if (offerTitle) {
+          offerFields = {
+            kind: "offer",
+            offerId: offer.id,
+            offerSlug: offer.slug,
+            offerTitle,
+          };
+        }
+      }
+    } catch (err) {
+      // A tag is a nicety — never lose the inquiry over it.
+      console.error("[landing] offer tag lookup failed:", err);
+    }
+  }
+
+  const fields: Record<string, unknown> = { ...offerFields };
   if (message) fields.message = message;
   if (preferredWindowIso) fields.preferredWindow = preferredWindowIso;
   if (verdict.spam) fields.spamReasons = verdict.reasons;
@@ -247,6 +288,7 @@ export async function submitLandingLead(
             fromEmail: email,
             message: message || null,
             preferredWhenLabel,
+            offerTitle,
           });
         } catch (err) {
           console.error("[landing] inquiry notify email failed:", err);

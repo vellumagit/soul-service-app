@@ -27,7 +27,31 @@ import {
   moveOfferRow,
   deleteOfferRow,
 } from "@/lib/offer-actions";
-import { OFFER_PAGES } from "@/lib/landing-offers";
+import { OFFER_PAGES, slugifyOffer } from "@/lib/landing-offers";
+import { CANONICAL_ORIGIN } from "@/lib/storefront-seo";
+
+/** The public address an offer is shared at. */
+function offerUrl(slug: string, lang: "en" | "uk" = "en"): string {
+  return `${CANONICAL_ORIGIN}${lang === "uk" ? "/uk" : ""}/offer/${slug}`;
+}
+
+/** Copy an offer's link, with a toast either way. */
+async function copyOfferLink(slug: string, lang: "en" | "uk") {
+  try {
+    await navigator.clipboard.writeText(offerUrl(slug, lang));
+    notify({
+      kind: "success",
+      title: lang === "uk" ? "Ukrainian link copied" : "Link copied",
+      body: offerUrl(slug, lang),
+    });
+  } catch {
+    notify({
+      kind: "error",
+      title: "Couldn't copy",
+      body: offerUrl(slug, lang),
+    });
+  }
+}
 
 export type OfferItem = {
   id: string;
@@ -48,6 +72,8 @@ export type OfferItem = {
   variant: string;
   rowId: string | null;
   page: string | null;
+  /** Shareable address: svit.live/offer/<slug>. */
+  slug: string | null;
   published: boolean;
   sortOrder: number;
 };
@@ -264,6 +290,43 @@ export function OffersManager({
                             </span>
                           )}
                         </div>
+                        {/* Its own shareable link — the page with this offer
+                            and (for a contact-form offer) the inquiry form. */}
+                        {o.slug ? (
+                          <div className="text-[11px] mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <a
+                              href={offerUrl(o.slug)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="font-mono text-plum-700 hover:underline break-all"
+                            >
+                              {offerUrl(o.slug).replace(/^https:\/\//, "")}
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => copyOfferLink(o.slug!, "en")}
+                              className="px-1.5 py-0.5 rounded border border-ink-200 text-ink-600 hover:bg-ink-50"
+                            >
+                              Copy link
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => copyOfferLink(o.slug!, "uk")}
+                              className="px-1.5 py-0.5 rounded border border-ink-200 text-ink-600 hover:bg-ink-50"
+                            >
+                              Copy УКР link
+                            </button>
+                            {!o.published && (
+                              <span className="text-ink-400 italic">
+                                (hidden offers&apos; links don&apos;t open)
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="text-[11px] mt-1.5 text-ink-400 italic">
+                            Open and save this offer to give it its own link.
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-1 shrink-0">
@@ -697,6 +760,26 @@ function OfferDialog({
                 </option>
               ))}
             </select>
+          </Field>
+
+          <Field
+            label="Shareable link"
+            hint="A page with just this offer — and, if its button goes to your contact form, the form with your open times right under it. Send it, post it anywhere. Leave blank and it's made from the name. Letters, numbers and dashes."
+          >
+            <div className="flex items-stretch rounded-md border border-ink-200 bg-white overflow-hidden focus-within:border-plum-500">
+              <span className="px-2.5 flex items-center text-xs text-ink-400 bg-ink-50 border-r border-ink-200 whitespace-nowrap">
+                svit.live/offer/
+              </span>
+              <input
+                name="slug"
+                defaultValue={offer?.slug ?? ""}
+                maxLength={60}
+                placeholder={
+                  slugifyOffer(offer?.titleEn ?? "") || "holiday-gift"
+                }
+                className="flex-1 min-w-0 px-2.5 py-1.5 text-sm outline-none bg-transparent"
+              />
+            </div>
           </Field>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

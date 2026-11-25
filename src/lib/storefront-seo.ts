@@ -37,7 +37,7 @@ const LOCALIZED_EXACT = new Set([
   // The Journal (journal.ts): the index, and each article under it.
   "/journal",
 ]);
-const LOCALIZED_PREFIXES = ["/free/", "/journal/"];
+const LOCALIZED_PREFIXES = ["/free/", "/journal/", "/offer/"];
 
 export function isLocalizedPath(path: string): boolean {
   return (

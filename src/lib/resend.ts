@@ -1421,11 +1421,18 @@ export async function sendLandingInquiryNotifyEmail(input: {
   fromEmail: string;
   message: string | null;
   preferredWhenLabel?: string | null;
+  /** Sent from an offer's own page — what they asked about. */
+  offerTitle?: string | null;
 }): Promise<void> {
-  const subject = `New inquiry from ${input.fromName}`;
+  const subject = input.offerTitle
+    ? `New inquiry about ${input.offerTitle} — from ${input.fromName}`
+    : `New inquiry from ${input.fromName}`;
   const detailLines = [
     `From: ${input.fromName} <${input.fromEmail}>`,
   ];
+  if (input.offerTitle) {
+    detailLines.push(`About: ${input.offerTitle}`);
+  }
   if (input.preferredWhenLabel) {
     detailLines.push(`Preferred time: ${input.preferredWhenLabel}`);
   }
@@ -1439,6 +1446,11 @@ ${input.message ? `"${input.message}"\n\n` : "(No message — just their details
     <div style="max-width:480px;margin:40px auto;padding:32px;background:#fdf9f1;border-radius:12px;border:1px solid #ead9c1;">
       <p style="margin:0 0 16px 0;font-size:16px;font-weight:600;color:#1a1411;">A new note came in through your landing page.</p>
       <p style="margin:0 0 4px 0;font-size:14px;color:#564a42;"><strong>From:</strong> ${escapeHtml(input.fromName)} &lt;${escapeHtml(input.fromEmail)}&gt;</p>
+      ${
+        input.offerTitle
+          ? `<p style="margin:0 0 4px 0;font-size:14px;color:#564a42;"><strong>About:</strong> ${escapeHtml(input.offerTitle)}</p>`
+          : ""
+      }
       ${
         input.preferredWhenLabel
           ? `<p style="margin:0 0 4px 0;font-size:14px;color:#564a42;"><strong>Preferred time:</strong> ${escapeHtml(input.preferredWhenLabel)}</p>`

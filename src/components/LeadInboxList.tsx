@@ -82,7 +82,9 @@ function SubmissionRow({
   // plain-language summary instead. External form submissions are left exactly
   // as they arrive, so a real custom field is never swallowed.
   const isFirstParty =
-    fields.kind === "lead-magnet" || fields.source === "compass-quiz";
+    fields.kind === "lead-magnet" ||
+    fields.kind === "offer" ||
+    fields.source === "compass-quiz";
   const visibleEntries = isFirstParty
     ? fieldEntries.filter(([k]) => !INTERNAL_FIELD_KEYS.has(k))
     : fieldEntries;
@@ -351,6 +353,7 @@ function sourceLabel(
   formName: string | null | undefined
 ): string {
   if (fields.kind === "lead-magnet") return "Lead magnet";
+  if (fields.kind === "offer") return "Offer page";
   if (fields.source === "compass-quiz") return "Compass quiz";
   if (formName && /landing|contact/i.test(formName)) return "Website contact form";
   return formName || "Form";
@@ -382,12 +385,22 @@ const INTERNAL_FIELD_KEYS = new Set([
   "quizResult",
   "quizResultLabel",
   "wantsWorkbook",
+  "offerId",
+  "offerSlug",
+  "offerTitle",
 ]);
 
 /** A plain-language line for our own submissions — what this person actually
  *  did — so she reads "Downloaded …" instead of a JSON blob. Returns null for
  *  external forms (they fall back to the message/intent preview). */
 function humanSummary(fields: Record<string, unknown>): string | null {
+  if (fields.kind === "offer") {
+    const title =
+      typeof fields.offerTitle === "string" && fields.offerTitle.trim()
+        ? fields.offerTitle.trim()
+        : "an offer";
+    return `Asked about “${title}”`;
+  }
   if (fields.kind === "lead-magnet") {
     const title =
       typeof fields.magnetTitle === "string" && fields.magnetTitle.trim()

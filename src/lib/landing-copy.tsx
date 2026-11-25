@@ -203,6 +203,13 @@ export interface LandingCopy {
     };
   };
   contact: { tag: string; title: ReactNode; body: string };
+  /** /offer/<slug> — one offer on its own shareable page. */
+  offerPage: {
+    formTag: string;
+    formTitle: string;
+    formBody: string;
+    seeAll: string;
+  };
   // Static labels for the "Free resource" section (the freebie block). The
   // title/subtitle come from the featured lead magnet itself; only the eyebrow
   // and the button word live here.
@@ -491,6 +498,13 @@ const EN: LandingCopy = {
       </>
     ),
     body: "A few words is enough. I read every note myself and reply within a few days, usually sooner.",
+  },
+  offerPage: {
+    formTag: "Send a note",
+    formTitle: "Tell me you’d like this",
+    formBody:
+      "Leave your name and email — and tap a time if one suits. I read every note myself and reply within a few days, usually sooner.",
+    seeAll: "← Everything I offer",
   },
   freebie: { tag: "A gift for you", cta: "Get it free →" },
   final: {
@@ -836,6 +850,13 @@ const UK: LandingCopy = {
       </>
     ),
     body: "Кількох слів достатньо. Я читаю кожну записку сама й відповідаю протягом кількох днів, зазвичай швидше.",
+  },
+  offerPage: {
+    formTag: "Напишіть",
+    formTitle: "Напишіть, що вам це цікаво",
+    formBody:
+      "Залиште ім’я та пошту — і виберіть час, якщо якийсь підходить. Я читаю кожну записку сама й відповідаю протягом кількох днів, зазвичай швидше.",
+    seeAll: "← Усе, що я пропоную",
   },
   freebie: { tag: "Подарунок для вас", cta: "Отримати безкоштовно →" },
   final: {

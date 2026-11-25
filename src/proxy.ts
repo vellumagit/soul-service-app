@@ -42,6 +42,7 @@ const PUBLIC_PREFIXES = [
   "/portal", // client portal — gates itself via requirePortalSession
   "/circles/", // public group-session sign-up pages
   "/free/", // public lead-magnet opt-in pages (email-gated free resources)
+  "/offer/", // one offer on its own shareable page (with the inquiry form)
   "/api/auth/", // /api/auth/google/callback (Google Calendar OAuth)
   "/api/cron/", // Vercel Cron endpoints — verified by CRON_SECRET, not session
   "/api/webhooks/", // Stripe + Recall webhooks — verified by their own signatures

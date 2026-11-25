@@ -54,7 +54,24 @@ export type OfferRow = {
   variant: string;
   rowId: string | null;
   page?: string | null;
+  /** Shareable address: /offer/<slug>. */
+  slug?: string | null;
 };
+
+/** "Holiday Gift — 2026!" → "holiday-gift-2026". Latin letters, digits and
+ *  hyphens only, so the link survives being pasted anywhere; Cyrillic-only
+ *  names fall back to "offer" and she can type her own. */
+export function slugifyOffer(raw: string): string {
+  return raw
+    .toLowerCase()
+    // Strip accents ("café" → "cafe"); anything still non-Latin becomes "-".
+    .normalize("NFKD")
+    .replace(/\p{M}/gu, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60)
+    .replace(/-+$/g, "");
+}
 
 /** A row of the ladder, as stored. The heading is optional. */
 export type OfferRowGroup = {

@@ -1150,6 +1150,23 @@ export async function acceptLeadSubmission(
           ? fields.magnetTitle.trim()
           : "a free resource";
       privateNotes = `Downloaded “${title}” (free resource) on ${dateStr}.`;
+    } else if (fields.kind === "offer") {
+      // Sent from an offer's own page (/offer/<slug>): say what they asked
+      // about, then their note and preferred time — not the plumbing ids.
+      const title =
+        typeof fields.offerTitle === "string" && fields.offerTitle.trim()
+          ? fields.offerTitle.trim()
+          : "an offer";
+      const extras = Object.entries(fields)
+        .filter(
+          ([k]) =>
+            !matched.has(k) &&
+            !["kind", "offerId", "offerSlug", "offerTitle"].includes(k)
+        )
+        .map(([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`);
+      privateNotes =
+        `Asked about “${title}” on ${dateStr}.` +
+        (extras.length > 0 ? `\n\n${extras.join("\n")}` : "");
     } else if (
       fields.source === "compass-quiz" ||
       typeof fields.quizResultLabel === "string"
