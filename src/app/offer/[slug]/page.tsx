@@ -176,8 +176,10 @@ export default async function OfferSharePage({
         </header>
 
         <section className="ways" style={{ padding: "44px 24px 24px" }}>
-          <div className="wrap ladder" style={{ maxWidth: 520 }}>
-            <div className="lane">
+          {/* One card, full width of a narrow column — the homepage's .lane
+              is a 3-up grid, which squeezed a lone card into a third. */}
+          <div className="wrap ladder" style={{ maxWidth: 520, marginTop: 0 }}>
+            <div className="lane" style={{ gridTemplateColumns: "1fr" }}>
               <div
                 className={`card${
                   offer.variant === "free"
