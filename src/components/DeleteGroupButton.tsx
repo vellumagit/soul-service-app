@@ -22,7 +22,7 @@ export function DeleteGroupButton({ groupId, groupName }: Props) {
   function onClick() {
     if (
       !confirm(
-        `Delete “${groupName}” entirely? Its scheduled sessions go with it. This can't be undone.`
+        `Delete “${groupName}” entirely? Its sessions and any sign-ups go with it (people stay in your Network). This can't be undone.`
       )
     ) {
       return;

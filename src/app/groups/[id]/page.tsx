@@ -28,6 +28,7 @@ import { GroupRecurrencePanel } from "@/components/GroupRecurrencePanel";
 import { AddCircleAttendeeInline } from "@/components/AddCircleAttendeeInline";
 import { EditGroupDialog } from "@/components/EditGroupDialog";
 import { DeleteGroupButton } from "@/components/DeleteGroupButton";
+import { ArchiveGroupButton } from "@/components/ArchiveGroupButton";
 import { resolveCircleMeetingUrl } from "@/lib/circle-fulfillment";
 
 export const dynamic = "force-dynamic";
@@ -245,6 +246,20 @@ export default async function GroupDetailPage({
       locale={locale}
       timeZone={settings.timezone}
     >
+      {group.archivedAt && (
+        <div className="mb-6 paper-card p-4 border-l-2 border-ink-300 flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-sm text-ink-700">
+            This Circle is <strong>archived</strong> — it&apos;s off your Circles
+            list and your page. Everything in it is kept.
+          </p>
+          <ArchiveGroupButton
+            groupId={group.id}
+            groupName={group.name}
+            archived
+            look="button"
+          />
+        </div>
+      )}
       <header className="mb-7 flex items-baseline justify-between gap-3 flex-wrap">
         <div className="min-w-0 flex-1">
           <h1
@@ -751,9 +766,17 @@ export default async function GroupDetailPage({
         </section>
       )}
 
-      {/* Danger zone — deliberately last and quiet. The action itself
-          refuses if the Circle has any sign-up history. */}
-      <div className="mt-10 pt-4 border-t border-ink-100 text-right">
+      {/* Tidy-up — deliberately last and quiet. Archive keeps every record;
+          delete refuses once there's real history (a payment, or a session
+          that actually met) and points to Archive instead. */}
+      <div className="mt-10 pt-4 border-t border-ink-100 flex items-center justify-end gap-5 flex-wrap">
+        {!group.archivedAt && (
+          <ArchiveGroupButton
+            groupId={group.id}
+            groupName={group.name}
+            archived={false}
+          />
+        )}
         <DeleteGroupButton groupId={group.id} groupName={group.name} />
       </div>
     </AppShell>

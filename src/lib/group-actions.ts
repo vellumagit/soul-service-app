@@ -240,13 +240,97 @@ export async function updateGroup(
   return { ok: true };
 }
 
-export async function archiveGroup(id: string): Promise<{ ok: true }> {
+export type ArchiveGroupResult = { ok: true; cancelled: number } | { ok: false; error: string };
+
+/** Put a Circle away: off the Circles list, off the storefront, its weekly
+ *  rhythm stopped — but every record kept (sign-ups, payments, who came).
+ *  The answer for a Circle with history that delete rightly refuses.
+ *
+ *  Upcoming sessions nobody has signed up for are cancelled quietly (and
+ *  pulled off Google Calendar). If anyone still holds a seat on an upcoming
+ *  session, it refuses — those guests need a proper cancellation (with its
+ *  email and any refund) first, not a silent disappearance. */
+export async function archiveGroup(id: string): Promise<ArchiveGroupResult> {
+  const { accountId } = await requireSession();
+  const [group] = await db
+    .select({ id: groups.id })
+    .from(groups)
+    .where(and(eq(groups.accountId, accountId), eq(groups.id, id)))
+    .limit(1);
+  if (!group) return { ok: false, error: "Circle not found." };
+
+  const upcoming = await db
+    .select({
+      id: groupSessions.id,
+      googleEventId: groupSessions.googleEventId,
+      guests: sql<number>`(
+        SELECT COUNT(*)::int FROM group_attendees
+        WHERE group_attendees.group_session_id = ${groupSessions.id}
+          AND group_attendees.status <> 'cancelled'
+      )`,
+    })
+    .from(groupSessions)
+    .where(
+      and(
+        eq(groupSessions.groupId, id),
+        eq(groupSessions.status, "scheduled"),
+        gte(groupSessions.scheduledAt, new Date())
+      )
+    );
+  const withGuests = upcoming.filter((s) => s.guests > 0);
+  if (withGuests.length > 0) {
+    return {
+      ok: false,
+      error: `${withGuests.length === 1 ? "An upcoming session still has" : `${withGuests.length} upcoming sessions still have`} people signed up. Cancel ${withGuests.length === 1 ? "it" : "them"} first (that tells your guests), then archive.`,
+    };
+  }
+
+  const now = new Date();
+  for (const s of upcoming) {
+    await db
+      .update(groupSessions)
+      .set({ status: "cancelled", updatedAt: now })
+      .where(eq(groupSessions.id, s.id));
+    if (s.googleEventId) {
+      try {
+        const { removeCircleFromGoogle } = await import("./circle-google");
+        await removeCircleFromGoogle(s.id);
+      } catch (err) {
+        console.error("[circle] google delete on archive failed:", err);
+      }
+    }
+  }
+
+  await db
+    .update(groups)
+    .set({
+      archivedAt: now,
+      published: false,
+      // Otherwise the hourly top-up would keep scheduling it.
+      recurrenceEnabled: false,
+      updatedAt: now,
+    })
+    .where(and(eq(groups.accountId, accountId), eq(groups.id, id)));
+
+  revalidatePath("/groups");
+  revalidatePath(`/groups/${id}`);
+  revalidatePath("/calendar");
+  revalidatePath("/today");
+  revalidatePath("/");
+  return { ok: true, cancelled: upcoming.length };
+}
+
+/** Bring an archived Circle back onto the Circles list. It comes back
+ *  UNPUBLISHED and with no weekly rhythm — she turns those on again on
+ *  purpose, so restoring never surprises anyone on the storefront. */
+export async function unarchiveGroup(id: string): Promise<{ ok: true }> {
   const { accountId } = await requireSession();
   await db
     .update(groups)
-    .set({ archivedAt: new Date(), published: false })
+    .set({ archivedAt: null, updatedAt: new Date() })
     .where(and(eq(groups.accountId, accountId), eq(groups.id, id)));
   revalidatePath("/groups");
+  revalidatePath(`/groups/${id}`);
   return { ok: true };
 }
 
@@ -1015,12 +1099,14 @@ export async function cancelGroupSession(
 
 export type DeleteGroupResult = { ok: true } | { ok: false; error: string };
 
-// Delete a Circle outright. Guarded: a Circle with ANY sign-up history —
-// any attendee row on any of its sessions, whatever the status — refuses
-// to die, because those rows are payment + relationship records. The
-// button exists for its real purpose: removing a Circle created by
-// mistake, or a test nobody ever joined. For a retired Circle with
-// history, unpublishing (Edit circle) is the right move.
+// Delete a Circle outright. Guarded by REAL history, not mere sign-ups:
+//   - money: anyone ever paid, was refunded, or went through card checkout;
+//   - it happened: any session in the past that wasn't cancelled.
+// Either one means these rows are part of her books / her record of who
+// came, and the answer is Archive. Otherwise — a test, a mistake, a Circle
+// that was cancelled before it ever ran — it can go, sign-ups and all. (The
+// old rule refused on ANY attendee row, so signing up to test a Circle made
+// it undeletable forever.) People who signed up stay in her Network.
 export async function deleteGroup(
   groupId: string
 ): Promise<DeleteGroupResult> {
@@ -1033,19 +1119,66 @@ export async function deleteGroup(
     .limit(1);
   if (!group) return { ok: false, error: "Circle not found." };
 
-  const [{ n }] = await db
-    .select({ n: sql<number>`COUNT(*)::int` })
+  const [{ money }] = await db
+    .select({ money: sql<number>`COUNT(*)::int` })
     .from(groupAttendees)
     .innerJoin(
       groupSessions,
       eq(groupSessions.id, groupAttendees.groupSessionId)
     )
-    .where(eq(groupSessions.groupId, groupId));
-  if (n > 0) {
+    .where(
+      and(
+        eq(groupSessions.groupId, groupId),
+        sql`(${groupAttendees.paid} = TRUE
+          OR ${groupAttendees.refundedAt} IS NOT NULL
+          OR ${groupAttendees.stripePaymentIntentId} IS NOT NULL)`
+      )
+    );
+  if (money > 0) {
     return {
       ok: false,
       error:
-        "This Circle has sign-up history, so it can't be deleted — its records are part of your books. To retire it, open Edit circle and untick “Publish on my storefront” instead.",
+        "Someone has paid for this Circle, so it can't be deleted — that payment is part of your books. Use “Archive this Circle” instead: it disappears from your lists and your page, and the records stay safe.",
+    };
+  }
+  const [{ held }] = await db
+    .select({ held: sql<number>`COUNT(*)::int` })
+    .from(groupSessions)
+    .where(
+      and(
+        eq(groupSessions.groupId, groupId),
+        sql`${groupSessions.status} <> 'cancelled'`,
+        sql`${groupSessions.scheduledAt} < NOW()`
+      )
+    );
+  if (held > 0) {
+    return {
+      ok: false,
+      error:
+        "This Circle has already met, so it can't be deleted — that's your record of who came. Use “Archive this Circle” instead: it disappears from your lists and your page, and the records stay safe.",
+    };
+  }
+  // Someone still expecting to come must hear it's off — through Cancel
+  // session (email + Google), not a silent delete.
+  const [{ seated }] = await db
+    .select({ seated: sql<number>`COUNT(*)::int` })
+    .from(groupAttendees)
+    .innerJoin(
+      groupSessions,
+      eq(groupSessions.id, groupAttendees.groupSessionId)
+    )
+    .where(
+      and(
+        eq(groupSessions.groupId, groupId),
+        eq(groupSessions.status, "scheduled"),
+        sql`${groupAttendees.status} <> 'cancelled'`
+      )
+    );
+  if (seated > 0) {
+    return {
+      ok: false,
+      error:
+        "People are still signed up for an upcoming session. Cancel that session first (it tells them), then delete.",
     };
   }
 

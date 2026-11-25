@@ -3,7 +3,7 @@
 // dialog at the top.
 
 import Link from "next/link";
-import { and, eq, isNull, desc, sql } from "drizzle-orm";
+import { and, eq, isNull, isNotNull, desc, sql } from "drizzle-orm";
 import { AppShell } from "@/components/AppShell";
 import { QuickActions } from "@/components/QuickActions";
 import { requireSession } from "@/lib/session-cookies";
@@ -52,6 +52,14 @@ export default async function GroupsPage() {
     getSettings(accountId),
     listClientsForPicker(accountId),
   ]);
+
+  // Archived Circles — tucked away at the bottom so they never clutter the
+  // list, but always findable (and restorable from their own page).
+  const archivedRows = await db
+    .select({ id: groups.id, name: groups.name, archivedAt: groups.archivedAt })
+    .from(groups)
+    .where(and(eq(groups.accountId, accountId), isNotNull(groups.archivedAt)))
+    .orderBy(desc(groups.archivedAt));
 
   const locale = asLocale(settings.uiLanguage);
 
@@ -143,6 +151,26 @@ export default async function GroupsPage() {
             </Link>
           ))}
         </div>
+      )}
+
+      {archivedRows.length > 0 && (
+        <details className="mt-10 max-w-3xl">
+          <summary className="text-[12px] text-ink-500 cursor-pointer select-none hover:text-ink-800">
+            Archived ({archivedRows.length})
+          </summary>
+          <ul className="mt-3 space-y-1.5">
+            {archivedRows.map((g) => (
+              <li key={g.id} className="text-sm">
+                <Link href={`/groups/${g.id}`} className="text-ink-700 hover:text-plum-700 hover:underline">
+                  {g.name}
+                </Link>
+                <span className="text-[11px] text-ink-400 ml-2">
+                  open to restore or delete
+                </span>
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
     </AppShell>
   );
