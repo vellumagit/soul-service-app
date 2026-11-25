@@ -27,7 +27,12 @@ import {
   moveOfferRow,
   deleteOfferRow,
 } from "@/lib/offer-actions";
-import { OFFER_PAGES, slugifyOffer } from "@/lib/landing-offers";
+import {
+  FREE_PRICE,
+  OFFER_PAGES,
+  isFreePrice,
+  slugifyOffer,
+} from "@/lib/landing-offers";
 import { CANONICAL_ORIGIN } from "@/lib/storefront-seo";
 
 /** The public address an offer is shared at. */
@@ -251,7 +256,9 @@ export function OffersManager({
                             {o.titleEn || o.titleUk}
                           </span>
                           <span className="text-xs text-ink-600">
-                            {o.priceEn || o.priceUk}
+                            {isFreePrice(o.priceEn || o.priceUk)
+                              ? FREE_PRICE.en
+                              : o.priceEn || o.priceUk}
                             {(o.priceSuffixEn || o.priceSuffixUk) && (
                               <span className="text-ink-400">
                                 {" "}
@@ -590,6 +597,11 @@ function OfferDialog({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [linkKind, setLinkKind] = useState(offer?.linkKind ?? "contact");
+  // "Free offer": the price reads Free / Безкоштовно in each language, so
+  // she never has to type a "0" that would show up as a lone 0.
+  const [free, setFree] = useState(
+    isFreePrice(offer?.priceEn) || isFreePrice(offer?.priceUk)
+  );
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -639,6 +651,24 @@ function OfferDialog({
           </span>
         </div>
 
+        <label className="flex items-start gap-2 text-sm text-ink-700 cursor-pointer">
+          <input
+            type="checkbox"
+            name="isFree"
+            value="true"
+            checked={free}
+            onChange={(e) => setFree(e.target.checked)}
+            className="rounded border-ink-300 mt-0.5"
+          />
+          <span>
+            Free offer
+            <span className="block text-[11px] text-ink-500">
+              The price shows as &ldquo;{FREE_PRICE.en}&rdquo; in English and
+              &ldquo;{FREE_PRICE.uk}&rdquo; in Ukrainian.
+            </span>
+          </span>
+        </label>
+
         {LANGS.map((l) => {
           const en = l.id === "en";
           return (
@@ -666,13 +696,24 @@ function OfferDialog({
                 />
               </Field>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Field label="Price" hint="Written as you want it read.">
+                <Field
+                  label="Price"
+                  hint={free ? "Set by “Free offer” above." : "Written as you want it read."}
+                >
+                  {/* Kept mounted (just hidden) so unticking Free brings back
+                      whatever she'd typed. */}
                   <input
                     name={en ? "priceEn" : "priceUk"}
                     defaultValue={(en ? offer?.priceEn : offer?.priceUk) ?? ""}
                     className={inputCls}
-                    placeholder={en ? "$150" : "Безкоштовно"}
+                    placeholder={en ? "$150" : "1500 грн"}
+                    style={{ display: free ? "none" : undefined }}
                   />
+                  {free && (
+                    <div className="px-2.5 py-1.5 text-sm rounded-md border border-ink-100 bg-ink-50 text-ink-600">
+                      {en ? FREE_PRICE.en : FREE_PRICE.uk}
+                    </div>
+                  )}
                 </Field>
                 <Field label="After the price" hint="e.g. “/ session”.">
                   <input

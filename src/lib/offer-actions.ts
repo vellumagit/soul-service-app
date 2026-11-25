@@ -17,6 +17,7 @@ import { requireSession } from "./session-cookies";
 import {
   OFFER_LINK_KINDS,
   OFFER_VARIANTS,
+  FREE_PRICE,
   asOfferPage,
   slugifyOffer,
 } from "./landing-offers";
@@ -163,13 +164,16 @@ export async function saveOffer(formData: FormData): Promise<void> {
       "That link doesn't look right. Use a full web address (https://…) or a path on your own site (/quiz)."
     );
 
+  const isFree = formData.get("isFree") === "true";
   const values = {
     stepEn: str(formData, "stepEn", MAX_SHORT),
     stepUk: str(formData, "stepUk", MAX_SHORT),
     titleEn,
     titleUk,
-    priceEn: str(formData, "priceEn", MAX_SHORT),
-    priceUk: str(formData, "priceUk", MAX_SHORT),
+    // "Free offer" ticked → the word for free in each language, whatever was
+    // in the (hidden) price boxes.
+    priceEn: isFree ? FREE_PRICE.en : str(formData, "priceEn", MAX_SHORT),
+    priceUk: isFree ? FREE_PRICE.uk : str(formData, "priceUk", MAX_SHORT),
     priceSuffixEn: str(formData, "priceSuffixEn", MAX_SHORT),
     priceSuffixUk: str(formData, "priceSuffixUk", MAX_SHORT),
     descriptionEn: str(formData, "descriptionEn", MAX_LONG),

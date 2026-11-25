@@ -58,6 +58,19 @@ export type OfferRow = {
   slug?: string | null;
 };
 
+/** How a free offer's price reads, per language. */
+export const FREE_PRICE = { en: "Free", uk: "Безкоштовно" } as const;
+
+/** A price that means "no charge": a bare zero in any common shape ("0",
+ *  "$0", "0.00", "$0 CAD", "0 грн") or the word itself in either language.
+ *  Those render as FREE_PRICE so a typed "0" never shows up as a lone "0". */
+export function isFreePrice(raw: string | null | undefined): boolean {
+  const v = (raw ?? "").trim().toLowerCase();
+  if (!v) return false;
+  if (/^(free|безкоштовно|бесплатно)$/.test(v)) return true;
+  return /^[$€£₴]?\s*0+(?:[.,]0+)?\s*(?:cad|usd|eur|uah|грн)?$/.test(v);
+}
+
 /** "Holiday Gift — 2026!" → "holiday-gift-2026". Latin letters, digits and
  *  hyphens only, so the link survives being pasted anywhere; Cyrillic-only
  *  names fall back to "offer" and she can type her own. */
@@ -149,7 +162,12 @@ export function offerForLang(
     id: row.id,
     step: uk ? pick(row.stepUk, row.stepEn) : pick(row.stepEn, row.stepUk),
     title: uk ? pick(row.titleUk, row.titleEn) : pick(row.titleEn, row.titleUk),
-    price: uk ? pick(row.priceUk, row.priceEn) : pick(row.priceEn, row.priceUk),
+    price: (() => {
+      const p = uk ? pick(row.priceUk, row.priceEn) : pick(row.priceEn, row.priceUk);
+      // A zero (or "Free" written in only the other language) reads as the
+      // word for free in THIS page's language.
+      return isFreePrice(p) ? FREE_PRICE[uk ? "uk" : "en"] : p;
+    })(),
     priceSuffix: uk
       ? pick(row.priceSuffixUk, row.priceSuffixEn)
       : pick(row.priceSuffixEn, row.priceSuffixUk),
