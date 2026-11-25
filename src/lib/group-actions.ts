@@ -440,6 +440,145 @@ async function circleGuestsForNotice(accountId: string, groupSessionId: string) 
   return { ...row, guests };
 }
 
+export type UpdateGroupSessionResult =
+  | { ok: true; confirmed: number }
+  | { ok: false; error: string };
+
+/** Edit an upcoming Circle session's details in place — topic, length,
+ *  seats, price and (when it isn't on Google Calendar) the meeting link.
+ *  The time itself goes through rescheduleGroupSession, which owns the
+ *  "moved" emails. Before this, a typo in the topic or a missing Meet link
+ *  meant cancelling (emailing everyone) and scheduling it again.
+ *
+ *  Price rules:
+ *   - can't change once someone has paid for this session (they paid THAT
+ *     price);
+ *   - turning a session FREE confirms everyone still waiting (not anyone
+ *     mid-card-checkout) as a no-charge seat and sends their welcome email
+ *     — the same thing a free sign-up gets. `confirmed` counts them. */
+export async function updateGroupSessionDetails(
+  formData: FormData
+): Promise<UpdateGroupSessionResult> {
+  try {
+    const { accountId } = await requireSession();
+    const id = String(formData.get("id") ?? "");
+    if (!id) return { ok: false, error: "Missing session reference." };
+
+    const [row] = await db
+      .select({
+        status: groupSessions.status,
+        scheduledAt: groupSessions.scheduledAt,
+        durationMinutes: groupSessions.durationMinutes,
+        capacity: groupSessions.capacity,
+        priceCents: groupSessions.priceCents,
+        meetUrl: groupSessions.meetUrl,
+        googleEventId: groupSessions.googleEventId,
+        groupId: groupSessions.groupId,
+      })
+      .from(groupSessions)
+      .where(and(eq(groupSessions.accountId, accountId), eq(groupSessions.id, id)))
+      .limit(1);
+    if (!row) return { ok: false, error: "That Circle wasn't found." };
+    if (row.status !== "scheduled") {
+      return { ok: false, error: "Only an upcoming Circle can be edited." };
+    }
+    const endsAt =
+      new Date(row.scheduledAt).getTime() + row.durationMinutes * 60 * 1000;
+    if (endsAt <= Date.now()) {
+      return { ok: false, error: "This Circle has already happened." };
+    }
+
+    const topic = String(formData.get("topic") ?? "").trim().slice(0, 300) || null;
+    const durationMinutes = clampInt(formData.get("durationMinutes"), 5, 480, row.durationMinutes);
+    const capacity = clampInt(formData.get("capacity"), 1, 500, row.capacity);
+    const priceDollars = parseFloat(String(formData.get("price") ?? ""));
+    const priceCents = Number.isFinite(priceDollars) && priceDollars >= 0
+      ? Math.round(priceDollars * 100)
+      : row.priceCents;
+
+    const [counts] = await db
+      .select({
+        taken: sql<number>`COUNT(*) FILTER (WHERE ${groupAttendees.status} <> 'cancelled')::int`,
+        paid: sql<number>`COUNT(*) FILTER (WHERE ${groupAttendees.paid} = TRUE AND ${groupAttendees.refundedAt} IS NULL)::int`,
+      })
+      .from(groupAttendees)
+      .where(eq(groupAttendees.groupSessionId, id));
+    const taken = counts?.taken ?? 0;
+    if (capacity < taken) {
+      return {
+        ok: false,
+        error: `${taken} ${taken === 1 ? "person has" : "people have"} a seat already — seats can't go below that.`,
+      };
+    }
+    const priceChanged = priceCents !== row.priceCents;
+    if (priceChanged && (counts?.paid ?? 0) > 0) {
+      return {
+        ok: false,
+        error: "Someone has already paid for this Circle, so its price can't change.",
+      };
+    }
+
+    // The meeting link is only hers to set when the Circle ISN'T on Google
+    // Calendar — when it is, every sync rewrites it with the event's own Meet
+    // link, so a pasted link would silently vanish.
+    const meetUrl = row.googleEventId
+      ? row.meetUrl
+      : String(formData.get("meetUrl") ?? "").trim().slice(0, 500) || null;
+
+    await db
+      .update(groupSessions)
+      .set({ topic, durationMinutes, capacity, priceCents, meetUrl, updatedAt: new Date() })
+      .where(and(eq(groupSessions.accountId, accountId), eq(groupSessions.id, id)));
+
+    // Turned free → everyone still waiting is let in, like a free sign-up.
+    let confirmed = 0;
+    if (priceChanged && priceCents <= 0) {
+      const waiting = await db
+        .update(groupAttendees)
+        .set({ status: "confirmed", paymentMethod: "gifted", updatedAt: new Date() })
+        .where(
+          and(
+            eq(groupAttendees.groupSessionId, id),
+            eq(groupAttendees.status, "pending"),
+            eq(groupAttendees.paid, false),
+            sql`${groupAttendees.stripeCheckoutSessionId} IS NULL`
+          )
+        )
+        .returning({ id: groupAttendees.id });
+      for (const a of waiting) {
+        try {
+          await fulfillCircleSeat(a.id);
+        } catch (err) {
+          console.error("[circle] fulfil after turning free failed", a.id, err);
+        }
+      }
+      confirmed = waiting.length;
+    }
+
+    // A new length changes the calendar event's end — patch it quietly.
+    if (durationMinutes !== row.durationMinutes && row.googleEventId) {
+      try {
+        const { syncCircleToGoogle } = await import("./circle-google");
+        await syncCircleToGoogle(id, { notify: false });
+      } catch (err) {
+        console.error("[circle] google sync after edit failed:", err);
+      }
+    }
+
+    revalidatePath(`/groups/${row.groupId}`);
+    revalidatePath(`/circles/${id}`);
+    revalidatePath("/requests", "layout");
+    revalidatePath("/today");
+    revalidatePath("/");
+    return { ok: true, confirmed };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Couldn't save the changes.",
+    };
+  }
+}
+
 export type RescheduleGroupSessionResult =
   | { ok: true; notified: number }
   | { ok: false; error: string };

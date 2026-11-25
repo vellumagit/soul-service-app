@@ -22,6 +22,7 @@ import { ScheduleGroupSessionDialog } from "@/components/ScheduleGroupSessionDia
 import { GroupAttendeeRow } from "@/components/GroupAttendeeRow";
 import { CancelGroupSessionButton } from "@/components/CancelGroupSessionButton";
 import { RescheduleCircleDialog } from "@/components/RescheduleCircleDialog";
+import { EditCircleSessionDialog } from "@/components/EditCircleSessionDialog";
 import { RestoreGroupSessionButton } from "@/components/RestoreGroupSessionButton";
 import { GroupRecurrencePanel } from "@/components/GroupRecurrencePanel";
 import { AddCircleAttendeeInline } from "@/components/AddCircleAttendeeInline";
@@ -86,6 +87,7 @@ export default async function GroupDetailPage({
       topic: groupSessions.topic,
       status: groupSessions.status,
       meetUrl: groupSessions.meetUrl,
+      googleEventId: groupSessions.googleEventId,
       attendeeCount: sql<number>`(
         SELECT COUNT(*)::int FROM group_attendees
         WHERE group_attendees.group_session_id = group_sessions.id
@@ -434,6 +436,18 @@ export default async function GroupDetailPage({
                       >
                         Public signup link →
                       </Link>
+                      <EditCircleSessionDialog
+                        sessionId={s.id}
+                        topic={s.topic}
+                        durationMinutes={s.durationMinutes}
+                        capacity={s.capacity}
+                        priceCents={s.priceCents}
+                        currency={group.defaultCurrency}
+                        meetUrl={s.meetUrl}
+                        onGoogleCalendar={!!s.googleEventId}
+                        guestCount={attendees.filter((a) => a.status !== "cancelled").length}
+                        hasPaidGuests={s.paidCount > 0}
+                      />
                       <RescheduleCircleDialog
                         sessionId={s.id}
                         currentScheduledAt={s.scheduledAt}
