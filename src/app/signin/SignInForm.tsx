@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useRef, useState } from "react";
 import { signInWithEmail, type SignInResult } from "@/lib/auth-actions";
 import { Field, inputCls } from "@/components/Form";
 import { DEFAULT_LOCALE, t, type Locale } from "@/lib/i18n";
@@ -10,6 +10,9 @@ const initialState: SignInResult | undefined = undefined;
 export function SignInForm({ locale = DEFAULT_LOCALE }: { locale?: Locale }) {
   const [state, action, pending] = useActionState(signInWithEmail, initialState);
   const [showPw, setShowPw] = useState(false);
+  // The bottom "Email me a sign-in link" button. "Forgot your password?"
+  // submits THROUGH it rather than being a submit button itself — see there.
+  const linkButtonRef = useRef<HTMLButtonElement>(null);
 
   // Success no longer redirects — we now email a magic link and render
   // a "check your email" card in place. This is the anti-enumeration
@@ -100,10 +103,18 @@ export function SignInForm({ locale = DEFAULT_LOCALE }: { locale?: Locale }) {
           <p className="text-[11px] text-ink-400 leading-relaxed">
             Have a password? Enter it — or use a sign-in link.
           </p>
+          {/* type="button", NOT a submit button. Pressing Enter in a form
+              fires the FIRST submit button in DOM order, and this one sits
+              above "Continue" — so as a submit button it hijacked Enter:
+              typing the right password and hitting Enter emailed a link
+              instead of signing in. requestSubmit() with the link button as
+              submitter sends the same intent=link (and still runs the
+              required-email validation). */}
           <button
-            type="submit"
-            name="intent"
-            value="link"
+            type="button"
+            onClick={(e) =>
+              e.currentTarget.form?.requestSubmit(linkButtonRef.current)
+            }
             disabled={pending} aria-busy={pending}
             className="text-[11px] text-plum-700 hover:underline whitespace-nowrap disabled:opacity-60"
           >
@@ -131,6 +142,7 @@ export function SignInForm({ locale = DEFAULT_LOCALE }: { locale?: Locale }) {
 
       {/* Fallback / reset: always emails a one-time link (intent=link). */}
       <button
+        ref={linkButtonRef}
         type="submit"
         name="intent"
         value="link"
