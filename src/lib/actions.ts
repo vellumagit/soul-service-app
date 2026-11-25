@@ -32,6 +32,7 @@ import {
   ruleInstant,
 } from "./recurring-sessions";
 import { isValidTimeZone, resolveTimeZone, zonedWallTimeToUtc } from "./timezone";
+import { leadFieldLabel, leadFieldValue } from "./lead-fields";
 import { safeCurrency } from "./format";
 import { emailAllowed, emailAllowedForClient, optOutsFromForm } from "./email-prefs";
 import { rethrowIfRedirect } from "./redirect-error";
@@ -1143,6 +1144,8 @@ export async function acceptLeadSubmission(
     // land in her notes as a JSON dump. Give those a clean one-line summary
     // instead; external forms keep the full field context so nothing custom is
     // ever lost.
+    // Field labels + timestamps as she'd read them, in her own timezone.
+    const notesTz = resolveTimeZone((await getSettings(accountId))?.timezone);
     let privateNotes: string | null;
     if (fields.kind === "lead-magnet") {
       const title =
@@ -1163,7 +1166,7 @@ export async function acceptLeadSubmission(
             !matched.has(k) &&
             !["kind", "offerId", "offerSlug", "offerTitle"].includes(k)
         )
-        .map(([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`);
+        .map(([k, v]) => `${leadFieldLabel(k)}: ${leadFieldValue(v, notesTz)}`);
       privateNotes =
         `Asked about “${title}” on ${dateStr}.` +
         (extras.length > 0 ? `\n\n${extras.join("\n")}` : "");
@@ -1190,7 +1193,7 @@ export async function acceptLeadSubmission(
         otherFields.length > 0
           ? `Submitted via ${form?.name ?? "form"} on ${dateStr}:\n\n` +
             otherFields
-              .map(([k, v]) => `- ${k}: ${formatFieldValue(v)}`)
+              .map(([k, v]) => `- ${leadFieldLabel(k)}: ${leadFieldValue(v, notesTz)}`)
               .join("\n")
           : null;
     }
@@ -1426,16 +1429,6 @@ function pickStringField(
   return null;
 }
 
-function formatFieldValue(v: unknown): string {
-  if (v === null || v === undefined) return "(empty)";
-  if (typeof v === "string") return v;
-  if (typeof v === "number" || typeof v === "boolean") return String(v);
-  try {
-    return JSON.stringify(v);
-  } catch {
-    return String(v);
-  }
-}
 
 /** Save the Closing Ritual for a session — three optional reflections
  *  she captures right after a session is marked complete. `skip`-mode

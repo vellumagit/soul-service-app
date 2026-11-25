@@ -19,6 +19,8 @@ import { notify } from "./FlashNotifier";
 import { ConfirmButton } from "./ConfirmButton";
 import { bumpCounts } from "@/lib/counts-event";
 import { relativeTime } from "@/lib/format";
+import { leadFieldLabel, leadFieldValue } from "@/lib/lead-fields";
+import { useTimeZone } from "./TimeZoneProvider";
 
 export function LeadInboxList({
   submissions,
@@ -178,8 +180,7 @@ function SubmissionRow({
           {visibleEntries.length > 0 && (
             <details className="mt-2 text-xs">
               <summary className="text-ink-500 cursor-pointer hover:text-ink-900">
-                {visibleEntries.length} field
-                {visibleEntries.length === 1 ? "" : "s"}
+                Details ({visibleEntries.length})
               </summary>
               <dl className="mt-1.5 grid grid-cols-[max-content_1fr] gap-x-3 gap-y-0.5">
                 {visibleEntries.map(([k, v]) => (
@@ -329,18 +330,18 @@ function ContextRow({
   fieldKey: string;
   value: unknown;
 }) {
-  const display =
-    value === null || value === undefined
-      ? "(empty)"
-      : typeof value === "string"
-        ? value
-        : typeof value === "number" || typeof value === "boolean"
-          ? String(value)
-          : JSON.stringify(value);
+  // Readable label + timestamps in her own timezone — not "preferredWindow
+  // 2026-11-27T22:30:00.000Z". The raw key stays in the tooltip.
+  const timeZone = useTimeZone();
+  const display = leadFieldValue(value, timeZone);
   return (
     <>
-      <dt className="text-ink-500 font-mono">{fieldKey}</dt>
-      <dd className="text-ink-700 truncate">{display}</dd>
+      <dt className="text-ink-500" title={fieldKey}>
+        {leadFieldLabel(fieldKey)}
+      </dt>
+      <dd className="text-ink-700 break-words" title={display}>
+        {display}
+      </dd>
     </>
   );
 }
