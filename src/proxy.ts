@@ -77,6 +77,42 @@ const CANONICAL_HOST = new URL(CANONICAL_ORIGIN).host;
 const ALIAS_HOSTS = new Set(["app.svit.live"]);
 
 /**
+ * The Vercel address (soul-service-app.vercel.app) serves the whole app too —
+ * and she'd ended up using it, so the Circle links she copied went out on a
+ * vercel.app address instead of svit.live. Every PAGE visit there now moves
+ * to the same path on svit.live: old bookmarks, the home-screen icon, links
+ * already shared, emailed sign-in links (the token is consumed on svit.live,
+ * so she's signed in there).
+ *
+ * Deliberately left alone, so nothing behind the scenes breaks:
+ *   - /api/* — Stripe webhooks + Connect callback, the Google Calendar OAuth
+ *     callback, the reminders cron, lead intake. Webhooks don't follow
+ *     redirects, and an OAuth callback must land where it was registered.
+ *   - anything that isn't GET/HEAD — a form already open on the old address
+ *     still submits.
+ *   - preview deployments (their own *.vercel.app URLs) — only the production
+ *     alias, or any vercel.app host of a PRODUCTION deployment, moves.
+ */
+const VERCEL_PROD_HOSTS = new Set(["soul-service-app.vercel.app"]);
+
+function redirectOffVercel(request: NextRequest): NextResponse | null {
+  const host = (request.headers.get("host") ?? "").toLowerCase();
+  if (!host.endsWith(".vercel.app")) return null;
+  const isProdHost =
+    VERCEL_PROD_HOSTS.has(host) || process.env.VERCEL_ENV === "production";
+  if (!isProdHost) return null;
+  if (request.method !== "GET" && request.method !== "HEAD") return null;
+  const { pathname } = request.nextUrl;
+  if (pathname.startsWith("/api/")) return null;
+
+  const url = request.nextUrl.clone();
+  url.protocol = "https";
+  url.host = CANONICAL_HOST;
+  url.port = "";
+  return NextResponse.redirect(url, 308);
+}
+
+/**
  * Bilingual storefront routing (see storefront-seo.ts):
  *   /uk/*  → rewritten onto the shared page with the language header "uk",
  *            and the choice remembered in the landing_lang cookie.
@@ -135,6 +171,10 @@ function routeStorefront(request: NextRequest): NextResponse | null {
 
 export async function proxy(request: NextRequest): Promise<NextResponse> {
   const { pathname, search } = request.nextUrl;
+
+  // Off the vercel.app address first, before any auth or language routing.
+  const offVercel = redirectOffVercel(request);
+  if (offVercel) return offVercel;
 
   const storefront = routeStorefront(request);
   if (storefront) return storefront;
